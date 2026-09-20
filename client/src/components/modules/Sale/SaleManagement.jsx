@@ -52,16 +52,31 @@ const SaleManagement = ({
     setSaleFilters,
     refreshPendingIndicators,
     fetchSalesGlobal,
-    highlightId, isRequestedNotif
+    highlightId, isRequestedNotif,
+    activeBaseline: propActiveBaseline
 }) => {
     
     const [showForm, setShowForm] = useState(false);
     const [sales, setSales] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
+    const [activeBaseline, setActiveBaseline] = useState(propActiveBaseline || null);
     const [customers, setCustomers] = useState([]);
     const [employeesMap, setEmployeesMap] = useState({});
     const [employeesFirstNameMap, setEmployeesFirstNameMap] = useState({});
     const [activePdfDropdown, setActivePdfDropdown] = useState(null);
+
+    useEffect(() => {
+        if (propActiveBaseline) {
+            setActiveBaseline(propActiveBaseline);
+        }
+    }, [propActiveBaseline]);
+
+    const fetchStockBaseline = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/stock-baseline/active`);
+            if (res.data) setActiveBaseline(res.data);
+        } catch (e) {}
+    };
 
     const fetchEmployees = async () => {
         try {
@@ -1440,6 +1455,7 @@ const SaleManagement = ({
                 return d && typeof d === 'object' ? { ...d, _id: item._id } : item;
             });
             setStockRecords(decrypted);
+            fetchStockBaseline();
         } catch (error) {
             console.error('Error fetching stock records:', error);
         }
@@ -1520,7 +1536,8 @@ const SaleManagement = ({
             warehouses,
             salesForCalc,
             products,
-            damagesRecords
+            damagesRecords,
+            activeBaseline
         );
         const calculatedStock = stockRes?.displayRecords || [];
         const matchedGroup = calculatedStock.find(g => (g.productName || '').trim().toLowerCase() === cleanPName.toLowerCase());
@@ -1528,7 +1545,10 @@ const SaleManagement = ({
             const targetBrandLower = cleanBrand.toLowerCase();
             let targetBrands = matchedGroup.brandList;
             if (targetBrandLower) {
-                targetBrands = targetBrands.filter(b => (b.brand || '').trim().toLowerCase() === targetBrandLower);
+                targetBrands = targetBrands.filter(b => {
+                    const bBrand = (b.brand || '').trim().toLowerCase();
+                    return bBrand === targetBrandLower || bBrand.replace(/\s+/g, ' ') === targetBrandLower.replace(/\s+/g, ' ');
+                });
             }
             if (cleanLc) {
                 targetBrands = targetBrands.filter(b => isLcMatch(b.lcNo, cleanLc));
@@ -1554,7 +1574,8 @@ const SaleManagement = ({
                 warehouses,
                 salesForCalc,
                 products,
-                damagesRecords
+                damagesRecords,
+                activeBaseline
             );
             const calculatedWhStock = whStockRes?.displayRecords || [];
             const matchedWhGroup = calculatedWhStock.find(g => (g.productName || '').trim().toLowerCase() === cleanPName.toLowerCase());
@@ -1562,7 +1583,10 @@ const SaleManagement = ({
                 const targetBrandLower = cleanBrand.toLowerCase();
                 let targetBrands = matchedWhGroup.brandList;
                 if (targetBrandLower) {
-                    targetBrands = targetBrands.filter(b => (b.brand || '').trim().toLowerCase() === targetBrandLower);
+                    targetBrands = targetBrands.filter(b => {
+                        const bBrand = (b.brand || '').trim().toLowerCase();
+                        return bBrand === targetBrandLower || bBrand.replace(/\s+/g, ' ') === targetBrandLower.replace(/\s+/g, ' ');
+                    });
                 }
                 if (cleanLc) {
                     targetBrands = targetBrands.filter(b => isLcMatch(b.lcNo, cleanLc));
@@ -5102,6 +5126,7 @@ const SaleManagement = ({
                                         <div className="relative">
                                             <input
                                                 type="text"
+                                                name="border_company_name"
                                                 placeholder={formData.companyName || "Search company..."}
                                                 value={activeDropdown === 'companyName' ? companyNameSearch : (formData.companyName || '')}
                                                 readOnly={isFieldReadOnly(originalData?.companyName)}
@@ -5112,7 +5137,11 @@ const SaleManagement = ({
                                                     setHighlightedIndex(-1);
                                                     setFormData(prev => ({ ...prev, companyName: e.target.value }));
                                                 }}
-                                                autoComplete="off"
+                                                autoComplete="one-time-code"
+                                                data-lpignore="true"
+                                                data-form-type="other"
+                                                spellCheck={false}
+                                                autoCorrect="off"
                                                 onFocus={() => {
                                                     if (isFieldReadOnly(originalData?.companyName)) return;
                                                     setCompanyNameSearch(formData.companyName || '');
@@ -5176,6 +5205,7 @@ const SaleManagement = ({
                                     <div className="relative">
                                         <input
                                             type="text"
+                                            name="sale_company_name"
                                             placeholder={formData.companyName || "Search company..."}
                                             value={activeDropdown === 'companyName' ? companyNameSearch : (formData.companyName || '')}
                                             readOnly={isFieldReadOnly(originalData?.companyName)}
@@ -5186,7 +5216,11 @@ const SaleManagement = ({
                                                 setHighlightedIndex(-1);
                                                 setFormData(prev => ({ ...prev, companyName: e.target.value }));
                                             }}
-                                            autoComplete="off"
+                                            autoComplete="one-time-code"
+                                            data-lpignore="true"
+                                            data-form-type="other"
+                                            spellCheck={false}
+                                            autoCorrect="off"
                                             onFocus={() => {
                                                 if (isFieldReadOnly(originalData?.companyName)) return;
                                                 setCompanyNameSearch(formData.companyName || '');
@@ -5233,15 +5267,15 @@ const SaleManagement = ({
                                 </div>
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Customer</label>
-                                    <input autoComplete="off" type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" />
+                                    <input autoComplete="one-time-code" data-lpignore="true" data-form-type="other" type="text" name="sale_customer_name" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" />
                                 </div>
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Contact</label>
-                                    <input autoComplete="off" type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" />
+                                    <input autoComplete="one-time-code" data-lpignore="true" data-form-type="other" type="text" name="sale_customer_contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" />
                                 </div>
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Address</label>
-                                    <input autoComplete="off" type="text" name="address" value={formData.address} readOnly placeholder="Address" className="sale-mgmt-input sale-mgmt-input-readonly" />
+                                    <input autoComplete="one-time-code" data-lpignore="true" data-form-type="other" type="text" name="sale_customer_address" value={formData.address} readOnly placeholder="Address" className="sale-mgmt-input sale-mgmt-input-readonly" />
                                 </div>
 
                             </div>

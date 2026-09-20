@@ -2066,6 +2066,7 @@ function App() {
             setShowSalesReport={setShowSalesReport}
             setSalesReportData={setFilteredSalesForReport}
             setSalesReportSearchQuery={setSalesReportSearchQuery}
+            activeBaseline={activeBaseline}
           />
         );
       case 'general-sale-section':
@@ -2092,6 +2093,7 @@ function App() {
             refreshPendingIndicators={fetchPendingEntries}
             fetchSalesGlobal={fetchSales}
             highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
+            activeBaseline={activeBaseline}
           />
         );
       case 'border-sale-section':
@@ -2118,6 +2120,7 @@ function App() {
             refreshPendingIndicators={fetchPendingEntries}
             fetchSalesGlobal={fetchSales}
             highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
+            activeBaseline={activeBaseline}
           />
         );
       case 'employee-section':

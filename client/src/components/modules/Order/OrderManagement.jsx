@@ -42,16 +42,33 @@ const OrderManagement = ({
     endLongPress,
     isLongPressTriggered,
     highlightId,
-    isRequestedNotif
+    isRequestedNotif,
+    activeBaseline: propActiveBaseline
 }) => {
     
     // --- State Management ---
     const [sales, setSales] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
+    const [activeBaseline, setActiveBaseline] = useState(propActiveBaseline || null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [employeesMap, setEmployeesMap] = useState({});
     const [employeesFullNameMap, setEmployeesFullNameMap] = useState({});
+
+    useEffect(() => {
+        if (propActiveBaseline) {
+            setActiveBaseline(propActiveBaseline);
+        }
+    }, [propActiveBaseline]);
+
+    const fetchStockBaseline = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/stock-baseline/active`);
+            if (res.data) setActiveBaseline(res.data);
+        } catch (err) {
+            // ignore if baseline fetch fails
+        }
+    };
 
     const rowRefs = useRef({});
     useEffect(() => {
@@ -319,6 +336,7 @@ const OrderManagement = ({
         fetchStockRecords();
         fetchDamagesRecords();
         fetchEmployees();
+        fetchStockBaseline();
     }, []);
 
     const fetchCustomers = async () => {
@@ -727,7 +745,8 @@ const OrderManagement = ({
                         warehouses,
                         salesForCalc,
                         products,
-                        damagesRecords
+                        damagesRecords,
+                        activeBaseline
                     );
                     const calculatedWhStock = whStockRes?.displayRecords || [];
 
@@ -737,7 +756,10 @@ const OrderManagement = ({
                         const targetBrandLower = bName.toLowerCase();
                         let targetBrands = matchedWhGroup.brandList;
                         if (targetBrandLower) {
-                            targetBrands = targetBrands.filter(b => (b.brand || '').trim().toLowerCase() === targetBrandLower);
+                            targetBrands = targetBrands.filter(b => {
+                                const bBrand = (b.brand || '').trim().toLowerCase();
+                                return bBrand === targetBrandLower || bBrand.replace(/\s+/g, ' ') === targetBrandLower.replace(/\s+/g, ' ');
+                            });
                         }
                         if (lcNo) {
                             targetBrands = targetBrands.filter(b => isLcMatch(b.lcNo, lcNo));
@@ -776,6 +798,7 @@ const OrderManagement = ({
         allSalesRecords,
         products,
         damagesRecords,
+        activeBaseline,
         editingId
     ]);
 
@@ -2054,6 +2077,7 @@ const OrderManagement = ({
                                     <input
                                         type="text"
                                         required
+                                        name="order_search_company"
                                         placeholder={formData.companyName || "Search company..."}
                                         value={activeDropdown === 'companyName' ? companyNameSearch : formData.companyName}
                                         onChange={(e) => {
@@ -2068,7 +2092,11 @@ const OrderManagement = ({
                                             setHighlightedIndex(-1);
                                         }}
                                         onKeyDown={(e) => handleDropdownKeyDown(e, getFilteredCustomers(), handleCustomerSelect)}
-                                        autoComplete="off"
+                                        autoComplete="one-time-code"
+                                        data-lpignore="true"
+                                        data-form-type="other"
+                                        spellCheck={false}
+                                        autoCorrect="off"
                                         className="sale-mgmt-input pr-12"
                                     />
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -2106,7 +2134,7 @@ const OrderManagement = ({
                                                     <span className="font-bold">{c.companyName || c.customerName}</span>
                                                     {(c.contact || c.phone || c.address) && (
                                                         <span className="text-[11px] text-gray-400 font-normal">
-                                                            {[c.contact || c.phone, c.address].filter(Boolean).join(' • ')}
+                                                             {[c.contact || c.phone, c.address].filter(Boolean).join(' • ')}
                                                         </span>
                                                     )}
                                                 </div>
@@ -2120,7 +2148,11 @@ const OrderManagement = ({
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Customer Name</label>
                                 <input
-                                    autoComplete="off"
+                                    autoComplete="one-time-code"
+                                    data-lpignore="true"
+                                    data-form-type="other"
+                                    spellCheck={false}
+                                    name="order_customer_name"
                                     type="text"
                                     placeholder="Customer name..."
                                     value={formData.customerName}
@@ -2132,7 +2164,11 @@ const OrderManagement = ({
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Address</label>
                                 <input
-                                    autoComplete="off"
+                                    autoComplete="one-time-code"
+                                    data-lpignore="true"
+                                    data-form-type="other"
+                                    spellCheck={false}
+                                    name="order_customer_address"
                                     type="text"
                                     placeholder="Address..."
                                     value={formData.address}
@@ -2144,7 +2180,11 @@ const OrderManagement = ({
                             <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Phone</label>
                                 <input
-                                    autoComplete="off"
+                                    autoComplete="one-time-code"
+                                    data-lpignore="true"
+                                    data-form-type="other"
+                                    spellCheck={false}
+                                    name="order_customer_phone"
                                     type="text"
                                     placeholder="Phone number..."
                                     value={formData.phone}
