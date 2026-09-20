@@ -4538,11 +4538,8 @@ const SaleManagement = ({
 
                         <button
                             onClick={() => {
-                                const reportRecords = sales.filter(s => {
-                                    const statusLower = (s.status || '').toLowerCase();
-                                    return statusLower !== 'rejected';
-                                });
-                                if (setSalesReportData) setSalesReportData(reportRecords.length > 0 ? reportRecords : sales);
+                                const currentData = getFilteredData ? getFilteredData() : (displayedSales || []);
+                                if (setSalesReportData) setSalesReportData(currentData);
                                 if (setSalesReportSearchQuery) setSalesReportSearchQuery(searchQuery);
                                 setShowSalesReport(true);
                             }}

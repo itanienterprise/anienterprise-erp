@@ -1989,14 +1989,8 @@ const OrderManagement = ({
                         {/* Report Button */}
                         <button
                             onClick={() => {
-                                const orderRecords = sales.filter(sale => {
-                                    const sType = (sale.saleType || '').toLowerCase();
-                                    const inv = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
-                                    const isOrder = sType === 'order' || inv.startsWith('ORD');
-                                    const statusLower = (sale.status || '').toLowerCase();
-                                    return isOrder && statusLower !== 'rejected';
-                                });
-                                if (setSalesReportData) setSalesReportData(orderRecords.length > 0 ? orderRecords : sales);
+                                const currentData = getFilteredData || [];
+                                if (setSalesReportData) setSalesReportData(currentData);
                                 if (setSalesReportSearchQuery) setSalesReportSearchQuery(searchQuery);
                                 if (setShowSalesReport) setShowSalesReport(true);
                             }}
