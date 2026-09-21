@@ -520,6 +520,7 @@ export const trackUserAction = (actionName, moduleName, details = {}) => {
         action === 'CARD OPEN' ||
         action === 'CARD CLOSE' ||
         action === 'CARD CLOSE (NO SAVE)' ||
+        action === 'PRINT' ||
         actionQueue.length >= 5
     ) {
         flushQueue();

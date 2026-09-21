@@ -14,6 +14,7 @@ import './PI.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { IPDetailsModal } from '../IPManagement/IPDetailsModal';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { trackUserAction } from '../../../utils/activityTracker';
 
 function PI({
     importers,
@@ -96,6 +97,47 @@ function PI({
     const [toast, setToast] = useState(null);
     const [expandedCardId, setExpandedCardId] = useState(null);
     const [showReviseForm, setShowReviseForm] = useState(false);
+    const [showTenPercentForm, setShowTenPercentForm] = useState(false);
+    const [selectedTenPercentPiId, setSelectedTenPercentPiId] = useState('');
+    const [selectedTenPercentRevisionNo, setSelectedTenPercentRevisionNo] = useState('Original PI');
+    const [tenPercentSearchQuery, setTenPercentSearchQuery] = useState('');
+    const [tenPercentFormData, setTenPercentFormData] = useState({
+        piNumber: '',
+        piRevision: '',
+        date: '',
+        validityDate: '',
+        partyName: '',
+        partyAddress: '',
+        partyContact: '',
+        partyEmail: '',
+        exporterName: '',
+        exporterAddress: '',
+        exporterContact: '',
+        exporterEmail: '',
+        placeOfReceipt: '',
+        portOfLoading: 'ANY PLACE OF INDIA',
+        portOfDischarge: '',
+        certification: '',
+        packingType: '',
+        invoiceStyle: 'Style 1 SAA',
+        indianBank: 'ICICI BANK LTD. KOLKATA.',
+        bankName: '',
+        bankBranch: '',
+        bankAccount: '',
+        bankBin: '',
+        buyerOrderNo: '',
+        buyerOrderDate: '',
+        otherReferences: '',
+        buyerName: '',
+        preCarriageBy: 'ROAD',
+        placeOfReceiptByPreCarrier: '',
+        remarks: '',
+        ipNumbers: [],
+        ipNumber: '',
+        productsList: [],
+        grandTotal: '',
+        grandTotalQuantity: ''
+    });
     const [selectedIpForDetails, setSelectedIpForDetails] = useState(null);
 
     const handleOpenIpDetails = (ipNumber, piRecord) => {
@@ -260,6 +302,7 @@ function PI({
     const statusRef = useRef(null);
     const invoiceStyleRef = useRef(null);
     const revisePiRef = useRef(null);
+    const tenPercentPiRef = useRef(null);
 
     const initialFilterDropdownState = {
         port: false,
@@ -2256,6 +2299,21 @@ function PI({
         );
     }, [reviseSearchQuery, records]);
 
+    const filteredPiRecordsForTenPercent = useMemo(() => {
+        const q = (tenPercentSearchQuery || '').trim().toLowerCase();
+        if (!q) return records;
+        return records.filter(pi =>
+            (pi.piNumber || '').toLowerCase().includes(q) ||
+            (pi.partyName || '').toLowerCase().includes(q) ||
+            (pi.exporterName || '').toLowerCase().includes(q)
+        );
+    }, [tenPercentSearchQuery, records]);
+
+    const selectedPiForTenPercent = useMemo(() => {
+        if (!selectedTenPercentPiId) return null;
+        return records.find(r => r._id === selectedTenPercentPiId) || null;
+    }, [selectedTenPercentPiId, records]);
+
     const selectedPiForRevise = useMemo(() => {
         if (!selectedRevisePiId) return null;
         return records.find(r => r._id === selectedRevisePiId) || null;
@@ -2308,6 +2366,374 @@ function PI({
             remarks: '',
             ipNumbers: []
         });
+    };
+
+    const getHistoryTimeline = (record) => {
+        if (!record) return [];
+        const list = [];
+        const revisions = record.revisions || [];
+        const hasOriginal = revisions.some(r => r.reviseNo === 'Original PI');
+
+        if (revisions.length === 0) {
+            // Unrevised: just original PI using current fields
+            list.push({
+                reviseNo: 'Original PI',
+                reviseDate: record.date,
+                validityDate: record.validityDate,
+                placeOfReceipt: record.placeOfReceipt || 'N/A',
+                portOfLoading: record.portOfLoading || 'N/A',
+                portOfDischarge: record.portOfDischarge || 'N/A',
+                certification: record.certification || 'N/A',
+                packingType: record.packingType || 'N/A',
+                productsList: getPiProductsList(record),
+                grandTotal: record.grandTotal,
+                grandTotalQuantity: record.grandTotalQuantity,
+                remarks: record.remarks || '',
+                ipNumbers: record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []),
+                isOriginal: true
+            });
+        } else {
+            // Revised:
+            if (!hasOriginal) {
+                // Synthesize the Original PI for old records if it was not stored
+                list.push({
+                    reviseNo: 'Original PI',
+                    reviseDate: record.date,
+                    validityDate: 'N/A (Historical)',
+                    placeOfReceipt: 'N/A (Historical)',
+                    portOfLoading: 'N/A (Historical)',
+                    portOfDischarge: 'N/A (Historical)',
+                    certification: 'N/A (Historical)',
+                    packingType: 'N/A (Historical)',
+                    productsList: [],
+                    grandTotal: 'N/A',
+                    grandTotalQuantity: 'N/A',
+                    remarks: 'Historical original values were not captured prior to first revision.',
+                    ipNumbers: [],
+                    isOriginal: true,
+                    isPlaceholder: true
+                });
+            }
+
+            // Deduplicate revisions defensively by reviseNo, keeping the latest occurrence
+            const seenNos = new Map();
+            revisions.forEach(rev => {
+                const key = (rev.reviseNo || '').trim().toLowerCase();
+                if (key) seenNos.set(key, rev);
+            });
+            const processedKeys = new Set();
+            revisions.forEach(rev => {
+                const key = (rev.reviseNo || '').trim().toLowerCase();
+                if (key && !processedKeys.has(key)) {
+                    processedKeys.add(key);
+                    const latestRev = seenNos.get(key);
+                    list.push({
+                        ...latestRev,
+                        ipNumbers: latestRev.ipNumbers || (latestRev.ipNumber ? latestRev.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []))),
+                        isOriginal: latestRev.reviseNo === 'Original PI'
+                    });
+                }
+            });
+        }
+        return list;
+    };
+
+    const [selectedVersionBaseInfo, setSelectedVersionBaseInfo] = useState({
+        grandTotalQuantity: 0,
+        grandTotal: 0
+    });
+
+    const resetTenPercentForm = () => {
+        if (selectedTenPercentPiId && selectedPiForTenPercent) {
+            try {
+                trackUserAction(
+                    `Closed 10% PI Form: ${selectedPiForTenPercent.piNumber}`,
+                    'PI',
+                    {
+                        action: 'CARD CLOSE (NO SAVE)',
+                        actionCategory: 'UI_INTERACTION',
+                        piNumber: selectedPiForTenPercent.piNumber,
+                        view: 'pi-section'
+                    }
+                );
+            } catch (actErr) {}
+        }
+        setShowTenPercentForm(false);
+        setSelectedTenPercentPiId('');
+        setSelectedTenPercentRevisionNo('Original PI');
+        setTenPercentSearchQuery('');
+        setSelectedVersionBaseInfo({
+            grandTotalQuantity: 0,
+            grandTotal: 0
+        });
+        setTenPercentFormData({
+            piNumber: '',
+            piRevision: '',
+            date: '',
+            validityDate: '',
+            partyName: '',
+            partyAddress: '',
+            partyContact: '',
+            partyEmail: '',
+            exporterName: '',
+            exporterAddress: '',
+            exporterContact: '',
+            exporterEmail: '',
+            placeOfReceipt: '',
+            portOfLoading: 'ANY PLACE OF INDIA',
+            portOfDischarge: '',
+            certification: '',
+            packingType: '',
+            invoiceStyle: 'Style 1 SAA',
+            indianBank: 'ICICI BANK LTD. KOLKATA.',
+            bankName: '',
+            bankBranch: '',
+            bankAccount: '',
+            bankBin: '',
+            buyerOrderNo: '',
+            buyerOrderDate: '',
+            otherReferences: '',
+            buyerName: '',
+            preCarriageBy: 'ROAD',
+            placeOfReceiptByPreCarrier: '',
+            remarks: '',
+            ipNumbers: [],
+            ipNumber: '',
+            productsList: [],
+            grandTotal: '',
+            grandTotalQuantity: ''
+        });
+    };
+
+    const handleSelectPiForTenPercent = (pi, revisionNo = 'Original PI') => {
+        if (!pi) return;
+        setSelectedTenPercentPiId(pi._id);
+        setSelectedTenPercentRevisionNo(revisionNo);
+        setTenPercentSearchQuery(pi.piNumber || '');
+        setActiveDropdown(null);
+
+        try {
+            trackUserAction(
+                `Opened 10% PI Form: ${pi.piNumber || ''} (${revisionNo})`,
+                'PI',
+                {
+                    action: 'CARD OPEN',
+                    actionCategory: 'UI_INTERACTION',
+                    piNumber: pi.piNumber || '',
+                    revisionNo: revisionNo,
+                    partyName: pi.partyName || '',
+                    view: 'pi-section'
+                }
+            );
+        } catch (actErr) {}
+
+        const timeline = getHistoryTimeline(pi);
+        const activeVersion = timeline.find(t => (t.reviseNo || '').trim().toLowerCase() === (revisionNo || '').trim().toLowerCase()) || timeline[0] || {};
+
+        let sourceProducts = [];
+        if (activeVersion.productsList && activeVersion.productsList.length > 0) {
+            sourceProducts = activeVersion.productsList;
+        } else if (revisionNo === 'Original PI') {
+            sourceProducts = getPiProductsList(pi);
+        }
+
+        let calculatedGrandTotal = 0;
+        let calculatedGrandTotalQty = 0;
+        const modifiedProducts = (sourceProducts || []).map(p => {
+            const origQty = parseFloat(p.quantity) || 0;
+            const rate = parseFloat(p.rate) || 0;
+            const freight = parseFloat(p.freight) || 0;
+            const amount = (origQty && rate) ? parseFloat((origQty * rate).toFixed(2)) : (parseFloat(p.amount) || 0);
+            const totalFreight = (origQty && freight) ? parseFloat((origQty * freight).toFixed(2)) : (parseFloat(p.totalFreight) || 0);
+
+            calculatedGrandTotal += (amount + totalFreight);
+            calculatedGrandTotalQty += origQty;
+
+            return {
+                ...p,
+                origQuantity: p.quantity || '',
+                quantity: p.quantity || '',
+                rate: p.rate || '',
+                amount: amount > 0 ? amount.toFixed(2) : (p.amount || ''),
+                freight: p.freight || '',
+                totalFreight: totalFreight > 0 ? totalFreight.toFixed(2) : (p.totalFreight || '')
+            };
+        });
+
+        const origBaseQty = parseFloat(activeVersion.grandTotalQuantity || 0) || (sourceProducts.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0));
+        const origBaseTotal = parseFloat(activeVersion.grandTotal || 0) || (sourceProducts.reduce((sum, p) => sum + ((parseFloat(p.quantity) || 0) * (parseFloat(p.rate) || 0) + (parseFloat(p.quantity) || 0) * (parseFloat(p.freight) || 0)), 0));
+
+        setSelectedVersionBaseInfo({
+            grandTotalQuantity: origBaseQty,
+            grandTotal: origBaseTotal
+        });
+
+        const ipNums = activeVersion.ipNumbers || (activeVersion.ipNumber ? activeVersion.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : (pi.ipNumbers || (pi.ipNumber ? pi.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : [])));
+
+        const isRev = (activeVersion.reviseNo || revisionNo) !== 'Original PI';
+        const formattedPiNo = isRev ? `${pi.piNumber} (REVISED)` : (pi.piNumber || '');
+
+        const rawDate = activeVersion.reviseDate || pi.date || '';
+        const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+
+        const rawValDate = activeVersion.validityDate && activeVersion.validityDate !== 'N/A (Historical)' ? activeVersion.validityDate : (pi.validityDate || '');
+        const valDateStr = typeof rawValDate === 'string' && rawValDate.includes('T') ? rawValDate.split('T')[0] : rawValDate;
+
+        const placeOfReceipt = activeVersion.placeOfReceipt && !activeVersion.placeOfReceipt.includes('Historical') && activeVersion.placeOfReceipt !== 'N/A' ? activeVersion.placeOfReceipt : (pi.placeOfReceipt || '');
+        const portOfLoading = activeVersion.portOfLoading && !activeVersion.portOfLoading.includes('Historical') && activeVersion.portOfLoading !== 'N/A' ? activeVersion.portOfLoading : (pi.portOfLoading || 'ANY PLACE OF INDIA');
+        const portOfDischarge = activeVersion.portOfDischarge && !activeVersion.portOfDischarge.includes('Historical') && activeVersion.portOfDischarge !== 'N/A' ? activeVersion.portOfDischarge : (pi.portOfDischarge || '');
+        const certification = activeVersion.certification && !activeVersion.certification.includes('Historical') && activeVersion.certification !== 'N/A' ? activeVersion.certification : (pi.certification || '');
+        const packingType = activeVersion.packingType && !activeVersion.packingType.includes('Historical') && activeVersion.packingType !== 'N/A' ? activeVersion.packingType : (pi.packingType || '');
+        const remarks = activeVersion.remarks && !activeVersion.remarks.includes('Historical original') ? activeVersion.remarks : (pi.remarks || '');
+
+        setTenPercentFormData({
+            piNumber: formattedPiNo,
+            piRevision: isRev ? `${activeVersion.reviseNo} DATE: ${formatDate(rawDate)}` : (pi.piRevision || ''),
+            date: dateStr,
+            validityDate: valDateStr,
+            partyName: pi.partyName || '',
+            partyAddress: pi.partyAddress || '',
+            partyContact: pi.partyContact || '',
+            partyEmail: pi.partyEmail || '',
+            exporterName: pi.exporterName || '',
+            exporterAddress: pi.exporterAddress || '',
+            exporterContact: pi.exporterContact || '',
+            exporterEmail: pi.exporterEmail || '',
+            placeOfReceipt,
+            portOfLoading,
+            portOfDischarge,
+            certification,
+            packingType,
+            invoiceStyle: pi.invoiceStyle || 'Style 1 SAA',
+            indianBank: pi.indianBank || 'ICICI BANK LTD. KOLKATA.',
+            bankName: pi.bankName || '',
+            bankBranch: pi.bankBranch || '',
+            bankAccount: pi.bankAccount || '',
+            bankBin: pi.bankBin || '',
+            buyerOrderNo: pi.buyerOrderNo || '',
+            buyerOrderDate: pi.buyerOrderDate ? (pi.buyerOrderDate.includes('T') ? pi.buyerOrderDate.split('T')[0] : pi.buyerOrderDate) : '',
+            otherReferences: pi.otherReferences || '',
+            buyerName: pi.buyerName || '',
+            preCarriageBy: pi.preCarriageBy || 'ROAD',
+            placeOfReceiptByPreCarrier: pi.placeOfReceiptByPreCarrier || '',
+            remarks,
+            ipNumbers: ipNums,
+            ipNumber: ipNums.join(', '),
+            productsList: modifiedProducts,
+            grandTotal: calculatedGrandTotal > 0 ? calculatedGrandTotal.toFixed(2) : '',
+            grandTotalQuantity: calculatedGrandTotalQty > 0 ? calculatedGrandTotalQty.toFixed(2) : ''
+        });
+    };
+
+    const handleSwitchTenPercentRevision = (revNo) => {
+        if (!selectedPiForTenPercent) return;
+        try {
+            trackUserAction(
+                `Switched 10% PI Version: ${selectedPiForTenPercent.piNumber} to ${revNo}`,
+                'PI',
+                {
+                    action: 'CLICK',
+                    actionCategory: 'UI_CLICK',
+                    piNumber: selectedPiForTenPercent.piNumber,
+                    revisionNo: revNo,
+                    view: 'pi-section'
+                }
+            );
+        } catch (actErr) {}
+        handleSelectPiForTenPercent(selectedPiForTenPercent, revNo);
+    };
+
+    const handleTenPercentProductChange = (idx, field, value) => {
+        setTenPercentFormData(prev => {
+            const list = [...(prev.productsList || [])];
+            list[idx] = { ...list[idx], [field]: value };
+
+            let grandTotalVal = 0;
+            let grandTotalQtyVal = 0;
+            const updatedList = list.map(item => {
+                const itemQ = parseFloat(item.quantity) || 0;
+                const itemR = parseFloat(item.rate) || 0;
+                const itemF = parseFloat(item.freight) || 0;
+                const amount = itemQ * itemR;
+                const totalFreight = itemQ * itemF;
+                grandTotalVal += amount + totalFreight;
+                grandTotalQtyVal += itemQ;
+                return {
+                    ...item,
+                    amount: amount > 0 ? amount.toFixed(2) : '',
+                    totalFreight: totalFreight > 0 ? totalFreight.toFixed(2) : ''
+                };
+            });
+
+            return {
+                ...prev,
+                productsList: updatedList,
+                grandTotal: grandTotalVal > 0 ? grandTotalVal.toFixed(2) : '',
+                grandTotalQuantity: grandTotalQtyVal > 0 ? grandTotalQtyVal.toFixed(2) : ''
+            };
+        });
+    };
+
+    const handlePrintTenPercentPdf = () => {
+        if (!selectedPiForTenPercent) {
+            showToast('Please select a PI first.', 'error');
+            return;
+        }
+        const enriched = {
+            ...selectedPiForTenPercent,
+            ...tenPercentFormData,
+            piNumber: tenPercentFormData.piNumber || selectedPiForTenPercent.piNumber,
+            isTenPercent: true
+        };
+        if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+            const exp = exporters?.find(e => e.name === enriched.exporterName);
+            if (exp) {
+                enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                enriched.exporterContact = enriched.exporterContact || exp.phone;
+                enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                enriched.exporterSeal = enriched.exporterSeal || exp.seal;
+            }
+        }
+        if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+            const imp = importers?.find(i => i.name === enriched.partyName);
+            if (imp) {
+                enriched.partyAddress = enriched.partyAddress || imp.address;
+                enriched.partyContact = enriched.partyContact || imp.phone;
+                enriched.partyEmail = enriched.partyEmail || imp.email;
+                enriched.partySignature = enriched.partySignature || imp.signature;
+            }
+        }
+        if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
+            generatePI2PDF(enriched);
+        } else {
+            generatePIPDF(enriched);
+        }
+
+        const piNum = tenPercentFormData.piNumber || selectedPiForTenPercent.piNumber || '';
+        const partyName = selectedPiForTenPercent.partyName || '';
+        const totalQty = parseFloat(tenPercentFormData.grandTotalQuantity || 0).toLocaleString('en-US');
+        const grandTotal = parseFloat(tenPercentFormData.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const rev = selectedTenPercentRevisionNo || 'Original PI';
+
+        try {
+            trackUserAction(
+                `Printed 10% PI PDF: ${piNum} ("${partyName}") • Total: $${grandTotal} • Qty: ${totalQty} kg (${rev})`,
+                'PI',
+                {
+                    action: 'PRINT',
+                    actionCategory: 'MUTATION',
+                    piNumber: piNum,
+                    revisionNo: rev,
+                    partyName: partyName,
+                    totalQuantity: String(totalQty),
+                    totalAmount: String(grandTotal),
+                    view: 'pi-section'
+                }
+            );
+        } catch (actErr) {}
+
+        showToast('10% PI PDF generated successfully!', 'success');
     };
 
     const handleReviseDropdownSelect = (field, value) => {
@@ -3061,80 +3487,10 @@ function PI({
         });
     }, [filteredRecords, sortConfig, checkIsLcDone]);
 
-    const getHistoryTimeline = (record) => {
-        if (!record) return [];
-        const list = [];
-        const revisions = record.revisions || [];
-        const hasOriginal = revisions.some(r => r.reviseNo === 'Original PI');
-
-        if (revisions.length === 0) {
-            // Unrevised: just original PI using current fields
-            list.push({
-                reviseNo: 'Original PI',
-                reviseDate: record.date,
-                validityDate: record.validityDate,
-                placeOfReceipt: record.placeOfReceipt || 'N/A',
-                portOfLoading: record.portOfLoading || 'N/A',
-                portOfDischarge: record.portOfDischarge || 'N/A',
-                certification: record.certification || 'N/A',
-                packingType: record.packingType || 'N/A',
-                productsList: getPiProductsList(record),
-                grandTotal: record.grandTotal,
-                grandTotalQuantity: record.grandTotalQuantity,
-                remarks: record.remarks || '',
-                ipNumbers: record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []),
-                isOriginal: true
-            });
-        } else {
-            // Revised:
-            if (!hasOriginal) {
-                // Synthesize the Original PI for old records if it was not stored
-                list.push({
-                    reviseNo: 'Original PI',
-                    reviseDate: record.date,
-                    validityDate: 'N/A (Historical)',
-                    placeOfReceipt: 'N/A (Historical)',
-                    portOfLoading: 'N/A (Historical)',
-                    portOfDischarge: 'N/A (Historical)',
-                    certification: 'N/A (Historical)',
-                    packingType: 'N/A (Historical)',
-                    productsList: [],
-                    grandTotal: 'N/A',
-                    grandTotalQuantity: 'N/A',
-                    remarks: 'Historical original values were not captured prior to first revision.',
-                    ipNumbers: [],
-                    isOriginal: true,
-                    isPlaceholder: true
-                });
-            }
-
-            // Deduplicate revisions defensively by reviseNo, keeping the latest occurrence
-            const seenNos = new Map();
-            revisions.forEach(rev => {
-                const key = (rev.reviseNo || '').trim().toLowerCase();
-                if (key) seenNos.set(key, rev);
-            });
-            const processedKeys = new Set();
-            revisions.forEach(rev => {
-                const key = (rev.reviseNo || '').trim().toLowerCase();
-                if (key && !processedKeys.has(key)) {
-                    processedKeys.add(key);
-                    const latestRev = seenNos.get(key);
-                    list.push({
-                        ...latestRev,
-                        ipNumbers: latestRev.ipNumbers || (latestRev.ipNumber ? latestRev.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []))),
-                        isOriginal: latestRev.reviseNo === 'Original PI'
-                    });
-                }
-            });
-        }
-        return list;
-    };
-
     return (
         <div className="pi-management space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                {!showForm && !showReviseForm ? (
+                {!showForm && !showReviseForm && !showTenPercentForm ? (
                     <>
                         <div className="w-full md:w-1/4 text-center md:text-left">
                             <h2 className="text-2xl font-bold text-gray-800" style={{ margin: 0 }}>Proforma Invoice (PI)</h2>
@@ -3157,7 +3513,7 @@ function PI({
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                {!showForm && !showReviseForm && (
+                {!showForm && !showReviseForm && !showTenPercentForm && (
                     <div className="w-full md:w-auto flex flex-row justify-end gap-2 sm:gap-3 z-[60]">
                         {/* Filter Button & Panel */}
                         <div className="relative">
@@ -3424,7 +3780,11 @@ function PI({
                         {canManage && (
                             <>
                                 <button
-                                    onClick={() => setShowReviseForm(true)}
+                                    onClick={() => {
+                                        setShowForm(false);
+                                        setShowTenPercentForm(false);
+                                        setShowReviseForm(true);
+                                    }}
                                     className="flex-1 md:flex-none px-4 py-2 border border-blue-200 bg-blue-50/10 hover:bg-blue-50/50 text-blue-600 font-bold rounded-xl transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap text-sm h-[40px]"
                                 >
                                     <FileTextIcon className="w-4 h-4 mr-1.5 text-blue-500" />
@@ -3433,6 +3793,8 @@ function PI({
                                 <button
                                     onClick={() => {
                                         resetForm();
+                                        setShowReviseForm(false);
+                                        setShowTenPercentForm(false);
                                         setShowForm(true);
                                     }}
                                     className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap h-[40px]"
@@ -5574,7 +5936,375 @@ function PI({
                 </div>
             )}
 
-            {!showForm && !showReviseForm && (
+            {showTenPercentForm && (
+                <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-5 md:p-8 transition-all duration-300">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
+                        <div className="flex items-center gap-3 shrink-0">
+                            <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                                <FileTextIcon className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base font-black text-gray-800">10% Value Added PI</span>
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
+                                        QTY +10%
+                                    </span>
+                                </div>
+                                <p className="text-xs text-gray-500 font-medium">Edit & Print Only • No database changes</p>
+                            </div>
+                        </div>
+
+                        {/* Dropdown to select PI */}
+                        <div className="flex-1 max-w-md w-full relative dropdown-container" ref={tenPercentPiRef}>
+                            <div className="relative w-full">
+                                <input
+                                    type="text"
+                                    placeholder="Search or select PI number..."
+                                    value={tenPercentSearchQuery}
+                                    onChange={(e) => {
+                                        setTenPercentSearchQuery(e.target.value);
+                                        setActiveDropdown('tenPercentPi');
+                                        setHighlightedIndex(-1);
+                                    }}
+                                    onFocus={() => {
+                                        setActiveDropdown('tenPercentPi');
+                                        setHighlightedIndex(-1);
+                                    }}
+                                    className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-center text-sm shadow-sm h-[38px]"
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                    <ChevronDownIcon className="w-4 h-4" />
+                                </div>
+                            </div>
+                            {activeDropdown === 'tenPercentPi' && filteredPiRecordsForTenPercent.length > 0 && (
+                                <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                    {filteredPiRecordsForTenPercent.map((pi) => (
+                                        <button
+                                            key={pi._id}
+                                            type="button"
+                                            onClick={() => handleSelectPiForTenPercent(pi, 'Original PI')}
+                                            className="w-full px-4 py-2 text-center text-sm flex justify-between items-center hover:bg-blue-50 text-gray-700 font-semibold"
+                                        >
+                                            <span className="flex-1 text-center font-bold text-gray-800">{pi.piNumber}</span>
+                                            <span className="text-xs text-gray-400 font-normal pr-4">{pi.partyName || '-'}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={resetTenPercentForm}
+                            className="p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
+                            title="Close Form"
+                        >
+                            <XIcon className="w-5 h-5 text-gray-400 group-hover:text-rose-500" />
+                        </button>
+                    </div>
+
+                    {selectedTenPercentPiId && selectedPiForTenPercent ? (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full text-left">
+                            {/* Revision Selector if PI has revisions */}
+                            {(() => {
+                                const timeline = getHistoryTimeline(selectedPiForTenPercent);
+                                if (timeline.length <= 1) return null;
+                                return (
+                                    <div className="flex flex-wrap items-center gap-2 bg-blue-50/50 p-3 rounded-xl border border-blue-200/50">
+                                        <span className="text-xs font-black text-blue-900 uppercase tracking-wider mr-2">Select Version / Revision:</span>
+                                        {timeline.map((item, idx) => {
+                                            const isSelected = selectedTenPercentRevisionNo.trim().toLowerCase() === (item.reviseNo || '').trim().toLowerCase();
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onClick={() => handleSwitchTenPercentRevision(item.reviseNo)}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${isSelected ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-blue-100 border border-blue-200'}`}
+                                                >
+                                                    {item.reviseNo}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+
+                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                                {/* Left Column: Reference Details */}
+                                <div className="lg:col-span-1 space-y-4 bg-gray-50/50 border border-gray-100 rounded-2xl p-5">
+                                    <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">Selected PI Info</h4>
+                                    <div className="space-y-3 text-xs">
+                                        <div className="border-b border-gray-200/50 pb-2">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">PI Number</span>
+                                            <p className="font-bold text-gray-800">{selectedPiForTenPercent.piNumber}</p>
+                                        </div>
+                                        <div className="border-b border-gray-200/50 pb-2">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">Version</span>
+                                            <p className="font-bold text-blue-700">{selectedTenPercentRevisionNo}</p>
+                                        </div>
+                                        <div className="border-b border-gray-200/50 pb-2">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">Importer</span>
+                                            <p className="font-semibold text-gray-700">{selectedPiForTenPercent.partyName || 'N/A'}</p>
+                                        </div>
+                                        <div className="border-b border-gray-200/50 pb-2">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">Exporter</span>
+                                            <p className="font-semibold text-gray-700">{selectedPiForTenPercent.exporterName || 'N/A'}</p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 border-b border-gray-200/50 pb-2">
+                                            <div>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">PI Date</span>
+                                                <p className="font-medium text-gray-700">{formatDate(tenPercentFormData.date)}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">Validity</span>
+                                                <p className="font-medium text-gray-700">{formatDate(tenPercentFormData.validityDate)}</p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">IP Number(s)</span>
+                                            <p className="font-medium text-gray-700 break-words">{tenPercentFormData.ipNumber || 'N/A'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Middle & Right Columns: Editable 10% PI Details */}
+                                <div className="lg:col-span-3 space-y-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                                    {/* 10% Value Stat Card */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-blue-50/50 border border-blue-100">
+                                        <div>
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Original Qty</span>
+                                            <p className="text-base font-bold text-gray-600">
+                                                {parseFloat(selectedVersionBaseInfo.grandTotalQuantity || 0).toLocaleString('en-US')} kg
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Total Qty</span>
+                                            <p className="text-base font-black text-blue-600">
+                                                {parseFloat(tenPercentFormData.grandTotalQuantity || 0).toLocaleString('en-US')} kg
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Original Total</span>
+                                            <p className="text-base font-bold text-gray-600">
+                                                ${parseFloat(selectedVersionBaseInfo.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Grand Total</span>
+                                            <p className="text-lg font-black text-emerald-600">
+                                                ${parseFloat(tenPercentFormData.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Top Form Fields */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">PI Number (PDF)</label>
+                                            <input
+                                                type="text"
+                                                value={tenPercentFormData.piNumber}
+                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, piNumber: e.target.value }))}
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-gray-800"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <CustomDatePicker
+                                                label="PI Date"
+                                                value={tenPercentFormData.date}
+                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, date: e.target.value }))}
+                                                compact={true}
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <CustomDatePicker
+                                                label="Validity Date"
+                                                value={tenPercentFormData.validityDate}
+                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, validityDate: e.target.value }))}
+                                                compact={true}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Products Table with Qty + 10% */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <h5 className="text-[11px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                                                <span>Products & Pricing</span>
+                                                <span className="text-[10px] font-normal text-blue-600">(Editable for Print)</span>
+                                            </h5>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSelectPiForTenPercent(selectedPiForTenPercent, selectedTenPercentRevisionNo)}
+                                                className="text-xs font-bold text-blue-700 hover:text-blue-800 underline flex items-center gap-1"
+                                            >
+                                                ↻ Reset to Original
+                                            </button>
+                                        </div>
+
+                                        <div className="overflow-x-auto rounded-xl border border-gray-200">
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="bg-gray-50 text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                                                        <th className="px-3 py-2.5">Product Name</th>
+                                                        <th className="px-3 py-2.5">HS Code</th>
+                                                        <th className="px-3 py-2.5">Orig Qty (kg)</th>
+                                                        <th className="px-3 py-2.5 text-blue-700 bg-blue-50/50">Qty (kg) *</th>
+                                                        <th className="px-3 py-2.5">Rate ($)</th>
+                                                        <th className="px-3 py-2.5">Freight ($)</th>
+                                                        <th className="px-3 py-2.5">Total Freight ($)</th>
+                                                        <th className="px-3 py-2.5 font-black text-right">Amount ($)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {(tenPercentFormData.productsList || []).map((prod, idx) => (
+                                                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                                                            <td className="px-3 py-2 font-bold text-gray-800">{prod.productName || '-'}</td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={prod.hsCode || ''}
+                                                                    onChange={(e) => handleTenPercentProductChange(idx, 'hsCode', e.target.value)}
+                                                                    className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-xs"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2 font-medium text-gray-400">
+                                                                {parseFloat(prod.origQuantity || 0).toLocaleString('en-US')} kg
+                                                            </td>
+                                                            <td className="px-3 py-2 bg-blue-50/30">
+                                                                <input
+                                                                    type="number"
+                                                                    value={prod.quantity || ''}
+                                                                    onChange={(e) => handleTenPercentProductChange(idx, 'quantity', e.target.value)}
+                                                                    className="w-28 px-2 py-1 border border-blue-300 bg-white font-bold text-blue-800 rounded-lg text-xs focus:ring-1 focus:ring-blue-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.0001"
+                                                                    value={prod.rate || ''}
+                                                                    onChange={(e) => handleTenPercentProductChange(idx, 'rate', e.target.value)}
+                                                                    className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-xs font-semibold"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.0001"
+                                                                    value={prod.freight || ''}
+                                                                    onChange={(e) => handleTenPercentProductChange(idx, 'freight', e.target.value)}
+                                                                    className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2 font-medium text-gray-600">
+                                                                ${parseFloat(prod.totalFreight || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-3 py-2 font-extrabold text-blue-700 text-right">
+                                                                ${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    {/* Additional Logistics / Options */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Place of Receipt</label>
+                                            <input
+                                                type="text"
+                                                value={tenPercentFormData.placeOfReceipt || ''}
+                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, placeOfReceipt: e.target.value }))}
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Port of Loading</label>
+                                            <input
+                                                type="text"
+                                                value={tenPercentFormData.portOfLoading || ''}
+                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, portOfLoading: e.target.value }))}
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Port of Discharge</label>
+                                            <input
+                                                type="text"
+                                                value={tenPercentFormData.portOfDischarge || ''}
+                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, portOfDischarge: e.target.value }))}
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Invoice Style & Remarks */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Invoice Style</label>
+                                            <select
+                                                value={tenPercentFormData.invoiceStyle || 'Style 1 SAA'}
+                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, invoiceStyle: e.target.value }))}
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold bg-white"
+                                            >
+                                                <option value="Style 1 SAA">Style 1 SAA</option>
+                                                <option value="Style 2 AAS">Style 2 AAS</option>
+                                                <option value="Style 3">Style 3</option>
+                                            </select>
+                                        </div>
+                                        <div className="sm:col-span-2 space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Remarks / Special Conditions</label>
+                                            <input
+                                                type="text"
+                                                value={tenPercentFormData.remarks || ''}
+                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                                                placeholder="e.g. VALUE & QUANTITY ± 10% ACCEPTABLE."
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Bottom Actions */}
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-100">
+                                        <span className="text-xs text-blue-700 font-bold flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                                            Generates 10% PDF directly • Original data stays untouched
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={resetTenPercentForm}
+                                                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs rounded-xl transition-all active:scale-95"
+                                            >
+                                                Close
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handlePrintTenPercentPdf}
+                                                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs rounded-xl shadow-lg shadow-blue-500/20 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-1.5"
+                                            >
+                                                <PDFIcon className="w-4 h-4 text-white" />
+                                                <span>Print 10% PI PDF</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="py-16 text-center text-gray-400">
+                            <FileTextIcon className="w-12 h-12 mx-auto mb-3 text-blue-400/60" />
+                            <p className="text-sm font-bold text-gray-600">Select a PI from the dropdown above to load and edit its 10% Value Added copy</p>
+                            <p className="text-xs text-gray-400 mt-1">Both Original PI and Revisions can be selected and modified with +10% rate</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {!showForm && !showReviseForm && !showTenPercentForm && (
                 <div className="space-y-4">
                     {/* Desktop Table View */}
                     <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -6520,152 +7250,178 @@ function PI({
                                                 </div>
 
                                                 {/* Action Buttons under Cards */}
-                                                <div className="flex items-center justify-center gap-4 pt-6 pb-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const enriched = {
-                                                                ...viewHistoryRecord,
-                                                                ...activeRevision,
-                                                                piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
-                                                            };
-
-                                                            // Enrich exporter details if missing
-                                                            if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
-                                                                const exp = exporters?.find(e => e.name === enriched.exporterName);
-                                                                if (exp) {
-                                                                    enriched.exporterAddress = enriched.exporterAddress || exp.address;
-                                                                    enriched.exporterContact = enriched.exporterContact || exp.phone;
-                                                                    enriched.exporterEmail = enriched.exporterEmail || exp.email;
-                                                                    enriched.exporterSignature = enriched.exporterSignature || exp.signature;
-                                                                }
-                                                            }
-
-                                                            // Enrich importer details if missing
-                                                            if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
-                                                                const imp = importers?.find(i => i.name === enriched.partyName);
-                                                                if (imp) {
-                                                                    enriched.partyAddress = enriched.partyAddress || imp.address;
-                                                                    enriched.partyContact = enriched.partyContact || imp.phone;
-                                                                    enriched.partyEmail = enriched.partyEmail || imp.email;
-                                                                    enriched.partySignature = enriched.partySignature || imp.signature;
-                                                                }
-                                                            }
-
-                                                            if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
-                                                                generatePI2PDF(enriched);
-                                                            } else {
-                                                                generatePIPDF(enriched);
-                                                            }
-                                                        }}
-                                                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
-                                                    >
-                                                        <PDFIcon className="w-4 h-4 text-white" />
-                                                        <span>Print PI PDF</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const enriched = {
-                                                                ...viewHistoryRecord,
-                                                                ...activeRevision,
-                                                                piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
-                                                            };
-                                                            if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
-                                                                const exp = exporters?.find(e => e.name === enriched.exporterName);
-                                                                if (exp) {
-                                                                    enriched.exporterAddress = enriched.exporterAddress || exp.address;
-                                                                    enriched.exporterContact = enriched.exporterContact || exp.phone;
-                                                                    enriched.exporterEmail = enriched.exporterEmail || exp.email;
-                                                                    enriched.exporterSignature = enriched.exporterSignature || exp.signature;
-                                                                    enriched.exporterSeal = enriched.exporterSeal || exp.seal;
-                                                                }
-                                                            }
-                                                            if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
-                                                                const imp = importers?.find(i => i.name === enriched.partyName);
-                                                                if (imp) {
-                                                                    enriched.partyAddress = enriched.partyAddress || imp.address;
-                                                                    enriched.partyContact = enriched.partyContact || imp.phone;
-                                                                    enriched.partyEmail = enriched.partyEmail || imp.email;
-                                                                    enriched.partySignature = enriched.partySignature || imp.signature;
-                                                                }
-                                                            }
-                                                            generateBankApplicationPDF(enriched);
-                                                        }}
-                                                        className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
-                                                    >
-                                                        <FileTextIcon className="w-4 h-4 text-white" />
-                                                        <span>Bank Application</span>
-                                                    </button>
-                                                    {!activeRevision.isOriginal && canDeleteRevision && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setShowDeleteRevisionConfirm(true)}
-                                                            className="px-6 py-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 border border-red-200 shadow-sm"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4 text-red-500" />
-                                                            <span>Delete Revised PI</span>
-                                                        </button>
-                                                    )}
-                                                    {canManage && (
+                                                <div className="space-y-3 pt-6 pb-2">
+                                                    {/* Row 1: Document & PDF actions */}
+                                                    <div className="flex flex-wrap items-center justify-center gap-2.5">
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                setViewHistoryRecord(null);
-                                                                if (activeRevision.reviseNo === 'Original PI') {
-                                                                    handleEdit(viewHistoryRecord);
+                                                                const enriched = {
+                                                                    ...viewHistoryRecord,
+                                                                    ...activeRevision,
+                                                                    piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
+                                                                };
+
+                                                                // Enrich exporter details if missing
+                                                                if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                    const exp = exporters?.find(e => e.name === enriched.exporterName);
+                                                                    if (exp) {
+                                                                        enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                                                                        enriched.exporterContact = enriched.exporterContact || exp.phone;
+                                                                        enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                                                                        enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                                                                        enriched.exporterSeal = enriched.exporterSeal || exp.seal;
+                                                                    }
+                                                                }
+
+                                                                // Enrich importer details if missing
+                                                                if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+                                                                    const imp = importers?.find(i => i.name === enriched.partyName);
+                                                                    if (imp) {
+                                                                        enriched.partyAddress = enriched.partyAddress || imp.address;
+                                                                        enriched.partyContact = enriched.partyContact || imp.phone;
+                                                                        enriched.partyEmail = enriched.partyEmail || imp.email;
+                                                                        enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                    }
+                                                                }
+
+                                                                if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
+                                                                    generatePI2PDF(enriched);
                                                                 } else {
-                                                                    setSelectedRevisePiId(viewHistoryRecord._id);
-                                                                    setEditingRevisionOriginalNo(activeRevision.reviseNo);
-                                                                    setReviseSearchQuery(viewHistoryRecord.piNumber || '');
-                                                                    setReviseIpSearch('');
-                                                                    setActiveDropdown(null);
-                                                                    setHighlightedIndex(-1);
-
-                                                                    const initialProducts = (activeRevision.productsList && activeRevision.productsList.length > 0)
-                                                                        ? activeRevision.productsList
-                                                                        : getPiProductsList(viewHistoryRecord);
-                                                                    const ipNumbers = activeRevision.ipNumbers || [];
-                                                                    const mappedProducts = initialProducts.map(prod => {
-                                                                        if (prod._fromIp) return prod;
-                                                                        const matchingIp = ipNumbers.find(ipNum => {
-                                                                            const ipRec = ipRecords.find(r => r.ipNumber === ipNum);
-                                                                            return ipRec && ipRec.productName === prod.productName;
-                                                                        });
-                                                                        if (matchingIp) {
-                                                                            return { ...prod, _fromIp: matchingIp };
-                                                                        }
-                                                                        return prod;
-                                                                    });
-                                                                    const { list, grandTotal, grandTotalQuantity } = recalcReviseProducts(mappedProducts);
-
-                                                                    // Pre-fill reviseFormData with the specific activeRevision values
-                                                                    setReviseFormData({
-                                                                        reviseNo: activeRevision.reviseNo,
-                                                                        reviseDate: activeRevision.reviseDate ? activeRevision.reviseDate.split('T')[0] : new Date().toISOString().split('T')[0],
-                                                                        validityDate: activeRevision.validityDate && activeRevision.validityDate !== 'N/A (Historical)' ? activeRevision.validityDate.split('T')[0] : '',
-                                                                        placeOfReceipt: activeRevision.placeOfReceipt && activeRevision.placeOfReceipt !== 'N/A (Historical)' ? activeRevision.placeOfReceipt : '',
-                                                                        portOfLoading: activeRevision.portOfLoading && activeRevision.portOfLoading !== 'N/A (Historical)' ? activeRevision.portOfLoading : '',
-                                                                        portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
-                                                                        certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
-                                                                        packingType: activeRevision.packingType && activeRevision.packingType !== 'N/A (Historical)' ? activeRevision.packingType : '',
-                                                                        productsList: list,
-                                                                        grandTotal: grandTotal || (activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0),
-                                                                        grandTotalQuantity: grandTotalQuantity || (activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0),
-                                                                        remarks: activeRevision.remarks && activeRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? activeRevision.remarks : '',
-                                                                        ipNumbers: activeRevision.ipNumbers || []
-                                                                    });
-                                                                    setShowReviseForm(true);
+                                                                    generatePIPDF(enriched);
                                                                 }
                                                             }}
-                                                            data-action={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
-                                                            title={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
-                                                            aria-label={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
-                                                            className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                                                            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
                                                         >
-                                                            <EditIcon className="w-4 h-4 text-gray-500" />
-                                                            <span>{activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}</span>
+                                                            <PDFIcon className="w-4 h-4 text-white shrink-0" />
+                                                            <span>Print PI PDF</span>
                                                         </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const enriched = {
+                                                                    ...viewHistoryRecord,
+                                                                    ...activeRevision,
+                                                                    piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
+                                                                };
+                                                                if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                    const exp = exporters?.find(e => e.name === enriched.exporterName);
+                                                                    if (exp) {
+                                                                        enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                                                                        enriched.exporterContact = enriched.exporterContact || exp.phone;
+                                                                        enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                                                                        enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                                                                        enriched.exporterSeal = enriched.exporterSeal || exp.seal;
+                                                                    }
+                                                                }
+                                                                if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+                                                                    const imp = importers?.find(i => i.name === enriched.partyName);
+                                                                    if (imp) {
+                                                                        enriched.partyAddress = enriched.partyAddress || imp.address;
+                                                                        enriched.partyContact = enriched.partyContact || imp.phone;
+                                                                        enriched.partyEmail = enriched.partyEmail || imp.email;
+                                                                        enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                    }
+                                                                }
+                                                                generateBankApplicationPDF(enriched);
+                                                            }}
+                                                            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                                        >
+                                                            <FileTextIcon className="w-4 h-4 text-white shrink-0" />
+                                                            <span>Bank Application</span>
+                                                        </button>
+                                                        {canManage && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setViewHistoryRecord(null);
+                                                                    setShowForm(false);
+                                                                    setShowReviseForm(false);
+                                                                    setShowTenPercentForm(true);
+                                                                    handleSelectPiForTenPercent(viewHistoryRecord, activeRevision.reviseNo);
+                                                                }}
+                                                                className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 border border-blue-200 shadow-sm whitespace-nowrap"
+                                                            >
+                                                                <FileTextIcon className="w-4 h-4 text-blue-600 shrink-0" />
+                                                                <span>10% PI</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Row 2: Edit then Delete */}
+                                                    {(canManage || (!activeRevision.isOriginal && canDeleteRevision)) && (
+                                                        <div className="flex flex-wrap items-center justify-center gap-2.5">
+                                                            {canManage && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setViewHistoryRecord(null);
+                                                                        if (activeRevision.reviseNo === 'Original PI') {
+                                                                            handleEdit(viewHistoryRecord);
+                                                                        } else {
+                                                                            setSelectedRevisePiId(viewHistoryRecord._id);
+                                                                            setEditingRevisionOriginalNo(activeRevision.reviseNo);
+                                                                            setReviseSearchQuery(viewHistoryRecord.piNumber || '');
+                                                                            setReviseIpSearch('');
+                                                                            setActiveDropdown(null);
+                                                                            setHighlightedIndex(-1);
+
+                                                                            const initialProducts = (activeRevision.productsList && activeRevision.productsList.length > 0)
+                                                                                ? activeRevision.productsList
+                                                                                : getPiProductsList(viewHistoryRecord);
+                                                                            const ipNumbers = activeRevision.ipNumbers || [];
+                                                                            const mappedProducts = initialProducts.map(prod => {
+                                                                                if (prod._fromIp) return prod;
+                                                                                const matchingIp = ipNumbers.find(ipNum => {
+                                                                                    const ipRec = ipRecords.find(r => r.ipNumber === ipNum);
+                                                                                    return ipRec && ipRec.productName === prod.productName;
+                                                                                });
+                                                                                if (matchingIp) {
+                                                                                    return { ...prod, _fromIp: matchingIp };
+                                                                                }
+                                                                                return prod;
+                                                                            });
+                                                                            const { list, grandTotal, grandTotalQuantity } = recalcReviseProducts(mappedProducts);
+
+                                                                            // Pre-fill reviseFormData with the specific activeRevision values
+                                                                            setReviseFormData({
+                                                                                reviseNo: activeRevision.reviseNo,
+                                                                                reviseDate: activeRevision.reviseDate ? activeRevision.reviseDate.split('T')[0] : new Date().toISOString().split('T')[0],
+                                                                                validityDate: activeRevision.validityDate && activeRevision.validityDate !== 'N/A (Historical)' ? activeRevision.validityDate.split('T')[0] : '',
+                                                                                placeOfReceipt: activeRevision.placeOfReceipt && activeRevision.placeOfReceipt !== 'N/A (Historical)' ? activeRevision.placeOfReceipt : '',
+                                                                                portOfLoading: activeRevision.portOfLoading && activeRevision.portOfLoading !== 'N/A (Historical)' ? activeRevision.portOfLoading : '',
+                                                                                portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
+                                                                                certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
+                                                                                packingType: activeRevision.packingType && activeRevision.packingType !== 'N/A (Historical)' ? activeRevision.packingType : '',
+                                                                                productsList: list,
+                                                                                grandTotal: grandTotal || (activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0),
+                                                                                grandTotalQuantity: grandTotalQuantity || (activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0),
+                                                                                remarks: activeRevision.remarks && activeRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? activeRevision.remarks : '',
+                                                                                ipNumbers: activeRevision.ipNumbers || []
+                                                                            });
+                                                                            setShowReviseForm(true);
+                                                                        }
+                                                                    }}
+                                                                    data-action={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
+                                                                    title={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
+                                                                    aria-label={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
+                                                                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                                                >
+                                                                    <EditIcon className="w-4 h-4 text-gray-500 shrink-0" />
+                                                                    <span>{activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}</span>
+                                                                </button>
+                                                            )}
+                                                            {!activeRevision.isOriginal && canDeleteRevision && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setShowDeleteRevisionConfirm(true)}
+                                                                    className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 border border-red-200 shadow-sm whitespace-nowrap"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4 text-red-500 shrink-0" />
+                                                                    <span>Delete Revised PI</span>
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>

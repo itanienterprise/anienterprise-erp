@@ -4948,6 +4948,11 @@ apiRouter.post('/api/logs/client-action', async (req, res) => {
         if (cleanDetails.targetId) pruned.targetId = cleanDetails.targetId;
         if (cleanDetails.targetName) pruned.targetName = cleanDetails.targetName;
         if (cleanDetails.receiptNo) pruned.receiptNo = cleanDetails.receiptNo;
+        if (cleanDetails.piNumber) pruned.piNumber = cleanDetails.piNumber;
+        if (cleanDetails.revisionNo) pruned.revisionNo = cleanDetails.revisionNo;
+        if (cleanDetails.totalAmount) pruned.totalAmount = cleanDetails.totalAmount;
+        if (cleanDetails.totalQuantity) pruned.totalQuantity = cleanDetails.totalQuantity;
+        if (cleanDetails.partyName) pruned.partyName = cleanDetails.partyName;
       }
 
       const doc = {
