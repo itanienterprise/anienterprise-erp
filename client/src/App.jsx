@@ -605,6 +605,28 @@ function App() {
     }
   }, [isAuthenticated, currentUser]);
 
+  // Sync profile details (including profilePhoto) on load
+  useEffect(() => {
+    if (isAuthenticated && currentUser && currentUser.profilePhoto === undefined) {
+      axios.get(`${API_BASE_URL}/api/profile`)
+        .then(res => {
+          if (res.data) {
+            setCurrentUser(prev => {
+              const updated = {
+                ...prev,
+                profilePhoto: res.data.profilePhoto || null,
+                name: prev?.name || res.data.name
+              };
+              localStorage.setItem('currentUser', JSON.stringify(updated));
+              return updated;
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isAuthenticated, currentUser?.username, currentUser?.profilePhoto]);
+
+
   // Global auto-backup auto-download polling for administrators
   useEffect(() => {
     if (!isAuthenticated || !currentUser) return;
@@ -2300,11 +2322,19 @@ function App() {
                 className="relative group focus:outline-none flex-shrink-0"
                 title={isMini ? (currentUser?.name || currentUser?.username || 'Profile (Click to expand)') : undefined}
               >
-                <img
-                  src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
-                  alt="Profile"
-                  className="w-9 h-9 rounded-full border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
-                />
+                {currentUser?.profilePhoto ? (
+                  <img
+                    src={currentUser.profilePhoto}
+                    alt="Profile"
+                    className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
+                  />
+                ) : (
+                  <img
+                    src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
+                    alt="Profile"
+                    className="w-9 h-9 rounded-full border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
+                  />
+                )}
               </button>
               <div className={`transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'w-auto opacity-100 max-w-[150px] ml-3'}`}>
                 <p className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-tight truncate">
@@ -3289,6 +3319,13 @@ function App() {
         <Profile
           currentUser={currentUser}
           onClose={() => setShowProfile(false)}
+          onPhotoUpdate={(newPhoto) => {
+            setCurrentUser(prev => {
+              const updated = { ...prev, profilePhoto: newPhoto };
+              localStorage.setItem('currentUser', JSON.stringify(updated));
+              return updated;
+            });
+          }}
         />
       )}
     </div>

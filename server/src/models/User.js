@@ -14,6 +14,10 @@ const userSchema = new mongoose.Schema({
     role: {
         type: String,
         default: 'admin'
+    },
+    profilePhoto: {
+        type: String, // Base64 encoded image
+        default: null
     }
 }, { timestamps: true });
 
