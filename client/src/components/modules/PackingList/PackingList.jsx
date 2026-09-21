@@ -685,9 +685,9 @@ function PackingList({
         const displayPiNumber = isRevised ? `${rawPi.piNumber} (REVISED)` : (rawPi.piNumber || '');
 
         // Look up the LC that references this PI number
-        const cleanPiNo = rawPi.piNumber || '';
+        const cleanPiNo = (rawPi.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
         const matchedLcByPi = lcRecords?.find(lc => {
-            const lcPi = (lc.piNo || '').replace(' (REVISED)', '');
+            const lcPi = (lc.piNo || '').replace(' (REVISED)', '').trim().toLowerCase();
             return lcPi === cleanPiNo;
         });
 
@@ -806,34 +806,34 @@ function PackingList({
         setFormData(prev => ({
             ...prev,
             piNumber: displayPiNumber,
-            piDate: piDate ? piDate.split('T')[0] : '',
-            partyName: rawPi.partyName || '',
-            partyAddress: rawPi.partyAddress || '',
-            partyContact: rawPi.partyContact || '',
-            exporterName: rawPi.exporterName || '',
-            exporterAddress: rawPi.exporterAddress || '',
-            exporterContact: rawPi.exporterContact || '',
-            exporterEmail: rawPi.exporterEmail || '',
-            portOfLoading: rawPi.portOfLoading || '',
-            portOfDischarge: rawPi.portOfDischarge || '',
-            vesselFlightNo: rawPi.vesselFlightNo || 'BY TRUCK',
-            preCarriageBy: rawPi.preCarriageBy || 'ROAD',
-            placeOfReceipt: rawPi.placeOfReceipt || rawPi.placeOfReceiptByPreCarrier || 'BY ROAD',
-            finalDestination: rawPi.finalDestination || 'BANGLADESH',
-            marksNo: rawPi.marksNo || '',
-            buyerOrderNo: rawPi.buyerOrderNo || '',
-            buyerOrderDate: rawPi.buyerOrderDate ? rawPi.buyerOrderDate.split('T')[0] : '',
-            lcNumber: matchedLcByPi ? (matchedLcByPi.lcNo || '') : '',
-            lcDate: matchedLcByPi ? (matchedLcByPi.openingDate ? matchedLcByPi.openingDate.split('T')[0] : '') : '',
-            partySignature: rawPi.partySignature || '',
-            exporterSignature: rawPi.exporterSignature || '',
-            invoiceStyle: rawPi.invoiceStyle || 'Style 2 AAS',
-            bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : (rawPi.bankName || ''),
-            branchName: matchedLcByPi ? (matchedLcByPi.bankBranch || '') : (rawPi.bankBranch || ''),
+            piDate: piDate ? (typeof piDate === 'string' && piDate.includes('T') ? piDate.split('T')[0] : piDate) : (prev.piDate || ''),
+            partyName: rawPi.partyName || prev.partyName || '',
+            partyAddress: rawPi.partyAddress || prev.partyAddress || '',
+            partyContact: rawPi.partyContact || prev.partyContact || '',
+            exporterName: rawPi.exporterName || prev.exporterName || '',
+            exporterAddress: rawPi.exporterAddress || prev.exporterAddress || '',
+            exporterContact: rawPi.exporterContact || prev.exporterContact || '',
+            exporterEmail: rawPi.exporterEmail || prev.exporterEmail || '',
+            portOfLoading: selectedRev.portOfLoading || rawPi.portOfLoading || prev.portOfLoading || '',
+            portOfDischarge: selectedRev.portOfDischarge || rawPi.portOfDischarge || prev.portOfDischarge || '',
+            vesselFlightNo: rawPi.vesselFlightNo || prev.vesselFlightNo || 'BY TRUCK',
+            preCarriageBy: rawPi.preCarriageBy || prev.preCarriageBy || 'ROAD',
+            placeOfReceipt: selectedRev.placeOfReceipt || rawPi.placeOfReceipt || rawPi.placeOfReceiptByPreCarrier || prev.placeOfReceipt || 'BY ROAD',
+            finalDestination: rawPi.finalDestination || prev.finalDestination || 'BANGLADESH',
+            marksNo: rawPi.marksNo || prev.marksNo || '',
+            buyerOrderNo: rawPi.buyerOrderNo || prev.buyerOrderNo || '',
+            buyerOrderDate: rawPi.buyerOrderDate ? (typeof rawPi.buyerOrderDate === 'string' && rawPi.buyerOrderDate.includes('T') ? rawPi.buyerOrderDate.split('T')[0] : rawPi.buyerOrderDate) : (prev.buyerOrderDate || ''),
+            lcNumber: matchedLcByPi ? (matchedLcByPi.lcNo || '') : (rawPi.lcNumber || prev.lcNumber || ''),
+            lcDate: matchedLcByPi ? (matchedLcByPi.openingDate ? (typeof matchedLcByPi.openingDate === 'string' && matchedLcByPi.openingDate.includes('T') ? matchedLcByPi.openingDate.split('T')[0] : matchedLcByPi.openingDate) : '') : (prev.lcDate || ''),
+            partySignature: rawPi.partySignature || prev.partySignature || '',
+            exporterSignature: rawPi.exporterSignature || prev.exporterSignature || '',
+            invoiceStyle: rawPi.invoiceStyle || prev.invoiceStyle || 'Style 2 AAS',
+            bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : (rawPi.bankName || prev.bankName || ''),
+            branchName: matchedLcByPi ? (matchedLcByPi.bankBranch || '') : (rawPi.bankBranch || prev.branchName || ''),
             bankBin: (() => {
-                const bName = matchedLcByPi ? (matchedLcByPi.bankName || '') : (rawPi.bankName || '');
+                const bName = matchedLcByPi ? (matchedLcByPi.bankName || '') : (rawPi.bankName || prev.bankName || '');
                 const mBank = banks.find(b => (b.bankName || '').trim().toLowerCase() === (bName || '').trim().toLowerCase());
-                return matchedLcByPi?.bankBin || rawPi.bankBin || mBank?.binNo || mBank?.bin || '';
+                return matchedLcByPi?.bankBin || rawPi.bankBin || mBank?.binNo || mBank?.bin || prev.bankBin || '';
             })(),
             trNumber: isRevised && prevTrNumber ? prevTrNumber : (isRevised ? prev.trNumber : prev.trNumber),
             trName: isRevised && prevTrName ? prevTrName : (isRevised ? prev.trName : prev.trName),
@@ -1354,14 +1354,12 @@ function PackingList({
             if (hasRevisions) {
                 const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
                 list.push({
-                    ...pi,
-                    ...(originalRev || {}),
                     _dropdownKey: `${pi._id}-original`,
                     isRevisedOption: false,
-                    displayPiNumber: pi.piNumber,
+                    displayPiNumber: pi.piNumber || '',
                     revisionLabel: 'ORIGINAL',
                     selectedRevisionNo: 'Original PI',
-                    displayDate: (originalRev && originalRev.date) || pi.date || pi.piDate,
+                    displayDate: (originalRev && (originalRev.reviseDate || originalRev.date)) || pi.date || pi.piDate || '',
                     partyName: pi.partyName || (originalRev && originalRev.partyName) || '',
                     rawPi: pi
                 });
@@ -1370,27 +1368,24 @@ function PackingList({
                     .filter(r => r.reviseNo !== 'Original PI')
                     .forEach((rev, revIdx) => {
                         list.push({
-                            ...pi,
-                            ...rev,
                             _dropdownKey: `${pi._id}-${rev.reviseNo || revIdx}`,
                             isRevisedOption: true,
-                            displayPiNumber: `${pi.piNumber} (REVISED)`,
+                            displayPiNumber: `${pi.piNumber || ''} (REVISED)`,
                             revisionLabel: rev.reviseNo,
                             selectedRevisionNo: rev.reviseNo,
-                            displayDate: rev.reviseDate || rev.amendmentDate || rev.date || pi.date,
+                            displayDate: rev.reviseDate || rev.amendmentDate || rev.date || pi.date || '',
                             partyName: pi.partyName || rev.partyName || '',
                             rawPi: pi
                         });
                     });
             } else {
                 list.push({
-                    ...pi,
                     _dropdownKey: pi._id,
                     isRevisedOption: false,
-                    displayPiNumber: pi.piNumber,
+                    displayPiNumber: pi.piNumber || '',
                     revisionLabel: null,
                     selectedRevisionNo: 'Original PI',
-                    displayDate: pi.date || pi.piDate,
+                    displayDate: pi.date || pi.piDate || '',
                     partyName: pi.partyName || '',
                     rawPi: pi
                 });
@@ -1888,7 +1883,16 @@ function PackingList({
                                                 <button
                                                     key={pi._dropdownKey || idx}
                                                     type="button"
-                                                    onClick={() => handleFormPiSelect(pi)}
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleFormPiSelect(pi);
+                                                    }}
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleFormPiSelect(pi);
+                                                    }}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                                     className={`w-full px-3.5 py-2.5 text-left text-sm flex items-center justify-between transition-colors ${
                                                         isHighlighted || isSelected
