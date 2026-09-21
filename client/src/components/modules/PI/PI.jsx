@@ -1196,6 +1196,9 @@ function PI({
                 const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === value.toLowerCase().trim());
                 if (matchedPort) {
                     updated.placeOfReceipt = matchedPort.placeOfReceipt || '';
+                    if (matchedPort.portOfLoading) {
+                        updated.portOfLoading = matchedPort.portOfLoading;
+                    }
                 }
             }
 
@@ -1626,6 +1629,21 @@ function PI({
                                 const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === ip.port.toLowerCase().trim());
                                 if (matchedPort) {
                                     updated.placeOfReceipt = matchedPort.placeOfReceipt || '';
+                                    if (matchedPort.portOfLoading) {
+                                        updated.portOfLoading = matchedPort.portOfLoading;
+                                    }
+                                }
+                            }
+                            if (ip.portOfLoading) {
+                                updated.portOfLoading = ip.portOfLoading;
+                            }
+                        } else if (!updated.portOfLoading) {
+                            if (ip.portOfLoading) {
+                                updated.portOfLoading = ip.portOfLoading;
+                            } else if (ip.port) {
+                                const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === ip.port.toLowerCase().trim());
+                                if (matchedPort && matchedPort.portOfLoading) {
+                                    updated.portOfLoading = matchedPort.portOfLoading;
                                 }
                             }
                         }
@@ -1704,6 +1722,9 @@ function PI({
                 const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === value.toLowerCase().trim());
                 if (matchedPort) {
                     updated.placeOfReceipt = matchedPort.placeOfReceipt || '';
+                    if (matchedPort.portOfLoading) {
+                        updated.portOfLoading = matchedPort.portOfLoading;
+                    }
                 }
             }
 
@@ -2922,6 +2943,14 @@ function PI({
         setReviseFormData(prev => {
             const updated = { ...prev, [field]: value };
 
+            if (field === 'portOfDischarge') {
+                const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === value.toLowerCase().trim());
+                if (matchedPort) {
+                    if (matchedPort.placeOfReceipt) updated.placeOfReceipt = matchedPort.placeOfReceipt;
+                    if (matchedPort.portOfLoading) updated.portOfLoading = matchedPort.portOfLoading;
+                }
+            }
+
             if (field === 'certification') {
                 setCertSearch('');
                 const currentCert = prev.certification || '';
@@ -3069,8 +3098,30 @@ function PI({
 
             const { list: recalculatedList, grandTotal, grandTotalQuantity } = recalcReviseProducts(updatedProductsList);
 
+            let extraFields = {};
+            if (!alreadySelected && (updatedIpNumbers.length === 1 || !prev.portOfLoading)) {
+                if (ip.port) {
+                    if (updatedIpNumbers.length === 1) {
+                        extraFields.portOfDischarge = ip.port;
+                    }
+                    const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === ip.port.toLowerCase().trim());
+                    if (matchedPort) {
+                        if (matchedPort.placeOfReceipt && (updatedIpNumbers.length === 1 || !prev.placeOfReceipt)) {
+                            extraFields.placeOfReceipt = matchedPort.placeOfReceipt;
+                        }
+                        if (matchedPort.portOfLoading && (updatedIpNumbers.length === 1 || !prev.portOfLoading)) {
+                            extraFields.portOfLoading = matchedPort.portOfLoading;
+                        }
+                    }
+                }
+                if (ip.portOfLoading) {
+                    extraFields.portOfLoading = ip.portOfLoading;
+                }
+            }
+
             return {
                 ...prev,
+                ...extraFields,
                 ipNumbers: updatedIpNumbers,
                 productsList: recalculatedList,
                 grandTotal,

@@ -35,6 +35,7 @@ const Port = ({
         name: '',
         location: '',
         placeOfReceipt: '',
+        portOfLoading: '',
         code: '',
         type: 'Seaport',
         status: 'Active'
@@ -90,7 +91,7 @@ const Port = ({
     };
 
     const resetForm = () => {
-        setFormData({ name: '', location: '', placeOfReceipt: '', code: '', type: 'Seaport', status: 'Active' });
+        setFormData({ name: '', location: '', placeOfReceipt: '', portOfLoading: '', code: '', type: 'Seaport', status: 'Active' });
         setEditingId(null);
         setSubmitStatus(null);
     };
@@ -100,6 +101,7 @@ const Port = ({
             name: port.name || '',
             location: port.location || '',
             placeOfReceipt: port.placeOfReceipt || '',
+            portOfLoading: port.portOfLoading || '',
             code: port.code || '',
             type: port.type || 'Seaport',
             status: port.status || 'Active'
@@ -152,6 +154,7 @@ const Port = ({
             (port.code || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (port.location || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (port.placeOfReceipt || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (port.portOfLoading || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (port.type || '').toLowerCase().includes(searchQuery.toLowerCase())
         );
 
@@ -244,6 +247,10 @@ const Port = ({
                             <input type="text" name="placeOfReceipt" value={formData.placeOfReceipt} onChange={handleInputChange} placeholder="e.g., ICD Kamalapur" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" />
                         </div>
                         <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Port of Loading</label>
+                            <input type="text" name="portOfLoading" value={formData.portOfLoading} onChange={handleInputChange} placeholder="e.g., Petrapole / Shanghai" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" />
+                        </div>
+                        <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700">Port Type</label>
                             <select name="type" value={formData.type} onChange={handleInputChange} className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all">
                                 <option>Seaport</option>
@@ -287,6 +294,7 @@ const Port = ({
                                         <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('code')}>Code</th>
                                         <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('location')}>Location</th>
                                         <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('placeOfReceipt')}>Place of Receipt</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('portOfLoading')}>Port of Loading</th>
                                         <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('type')}>Type</th>
                                         <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100" onClick={() => requestSort('status')}>Status</th>
                                         <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Actions</th>
@@ -294,13 +302,14 @@ const Port = ({
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {isLoading ? (
-                                        Array(5).fill(0).map((_, i) => <tr key={i}><td colSpan="7" className="px-6 py-4 animate-pulse bg-gray-100/50"></td></tr>)
+                                        Array(5).fill(0).map((_, i) => <tr key={i}><td colSpan="8" className="px-6 py-4 animate-pulse bg-gray-100/50"></td></tr>)
                                     ) : displayPorts.map((port) => (
                                         <tr key={port._id} className="hover:bg-gray-50/50 transition-colors group">
                                             <td className="px-6 py-4 text-[13px] font-bold text-gray-700">{port.name}</td>
                                             <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{port.code}</td>
                                             <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{port.location}</td>
                                             <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{port.placeOfReceipt || '-'}</td>
+                                            <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{port.portOfLoading || '-'}</td>
                                             <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{port.type}</td>
                                             <td className="px-6 py-4 text-[13px] font-medium">
                                                 <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${port.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-gray-50 text-gray-600 border border-gray-100'}`}>{port.status}</span>
@@ -368,6 +377,11 @@ const Port = ({
                                                         <span className="w-36 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Place of Receipt</span>
                                                         <span className="text-gray-400 font-bold mr-3 shrink-0">:</span>
                                                         <span className="font-bold text-gray-700 leading-tight">{port.placeOfReceipt || '-'}</span>
+                                                    </div>
+                                                    <div className="flex items-start text-[13px]">
+                                                        <span className="w-36 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Port of Loading</span>
+                                                        <span className="text-gray-400 font-bold mr-3 shrink-0">:</span>
+                                                        <span className="font-bold text-gray-700 leading-tight">{port.portOfLoading || '-'}</span>
                                                     </div>
                                                     <div className="flex items-center text-[13px]">
                                                         <span className="w-36 text-[11px] font-bold text-blue-400 uppercase tracking-wider shrink-0">Type</span>
