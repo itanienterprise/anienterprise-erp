@@ -6120,7 +6120,7 @@ function PI({
 
             {showTenPercentForm && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-                    <div className="bg-white w-full max-w-6xl max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-y-auto border border-gray-100 animate-in zoom-in-95 duration-200 p-5 md:p-8 my-auto text-left relative">
+                    <div className="bg-white w-full max-w-[95vw] 2xl:max-w-[1550px] xl:max-w-[1450px] max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-y-auto border border-gray-100 animate-in zoom-in-95 duration-200 p-5 md:p-8 my-auto text-left relative">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
                         <div className="flex items-center gap-3 shrink-0">
                             <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
@@ -7219,7 +7219,7 @@ function PI({
                 if (typeof document === 'undefined' || !document.body) return null;
                 return createPortal(
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                        <div className="bg-white w-full max-w-6xl h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <div className="bg-white w-full max-w-[95vw] 2xl:max-w-[1550px] xl:max-w-[1450px] h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
                             {/* Modal Header */}
                             <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                                 <div className="flex items-center gap-3">
@@ -7250,7 +7250,7 @@ function PI({
                             {/* Modal Body */}
                             <div className="flex-1 flex overflow-hidden min-h-0">
                                 {/* Left Sidebar: Timeline */}
-                                <div className="w-60 border-r border-gray-100 overflow-y-auto p-6 bg-gray-50/30 flex-shrink-0">
+                                <div className="w-72 border-r border-gray-100 overflow-y-auto p-6 bg-gray-50/30 flex-shrink-0">
                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Revision Timeline</h4>
                                     <div className="relative border-l border-gray-200 pl-6 ml-3 space-y-8">
                                         {timeline.map((rev, idx) => {
