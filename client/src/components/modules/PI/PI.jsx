@@ -7576,7 +7576,7 @@ function PI({
                                                     </div>
 
                                                     {/* Row 2: Edit then Delete */}
-                                                    {(canManage || (!activeRevision.isOriginal && canDeleteRevision)) && (
+                                                    {!activeRevision.isTenPercent && (canManage || (!activeRevision.isOriginal && canDeleteRevision)) && (
                                                         <div className="flex flex-wrap items-center justify-center gap-2.5">
                                                             {canManage && (
                                                                 <button
