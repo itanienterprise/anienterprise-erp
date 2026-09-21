@@ -44,8 +44,68 @@ const numberToWordsUSD = (amount) => {
 const getRevName = (name) => {
     if (!name) return 'Original PI';
     if (name === 'Original PI') return 'Original PI';
+    if (name.includes('10%')) {
+        const match = name.match(/REVISE NO-(\d+)/i) || name.match(/Revised\s+(\d+)/i);
+        return match ? `10% PI (Revised ${parseInt(match[1])})` : name;
+    }
     const match = name.match(/REVISE NO-(\d+)/i);
     return match ? `Revised ${parseInt(match[1])}` : name;
+};
+
+const getAvailableRevisions = (rawPi) => {
+    if (!rawPi) return [];
+    const list = [];
+    const revisions = Array.isArray(rawPi.revisions) ? rawPi.revisions : [];
+
+    // 1. Original PI
+    const hasOriginal = revisions.some(r => r.reviseNo === 'Original PI');
+    if (hasOriginal) {
+        list.push(revisions.find(r => r.reviseNo === 'Original PI'));
+    } else {
+        list.push({ reviseNo: 'Original PI', date: rawPi.date });
+    }
+
+    // 2. Standard revisions (REVISE NO-01, etc.)
+    revisions.filter(r => r.reviseNo !== 'Original PI').forEach(rev => {
+        list.push(rev);
+    });
+
+    // 3. 10% PI records (from tenPercentRecords or tenPercentRecord)
+    const tenPercentRecs = Array.isArray(rawPi.tenPercentRecords)
+        ? rawPi.tenPercentRecords
+        : (rawPi.tenPercentRecord ? [rawPi.tenPercentRecord] : []);
+
+    if (tenPercentRecs.length > 0) {
+        tenPercentRecs.forEach(tRec => {
+            const revNo = tRec.reviseNo || (tRec.sourceRevisionNo && tRec.sourceRevisionNo !== 'Original PI' ? `10% PI (${tRec.sourceRevisionNo})` : '10% PI');
+            if (!list.some(item => item.reviseNo === revNo)) {
+                list.push({
+                    ...tRec,
+                    reviseNo: revNo,
+                    isTenPercent: true
+                });
+            }
+        });
+    } else {
+        // Dynamic options if not yet saved
+        const nonOrigRevisions = revisions.filter(r => r.reviseNo !== 'Original PI');
+        if (nonOrigRevisions.length > 0) {
+            nonOrigRevisions.forEach(rev => {
+                list.push({
+                    reviseNo: `10% PI (${rev.reviseNo})`,
+                    sourceRevisionNo: rev.reviseNo,
+                    isTenPercent: true
+                });
+            });
+        }
+        list.push({
+            reviseNo: '10% PI',
+            sourceRevisionNo: 'Original PI',
+            isTenPercent: true
+        });
+    }
+
+    return list;
 };
 
 function PackingList({
@@ -681,8 +741,29 @@ function PackingList({
     };
 
     const loadPiRevision = (rawPi, revisionNo) => {
-        const isRevised = revisionNo && revisionNo !== 'Original PI';
-        const displayPiNumber = isRevised ? `${rawPi.piNumber} (REVISED)` : (rawPi.piNumber || '');
+        const isTenPercent = Boolean(revisionNo && (revisionNo.includes('10%') || revisionNo.startsWith('10% PI')));
+        const isRevised = !isTenPercent && revisionNo && revisionNo !== 'Original PI';
+        const revisions = rawPi.revisions || [];
+
+        // Check for saved 10% PI records if isTenPercent
+        const tenPercentRecs = Array.isArray(rawPi.tenPercentRecords)
+            ? rawPi.tenPercentRecords
+            : (rawPi.tenPercentRecord ? [rawPi.tenPercentRecord] : []);
+
+        const matchedTenRec = isTenPercent
+            ? (tenPercentRecs.find(t => {
+                if (t.reviseNo === revisionNo) return true;
+                const tSource = (t.sourceRevisionNo || 'Original PI').trim().toLowerCase();
+                const curRev = (revisionNo || '').trim().toLowerCase();
+                return curRev.includes(tSource);
+            }) || (tenPercentRecs.length > 0 ? tenPercentRecs[0] : null))
+            : null;
+
+        const isRevSource = isTenPercent
+            ? (matchedTenRec?.sourceRevisionNo ? matchedTenRec.sourceRevisionNo !== 'Original PI' : (revisionNo.includes('REVISE') || revisionNo.includes('Revised')))
+            : isRevised;
+
+        const displayPiNumber = isRevSource ? `${rawPi.piNumber} (REVISED)` : (rawPi.piNumber || '');
 
         // Look up the LC that references this PI number
         const cleanPiNo = (rawPi.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
@@ -691,10 +772,10 @@ function PackingList({
             return lcPi === cleanPiNo;
         });
 
-        // The revisions array in rawPi
-        const revisions = rawPi.revisions || [];
-        // The selected revision object (could be 'Original PI' or subsequent revisions)
-        const selectedRev = revisions.find(r => r.reviseNo === revisionNo) || rawPi;
+        // The selected revision object (could be 10% record, 'Original PI', or subsequent revisions)
+        const selectedRev = isTenPercent
+            ? (matchedTenRec || revisions.find(r => r.reviseNo === revisionNo) || rawPi)
+            : (revisions.find(r => r.reviseNo === revisionNo) || rawPi);
 
         // Use the selected revision's date if available
         const piDate = selectedRev.reviseDate || selectedRev.date || rawPi.date || '';
@@ -702,7 +783,68 @@ function PackingList({
         let revisedTotalAmount = 0;
         let mappedProducts = [];
 
-        if (isRevised && revisions.length > 0) {
+        if (isTenPercent) {
+            // If we have a saved 10% record, use its productsList directly
+            if (matchedTenRec && Array.isArray(matchedTenRec.productsList) && matchedTenRec.productsList.length > 0) {
+                mappedProducts = matchedTenRec.productsList.map(p => {
+                    const qtyStr = String(p.quantity || '');
+                    const rateVal = parseFloat(p.rate) || 0;
+                    const freightVal = parseFloat(p.freight) || 0;
+                    const amt = p.amount ? parseFloat(p.amount) : ((parseFloat(qtyStr) || 0) * rateVal);
+                    const frt = p.totalFreight ? parseFloat(p.totalFreight) : ((parseFloat(qtyStr) || 0) * freightVal);
+                    revisedTotalAmount += (amt + frt);
+                    return {
+                        productName: p.productName || '',
+                        hsCode: p.hsCode || '',
+                        quantity: qtyStr,
+                        bagCount: '',
+                        packingType: resolvePiPackingType(p, matchedTenRec, rawPi),
+                        netWeight: qtyStr,
+                        grossWeight: '',
+                        rate: p.rate || '',
+                        amount: amt > 0 ? String(amt.toFixed(2)) : (p.amount || ''),
+                        freight: p.freight || '',
+                        totalFreight: frt > 0 ? String(frt.toFixed(2)) : (p.totalFreight || '')
+                    };
+                });
+            } else {
+                // Dynamic fallback: take base products from source revision or rawPi and apply +10%
+                const sourceRev = revisions.find(r => {
+                    if (revisionNo.includes(r.reviseNo)) return true;
+                    const match = revisionNo.match(/REVISE NO-(\d+)/i) || revisionNo.match(/Revised\s+(\d+)/i);
+                    if (match) {
+                        const num = parseInt(match[1], 10);
+                        return (r.reviseNo || '').includes(String(num)) || (r.reviseNo || '').includes(String(num).padStart(2, '0'));
+                    }
+                    return false;
+                }) || (revisions.length > 0 ? revisions[revisions.length - 1] : rawPi);
+
+                const productsSource = sourceRev.productsList || rawPi.productsList || [];
+                mappedProducts = productsSource.map(p => {
+                    const baseQty = parseFloat(p.quantity) || 0;
+                    const tenQty = Math.round(baseQty * 1.10);
+                    const qtyStr = String(tenQty);
+                    const rateVal = parseFloat(p.rate) || 0;
+                    const freightVal = parseFloat(p.freight) || 0;
+                    const amt = tenQty * rateVal;
+                    const frt = tenQty * freightVal;
+                    revisedTotalAmount += (amt + frt);
+                    return {
+                        productName: p.productName || '',
+                        hsCode: p.hsCode || '',
+                        quantity: qtyStr,
+                        bagCount: '',
+                        packingType: resolvePiPackingType(p, sourceRev, rawPi),
+                        netWeight: qtyStr,
+                        grossWeight: '',
+                        rate: p.rate || '',
+                        amount: amt > 0 ? String(amt.toFixed(2)) : (p.amount || ''),
+                        freight: p.freight || '',
+                        totalFreight: frt > 0 ? String(frt.toFixed(2)) : (p.totalFreight || '')
+                    };
+                });
+            }
+        } else if (isRevised && revisions.length > 0) {
             // Find index of selected revision
             const selectedRevIndex = revisions.findIndex(r => r.reviseNo === revisionNo);
             // Baseline revision to compare against: immediately preceding revision (selectedRevIndex - 1), or Original PI
@@ -835,13 +977,17 @@ function PackingList({
                 const mBank = banks.find(b => (b.bankName || '').trim().toLowerCase() === (bName || '').trim().toLowerCase());
                 return matchedLcByPi?.bankBin || rawPi.bankBin || mBank?.binNo || mBank?.bin || prev.bankBin || '';
             })(),
-            trNumber: isRevised && prevTrNumber ? prevTrNumber : (isRevised ? prev.trNumber : prev.trNumber),
-            trName: isRevised && prevTrName ? prevTrName : (isRevised ? prev.trName : prev.trName),
-            trDate: isRevised && prevTrDate ? prevTrDate : (isRevised ? prev.trDate : prev.trDate),
+            trNumber: isRevSource && prevTrNumber ? prevTrNumber : prev.trNumber,
+            trName: isRevSource && prevTrName ? prevTrName : prev.trName,
+            trDate: isRevSource && prevTrDate ? prevTrDate : prev.trDate,
             lcAmendment: (() => {
-                if (!isRevised) return '';
-                // Determine exact amendment number from selected revision (e.g. 'Revised 1' -> '01', 'Revised 2' -> '02')
-                const revNumMatch = (revisionNo || '').match(/\d+/);
+                if (!isRevSource) return '';
+                const targetRevForAmnd = isTenPercent
+                    ? (matchedTenRec?.sourceRevisionNo || (revisionNo.includes('REVISE') || revisionNo.includes('Revised') ? revisionNo : ''))
+                    : revisionNo;
+
+                if (!targetRevForAmnd || targetRevForAmnd === 'Original PI') return '';
+                const revNumMatch = targetRevForAmnd.match(/\d+/);
                 const amndIndex = revNumMatch ? parseInt(revNumMatch[0], 10) : 1;
                 const amndNoStr = String(amndIndex).padStart(2, '0');
 
@@ -864,8 +1010,8 @@ function PackingList({
             })(),
             descriptionGoods: rawPi.descriptionGoods || '',
             termsDeliveryPayment: rawPi.termsDeliveryPayment || '',
-            totalAmount: isRevised ? String(revisedTotalAmount.toFixed(2)) : (selectedRev.totalAmount || rawPi.totalAmount || ''),
-            totalAmountWords: isRevised ? numberToWordsUSD(revisedTotalAmount) : (selectedRev.totalAmountWords || rawPi.totalAmountWords || ''),
+            totalAmount: (isRevised || isTenPercent) ? String(revisedTotalAmount.toFixed(2)) : (selectedRev.totalAmount || rawPi.totalAmount || ''),
+            totalAmountWords: (isRevised || isTenPercent) ? numberToWordsUSD(revisedTotalAmount) : (selectedRev.totalAmountWords || rawPi.totalAmountWords || ''),
             countryOrigin: rawPi.countryOrigin || 'INDIA',
             countryFinalDest: rawPi.countryFinalDest || 'BANGLADESH',
             certification: rawPi.certification || '',
@@ -878,9 +1024,8 @@ function PackingList({
         }));
         setPiSearchQuery('');
         setActiveDropdown(null);
-        showToast(`Copied data from PI Number ${displayPiNumber}`);
+        showToast(`Copied data from PI Number ${displayPiNumber} (${getRevName(revisionNo)})`);
     };
-
     // Auto-populate form when a Proforma Invoice is selected
     const handlePISelect = (pi) => {
         const rawPi = pi.rawPi || pi;
@@ -1390,6 +1535,25 @@ function PackingList({
                     rawPi: pi
                 });
             }
+
+            // Also append 10% PI records if present
+            const tenPercentRecs = Array.isArray(pi.tenPercentRecords)
+                ? pi.tenPercentRecords
+                : (pi.tenPercentRecord ? [pi.tenPercentRecord] : []);
+            tenPercentRecs.forEach((tRec, tIdx) => {
+                const revNo = tRec.reviseNo || (tRec.sourceRevisionNo && tRec.sourceRevisionNo !== 'Original PI' ? `10% PI (${tRec.sourceRevisionNo})` : '10% PI');
+                list.push({
+                    _dropdownKey: `${pi._id}-tenpercent-${tIdx}`,
+                    isRevisedOption: true,
+                    isTenPercent: true,
+                    displayPiNumber: tRec.piNumber || (tRec.sourceRevisionNo && tRec.sourceRevisionNo !== 'Original PI' ? `${pi.piNumber || ''} (REVISED)` : (pi.piNumber || '')),
+                    revisionLabel: revNo,
+                    selectedRevisionNo: revNo,
+                    displayDate: tRec.reviseDate || tRec.date || pi.date || '',
+                    partyName: pi.partyName || tRec.partyName || '',
+                    rawPi: pi
+                });
+            });
         });
         return list;
     }, [piRecords]);
@@ -1726,7 +1890,7 @@ function PackingList({
                                     )}
                                 </div>
 
-                                {selectedPiRaw && selectedPiRaw.revisions && selectedPiRaw.revisions.length > 0 && (
+                                {selectedPiRaw && (
                                     <div className="w-full sm:w-64 animate-in fade-in slide-in-from-left-2 duration-300 flex items-center gap-2 relative">
                                         <span className="text-xs font-semibold text-blue-700 uppercase shrink-0">Revision:</span>
                                         <div className="relative flex-1">
@@ -1735,27 +1899,39 @@ function PackingList({
                                                 onClick={() => setActiveDropdown(activeDropdown === 'piRevisions' ? null : 'piRevisions')}
                                                 className="w-full px-4 py-2 border border-blue-200 rounded-lg text-sm bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-between outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium text-left"
                                             >
-                                                <span>{getRevName(formData.selectedRevisionNo || 'Original PI')}</span>
+                                                <span className="truncate">{getRevName(formData.selectedRevisionNo || 'Original PI')}</span>
                                                 <ChevronDownIcon className={`h-4 w-4 text-blue-400 transition-transform duration-200 ${activeDropdown === 'piRevisions' ? 'transform rotate-180' : ''}`} />
                                             </button>
                                             {activeDropdown === 'piRevisions' && (
                                                 <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                                    {selectedPiRaw.revisions.map((rev) => (
-                                                        <button
-                                                            key={rev.reviseNo}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                loadPiRevision(selectedPiRaw, rev.reviseNo);
-                                                                setActiveDropdown(null);
-                                                            }}
-                                                            className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center transition-colors ${(formData.selectedRevisionNo || 'Original PI') === rev.reviseNo
-                                                                    ? 'bg-blue-50 text-blue-700 font-semibold'
-                                                                    : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                                                    {getAvailableRevisions(selectedPiRaw).map((rev) => {
+                                                        const isSelected = (formData.selectedRevisionNo || 'Original PI') === rev.reviseNo;
+                                                        const is10 = rev.isTenPercent || String(rev.reviseNo).includes('10%');
+                                                        return (
+                                                            <button
+                                                                key={rev.reviseNo}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    loadPiRevision(selectedPiRaw, rev.reviseNo);
+                                                                    setActiveDropdown(null);
+                                                                }}
+                                                                className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center transition-colors ${
+                                                                    isSelected
+                                                                        ? is10 ? 'bg-purple-50 text-purple-700 font-semibold' : 'bg-blue-50 text-blue-700 font-semibold'
+                                                                        : is10 ? 'text-purple-700 hover:bg-purple-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
                                                                 }`}
-                                                        >
-                                                            <span>{getRevName(rev.reviseNo)}</span>
-                                                        </button>
-                                                    ))}
+                                                            >
+                                                                <span className="flex items-center gap-2">
+                                                                    <span>{getRevName(rev.reviseNo)}</span>
+                                                                    {is10 && (
+                                                                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                                                                            +10%
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </div>
@@ -1837,8 +2013,12 @@ function PackingList({
                                 <div className="flex items-center justify-between">
                                     <label className="text-sm font-medium text-gray-700">PI Number</label>
                                     {formData.selectedRevisionNo && formData.selectedRevisionNo !== 'Original PI' && (
-                                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                            {formData.selectedRevisionNo}
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                            formData.selectedRevisionNo.includes('10%')
+                                                ? 'text-purple-700 bg-purple-50 border-purple-200'
+                                                : 'text-amber-700 bg-amber-50 border-amber-200'
+                                        }`}>
+                                            {getRevName(formData.selectedRevisionNo)}
                                         </span>
                                     )}
                                 </div>
@@ -1905,11 +2085,13 @@ function PackingList({
                                                             <span className="font-semibold text-gray-900">{pi.displayPiNumber}</span>
                                                             {pi.revisionLabel && (
                                                                 <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
-                                                                    pi.isRevisedOption
-                                                                        ? 'text-amber-700 bg-amber-50 border-amber-200'
-                                                                        : 'text-blue-700 bg-blue-50 border-blue-200'
+                                                                    pi.isTenPercent
+                                                                        ? 'text-purple-700 bg-purple-50 border-purple-200'
+                                                                        : pi.isRevisedOption
+                                                                            ? 'text-amber-700 bg-amber-50 border-amber-200'
+                                                                            : 'text-blue-700 bg-blue-50 border-blue-200'
                                                                 }`}>
-                                                                    {pi.revisionLabel}
+                                                                    {getRevName(pi.revisionLabel)}
                                                                 </span>
                                                             )}
                                                         </div>
