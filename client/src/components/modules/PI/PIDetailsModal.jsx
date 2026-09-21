@@ -142,6 +142,25 @@ export const PIDetailsModal = ({
                 }
             });
         }
+
+        // Append 10% PI records if present
+        const tenPercentRecs = resolvedPi.tenPercentRecords || (resolvedPi.tenPercentRecord ? [resolvedPi.tenPercentRecord] : []);
+        if (tenPercentRecs.length > 0) {
+            tenPercentRecs.forEach(tRec => {
+                list.push({
+                    ...tRec,
+                    reviseNo: tRec.reviseNo || '10% PI',
+                    isTenPercent: true,
+                    isOriginal: false,
+                    reviseDate: tRec.reviseDate || tRec.savedAt || resolvedPi.date,
+                    productsList: tRec.productsList || [],
+                    grandTotal: tRec.grandTotal,
+                    grandTotalQuantity: tRec.grandTotalQuantity,
+                    ipNumbers: tRec.ipNumbers || (tRec.ipNumber ? String(tRec.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (resolvedPi.ipNumbers || []))
+                });
+            });
+        }
+
         return list;
     }, [resolvedPi]);
 
@@ -222,7 +241,10 @@ export const PIDetailsModal = ({
         const enriched = {
             ...resolvedPi,
             ...activeRevision,
-            piNumber: `${resolvedPi.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
+            piNumber: activeRevision.isTenPercent
+                ? (activeRevision.piNumber || resolvedPi.piNumber)
+                : `${resolvedPi.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
+            isTenPercent: !!activeRevision.isTenPercent
         };
 
         if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
@@ -338,23 +360,33 @@ export const PIDetailsModal = ({
                                     >
                                         {/* Timeline Bullet */}
                                         <div className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${isActive
-                                            ? 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
-                                            : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
+                                            ? rev.isTenPercent
+                                                ? 'bg-purple-600 border-purple-600 ring-4 ring-purple-100 scale-110 shadow-sm'
+                                                : 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
+                                            : rev.isTenPercent
+                                                ? 'bg-white border-purple-300 group-hover:border-purple-400 group-hover:scale-105'
+                                                : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
                                             }`} />
 
                                         {/* Timeline Content Card */}
                                         <div className={`p-4 rounded-2xl border transition-all ${isActive
-                                            ? 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
+                                            ? rev.isTenPercent
+                                                ? 'bg-white border-purple-200 shadow-md shadow-purple-500/5 ring-1 ring-purple-100'
+                                                : 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
                                             : 'bg-white/50 border-gray-100 hover:border-gray-200 hover:bg-white hover:shadow-sm'
                                             }`}>
-                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isOriginal
-                                                ? 'bg-blue-50 text-blue-700'
-                                                : 'bg-amber-50 text-amber-700'
+                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isTenPercent
+                                                ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                                : rev.isOriginal
+                                                    ? 'bg-blue-50 text-blue-700'
+                                                    : 'bg-amber-50 text-amber-700'
                                                 }`}>
                                                 {rev.reviseNo}
                                             </span>
                                             <p className="text-sm font-bold text-gray-800 mt-2">
-                                                {rev.isOriginal ? 'Initial Creation' : 'Revised State'}
+                                                {rev.isTenPercent
+                                                    ? '10% Value Added State'
+                                                    : rev.isOriginal ? 'Initial Creation' : 'Revised State'}
                                             </p>
                                             <p className="text-sm font-medium text-gray-500 mt-1 font-mono">
                                                 {formatDate(rev.reviseDate)}
@@ -544,16 +576,18 @@ export const PIDetailsModal = ({
                                             className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                                         >
                                             <PDFIcon className="w-4 h-4 text-white" />
-                                            <span>Print PI PDF</span>
+                                            <span>{activeRevision.isTenPercent ? 'Print 10% PI PDF' : 'Print PI PDF'}</span>
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={handlePrintBankApplication}
-                                            className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-                                        >
-                                            <FileTextIcon className="w-4 h-4 text-white" />
-                                            <span>Bank Application</span>
-                                        </button>
+                                        {!activeRevision.isTenPercent && (
+                                            <button
+                                                type="button"
+                                                onClick={handlePrintBankApplication}
+                                                className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                                            >
+                                                <FileTextIcon className="w-4 h-4 text-white" />
+                                                <span>Bank Application</span>
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, FileTextIcon, CheckIcon
+    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, FileTextIcon, CheckIcon, SaveIcon
 } from '../../Icons';
 import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
@@ -98,6 +98,7 @@ function PI({
     const [expandedCardId, setExpandedCardId] = useState(null);
     const [showReviseForm, setShowReviseForm] = useState(false);
     const [showTenPercentForm, setShowTenPercentForm] = useState(false);
+    const [isTenPercentSaving, setIsTenPercentSaving] = useState(false);
     const [selectedTenPercentPiId, setSelectedTenPercentPiId] = useState('');
     const [selectedTenPercentRevisionNo, setSelectedTenPercentRevisionNo] = useState('Original PI');
     const [tenPercentSearchQuery, setTenPercentSearchQuery] = useState('');
@@ -2435,6 +2436,25 @@ function PI({
                 }
             });
         }
+
+        // Append 10% PI records if present
+        const tenPercentRecs = record.tenPercentRecords || (record.tenPercentRecord ? [record.tenPercentRecord] : []);
+        if (tenPercentRecs.length > 0) {
+            tenPercentRecs.forEach(tRec => {
+                list.push({
+                    ...tRec,
+                    reviseNo: tRec.reviseNo || '10% PI',
+                    isTenPercent: true,
+                    isOriginal: false,
+                    reviseDate: tRec.reviseDate || tRec.savedAt || record.date,
+                    productsList: tRec.productsList || [],
+                    grandTotal: tRec.grandTotal,
+                    grandTotalQuantity: tRec.grandTotalQuantity,
+                    ipNumbers: tRec.ipNumbers || (tRec.ipNumber ? String(tRec.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || []))
+                });
+            });
+        }
+
         return list;
     };
 
@@ -2505,7 +2525,7 @@ function PI({
         });
     };
 
-    const handleSelectPiForTenPercent = (pi, revisionNo = 'Original PI') => {
+    const handleSelectPiForTenPercent = (pi, revisionNo = 'Original PI', forceReset = false) => {
         if (!pi) return;
         setSelectedTenPercentPiId(pi._id);
         setSelectedTenPercentRevisionNo(revisionNo);
@@ -2527,7 +2547,7 @@ function PI({
             );
         } catch (actErr) {}
 
-        const timeline = getHistoryTimeline(pi);
+        const timeline = getHistoryTimeline(pi).filter(t => !t.isTenPercent);
         const activeVersion = timeline.find(t => (t.reviseNo || '').trim().toLowerCase() === (revisionNo || '').trim().toLowerCase()) || timeline[0] || {};
 
         let sourceProducts = [];
@@ -2536,29 +2556,6 @@ function PI({
         } else if (revisionNo === 'Original PI') {
             sourceProducts = getPiProductsList(pi);
         }
-
-        let calculatedGrandTotal = 0;
-        let calculatedGrandTotalQty = 0;
-        const modifiedProducts = (sourceProducts || []).map(p => {
-            const origQty = parseFloat(p.quantity) || 0;
-            const rate = parseFloat(p.rate) || 0;
-            const freight = parseFloat(p.freight) || 0;
-            const amount = (origQty && rate) ? parseFloat((origQty * rate).toFixed(2)) : (parseFloat(p.amount) || 0);
-            const totalFreight = (origQty && freight) ? parseFloat((origQty * freight).toFixed(2)) : (parseFloat(p.totalFreight) || 0);
-
-            calculatedGrandTotal += (amount + totalFreight);
-            calculatedGrandTotalQty += origQty;
-
-            return {
-                ...p,
-                origQuantity: p.quantity || '',
-                quantity: p.quantity || '',
-                rate: p.rate || '',
-                amount: amount > 0 ? amount.toFixed(2) : (p.amount || ''),
-                freight: p.freight || '',
-                totalFreight: totalFreight > 0 ? totalFreight.toFixed(2) : (p.totalFreight || '')
-            };
-        });
 
         const origBaseQty = parseFloat(activeVersion.grandTotalQuantity || 0) || (sourceProducts.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0));
         const origBaseTotal = parseFloat(activeVersion.grandTotal || 0) || (sourceProducts.reduce((sum, p) => sum + ((parseFloat(p.quantity) || 0) * (parseFloat(p.rate) || 0) + (parseFloat(p.quantity) || 0) * (parseFloat(p.freight) || 0)), 0));
@@ -2585,6 +2582,83 @@ function PI({
         const certification = activeVersion.certification && !activeVersion.certification.includes('Historical') && activeVersion.certification !== 'N/A' ? activeVersion.certification : (pi.certification || '');
         const packingType = activeVersion.packingType && !activeVersion.packingType.includes('Historical') && activeVersion.packingType !== 'N/A' ? activeVersion.packingType : (pi.packingType || '');
         const remarks = activeVersion.remarks && !activeVersion.remarks.includes('Historical original') ? activeVersion.remarks : (pi.remarks || '');
+
+        // Check if there is a previously saved 10% record for this revision
+        const existingTenPercentList = pi.tenPercentRecords || (pi.tenPercentRecord ? [pi.tenPercentRecord] : []);
+        const targetRevKey = (revisionNo || 'Original PI').trim().toLowerCase();
+        const saved10Percent = !forceReset && existingTenPercentList.find(r => ((r.sourceRevisionNo || 'Original PI').trim().toLowerCase() === targetRevKey));
+
+        if (saved10Percent) {
+            const savedProducts = (saved10Percent.productsList || []).map((p, idx) => {
+                const baseP = sourceProducts[idx] || {};
+                return {
+                    ...p,
+                    origQuantity: p.origQuantity || baseP.quantity || p.quantity || ''
+                };
+            });
+
+            setTenPercentFormData({
+                piNumber: saved10Percent.piNumber || formattedPiNo,
+                piRevision: isRev ? `${activeVersion.reviseNo} DATE: ${formatDate(rawDate)}` : (pi.piRevision || ''),
+                date: saved10Percent.reviseDate || dateStr,
+                validityDate: saved10Percent.validityDate || valDateStr,
+                partyName: saved10Percent.partyName || pi.partyName || '',
+                partyAddress: saved10Percent.partyAddress || pi.partyAddress || '',
+                partyContact: saved10Percent.partyContact || pi.partyContact || '',
+                partyEmail: saved10Percent.partyEmail || pi.partyEmail || '',
+                exporterName: saved10Percent.exporterName || pi.exporterName || '',
+                exporterAddress: saved10Percent.exporterAddress || pi.exporterAddress || '',
+                exporterContact: saved10Percent.exporterContact || pi.exporterContact || '',
+                exporterEmail: saved10Percent.exporterEmail || pi.exporterEmail || '',
+                placeOfReceipt: saved10Percent.placeOfReceipt || placeOfReceipt,
+                portOfLoading: saved10Percent.portOfLoading || portOfLoading,
+                portOfDischarge: saved10Percent.portOfDischarge || portOfDischarge,
+                certification: saved10Percent.certification || certification,
+                packingType: saved10Percent.packingType || packingType,
+                invoiceStyle: saved10Percent.invoiceStyle || pi.invoiceStyle || 'Style 1 SAA',
+                indianBank: saved10Percent.indianBank || pi.indianBank || 'ICICI BANK LTD. KOLKATA.',
+                bankName: saved10Percent.bankName || pi.bankName || '',
+                bankBranch: saved10Percent.bankBranch || pi.bankBranch || '',
+                bankAccount: saved10Percent.bankAccount || pi.bankAccount || '',
+                bankBin: saved10Percent.bankBin || pi.bankBin || '',
+                buyerOrderNo: saved10Percent.buyerOrderNo || pi.buyerOrderNo || '',
+                buyerOrderDate: saved10Percent.buyerOrderDate || (pi.buyerOrderDate ? (pi.buyerOrderDate.includes('T') ? pi.buyerOrderDate.split('T')[0] : pi.buyerOrderDate) : ''),
+                otherReferences: saved10Percent.otherReferences || pi.otherReferences || '',
+                buyerName: saved10Percent.buyerName || pi.buyerName || '',
+                preCarriageBy: saved10Percent.preCarriageBy || pi.preCarriageBy || 'ROAD',
+                placeOfReceiptByPreCarrier: saved10Percent.placeOfReceiptByPreCarrier || pi.placeOfReceiptByPreCarrier || '',
+                remarks: saved10Percent.remarks !== undefined ? saved10Percent.remarks : remarks,
+                ipNumbers: saved10Percent.ipNumbers || ipNums,
+                ipNumber: saved10Percent.ipNumber || ipNums.join(', '),
+                productsList: savedProducts,
+                grandTotal: saved10Percent.grandTotal || '',
+                grandTotalQuantity: saved10Percent.grandTotalQuantity || ''
+            });
+            return;
+        }
+
+        let calculatedGrandTotal = 0;
+        let calculatedGrandTotalQty = 0;
+        const modifiedProducts = (sourceProducts || []).map(p => {
+            const origQty = parseFloat(p.quantity) || 0;
+            const rate = parseFloat(p.rate) || 0;
+            const freight = parseFloat(p.freight) || 0;
+            const amount = (origQty && rate) ? parseFloat((origQty * rate).toFixed(2)) : (parseFloat(p.amount) || 0);
+            const totalFreight = (origQty && freight) ? parseFloat((origQty * freight).toFixed(2)) : (parseFloat(p.totalFreight) || 0);
+
+            calculatedGrandTotal += (amount + totalFreight);
+            calculatedGrandTotalQty += origQty;
+
+            return {
+                ...p,
+                origQuantity: p.quantity || '',
+                quantity: p.quantity || '',
+                rate: p.rate || '',
+                amount: amount > 0 ? amount.toFixed(2) : (p.amount || ''),
+                freight: p.freight || '',
+                totalFreight: totalFreight > 0 ? totalFreight.toFixed(2) : (p.totalFreight || '')
+            };
+        });
 
         setTenPercentFormData({
             piNumber: formattedPiNo,
@@ -2672,6 +2746,109 @@ function PI({
                 grandTotalQuantity: grandTotalQtyVal > 0 ? grandTotalQtyVal.toFixed(2) : ''
             };
         });
+    };
+
+    const handleSaveTenPercentRecord = async () => {
+        if (!selectedPiForTenPercent) {
+            showToast('Please select a PI first.', 'error');
+            return;
+        }
+        setIsTenPercentSaving(true);
+        try {
+            const revNo = selectedTenPercentRevisionNo || 'Original PI';
+            const tenPercentRec = {
+                reviseNo: revNo === 'Original PI' ? '10% PI' : `10% PI (${revNo})`,
+                sourceRevisionNo: revNo,
+                savedAt: new Date().toISOString(),
+                reviseDate: tenPercentFormData.date || selectedPiForTenPercent.date || new Date().toISOString().split('T')[0],
+                validityDate: tenPercentFormData.validityDate || selectedPiForTenPercent.validityDate || '',
+                piNumber: tenPercentFormData.piNumber || selectedPiForTenPercent.piNumber,
+                placeOfReceipt: tenPercentFormData.placeOfReceipt || '',
+                portOfLoading: tenPercentFormData.portOfLoading || '',
+                portOfDischarge: tenPercentFormData.portOfDischarge || '',
+                certification: tenPercentFormData.certification || '',
+                packingType: tenPercentFormData.packingType || '',
+                invoiceStyle: tenPercentFormData.invoiceStyle || selectedPiForTenPercent.invoiceStyle || 'Style 1 SAA',
+                remarks: tenPercentFormData.remarks || '',
+                ipNumbers: tenPercentFormData.ipNumbers || [],
+                ipNumber: tenPercentFormData.ipNumber || (tenPercentFormData.ipNumbers || []).join(', '),
+                productsList: tenPercentFormData.productsList || [],
+                grandTotal: tenPercentFormData.grandTotal || '',
+                grandTotalQuantity: tenPercentFormData.grandTotalQuantity || '',
+                isTenPercent: true,
+                partyName: tenPercentFormData.partyName || selectedPiForTenPercent.partyName || '',
+                partyAddress: tenPercentFormData.partyAddress || selectedPiForTenPercent.partyAddress || '',
+                partyContact: tenPercentFormData.partyContact || selectedPiForTenPercent.partyContact || '',
+                partyEmail: tenPercentFormData.partyEmail || selectedPiForTenPercent.partyEmail || '',
+                exporterName: tenPercentFormData.exporterName || selectedPiForTenPercent.exporterName || '',
+                exporterAddress: tenPercentFormData.exporterAddress || selectedPiForTenPercent.exporterAddress || '',
+                exporterContact: tenPercentFormData.exporterContact || selectedPiForTenPercent.exporterContact || '',
+                exporterEmail: tenPercentFormData.exporterEmail || selectedPiForTenPercent.exporterEmail || '',
+                buyerOrderNo: tenPercentFormData.buyerOrderNo || '',
+                buyerOrderDate: tenPercentFormData.buyerOrderDate || '',
+                otherReferences: tenPercentFormData.otherReferences || '',
+                buyerName: tenPercentFormData.buyerName || '',
+                preCarriageBy: tenPercentFormData.preCarriageBy || 'ROAD',
+                placeOfReceiptByPreCarrier: tenPercentFormData.placeOfReceiptByPreCarrier || '',
+                indianBank: tenPercentFormData.indianBank || selectedPiForTenPercent.indianBank || '',
+                bankName: tenPercentFormData.bankName || selectedPiForTenPercent.bankName || '',
+                bankBranch: tenPercentFormData.bankBranch || selectedPiForTenPercent.bankBranch || '',
+                bankAccount: tenPercentFormData.bankAccount || selectedPiForTenPercent.bankAccount || '',
+                bankBin: tenPercentFormData.bankBin || selectedPiForTenPercent.bankBin || ''
+            };
+
+            const existingList = selectedPiForTenPercent.tenPercentRecords || (selectedPiForTenPercent.tenPercentRecord ? [selectedPiForTenPercent.tenPercentRecord] : []);
+            const targetRevKey = revNo.trim().toLowerCase();
+            const existingIdx = existingList.findIndex(r => ((r.sourceRevisionNo || 'Original PI').trim().toLowerCase() === targetRevKey));
+            let updatedList;
+            if (existingIdx >= 0) {
+                updatedList = [...existingList];
+                updatedList[existingIdx] = tenPercentRec;
+            } else {
+                updatedList = [...existingList, tenPercentRec];
+            }
+
+            const payload = {
+                ...selectedPiForTenPercent,
+                tenPercentRecord: tenPercentRec,
+                tenPercentRecords: updatedList
+            };
+
+            const res = await axios.put(`${API_BASE_URL}/api/pi/${selectedPiForTenPercent._id}`, payload);
+            const savedPi = res.data;
+
+            setRecords(prev => prev.map(p => p._id === selectedPiForTenPercent._id ? savedPi : p));
+            if (viewHistoryRecord && viewHistoryRecord._id === selectedPiForTenPercent._id) {
+                setViewHistoryRecord(savedPi);
+            }
+
+            const totalQty = parseFloat(tenPercentFormData.grandTotalQuantity || 0).toLocaleString('en-US');
+            const grandTotal = parseFloat(tenPercentFormData.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            try {
+                trackUserAction(
+                    `Saved 10% PI Record: ${selectedPiForTenPercent.piNumber} (${revNo}) • Total: $${grandTotal} • Qty: ${totalQty} kg`,
+                    'PI',
+                    {
+                        action: 'SAVE_TEN_PERCENT_PI',
+                        actionCategory: 'MUTATION',
+                        piNumber: selectedPiForTenPercent.piNumber,
+                        revisionNo: revNo,
+                        partyName: selectedPiForTenPercent.partyName || '',
+                        totalQuantity: String(totalQty),
+                        totalAmount: String(grandTotal),
+                        view: 'pi-section'
+                    }
+                );
+            } catch (actErr) {}
+
+            showToast('10% PI record saved successfully!', 'success');
+            fetchRecords(false);
+        } catch (err) {
+            console.error('Error saving 10% PI record:', err);
+            showToast(err.response?.data?.message || err.message || 'Failed to save 10% PI record', 'error');
+        } finally {
+            setIsTenPercentSaving(false);
+        }
     };
 
     const handlePrintTenPercentPdf = () => {
@@ -5950,7 +6127,7 @@ function PI({
                                         QTY +10%
                                     </span>
                                 </div>
-                                <p className="text-xs text-gray-500 font-medium">Edit & Print Only • No database changes</p>
+                                <p className="text-xs text-gray-500 font-medium">Edit, Save & Print 10% Record • Original PI stays untouched</p>
                             </div>
                         </div>
 
@@ -6007,21 +6184,27 @@ function PI({
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full text-left">
                             {/* Revision Selector if PI has revisions */}
                             {(() => {
-                                const timeline = getHistoryTimeline(selectedPiForTenPercent);
-                                if (timeline.length <= 1) return null;
+                                const baseTimeline = getHistoryTimeline(selectedPiForTenPercent).filter(t => !t.isTenPercent);
+                                if (baseTimeline.length <= 1) return null;
                                 return (
                                     <div className="flex flex-wrap items-center gap-2 bg-blue-50/50 p-3 rounded-xl border border-blue-200/50">
                                         <span className="text-xs font-black text-blue-900 uppercase tracking-wider mr-2">Select Version / Revision:</span>
-                                        {timeline.map((item, idx) => {
+                                        {baseTimeline.map((item, idx) => {
                                             const isSelected = selectedTenPercentRevisionNo.trim().toLowerCase() === (item.reviseNo || '').trim().toLowerCase();
+                                            const hasSaved = (selectedPiForTenPercent.tenPercentRecords || (selectedPiForTenPercent.tenPercentRecord ? [selectedPiForTenPercent.tenPercentRecord] : [])).some(r => ((r.sourceRevisionNo || 'Original PI').trim().toLowerCase() === (item.reviseNo || '').trim().toLowerCase()));
                                             return (
                                                 <button
                                                     key={idx}
                                                     type="button"
                                                     onClick={() => handleSwitchTenPercentRevision(item.reviseNo)}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${isSelected ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-blue-100 border border-blue-200'}`}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${isSelected ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-blue-100 border border-blue-200'}`}
                                                 >
-                                                    {item.reviseNo}
+                                                    <span>{item.reviseNo}</span>
+                                                    {hasSaved && (
+                                                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-extrabold ${isSelected ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700 border border-purple-200'}`}>
+                                                            Saved
+                                                        </span>
+                                                    )}
                                                 </button>
                                             );
                                         })}
@@ -6135,7 +6318,7 @@ function PI({
                                             </h5>
                                             <button
                                                 type="button"
-                                                onClick={() => handleSelectPiForTenPercent(selectedPiForTenPercent, selectedTenPercentRevisionNo)}
+                                                onClick={() => handleSelectPiForTenPercent(selectedPiForTenPercent, selectedTenPercentRevisionNo, true)}
                                                 className="text-xs font-bold text-blue-700 hover:text-blue-800 underline flex items-center gap-1"
                                             >
                                                 ↻ Reset to Original
@@ -6271,7 +6454,7 @@ function PI({
                                     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-100">
                                         <span className="text-xs text-blue-700 font-bold flex items-center gap-1.5">
                                             <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                                            Generates 10% PDF directly • Original data stays untouched
+                                            Save or Print 10% copy • Original data stays untouched
                                         </span>
                                         <div className="flex items-center gap-2">
                                             <button
@@ -6280,6 +6463,27 @@ function PI({
                                                 className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs rounded-xl transition-all active:scale-95"
                                             >
                                                 Close
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveTenPercentRecord}
+                                                disabled={isTenPercentSaving}
+                                                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {isTenPercentSaving ? (
+                                                    <>
+                                                        <svg className="animate-spin -ml-1 mr-1.5 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                        </svg>
+                                                        <span>Saving...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <SaveIcon className="w-4 h-4 text-white" />
+                                                        <span>Save 10% PI</span>
+                                                    </>
+                                                )}
                                             </button>
                                             <button
                                                 type="button"
@@ -7017,7 +7221,7 @@ function PI({
                                     <div>
                                         <h3 className="text-lg font-black text-gray-900 tracking-tight">Proforma Invoice History Explorer</h3>
                                         <p className="text-sm text-gray-500 font-medium">
-                                            PI Number: <span className="font-bold text-blue-600 font-mono">{viewHistoryRecord.piNumber}{viewHistoryRecord.revisions && viewHistoryRecord.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}</span>
+                                            PI Number: <span className="font-bold text-blue-600 font-mono">{activeRevision.isTenPercent ? (activeRevision.piNumber || `${viewHistoryRecord.piNumber} (10% VALUE ADDED)`) : `${viewHistoryRecord.piNumber}${viewHistoryRecord.revisions && viewHistoryRecord.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`}</span>
                                             {' • '}Date: <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate || viewHistoryRecord.date)}</span>
                                             {linkedLcNo && (
                                                 <>
@@ -7051,23 +7255,33 @@ function PI({
                                                 >
                                                     {/* Timeline Bullet */}
                                                     <div className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${isActive
-                                                        ? 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
-                                                        : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
+                                                        ? rev.isTenPercent
+                                                            ? 'bg-purple-600 border-purple-600 ring-4 ring-purple-100 scale-110 shadow-sm'
+                                                            : 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
+                                                        : rev.isTenPercent
+                                                            ? 'bg-white border-purple-300 group-hover:border-purple-400 group-hover:scale-105'
+                                                            : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
                                                         }`} />
 
                                                     {/* Timeline Content Card */}
                                                     <div className={`p-4 rounded-2xl border transition-all ${isActive
-                                                        ? 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
+                                                        ? rev.isTenPercent
+                                                            ? 'bg-white border-purple-200 shadow-md shadow-purple-500/5 ring-1 ring-purple-100'
+                                                            : 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
                                                         : 'bg-white/50 border-gray-100 hover:border-gray-200 hover:bg-white hover:shadow-sm'
                                                         }`}>
-                                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isOriginal
-                                                            ? 'bg-blue-50 text-blue-700'
-                                                            : 'bg-amber-50 text-amber-700'
+                                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isTenPercent
+                                                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                                            : rev.isOriginal
+                                                                ? 'bg-blue-50 text-blue-700'
+                                                                : 'bg-amber-50 text-amber-700'
                                                             }`}>
                                                             {rev.reviseNo}
                                                         </span>
                                                         <p className="text-sm font-bold text-gray-800 mt-2">
-                                                            {rev.isOriginal ? 'Initial Creation' : 'Revised State'}
+                                                            {rev.isTenPercent
+                                                                ? '10% Value Added State'
+                                                                : rev.isOriginal ? 'Initial Creation' : 'Revised State'}
                                                         </p>
                                                         <p className="text-sm font-medium text-gray-500 mt-1 font-mono">
                                                             {formatDate(rev.reviseDate)}
@@ -7259,7 +7473,10 @@ function PI({
                                                                 const enriched = {
                                                                     ...viewHistoryRecord,
                                                                     ...activeRevision,
-                                                                    piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
+                                                                    piNumber: activeRevision.isTenPercent
+                                                                        ? (activeRevision.piNumber || viewHistoryRecord.piNumber)
+                                                                        : `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
+                                                                    isTenPercent: !!activeRevision.isTenPercent
                                                                 };
 
                                                                 // Enrich exporter details if missing
@@ -7294,42 +7511,44 @@ function PI({
                                                             className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
                                                         >
                                                             <PDFIcon className="w-4 h-4 text-white shrink-0" />
-                                                            <span>Print PI PDF</span>
+                                                            <span>{activeRevision.isTenPercent ? 'Print 10% PI PDF' : 'Print PI PDF'}</span>
                                                         </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                const enriched = {
-                                                                    ...viewHistoryRecord,
-                                                                    ...activeRevision,
-                                                                    piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
-                                                                };
-                                                                if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
-                                                                    const exp = exporters?.find(e => e.name === enriched.exporterName);
-                                                                    if (exp) {
-                                                                        enriched.exporterAddress = enriched.exporterAddress || exp.address;
-                                                                        enriched.exporterContact = enriched.exporterContact || exp.phone;
-                                                                        enriched.exporterEmail = enriched.exporterEmail || exp.email;
-                                                                        enriched.exporterSignature = enriched.exporterSignature || exp.signature;
-                                                                        enriched.exporterSeal = enriched.exporterSeal || exp.seal;
+                                                        {!activeRevision.isTenPercent && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const enriched = {
+                                                                        ...viewHistoryRecord,
+                                                                        ...activeRevision,
+                                                                        piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
+                                                                    };
+                                                                    if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                        const exp = exporters?.find(e => e.name === enriched.exporterName);
+                                                                        if (exp) {
+                                                                            enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                                                                            enriched.exporterContact = enriched.exporterContact || exp.phone;
+                                                                            enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                                                                            enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                                                                            enriched.exporterSeal = enriched.exporterSeal || exp.seal;
+                                                                        }
                                                                     }
-                                                                }
-                                                                if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
-                                                                    const imp = importers?.find(i => i.name === enriched.partyName);
-                                                                    if (imp) {
-                                                                        enriched.partyAddress = enriched.partyAddress || imp.address;
-                                                                        enriched.partyContact = enriched.partyContact || imp.phone;
-                                                                        enriched.partyEmail = enriched.partyEmail || imp.email;
-                                                                        enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                    if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+                                                                        const imp = importers?.find(i => i.name === enriched.partyName);
+                                                                        if (imp) {
+                                                                            enriched.partyAddress = enriched.partyAddress || imp.address;
+                                                                            enriched.partyContact = enriched.partyContact || imp.phone;
+                                                                            enriched.partyEmail = enriched.partyEmail || imp.email;
+                                                                            enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                        }
                                                                     }
-                                                                }
-                                                                generateBankApplicationPDF(enriched);
-                                                            }}
-                                                            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
-                                                        >
-                                                            <FileTextIcon className="w-4 h-4 text-white shrink-0" />
-                                                            <span>Bank Application</span>
-                                                        </button>
+                                                                    generateBankApplicationPDF(enriched);
+                                                                }}
+                                                                className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                                            >
+                                                                <FileTextIcon className="w-4 h-4 text-white shrink-0" />
+                                                                <span>Bank Application</span>
+                                                            </button>
+                                                        )}
                                                         {canManage && (
                                                             <button
                                                                 type="button"
@@ -7338,12 +7557,13 @@ function PI({
                                                                     setShowForm(false);
                                                                     setShowReviseForm(false);
                                                                     setShowTenPercentForm(true);
-                                                                    handleSelectPiForTenPercent(viewHistoryRecord, activeRevision.reviseNo);
+                                                                    const targetRev = activeRevision.isTenPercent ? (activeRevision.sourceRevisionNo || 'Original PI') : activeRevision.reviseNo;
+                                                                    handleSelectPiForTenPercent(viewHistoryRecord, targetRev);
                                                                 }}
                                                                 className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 border border-blue-200 shadow-sm whitespace-nowrap"
                                                             >
                                                                 <FileTextIcon className="w-4 h-4 text-blue-600 shrink-0" />
-                                                                <span>10% PI</span>
+                                                                <span>{activeRevision.isTenPercent ? 'Edit 10% PI' : '10% PI'}</span>
                                                             </button>
                                                         )}
                                                     </div>
