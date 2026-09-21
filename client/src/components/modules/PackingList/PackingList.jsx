@@ -1891,7 +1891,7 @@ function PackingList({
                                 </div>
 
                                 {selectedPiRaw && (
-                                    <div className="w-full sm:w-64 animate-in fade-in slide-in-from-left-2 duration-300 flex items-center gap-2 relative">
+                                    <div className="w-full sm:w-80 animate-in fade-in slide-in-from-left-2 duration-300 flex items-center gap-2 relative">
                                         <span className="text-xs font-semibold text-blue-700 uppercase shrink-0">Revision:</span>
                                         <div className="relative flex-1">
                                             <button
@@ -1903,7 +1903,7 @@ function PackingList({
                                                 <ChevronDownIcon className={`h-4 w-4 text-blue-400 transition-transform duration-200 ${activeDropdown === 'piRevisions' ? 'transform rotate-180' : ''}`} />
                                             </button>
                                             {activeDropdown === 'piRevisions' && (
-                                                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                <div className="absolute z-50 left-0 sm:left-auto sm:right-0 min-w-full sm:min-w-[260px] mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                                     {getAvailableRevisions(selectedPiRaw).map((rev) => {
                                                         const isSelected = (formData.selectedRevisionNo || 'Original PI') === rev.reviseNo;
                                                         const is10 = rev.isTenPercent || String(rev.reviseNo).includes('10%');
@@ -1915,16 +1915,16 @@ function PackingList({
                                                                     loadPiRevision(selectedPiRaw, rev.reviseNo);
                                                                     setActiveDropdown(null);
                                                                 }}
-                                                                className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center transition-colors ${
+                                                                className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center transition-colors whitespace-nowrap ${
                                                                     isSelected
                                                                         ? is10 ? 'bg-purple-50 text-purple-700 font-semibold' : 'bg-blue-50 text-blue-700 font-semibold'
                                                                         : is10 ? 'text-purple-700 hover:bg-purple-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
                                                                 }`}
                                                             >
-                                                                <span className="flex items-center gap-2">
-                                                                    <span>{getRevName(rev.reviseNo)}</span>
+                                                                <span className="flex items-center gap-2 whitespace-nowrap">
+                                                                    <span className="whitespace-nowrap font-medium">{getRevName(rev.reviseNo)}</span>
                                                                     {is10 && (
-                                                                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                                                                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 shrink-0 whitespace-nowrap">
                                                                             +10%
                                                                         </span>
                                                                     )}
