@@ -2820,6 +2820,11 @@ function PI({
             setRecords(prev => prev.map(p => p._id === selectedPiForTenPercent._id ? savedPi : p));
             if (viewHistoryRecord && viewHistoryRecord._id === selectedPiForTenPercent._id) {
                 setViewHistoryRecord(savedPi);
+                const updatedTl = getHistoryTimeline(savedPi);
+                const tenPercentIdx = updatedTl.findIndex(t => t.isTenPercent && (t.sourceRevisionNo || 'Original PI').trim().toLowerCase() === revNo.trim().toLowerCase());
+                if (tenPercentIdx >= 0) {
+                    setActiveHistoryIndex(tenPercentIdx);
+                }
             }
 
             const totalQty = parseFloat(tenPercentFormData.grandTotalQuantity || 0).toLocaleString('en-US');
@@ -6113,9 +6118,10 @@ function PI({
                 </div>
             )}
 
-            {showTenPercentForm && (
-                <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-5 md:p-8 transition-all duration-300">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
+            {showTenPercentForm && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-6xl max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-y-auto border border-gray-100 animate-in zoom-in-95 duration-200 p-5 md:p-8 my-auto text-left relative">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
                         <div className="flex items-center gap-3 shrink-0">
                             <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
                                 <FileTextIcon className="w-5 h-5 text-blue-600" />
@@ -6505,10 +6511,12 @@ function PI({
                             <p className="text-xs text-gray-400 mt-1">Both Original PI and Revisions can be selected and modified with +10% rate</p>
                         </div>
                     )}
-                </div>
+                    </div>
+                </div>,
+                document.body
             )}
 
-            {!showForm && !showReviseForm && !showTenPercentForm && (
+            {!showForm && !showReviseForm && (
                 <div className="space-y-4">
                     {/* Desktop Table View */}
                     <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -7553,7 +7561,6 @@ function PI({
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setViewHistoryRecord(null);
                                                                     setShowForm(false);
                                                                     setShowReviseForm(false);
                                                                     setShowTenPercentForm(true);
