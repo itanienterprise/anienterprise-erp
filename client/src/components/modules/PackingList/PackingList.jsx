@@ -892,35 +892,7 @@ function PackingList({
         const rawPi = piItem.rawPi || piItem;
         setSelectedPiRaw(rawPi);
         const targetRevNo = piItem.selectedRevisionNo || 'Original PI';
-        const displayPi = piItem.displayPiNumber || rawPi.piNumber || '';
-
-        if (!editingId) {
-            loadPiRevision(rawPi, targetRevNo);
-        } else {
-            if (formData.piNumber === displayPi && formData.selectedRevisionNo === targetRevNo) {
-                setActiveDropdown(null);
-                return;
-            }
-
-            const wantsFullReload = window.confirm(
-                `Do you want to reload all packing list details (importer, LC, and products) from PI ${displayPi}?\n\n• OK: Overwrite and reload all fields from this PI\n• Cancel: Update only PI Number and Date`
-            );
-
-            if (wantsFullReload) {
-                loadPiRevision(rawPi, targetRevNo);
-            } else {
-                setFormData(prev => {
-                    const piDateVal = piItem.displayDate || rawPi.date || rawPi.piDate || '';
-                    return {
-                        ...prev,
-                        piNumber: displayPi,
-                        piDate: piDateVal ? piDateVal.split('T')[0] : prev.piDate,
-                        selectedRevisionNo: targetRevNo
-                    };
-                });
-                showToast(`Updated PI Number to ${displayPi}`);
-            }
-        }
+        loadPiRevision(rawPi, targetRevNo);
         setActiveDropdown(null);
     };
 
