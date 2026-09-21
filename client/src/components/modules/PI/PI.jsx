@@ -2808,12 +2808,29 @@ function PI({
         }
     };
 
+    // Helper: Map raw / IP product name to standard ERP product name for table display
+    const getStandardProductName = (rawName) => {
+        if (!rawName) return '';
+        const clean = String(rawName).trim().toLowerCase();
+        if (!clean) return '';
+        const matched = products.find(p => {
+            const pIpName = (p.ipName || '').trim().toLowerCase();
+            const pName = (p.name || '').trim().toLowerCase();
+            return (pIpName && pIpName === clean) || (pName && pName === clean);
+        });
+        return matched?.name || rawName;
+    };
+
     const filteredRecords = records.filter(record => {
         // Search Query Filter
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
-                (record.productsList && record.productsList.some(p => (p.productName || '').toLowerCase().includes(query)));
+                getStandardProductName(record.productName).toLowerCase().includes(query) ||
+                (record.productsList && record.productsList.some(p =>
+                    (p.productName || '').toLowerCase().includes(query) ||
+                    getStandardProductName(p.productName).toLowerCase().includes(query)
+                ));
             const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
             const isLcDone = checkIsLcDone(record);
             const computedStatus = isLcDone ? 'lc done' : ((!record.ipNumber && (!record.ipNumbers || record.ipNumbers.length === 0)) ? 'ip missing' : (record.status || '').toLowerCase());
@@ -5673,8 +5690,8 @@ function PI({
                                     ) : sortedRecords.length > 0 ? (
                                         sortedRecords.map((record, index) => {
                                             const displayProducts = record.productsList && record.productsList.length > 0
-                                                ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
-                                                : record.productName || 'N/A';
+                                                ? record.productsList.map(p => getStandardProductName(p.productName)).filter(Boolean).join(', ')
+                                                : (getStandardProductName(record.productName) || 'N/A');
 
                                             const totalQty = record.productsList && record.productsList.length > 0
                                                 ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
@@ -5710,23 +5727,22 @@ function PI({
                                                     <td className="px-2 py-3.5 text-sm text-gray-600 font-medium whitespace-nowrap">{formatDate(getRecordEffectiveCreateDate(record))}</td>
                                                     <td className="px-2 py-3.5 text-sm text-gray-600 font-medium whitespace-nowrap">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</td>
                                                     <td className="px-2 py-3.5 text-sm font-bold text-blue-600 whitespace-nowrap">
-                                                        {piList.length > 1 ? (
-                                                            <div className="flex flex-col gap-0.5 font-mono">
-                                                                {piList.map((pNum, idx) => (
+                                                        <div className="flex flex-col gap-0.5 font-mono items-start">
+                                                            {piList.length > 1 ? (
+                                                                piList.map((pNum, idx) => (
                                                                     <div key={idx} className="whitespace-nowrap">
                                                                         {pNum}
                                                                     </div>
-                                                                ))}
-                                                                {record.revisions && record.revisions.length > 0 && (
-                                                                    <span className="text-[10px] text-amber-600 font-bold tracking-wider">(REVISED)</span>
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="font-mono">
-                                                                {record.piNumber || '—'}
-                                                                {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
-                                                            </span>
-                                                        )}
+                                                                ))
+                                                            ) : (
+                                                                <div className="whitespace-nowrap">
+                                                                    {record.piNumber || '—'}
+                                                                </div>
+                                                            )}
+                                                            {record.revisions && record.revisions.length > 0 && (
+                                                                <span className="text-[10px] text-amber-600 font-bold tracking-wider leading-tight">(REVISED)</span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-2 py-3.5 text-sm font-semibold text-gray-700 whitespace-nowrap">
                                                         {ipList.length > 0 ? (
@@ -5758,12 +5774,15 @@ function PI({
                                                     <td className="px-2 py-3.5 text-sm text-gray-600">
                                                         {hasMultipleProducts ? (
                                                             <div className="flex flex-col gap-1">
-                                                                {record.productsList.map((p, idx) => (
-                                                                    <div key={idx} className="whitespace-nowrap font-medium text-gray-800 flex items-center gap-1.5" title={p.productName}>
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
-                                                                        <span>{p.productName}</span>
-                                                                    </div>
-                                                                ))}
+                                                                {record.productsList.map((p, idx) => {
+                                                                    const stdName = getStandardProductName(p.productName);
+                                                                    return (
+                                                                        <div key={idx} className="whitespace-nowrap font-medium text-gray-800 flex items-center gap-1.5" title={stdName}>
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                                                                            <span>{stdName}</span>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                                 <div className="whitespace-nowrap font-extrabold text-blue-700 text-xs border-t border-gray-200/80 pt-0.5 mt-0.5">
                                                                     Total:
                                                                 </div>
@@ -5931,8 +5950,8 @@ function PI({
                             sortedRecords.map((record, index) => {
                                 const isExpanded = expandedCardId === record._id;
                                 const displayProducts = record.productsList && record.productsList.length > 0
-                                    ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
-                                    : record.productName || 'N/A';
+                                    ? record.productsList.map(p => getStandardProductName(p.productName)).filter(Boolean).join(', ')
+                                    : (getStandardProductName(record.productName) || 'N/A');
 
                                 const totalQty = record.productsList && record.productsList.length > 0
                                     ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
@@ -5974,23 +5993,22 @@ function PI({
                                                     </span>
                                                     <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap mt-0.5">PI No.</span>
                                                     <span className="text-blue-500 font-bold mx-2 mt-0.5">-</span>
-                                                    {piList.length > 1 ? (
-                                                        <div className="flex flex-col gap-0.5 min-w-0">
-                                                            {piList.map((pNum, idx) => (
+                                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                                        {piList.length > 1 ? (
+                                                            piList.map((pNum, idx) => (
                                                                 <span key={idx} className="text-sm font-black text-gray-900 tracking-tight truncate">
                                                                     {pNum}
                                                                 </span>
-                                                            ))}
-                                                            {record.revisions && record.revisions.length > 0 && (
-                                                                <span className="text-[10px] font-bold text-amber-600">(REVISED)</span>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-sm font-black text-gray-900 tracking-tight truncate">
-                                                            {record.piNumber || 'N/A'}
-                                                            {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
-                                                        </span>
-                                                    )}
+                                                            ))
+                                                        ) : (
+                                                            <span className="text-sm font-black text-gray-900 tracking-tight truncate">
+                                                                {record.piNumber || 'N/A'}
+                                                            </span>
+                                                        )}
+                                                        {record.revisions && record.revisions.length > 0 && (
+                                                            <span className="text-[10px] font-bold text-amber-600 leading-tight">(REVISED)</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <div className="flex flex-col items-end gap-1 shrink-0">
                                                     {isLcDone && (
@@ -6083,9 +6101,10 @@ function PI({
                                                                 <div className="flex flex-col gap-1">
                                                                     {record.productsList.map((p, idx) => {
                                                                         const itemQty = parseFloat(p.quantity) || 0;
+                                                                        const stdName = getStandardProductName(p.productName);
                                                                         return (
                                                                             <div key={idx} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded-lg text-xs">
-                                                                                <span>{p.productName}</span>
+                                                                                <span>{stdName}</span>
                                                                                 <span className="text-blue-600 font-extrabold">{itemQty > 0 ? `${itemQty.toLocaleString('en-US')} kg` : ''}</span>
                                                                             </div>
                                                                         );
