@@ -888,6 +888,42 @@ function PackingList({
         loadPiRevision(rawPi, 'Original PI');
     };
 
+    const handleFormPiSelect = (piItem) => {
+        const rawPi = piItem.rawPi || piItem;
+        setSelectedPiRaw(rawPi);
+        const targetRevNo = piItem.selectedRevisionNo || 'Original PI';
+        const displayPi = piItem.displayPiNumber || rawPi.piNumber || '';
+
+        if (!editingId) {
+            loadPiRevision(rawPi, targetRevNo);
+        } else {
+            if (formData.piNumber === displayPi && formData.selectedRevisionNo === targetRevNo) {
+                setActiveDropdown(null);
+                return;
+            }
+
+            const wantsFullReload = window.confirm(
+                `Do you want to reload all packing list details (importer, LC, and products) from PI ${displayPi}?\n\n• OK: Overwrite and reload all fields from this PI\n• Cancel: Update only PI Number and Date`
+            );
+
+            if (wantsFullReload) {
+                loadPiRevision(rawPi, targetRevNo);
+            } else {
+                setFormData(prev => {
+                    const piDateVal = piItem.displayDate || rawPi.date || rawPi.piDate || '';
+                    return {
+                        ...prev,
+                        piNumber: displayPi,
+                        piDate: piDateVal ? piDateVal.split('T')[0] : prev.piDate,
+                        selectedRevisionNo: targetRevNo
+                    };
+                });
+                showToast(`Updated PI Number to ${displayPi}`);
+            }
+        }
+        setActiveDropdown(null);
+    };
+
     const handleProductsImageChange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -1174,6 +1210,8 @@ function PackingList({
                 const item = filteredList[indexToSelect];
                 if (dropdownKey === 'piList') {
                     handlePISelect(item);
+                } else if (dropdownKey === 'formPiList') {
+                    handleFormPiSelect(item);
                 } else if (dropdownKey === 'lcNumber') {
                     setFormData(prev => ({
                         ...prev,
@@ -1336,6 +1374,69 @@ function PackingList({
             return true;
         });
     }, [piOptions, piSearchQuery]);
+
+    const formPiOptions = useMemo(() => {
+        const list = [];
+        piRecords.forEach(pi => {
+            const hasRevisions = Array.isArray(pi.revisions) && pi.revisions.length > 0;
+            if (hasRevisions) {
+                const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
+                list.push({
+                    ...pi,
+                    ...(originalRev || {}),
+                    _dropdownKey: `${pi._id}-original`,
+                    isRevisedOption: false,
+                    displayPiNumber: pi.piNumber,
+                    revisionLabel: 'ORIGINAL',
+                    selectedRevisionNo: 'Original PI',
+                    displayDate: (originalRev && originalRev.date) || pi.date || pi.piDate,
+                    partyName: pi.partyName || (originalRev && originalRev.partyName) || '',
+                    rawPi: pi
+                });
+
+                pi.revisions
+                    .filter(r => r.reviseNo !== 'Original PI')
+                    .forEach((rev, revIdx) => {
+                        list.push({
+                            ...pi,
+                            ...rev,
+                            _dropdownKey: `${pi._id}-${rev.reviseNo || revIdx}`,
+                            isRevisedOption: true,
+                            displayPiNumber: `${pi.piNumber} (REVISED)`,
+                            revisionLabel: rev.reviseNo,
+                            selectedRevisionNo: rev.reviseNo,
+                            displayDate: rev.reviseDate || rev.amendmentDate || rev.date || pi.date,
+                            partyName: pi.partyName || rev.partyName || '',
+                            rawPi: pi
+                        });
+                    });
+            } else {
+                list.push({
+                    ...pi,
+                    _dropdownKey: pi._id,
+                    isRevisedOption: false,
+                    displayPiNumber: pi.piNumber,
+                    revisionLabel: null,
+                    selectedRevisionNo: 'Original PI',
+                    displayDate: pi.date || pi.piDate,
+                    partyName: pi.partyName || '',
+                    rawPi: pi
+                });
+            }
+        });
+        return list;
+    }, [piRecords]);
+
+    const filteredFormPIs = useMemo(() => {
+        if (!formData.piNumber) return formPiOptions;
+        const query = formData.piNumber.trim().toLowerCase();
+        const matches = formPiOptions.filter(pi => {
+            return (pi.displayPiNumber || '').toLowerCase().includes(query) ||
+                (pi.partyName || '').toLowerCase().includes(query) ||
+                (pi.revisionLabel || '').toLowerCase().includes(query);
+        });
+        return matches.length > 0 ? matches : formPiOptions;
+    }, [formPiOptions, formData.piNumber]);
 
 
     const filteredLcs = useMemo(() => {
@@ -1765,16 +1866,103 @@ function PackingList({
                                 />
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">PI Number</label>
-                                <input
-                                    type="text"
-                                    name="piNumber"
-                                    value={formData.piNumber}
-                                    onChange={handleInputChange}
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                    placeholder="PI Reference No"
-                                />
+                            <div className="space-y-2 relative dropdown-container">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-medium text-gray-700">PI Number</label>
+                                    {formData.selectedRevisionNo && formData.selectedRevisionNo !== 'Original PI' && (
+                                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                            {formData.selectedRevisionNo}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="piNumber"
+                                        value={formData.piNumber}
+                                        onChange={(e) => {
+                                            handleInputChange(e);
+                                            setActiveDropdown('formPiList');
+                                            setHighlightedIndex(-1);
+                                        }}
+                                        onFocus={() => {
+                                            setActiveDropdown('formPiList');
+                                            setHighlightedIndex(-1);
+                                        }}
+                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'formPiList', filteredFormPIs)}
+                                        className="w-full px-4 py-2 pr-9 bg-white/50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        placeholder="Select or enter PI Reference No"
+                                        autoComplete="off"
+                                    />
+                                    <button
+                                        type="button"
+                                        tabIndex={-1}
+                                        onClick={() => {
+                                            setActiveDropdown(activeDropdown === 'formPiList' ? null : 'formPiList');
+                                            setHighlightedIndex(-1);
+                                        }}
+                                        className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-blue-600 transition-colors"
+                                    >
+                                        <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'formPiList' ? 'rotate-180 text-blue-600' : ''}`} />
+                                    </button>
+                                </div>
+
+                                {activeDropdown === 'formPiList' && filteredFormPIs.length > 0 && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-gray-50">
+                                        {filteredFormPIs.map((pi, idx) => {
+                                            const isSelected = formData.piNumber === pi.displayPiNumber && (formData.selectedRevisionNo === pi.selectedRevisionNo || !pi.selectedRevisionNo);
+                                            const isHighlighted = highlightedIndex === idx;
+                                            return (
+                                                <button
+                                                    key={pi._dropdownKey || idx}
+                                                    type="button"
+                                                    onClick={() => handleFormPiSelect(pi)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-3.5 py-2.5 text-left text-sm flex items-center justify-between transition-colors ${
+                                                        isHighlighted || isSelected
+                                                            ? 'bg-blue-50 text-blue-700'
+                                                            : 'text-gray-700 hover:bg-blue-50/60'
+                                                    }`}
+                                                >
+                                                    <div className="flex flex-col min-w-0 pr-2">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span className="font-semibold text-gray-900">{pi.displayPiNumber}</span>
+                                                            {pi.revisionLabel && (
+                                                                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                                                                    pi.isRevisedOption
+                                                                        ? 'text-amber-700 bg-amber-50 border-amber-200'
+                                                                        : 'text-blue-700 bg-blue-50 border-blue-200'
+                                                                }`}>
+                                                                    {pi.revisionLabel}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {pi.partyName && (
+                                                            <span className="text-xs text-gray-500 truncate mt-0.5">{pi.partyName}</span>
+                                                        )}
+                                                    </div>
+                                                    {pi.displayDate && (
+                                                        <span className="text-xs text-gray-400 font-mono shrink-0">
+                                                            {formatDate(pi.displayDate)}
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                        {formData.piNumber && filteredFormPIs.length < formPiOptions.length && (
+                                            <button
+                                                type="button"
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    setFormData(prev => ({ ...prev, piNumber: '' }));
+                                                }}
+                                                className="w-full py-2 text-center text-xs text-blue-600 hover:text-blue-700 bg-gray-50 hover:bg-blue-50 font-medium transition-colors"
+                                            >
+                                                Clear filter & show all ({formPiOptions.length}) PIs
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
 
