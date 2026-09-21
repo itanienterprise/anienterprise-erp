@@ -3416,6 +3416,51 @@ function PI({
         }
     };
 
+    const handleDeleteTenPercentRecord = async (record, revision) => {
+        if (!canDeleteRevision) {
+            showToast('Forbidden: You do not have permission to delete PI records', 'error');
+            return false;
+        }
+        if (!record || !revision) return false;
+
+        try {
+            const targetRevKey = (revision.sourceRevisionNo || 'Original PI').trim().toLowerCase();
+            const existingList = Array.isArray(record.tenPercentRecords)
+                ? record.tenPercentRecords
+                : (record.tenPercentRecord ? [record.tenPercentRecord] : []);
+
+            const updatedList = existingList.filter(r => (r.sourceRevisionNo || 'Original PI').trim().toLowerCase() !== targetRevKey);
+
+            const updatedPiData = {
+                ...record,
+                tenPercentRecord: updatedList.length > 0 ? updatedList[updatedList.length - 1] : null,
+                tenPercentRecords: updatedList
+            };
+
+            const res = await axios.put(`${API_BASE_URL}/api/pi/${record._id}`, updatedPiData);
+            const savedPi = res.data || updatedPiData;
+
+            setRecords(prev => prev.map(r => r._id === record._id ? savedPi : r));
+            if (viewHistoryRecord && viewHistoryRecord._id === record._id) {
+                setViewHistoryRecord(savedPi);
+            }
+
+            if (addNotification) {
+                addNotification(
+                    '10% PI Record Deleted',
+                    `10% PI record for ${revision.sourceRevisionNo || 'Original PI'} (PI: ${record.piNumber}) was deleted by ${currentUser?.name || currentUser?.username}.`,
+                    ['Admin', 'Incharge', 'Border Manager', 'LC Manager']
+                );
+            }
+            showToast('10% PI record deleted successfully!', 'success');
+            return true;
+        } catch (error) {
+            console.error('Error deleting 10% PI record:', error);
+            showToast(error.response?.data?.message || 'Failed to delete 10% PI record', 'error');
+            return false;
+        }
+    };
+
     // Helper: Map raw / IP product name to standard ERP product name for table display
     const getStandardProductName = (rawName) => {
         if (!rawName) return '';
@@ -7576,9 +7621,9 @@ function PI({
                                                     </div>
 
                                                     {/* Row 2: Edit then Delete */}
-                                                    {!activeRevision.isTenPercent && (canManage || (!activeRevision.isOriginal && canDeleteRevision)) && (
+                                                    {(canManage || (!activeRevision.isOriginal && canDeleteRevision)) && (
                                                         <div className="flex flex-wrap items-center justify-center gap-2.5">
-                                                            {canManage && (
+                                                            {!activeRevision.isTenPercent && canManage && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
@@ -7645,7 +7690,7 @@ function PI({
                                                                     className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 border border-red-200 shadow-sm whitespace-nowrap"
                                                                 >
                                                                     <TrashIcon className="w-4 h-4 text-red-500 shrink-0" />
-                                                                    <span>Delete Revised PI</span>
+                                                                    <span>{activeRevision.isTenPercent ? 'Delete 10% PI' : 'Delete Revised PI'}</span>
                                                                 </button>
                                                             )}
                                                         </div>
@@ -7684,9 +7729,11 @@ function PI({
                                             <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-3">
                                                 <TrashIcon className="w-8 h-8 text-red-500" />
                                             </div>
-                                            <h3 className="text-xl font-black text-gray-900 mb-2">Delete Revised PI?</h3>
+                                            <h3 className="text-xl font-black text-gray-900 mb-2">
+                                                {activeRevision.isTenPercent ? 'Delete 10% PI Record?' : 'Delete Revised PI?'}
+                                            </h3>
                                             <p className="text-sm text-gray-500 mb-8 leading-relaxed">
-                                                Are you sure you want to delete <span className="font-bold text-gray-800">{activeRevision.reviseNo || 'this revision'}</span> for PI <span className="font-bold text-blue-600">{viewHistoryRecord.piNumber}</span>? This action cannot be undone.
+                                                Are you sure you want to delete <span className="font-bold text-gray-800">{activeRevision.reviseNo || (activeRevision.isTenPercent ? '10% PI Record' : 'this revision')}</span> for PI <span className="font-bold text-blue-600">{viewHistoryRecord.piNumber}</span>? This action cannot be undone.
                                             </p>
 
                                             <div className="grid grid-cols-2 gap-3">
@@ -7706,7 +7753,9 @@ function PI({
                                                     onClick={async () => {
                                                         setDeleteRevisionStatus('loading');
                                                         try {
-                                                            const deleted = await handleDeleteRevision(viewHistoryRecord, activeRevision);
+                                                            const deleted = activeRevision.isTenPercent
+                                                                ? await handleDeleteTenPercentRecord(viewHistoryRecord, activeRevision)
+                                                                : await handleDeleteRevision(viewHistoryRecord, activeRevision);
                                                             if (deleted) {
                                                                 setDeleteRevisionStatus('success');
                                                                 setTimeout(() => {
