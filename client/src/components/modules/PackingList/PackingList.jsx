@@ -2994,7 +2994,7 @@ function PackingList({
                                                     <button
                                                         onClick={async () => {
                                                             try {
-                                                                await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
+                                                                await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups, products);
                                                             } catch (err) {
                                                                 console.error('PDF generation failed:', err);
                                                                 showToast('Failed to generate PDF.', 'error');
@@ -3127,7 +3127,7 @@ function PackingList({
                                                     <button
                                                         onClick={async () => {
                                                             try {
-                                                                await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
+                                                                await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups, products);
                                                             } catch (err) {
                                                                 console.error('PDF generation failed:', err);
                                                                 showToast('Failed to generate PDF.', 'error');

@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { appendTrTemplatePage } from './plTrTemplatePage';
+import { appendNocApplicationPage } from './plNocApplicationPage';
 
 // Helper function to format dates
 const formatDate = (dateString) => {
@@ -39,7 +40,7 @@ const formatExporterAddressOneLine = (addressStr) => {
 };
 
 
-export const generatePLPDF = async (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = []) => {
+export const generatePLPDF = async (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = [], products = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
@@ -687,6 +688,18 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         packingType: record.packingType || pi?.packingType || '',
         certification: record.certification || pi?.certification || ''
     }, trSetups);
+
+    await appendNocApplicationPage(doc, {
+        ...record,
+        bankName,
+        branchName,
+        productsList: enrichedProductsList,
+        lcNo: trLcNo,
+        lcDate: trLcDate,
+        piGrandTotal: trPiGrandTotal,
+        countryOrigin: record.countryOrigin || pi?.countryOrigin,
+        portOfDischarge: record.portOfDischarge || pi?.portOfDischarge
+    }, { piRecords, lcRecords, importers, exporters, banks, ipRecords, products });
 
     // Save/Download PDF
     const filename = `PackingList_${record.packingListNumber || 'Draft'}.pdf`;

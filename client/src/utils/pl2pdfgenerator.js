@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { appendTrTemplatePage } from './plTrTemplatePage';
+import { appendNocApplicationPage } from './plNocApplicationPage';
 
 const numberToWordsUSD = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
@@ -67,7 +68,7 @@ const formatExporterAddressOneLine = (addressStr) => {
 };
 
 
-export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = []) => {
+export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = [], products = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -1469,6 +1470,18 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         packingType: record.packingType || pi?.packingType || '',
         certification: record.certification || pi?.certification || ''
     }, trSetups);
+
+    await appendNocApplicationPage(doc, {
+        ...record,
+        bankName,
+        branchName,
+        productsList: enrichedProductsList,
+        lcNo: trLcNo,
+        lcDate: trLcDate,
+        piGrandTotal: trPiGrandTotal,
+        countryOrigin,
+        portOfDischarge
+    }, { piRecords, lcRecords, importers, exporters, banks, ipRecords, products });
 
     // Open in new tab
     const pdfOutput = doc.output('blob');
