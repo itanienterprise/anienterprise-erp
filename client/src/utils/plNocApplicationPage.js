@@ -423,31 +423,19 @@ export const appendNocApplicationPage = async (doc, record, context = {}) => {
         currentY += 6;
 
         // --- Signature Section ---
-        if (signatureImage) {
-            try {
-                doc.addImage(signatureImage, 'PNG', marginLeft, currentY - 2, 45, 14);
-                currentY += 14;
-            } catch (e) {
-                console.error('Error adding signature to NOC Application PDF:', e);
-                currentY += 10;
-            }
-        } else {
-            currentY += 10; // Blank signing space
-        }
-
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(11);
         doc.text('Yours faithfully,', marginLeft, currentY);
         currentY += 5;
 
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(11.5);
-        doc.text(signatoryName, marginLeft, currentY);
-        currentY += 4.5;
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10.5);
-        doc.text('Proprietor', marginLeft, currentY);
+        if (signatureImage) {
+            try {
+                doc.addImage(signatureImage, 'PNG', marginLeft, currentY, 50, 16);
+                currentY += 18;
+            } catch (e) {
+                console.error('Error adding signature to NOC Application PDF:', e);
+            }
+        }
 
         return true;
     } catch (e) {
