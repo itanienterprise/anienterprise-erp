@@ -5500,6 +5500,11 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const [insurancePayments, setInsurancePayments] = useState([]);
     const [expandedLcKey, setExpandedLcKey] = useState(null);
     const [expandedCardKey, setExpandedCardKey] = useState(null);
+    const [emptyFieldsModal, setEmptyFieldsModal] = useState({
+        isOpen: false,
+        emptyFields: [],
+        onConfirm: null
+    });
     const getLcTotalPaidExpense = (record) => {
         const adj = getAdjustedLcValues ? getAdjustedLcValues(record) : null;
         const activeTotal = (adj?.adjustedTotalAmount > 0) ? adj.adjustedTotalAmount : (parseFloat(record.totalAmount) || 0);
@@ -6577,14 +6582,101 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         });
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const getEmptyFieldsForLC = (data) => {
+        const empty = [];
+        const check = (val, label) => {
+            if (val === undefined || val === null || String(val).trim() === '') {
+                empty.push(label);
+            }
+        };
 
-        if (isDuplicateCoverNote) {
-            showToast('Duplicate Marine Cover Note detected! Each LC must have a unique Cover Note No.', 'error');
-            return;
+        // --- LC Details ---
+        check(data.openingDate, 'Opening Date');
+        check(data.expiryDate, 'Expiry Date');
+        check(data.latestShipmentDate, 'Latest Shipment Date');
+        check(data.lcNo, 'LC Number');
+        check(data.piNo, 'PI Number');
+        check(data.piOpeningDate, 'PI Date');
+        check(data.port, 'Port');
+
+        // --- IP Allocation ---
+        const ipList = Array.isArray(data.ipNumbers) && data.ipNumbers.length > 0
+            ? data.ipNumbers
+            : (data.ipNo ? data.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+        if (ipList.filter(Boolean).length === 0) {
+            empty.push('IP Number (Import Permit)');
         }
 
+        // --- Parties & Financials ---
+        check(data.importerName, 'Importer');
+        check(data.exporterName, 'Exporter');
+        check(data.dollarRate, 'Dollar Rate (BDT)');
+        check(data.totalAmount, 'Total LC Value');
+        check(data.marginBill, 'Margin Bill');
+        check(data.marginPaid, 'Margin Paid');
+        if (data.lcBillEnabled !== false) {
+            check(data.bankBill, 'Bank Bill');
+        }
+        check(data.totalBankBill, 'Total Bank Bill');
+
+        // --- Product Details ---
+        const products = data.productsList || [];
+        if (products.length === 0) {
+            empty.push('Products (At least one product required)');
+        } else {
+            products.forEach((p, idx) => {
+                const prefix = products.length > 1 ? `Product #${idx + 1} ` : 'Product ';
+                if (!p.hsCode || String(p.hsCode).trim() === '') {
+                    empty.push(`${prefix}H.S Code`);
+                }
+                if (!p.productName || String(p.productName).trim() === '') {
+                    empty.push(`${prefix}Name`);
+                }
+                if (p.quantity === undefined || p.quantity === null || String(p.quantity).trim() === '' || parseFloat(p.quantity) <= 0) {
+                    empty.push(`${prefix}Quantity`);
+                }
+                if (p.rate === undefined || p.rate === null || String(p.rate).trim() === '' || parseFloat(p.rate) <= 0) {
+                    empty.push(`${prefix}Rate`);
+                }
+                if (p.freight === undefined || p.freight === null || String(p.freight).trim() === '') {
+                    empty.push(`${prefix}Freight`);
+                }
+            });
+        }
+
+        // --- Bank Details ---
+        check(data.bankName, 'Issuing Bank');
+        check(data.bankBranch, 'Branch');
+        check(data.bankMargin, 'Margin (%)');
+        if (data.lcBillEnabled !== false) {
+            check(data.bankLcCommission, 'LC Commission (%)');
+            check(data.bankVatOnCommission, 'VAT on Commission (%)');
+            check(data.bankSwiftCharge, 'Swift Charge');
+            check(data.bankVatOnSwiftCharge, 'VAT on Swift Charge (%)');
+            check(data.bankLcApplicationForm, 'LC Application Form');
+            check(data.bankMpCharge, 'MP Charge');
+            check(data.bankStampCharge, 'Bank Stamp Charge');
+        }
+
+        // --- Insurance Details ---
+        check(data.insuranceCo, 'Insurance Company');
+        check(data.premium, 'Premium (%)');
+        check(data.premiumReturn, 'Premium Return (%)');
+        check(data.extraPercent, 'Extra Percent (%)');
+        check(data.netPremium, 'Net Premium');
+        check(data.premiumVat, 'Premium VAT (%)');
+        check(data.stampCharge, 'Insurance Stamp Charge');
+        check(data.grossPremium, 'Gross Premium');
+        check(data.expectedReturnAmount, 'Return Amount');
+
+        // --- Marine Cover Note ---
+        check(data.marineCoverNote, 'Marine Cover Note');
+        check(data.marineCNDate, 'Marine C.N Date');
+
+        return empty;
+    };
+
+    const executeSubmit = async () => {
         setIsSaving(true);
         try {
             if (editingId) {
@@ -6687,6 +6779,30 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleSubmit = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+
+        if (isDuplicateCoverNote) {
+            addNotification?.('Duplicate Marine Cover Note detected! Each LC must have a unique Cover Note No.', 'error');
+            return;
+        }
+
+        const emptyFields = getEmptyFieldsForLC(formData);
+        if (emptyFields.length > 0) {
+            setEmptyFieldsModal({
+                isOpen: true,
+                emptyFields,
+                onConfirm: () => {
+                    setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null });
+                    executeSubmit();
+                }
+            });
+            return;
+        }
+
+        executeSubmit();
     };
 
     const handleEdit = (record) => {
@@ -7518,6 +7634,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         setEditingId(null);
         setEditingRecord(null);
         setShowForm(false);
+        setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null });
     };
 
     const getAdjustedLcValues = (record) => {
@@ -8895,6 +9012,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
                     <form
                         onSubmit={handleSubmit}
+                        noValidate
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
                                 e.preventDefault();
@@ -12722,6 +12840,101 @@ style={
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* Empty Fields Review / Alert Modal */}
+            {emptyFieldsModal.isOpen && createPortal(
+                <div 
+                    className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null });
+                        }
+                    }}
+                >
+                    <div 
+                        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200 text-left"
+                        role="dialog"
+                        aria-modal="true"
+                    >
+                        {/* Header */}
+                        <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between bg-gray-50/50">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-base font-black text-gray-900 tracking-tight">
+                                            Empty Fields Detected
+                                        </h3>
+                                        <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                            {emptyFieldsModal.emptyFields.length}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                        The following {emptyFieldsModal.emptyFields.length === 1 ? 'field is' : `${emptyFieldsModal.emptyFields.length} fields are`} currently empty. Please review before saving.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null })}
+                                className="p-1.5 rounded-xl hover:bg-gray-200/70 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer shrink-0"
+                            >
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Body - Scrollable list of empty fields */}
+                        <div className="p-6 py-5 overflow-y-auto max-h-[46vh] space-y-3 bg-white">
+                            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                                Missing / Unfilled Fields
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {emptyFieldsModal.emptyFields.map((field, idx) => (
+                                    <div 
+                                        key={idx}
+                                        className="flex items-center gap-2 px-3 py-2 bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 transition-colors"
+                                    >
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                                        <span className="truncate font-semibold" title={field}>{field}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-4 p-3 bg-blue-50/60 border border-blue-100 rounded-xl text-xs text-blue-700 flex items-start gap-2">
+                                <span className="text-blue-500 font-bold shrink-0">ℹ</span>
+                                <span>You can click <strong>Keep Editing</strong> to complete these fields, or click <strong>Confirm</strong> to proceed and save anyway.</span>
+                            </div>
+                        </div>
+
+                        {/* Footer - Actions */}
+                        <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex items-center justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null })}
+                                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-bold text-sm transition-all shadow-sm active:scale-95 cursor-pointer"
+                            >
+                                Keep Editing
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (emptyFieldsModal.onConfirm) {
+                                        emptyFieldsModal.onConfirm();
+                                    }
+                                }}
+                                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm active:scale-95 flex items-center gap-2 cursor-pointer"
+                            >
+                                <CheckIcon className="w-4 h-4" />
+                                <span>Confirm</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
 
             {/* LC Management General / Bill Report Export Format Selection Modal */}

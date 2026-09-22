@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon, EyeIcon, PDFIcon, PlusIcon, DownloadIcon, BarChartIcon
+    FunnelIcon, XIcon, CheckIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon, EyeIcon, PDFIcon, PlusIcon, DownloadIcon, BarChartIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -324,6 +324,12 @@ function IPManagement({
         ipAttachment: '',
         ipAttachmentName: '',
         isExtended: false
+    });
+
+    const [emptyFieldsModal, setEmptyFieldsModal] = useState({
+        isOpen: false,
+        emptyFields: [],
+        onConfirm: null
     });
 
     const [filters, setFilters] = useState({
@@ -940,15 +946,32 @@ function IPManagement({
         }
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const getEmptyFieldsForIP = (data) => {
+        const empty = [];
+        const check = (val, label) => {
+            if (val === undefined || val === null || String(val).trim() === '') {
+                empty.push(label);
+            }
+        };
 
-        // Prevent submission if duplicate IP Number
-        if (isDuplicateIpNumber) {
-            setSubmitStatus('error');
-            return;
+        check(data.openingDate, 'Date');
+        check(data.closeDate, 'Close Date');
+        check(data.ipNumber, 'IP Number');
+        check(data.referenceNo, 'Reference No');
+        check(data.ipParty, 'Importer');
+        check(data.productName, 'IP Product Name');
+        if (data.quantity === undefined || data.quantity === null || String(data.quantity).trim() === '' || parseFloat(data.quantity) <= 0) {
+            empty.push('Quantity (kg)');
+        }
+        check(data.port, 'Port');
+        if (!data.ipAttachment || String(data.ipAttachment).trim() === '') {
+            empty.push('PDF Attachment');
         }
 
+        return empty;
+    };
+
+    const executeSubmit = async () => {
         setIsSubmitting(true);
         setSubmitStatus(null);
 
@@ -1000,6 +1023,31 @@ function IPManagement({
         }
     };
 
+    const handleSubmit = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+
+        // Prevent submission if duplicate IP Number
+        if (isDuplicateIpNumber) {
+            setSubmitStatus('error');
+            return;
+        }
+
+        const emptyFields = getEmptyFieldsForIP(formData);
+        if (emptyFields.length > 0) {
+            setEmptyFieldsModal({
+                isOpen: true,
+                emptyFields,
+                onConfirm: () => {
+                    setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null });
+                    executeSubmit();
+                }
+            });
+            return;
+        }
+
+        executeSubmit();
+    };
+
     const resetIpForm = () => {
         setFormData({
             openingDate: '',
@@ -1019,6 +1067,7 @@ function IPManagement({
             entryBy: '',
             entryByName: ''
         });
+        setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null });
         setEditingId(null);
         setSubmitStatus(null);
     };
@@ -1535,6 +1584,7 @@ function IPManagement({
 
                     <form
                         onSubmit={handleSubmit}
+                        noValidate
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
                                 e.preventDefault();
@@ -2273,6 +2323,101 @@ function IPManagement({
                     onClose={() => { setViewingPdf(null); setViewingPdfName(""); }}
                     onDownload={downloadPDF}
                 />
+            )}
+
+            {/* Empty Fields Review / Alert Modal */}
+            {emptyFieldsModal.isOpen && createPortal(
+                <div 
+                    className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null });
+                        }
+                    }}
+                >
+                    <div 
+                        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200 text-left"
+                        role="dialog"
+                        aria-modal="true"
+                    >
+                        {/* Header */}
+                        <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between bg-gray-50/50">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-base font-black text-gray-900 tracking-tight">
+                                            Empty Fields Detected
+                                        </h3>
+                                        <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                            {emptyFieldsModal.emptyFields.length}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                        The following {emptyFieldsModal.emptyFields.length === 1 ? 'field is' : `${emptyFieldsModal.emptyFields.length} fields are`} currently empty. Please review before saving.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null })}
+                                className="p-1.5 rounded-xl hover:bg-gray-200/70 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer shrink-0"
+                            >
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Body - Scrollable list of empty fields */}
+                        <div className="p-6 py-5 overflow-y-auto max-h-[46vh] space-y-3 bg-white">
+                            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                                Missing / Unfilled Fields
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {emptyFieldsModal.emptyFields.map((field, idx) => (
+                                    <div 
+                                        key={idx}
+                                        className="flex items-center gap-2 px-3 py-2 bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 transition-colors"
+                                    >
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                                        <span className="truncate font-semibold" title={field}>{field}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-4 p-3 bg-blue-50/60 border border-blue-100 rounded-xl text-xs text-blue-700 flex items-start gap-2">
+                                <span className="text-blue-500 font-bold shrink-0">ℹ</span>
+                                <span>You can click <strong>Keep Editing</strong> to complete these fields, or click <strong>Confirm</strong> to proceed and save anyway.</span>
+                            </div>
+                        </div>
+
+                        {/* Footer - Actions */}
+                        <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex items-center justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null })}
+                                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-bold text-sm transition-all shadow-sm active:scale-95 cursor-pointer"
+                            >
+                                Keep Editing
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (emptyFieldsModal.onConfirm) {
+                                        emptyFieldsModal.onConfirm();
+                                    }
+                                }}
+                                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm active:scale-95 flex items-center gap-2 cursor-pointer"
+                            >
+                                <CheckIcon className="w-4 h-4" />
+                                <span>Confirm</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
 
             {/* IP Management Export Format Selection Modal */}
