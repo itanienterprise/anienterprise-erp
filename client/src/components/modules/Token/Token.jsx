@@ -39,7 +39,20 @@ const STATUSES = ['Pending', 'In Progress', 'Resolved', 'Rejected'];
 const generateTokenNo = (existingTokens = []) => {
     const now = new Date();
     const prefix = `TK-${now.getFullYear().toString().slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const seq = existingTokens.length + 1;
+    let maxSeq = 0;
+    (existingTokens || []).forEach(t => {
+        const no = t?.tokenNo || '';
+        if (no.startsWith(prefix)) {
+            const parts = no.split('-');
+            if (parts.length >= 3) {
+                const num = parseInt(parts[2], 10);
+                if (!isNaN(num) && num > maxSeq) {
+                    maxSeq = num;
+                }
+            }
+        }
+    });
+    const seq = maxSeq + 1;
     const padded = String(seq).padStart(3, '0');
     return `${prefix}-${padded}`;
 };
@@ -109,7 +122,7 @@ const Token = ({ currentUser, addNotification }) => {
     const handleOpenNew = () => {
         setFormData({
             ...emptyForm,
-            tokenNo: generateTokenNo(tokens),
+            tokenNo: '',
             date: new Date().toISOString().split('T')[0],
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             employeeName: currentUser?.name || currentUser?.username || 'Employee',
@@ -140,8 +153,12 @@ const Token = ({ currentUser, addNotification }) => {
 
         setIsSubmitting(true);
         try {
+            // Generate token number upon submit for new tokens
+            const finalTokenNo = editingId ? (formData.tokenNo || generateTokenNo(tokens)) : generateTokenNo(tokens);
+
             const dataToSave = {
                 ...formData,
+                tokenNo: finalTokenNo,
                 updatedAt: new Date().toISOString()
             };
 
@@ -155,13 +172,13 @@ const Token = ({ currentUser, addNotification }) => {
                 const res = await axios.put(`${API_BASE_URL}/api/tokens/${editingId}`, dataToSave);
                 setTokens(prev => prev.map(t => t._id === editingId ? { ...t, ...res.data } : t));
                 if (typeof addNotification === 'function') {
-                    addNotification(`Token ${formData.tokenNo} updated successfully!`, 'success');
+                    addNotification(`Token ${finalTokenNo} updated successfully!`, 'success');
                 }
             } else {
                 const res = await axios.post(`${API_BASE_URL}/api/tokens`, dataToSave);
                 setTokens(prev => [res.data, ...prev]);
                 if (typeof addNotification === 'function') {
-                    addNotification(`Token ${res.data.tokenNo || formData.tokenNo} submitted successfully!`, 'success');
+                    addNotification(`Token ${res.data.tokenNo || finalTokenNo} generated and submitted successfully!`, 'success');
                 }
             }
             setShowForm(false);
@@ -346,7 +363,7 @@ const Token = ({ currentUser, addNotification }) => {
                     <div className="token-form-header">
                         <div>
                             <h3 className="token-form-title">
-                                {editingId ? 'Edit Service Token' : 'Open New Service Token'}
+                                {editingId ? `Edit Service Token (${formData.tokenNo})` : 'Open New Service Token'}
                             </h3>
                             <p className="text-xs text-gray-500 mt-0.5">
                                 Submit a request for entry edit, correction, or assistance
@@ -362,17 +379,8 @@ const Token = ({ currentUser, addNotification }) => {
                     </div>
 
                     <form onSubmit={handleSubmit} className="token-form-card-body">
-                        {/* Row 1: Token No, Requested Date, Requester */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="token-form-field">
-                                <label className="token-form-label">Token No</label>
-                                <input
-                                    type="text"
-                                    value={formData.tokenNo}
-                                    readOnly
-                                    className="token-form-input bg-gray-50 font-mono font-bold text-blue-600 cursor-not-allowed"
-                                />
-                            </div>
+                        {/* Row 1: Requested Date, Requester */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="token-form-field">
                                 <label className="token-form-label">Requested Date</label>
                                 <input

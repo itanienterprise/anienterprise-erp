@@ -2802,10 +2802,30 @@ apiRouter.delete('/api/returns/:id', async (req, res) => {
 // Token APIs (Support & Service Requests)
 apiRouter.post('/api/tokens', async (req, res) => {
   try {
-    const encryptedData = encryptData(req.body);
+    let payload = { ...req.body };
+    if (!payload.tokenNo) {
+      const now = new Date();
+      const prefix = `TK-${now.getFullYear().toString().slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const records = await Token.find().sort({ createdAt: -1 });
+      let maxSeq = 0;
+      records.forEach(r => {
+        try {
+          const d = decryptData(r.data);
+          if (d.tokenNo && d.tokenNo.startsWith(prefix)) {
+            const parts = d.tokenNo.split('-');
+            if (parts.length >= 3) {
+              const num = parseInt(parts[2], 10);
+              if (!isNaN(num) && num > maxSeq) maxSeq = num;
+            }
+          }
+        } catch (_) {}
+      });
+      payload.tokenNo = `${prefix}-${String(maxSeq + 1).padStart(3, '0')}`;
+    }
+    const encryptedData = encryptData(payload);
     const newToken = new Token({ data: encryptedData });
     const savedToken = await newToken.save();
-    res.status(201).json({ ...req.body, _id: savedToken._id, createdAt: savedToken.createdAt });
+    res.status(201).json({ ...payload, _id: savedToken._id, createdAt: savedToken.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
