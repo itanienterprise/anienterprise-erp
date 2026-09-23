@@ -61,6 +61,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
         phone: '',
         customerName: '',
         productName: '',
+        lcNo: '',
         brand: '',
         quantity: '',
         bags: '',
@@ -276,6 +277,37 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
         return getFirstNameFromIdentifier(candidate) || candidate;
     };
 
+    const getReturnLcNo = (ret) => {
+        if (!ret) return '-';
+        if (ret.lcNo) return ret.lcNo;
+        const pItems = ret.purchaseItems && ret.purchaseItems.length > 0 ? ret.purchaseItems : null;
+        if (pItems) {
+            const item = pItems.find(i => i.productName === ret.productName);
+            if (item) {
+                if (item.brandEntries && item.brandEntries.length > 0) {
+                    const be = item.brandEntries.find(b => (b.brandName || b.brand) === ret.brand);
+                    if (be && (be.lcNo || be.lcNumber)) return be.lcNo || be.lcNumber;
+                }
+                if (item.lcNo || item.lcNumber) return item.lcNo || item.lcNumber;
+            }
+        }
+        const orig = sales.find(s => s.invoiceNo === ret.invoiceNo);
+        if (orig) {
+            if (orig.items) {
+                const item = orig.items.find(i => i.productName === ret.productName);
+                if (item) {
+                    if (item.brandEntries && item.brandEntries.length > 0) {
+                        const be = item.brandEntries.find(b => (b.brandName || b.brand) === ret.brand);
+                        if (be && (be.lcNo || be.lcNumber)) return be.lcNo || be.lcNumber;
+                    }
+                    if (item.lcNo || item.lcNumber) return item.lcNo || item.lcNumber;
+                }
+            }
+            if (orig.lcNo) return orig.lcNo;
+        }
+        return '-';
+    };
+
     useEffect(() => {
         fetchReturns();
         fetchSales();
@@ -377,7 +409,9 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                     const wName = (w.whName || w.name || w.warehouse || '').trim().toLowerCase();
                     const wProd = (w.productName || w.product || '').trim().toLowerCase();
                     const wBrand = (w.brand || '').trim().toLowerCase();
-                    return isRet && wName === targetWhName && wProd === targetProdName && (wBrand === targetBrand || (!wBrand && !targetBrand));
+                    const wLc = (w.lcNo || '').trim().toLowerCase();
+                    const targetLc = (formData.lcNo || '').trim().toLowerCase();
+                    return isRet && wName === targetWhName && wProd === targetProdName && (wBrand === targetBrand || (!wBrand && !targetBrand)) && (!targetLc || !wLc || wLc === targetLc);
                 });
 
                 if (existingReturnedStock) {
@@ -400,6 +434,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                         productName: formData.productName,
                         product: formData.productName,
                         brand: formData.brand,
+                        lcNo: formData.lcNo || '',
                         whQty: returnQty,
                         whPkt: returnPkt,
                         inHouseQuantity: returnQty,
@@ -539,6 +574,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                 phone: '',
                 customerName: '',
                 productName: '',
+                lcNo: '',
                 brand: '',
                 quantity: '',
                 bags: '',
@@ -574,12 +610,27 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
     const handleEdit = (ret) => {
         // Find the original sale to populate purchaseItems if editing
         const originalSale = sales.find(s => s.invoiceNo === ret.invoiceNo);
+        let retLcNo = ret.lcNo || '';
+        if (!retLcNo) {
+            const pItems = originalSale ? (originalSale.items || []) : (ret.purchaseItems || []);
+            const matchedItem = pItems.find(i => i.productName === ret.productName);
+            if (matchedItem) {
+                if (matchedItem.brandEntries && matchedItem.brandEntries.length > 0) {
+                    const matchedBe = matchedItem.brandEntries.find(b => (b.brandName || b.brand) === ret.brand);
+                    retLcNo = (matchedBe && (matchedBe.lcNo || matchedBe.lcNumber)) || matchedItem.lcNo || '';
+                } else {
+                    retLcNo = matchedItem.lcNo || '';
+                }
+            }
+            if (!retLcNo && originalSale) retLcNo = originalSale.lcNo || '';
+        }
         setFormData({
             ...ret,
+            lcNo: retLcNo,
             entryBy: ret.entryBy || '',
             entryByName: ret.entryByName || '',
             returnExpense: ret.returnExpense !== undefined ? ret.returnExpense : '',
-            purchaseItems: originalSale ? (originalSale.items || []) : []
+            purchaseItems: originalSale ? (originalSale.items || []) : (ret.purchaseItems || [])
         });
         setEditingId(ret._id);
         setInvoiceSearch(ret.invoiceNo);
@@ -777,6 +828,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
     const filteredReturns = returns.filter(ret =>
         (ret.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (ret.productName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ret.lcNo || getReturnLcNo(ret) || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (ret.invoiceNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (ret.companyName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (ret.brand || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -809,12 +861,15 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
         }
 
         let defaultWh = sale.port || '';
+        let defaultLcNo = sale.lcNo || sale.lcNumber || '';
         if (items.length > 0) {
             const firstItem = items[0];
             if (firstItem.brandEntries && firstItem.brandEntries.length > 0) {
                 defaultWh = firstItem.brandEntries[0].warehouseName || firstItem.brandEntries[0].warehouse || defaultWh;
+                defaultLcNo = firstItem.brandEntries[0].lcNo || firstItem.brandEntries[0].lcNumber || firstItem.lcNo || defaultLcNo;
             } else {
                 defaultWh = firstItem.warehouseName || firstItem.warehouse || defaultWh;
+                defaultLcNo = firstItem.lcNo || defaultLcNo;
             }
         }
 
@@ -827,6 +882,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
             customerName: sale.customerName || sale.companyName || '',
             customerId: sale.customerId || '',
             productName: prodName,
+            lcNo: defaultLcNo || prev.lcNo || '',
             purchaseItems: items,
             warehouse: defaultWh || prev.warehouse || ''
         }));
@@ -878,12 +934,15 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                     invoiceNo: '',
                                     customerName: '',
                                     productName: '',
+                                    lcNo: '',
+                                    brand: '',
                                     quantity: '',
                                     returnPrice: '',
                                     returnExpense: '',
                                     reason: '',
                                     status: 'Pending',
-                                    originalQuantity: ''
+                                    originalQuantity: '',
+                                    purchaseItems: []
                                 });
                             }}
                             className="w-full md:w-auto return-product-add-btn whitespace-nowrap"
@@ -1022,6 +1081,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                         <thead>
                                             <tr>
                                                 <th>Product</th>
+                                                <th>LC No</th>
                                                 <th>Brand</th>
                                                 <th className="text-center">Qty</th>
                                                 <th className="text-right">Rate</th>
@@ -1033,11 +1093,13 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                                     {item.brandEntries && item.brandEntries.length > 0 ? (
                                                         item.brandEntries.map((be, beIdx) => {
                                                             const beWh = be.warehouseName || be.warehouse || item.warehouseName || item.warehouse || '';
+                                                            const rowLcNo = be.lcNo || be.lcNumber || item.lcNo || item.lcNumber || '';
                                                             return (
                                                                 <tr key={`${idx}-${beIdx}`} className="cursor-pointer hover:bg-blue-50/50" onClick={() => {
                                                                     setFormData(prev => ({
                                                                         ...prev,
                                                                         productName: item.productName,
+                                                                        lcNo: rowLcNo,
                                                                         brand: be.brand || be.brandName || '',
                                                                         quantity: '',
                                                                         returnPrice: be.unitPrice || 0,
@@ -1048,6 +1110,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                                                     if (beWh) setWarehouseSearch(beWh);
                                                                 }}>
                                                                     <td>{item.productName}</td>
+                                                                    <td className="font-semibold text-gray-700">{rowLcNo || '-'}</td>
                                                                     <td>{be.brandName || be.brand}</td>
                                                                     <td className="text-center font-bold text-blue-600">{parseFloat(be.quantity || 0) + (parseFloat(be.returnQty) || 0)}</td>
                                                                     <td className="text-right">৳ {parseFloat(be.unitPrice || 0).toLocaleString()}</td>
@@ -1057,11 +1120,13 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                                     ) : (
                                                         (() => {
                                                             const itemWh = item.warehouseName || item.warehouse || '';
+                                                            const rowLcNo = item.lcNo || item.lcNumber || '';
                                                             return (
                                                                 <tr className="cursor-pointer hover:bg-blue-50/50" onClick={() => {
                                                                     setFormData(prev => ({
                                                                         ...prev,
                                                                         productName: item.productName,
+                                                                        lcNo: rowLcNo,
                                                                         brand: '-',
                                                                         quantity: '',
                                                                         returnPrice: item.unitPrice || item.rate || 0,
@@ -1072,6 +1137,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                                                     if (itemWh) setWarehouseSearch(itemWh);
                                                                 }}>
                                                                     <td>{item.productName}</td>
+                                                                    <td className="font-semibold text-gray-700">{rowLcNo || '-'}</td>
                                                                     <td>-</td>
                                                                     <td className="text-center font-bold text-blue-600">{parseFloat(item.quantity || 0) + (parseFloat(item.returnQty) || 0)}</td>
                                                                     <td className="text-right">৳ {parseFloat(item.unitPrice || 0).toLocaleString()}</td>
@@ -1088,7 +1154,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                             </div>
                         )}
 
-                        <div className="return-product-form-field-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+                        <div className="return-product-form-field-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
                             <div className="return-product-form-field">
                                 <label className="return-product-form-label">Product Name</label>
                                 <input
@@ -1098,6 +1164,17 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                     value={formData.productName}
                                     onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
                                     required
+                                />
+                            </div>
+
+                            <div className="return-product-form-field">
+                                <label className="return-product-form-label">LC No</label>
+                                <input
+                                    type="text"
+                                    className="return-product-form-input"
+                                    placeholder="Auto-filled"
+                                    value={formData.lcNo || ''}
+                                    onChange={(e) => setFormData({ ...formData, lcNo: e.target.value })}
                                 />
                             </div>
 
@@ -1256,6 +1333,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                         <th className="return-product-table-header">Invoice No</th>
                                         <th className="return-product-table-header">Company Name</th>
                                         <th className="return-product-table-header">Product</th>
+                                        <th className="return-product-table-header">LC No</th>
                                         <th className="return-product-table-header">Brand</th>
                                         <th className="return-product-table-header text-center">Quantity</th>
                                         <th className="return-product-table-header text-center">Bags</th>
@@ -1276,6 +1354,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                             </td>
                                             <td className="return-product-table-cell font-bold text-gray-900">{ret.companyName}</td>
                                             <td className="return-product-table-cell font-bold text-gray-900">{ret.productName}</td>
+                                            <td className="return-product-table-cell font-semibold text-gray-700 text-xs">{getReturnLcNo(ret)}</td>
                                             <td className="return-product-table-cell text-purple-600 font-bold text-[11px]">{ret.brand !== '-' ? ret.brand : ''}</td>
                                             <td className="return-product-table-cell text-center font-bold">{ret.quantity}</td>
                                             <td className="return-product-table-cell text-center font-bold">{ret.bags || '-'}</td>
@@ -1336,7 +1415,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                     ))}
                                     {filteredReturns.length === 0 && (
                                         <tr>
-                                            <td colSpan={(canManage) ? 11 : 10} className="py-20 text-center text-gray-400">
+                                            <td colSpan={(canManage) ? 12 : 11} className="py-20 text-center text-gray-400">
                                                 <RotateCcwIcon className="w-12 h-12 mx-auto mb-4 opacity-20" />
                                                 <p className="text-sm">No return records found</p>
                                             </td>
@@ -1394,6 +1473,10 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                                 <div className="flex justify-between items-center text-xs">
                                                     <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Product</span>
                                                     <span className="text-gray-900 font-black">{ret.productName}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">LC No</span>
+                                                    <span className="text-gray-900 font-black">{getReturnLcNo(ret)}</span>
                                                 </div>
                                                 <div className="flex justify-between items-center text-xs">
                                                     <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Quantity</span>

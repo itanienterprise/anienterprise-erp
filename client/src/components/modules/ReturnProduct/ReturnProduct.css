@@ -398,10 +398,11 @@
 .purchase-items-preview-table tr:last-child td {
     border-bottom: none;
 }
-.purchase-items-preview-table th:nth-child(1) { width: 35%; }
-.purchase-items-preview-table th:nth-child(2) { width: 35%; }
-.purchase-items-preview-table th:nth-child(3) { width: 15%; }
+.purchase-items-preview-table th:nth-child(1) { width: 25%; }
+.purchase-items-preview-table th:nth-child(2) { width: 25%; }
+.purchase-items-preview-table th:nth-child(3) { width: 20%; }
 .purchase-items-preview-table th:nth-child(4) { width: 15%; }
+.purchase-items-preview-table th:nth-child(5) { width: 15%; }
 
 .invoice-dropdown-list {
     position: absolute;
