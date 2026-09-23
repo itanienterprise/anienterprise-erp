@@ -2870,8 +2870,13 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                 if (item.method) particulars += (particulars ? ' - ' : '') + item.method;
                 if (item.bankName) particulars += ` (${item.bankName})`;
                 if (item.reason) particulars += (particulars ? ' - ' : '') + item.reason;
+                if (item.type === 'return' && parseFloat(item.returnExpense || 0) > 0) {
+                    particulars += (particulars ? ' - ' : '') + `Return Expense: Tk. ${parseFloat(item.returnExpense).toLocaleString('en-IN')}`;
+                }
 
-                const debitVal = (item.type === 'sale' || item.type === 'payToCustomer') ? (parseFloat(item.amount || 0)) : 0;
+                const debitVal = (item.type === 'sale' || item.type === 'payToCustomer')
+                    ? (parseFloat(item.amount || 0))
+                    : (item.type === 'return' ? parseFloat(item.returnExpense || 0) : 0);
                 const creditVal = (item.type === 'payment' || item.type === 'purchase' || item.type === 'return')
                     ? (parseFloat(item.amount || 0))
                     : (item.type === 'sale' && parseFloat(item.paid || 0) > 0 ? parseFloat(item.paid || 0) : 0);

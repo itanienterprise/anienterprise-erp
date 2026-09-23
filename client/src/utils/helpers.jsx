@@ -158,6 +158,7 @@ export const getCustomerReturns = (c, returnsList = [], salesRecords = []) => {
             }
         }
         const amt = parseFloat(r.amount) || (rate * qty);
+        const expense = parseFloat(r.returnExpense || r.expense || 0);
         return {
             ...r,
             _id: r._id,
@@ -168,6 +169,7 @@ export const getCustomerReturns = (c, returnsList = [], salesRecords = []) => {
             quantity: qty,
             rate: rate,
             amount: amt,
+            returnExpense: expense,
             paid: 0,
             discount: 0,
             type: 'return',
@@ -480,7 +482,8 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
             currentBalance -= (amt - pd - disc);
         } else if (item.type === 'return') {
             const amt = parseFloat(item.amount) || 0;
-            currentBalance -= amt;
+            const exp = parseFloat(item.returnExpense || 0);
+            currentBalance -= (amt - exp);
         }
     });
 

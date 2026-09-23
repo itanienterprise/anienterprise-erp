@@ -1316,7 +1316,8 @@ const Customer = ({
                 currentBalance -= (amt - pd - disc);
             } else if (item.type === 'return') {
                 const amt = parseFloat(item.amount) || 0;
-                currentBalance -= amt;
+                const exp = parseFloat(item.returnExpense || 0);
+                currentBalance -= (amt - exp);
             }
             return { ...item, runningBalance: currentBalance };
         });
@@ -1410,7 +1411,8 @@ const Customer = ({
                 currentBalance += (amt - pd - disc);
             } else if (item.type === 'return') {
                 const amt = parseFloat(item.amount) || 0;
-                currentBalance -= amt;
+                const exp = parseFloat(item.returnExpense || 0);
+                currentBalance -= (amt - exp);
             } else {
                 const amt = parseFloat(item.amount) || 0;
                 const disc = parseFloat(item.discount) || 0;
@@ -3835,6 +3837,11 @@ const Customer = ({
                                                                                         Truck Fare paid (৳{parseFloat(item.paid || item.truckFare).toLocaleString('en-IN')})
                                                                                     </div>
                                                                                 )}
+                                                                                {item.type === 'return' && parseFloat(item.returnExpense || 0) > 0 && (
+                                                                                    <div className="text-[10px] text-violet-700 font-semibold pl-0.5">
+                                                                                        Return Expense: ৳{parseFloat(item.returnExpense).toLocaleString('en-IN')}
+                                                                                    </div>
+                                                                                )}
                                                                                 {item.type === 'return' && item.reason && (
                                                                                     <div className="text-[10px] text-gray-500 italic pl-0.5">
                                                                                         Reason: {item.reason}
@@ -3850,17 +3857,17 @@ const Customer = ({
                                                                         <td className="px-4 py-3 text-left text-gray-900 whitespace-pre-wrap text-xs">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString('en-US') : '—')}</td>
                                                                         <td className="px-4 py-3 text-left text-gray-500 whitespace-pre-wrap text-xs">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString('en-IN')}` : '—')}</td>
                                                                         <td className="px-4 py-3 text-left font-black text-violet-700 text-xs">
-                                                                            {item.type === 'sale'
+                                                                            {item.type === 'sale' || item.type === 'payToCustomer'
                                                                                 ? `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`
-                                                                                : (item.type === 'payToCustomer'
-                                                                                    ? `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`
+                                                                                : (item.type === 'return' && parseFloat(item.returnExpense || 0) > 0
+                                                                                    ? `৳${parseFloat(item.returnExpense).toLocaleString('en-IN')}`
                                                                                     : '—'
                                                                                 )
                                                                             }
                                                                         </td>
                                                                         <td className="px-4 py-3 text-left font-black text-emerald-600 text-xs">
                                                                             {item.type === 'payment' || item.type === 'purchase' || item.type === 'return'
-                                                                                ? `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`
+                                                                                ? (parseFloat(item.amount || 0) > 0 ? `৳${parseFloat(item.amount).toLocaleString('en-IN')}` : '—')
                                                                                 : (item.type === 'sale' && parseFloat(item.paid || 0) > 0
                                                                                     ? `৳${parseFloat(item.paid).toLocaleString('en-IN')}`
                                                                                     : '—'
@@ -4036,6 +4043,9 @@ const Customer = ({
                                                                                             <span className="font-bold text-left whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString('en-IN')}` : '—')}</span>
                                                                                         </div>
                                                                                         <div className="flex justify-between"><span className="text-gray-500">Return Amt:</span><span className="font-bold text-rose-600">৳{parseFloat(item.amount || 0).toLocaleString('en-IN')}</span></div>
+                                                                                        {parseFloat(item.returnExpense || 0) > 0 && (
+                                                                                            <div className="flex justify-between"><span className="text-gray-500">Return Expense:</span><span className="font-bold text-violet-700">৳{parseFloat(item.returnExpense).toLocaleString('en-IN')}</span></div>
+                                                                                        )}
                                                                                         {item.reason && <div className="flex justify-between"><span className="text-gray-500">Reason:</span><span className="font-medium text-gray-700">{item.reason}</span></div>}
                                                                                     </>
                                                                                 ) : (

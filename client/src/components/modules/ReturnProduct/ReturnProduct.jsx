@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
     PlusIcon,
     SearchIcon,
@@ -18,8 +19,10 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import './ReturnProduct.css';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { formatFirstName } from '../IPManagement/IPManagement';
+import { decryptData } from '../../../utils/encryption';
 
-const ReturnProduct = ({ currentUser }) => {
+const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated }) => {
     const [showForm, setShowForm] = useState(false);
     const [returns, setReturns] = useState([]);
     const [sales, setSales] = useState([]);
@@ -28,6 +31,22 @@ const ReturnProduct = ({ currentUser }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [expandedReturnId, setExpandedReturnId] = useState(null);
+    const [deleteConfirmReturn, setDeleteConfirmReturn] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [toast, setToast] = useState(null);
+    const toastTimerRef = useRef(null);
+
+    const showToast = (message, type = 'success') => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToast({ message, type });
+        toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        };
+    }, []);
 
     // Searchable Invoice State
     const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -48,10 +67,15 @@ const ReturnProduct = ({ currentUser }) => {
         warehouse: '',
         reason: '',
         returnPrice: '',
+        returnExpense: '',
+        entryBy: '',
+        entryByName: '',
         status: 'Pending',
         packetSize: 0,
         purchaseItems: []
     });
+
+    const [employeesFirstNameMap, setEmployeesFirstNameMap] = useState({});
 
     const [warehouses, setWarehouses] = useState([]);
     const [warehouseSearch, setWarehouseSearch] = useState('');
@@ -174,10 +198,89 @@ const ReturnProduct = ({ currentUser }) => {
         }
     };
 
+    const fetchEmployees = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(res.data) ? res.data : [];
+            const firstMap = {};
+
+            rawData.forEach(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const empId = (d.employeeId || '').toLowerCase().trim();
+                const uName = (d.username || '').toLowerCase().trim();
+                const rawFName = (d.firstName || '').trim();
+                const rawFullName = (d.name || '').trim();
+                const fName = formatFirstName(rawFName || rawFullName);
+
+                if (empId && fName) firstMap[empId] = fName;
+                if (uName && fName) firstMap[uName] = fName;
+                if (rawFullName && fName) firstMap[rawFullName.toLowerCase()] = fName;
+            });
+
+            firstMap['admin'] = 'Administrator';
+            firstMap['administrator'] = 'Administrator';
+            firstMap['a-1001'] = 'Anil';
+
+            setEmployeesFirstNameMap(firstMap);
+        } catch (error) {
+            console.error('Error fetching employees in ReturnProduct:', error);
+        }
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesFirstNameMap[key]) {
+            return employeesFirstNameMap[key];
+        }
+        if (employeesFirstNameMap[rawStr]) {
+            return employeesFirstNameMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesFirstNameMap[prefixKey]) return employeesFirstNameMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesFirstNameMap[firstWord.toLowerCase()]) {
+            return employeesFirstNameMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByFirstName = (item) => {
+        if (!item) return '—';
+        const candidate = item.entryByName || item.entryBy || item.requestedBy || item.createdBy || item.createdByName || item.userName || item.user;
+        if (!candidate || candidate === '-' || candidate === '—') return 'Administrator';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
+
     useEffect(() => {
         fetchReturns();
         fetchSales();
         fetchWarehouses();
+        fetchEmployees();
     }, []);
 
     // Handle outside click for warehouse dropdown
@@ -192,8 +295,11 @@ const ReturnProduct = ({ currentUser }) => {
     }, []);
 
     const filteredWarehouses = warehouses.filter(w => {
+        const query = (warehouseSearch || '').trim().toLowerCase();
+        if (!query) return true;
         const name = (w.whName || w.name || w.warehouse || '').toLowerCase();
-        return name.includes(warehouseSearch.toLowerCase());
+        if (query === (formData.warehouse || '').trim().toLowerCase()) return true;
+        return name.includes(query);
     });
 
     // Handle outside click for invoice dropdown
@@ -214,47 +320,85 @@ const ReturnProduct = ({ currentUser }) => {
             const returnQty = parseFloat(formData.quantity) || 0;
             const returnPkt = parseFloat(formData.bags) || (formData.packetSize > 0 ? returnQty / formData.packetSize : 0);
 
-            // 1. Update Warehouse Stock (Differential update for Edit, Simple add for New)
+            // 1. Update Warehouse Stock (Dedicated 'Returned Stock' records)
             if (formData.warehouse && formData.productName) {
                 const whResponse = await axios.get(`${API_BASE_URL}/api/warehouses`);
-                const allWh = Array.isArray(whResponse.data) ? whResponse.data : [];
+                let allWh = Array.isArray(whResponse.data) ? whResponse.data : [];
                 
                 const targetWhName = (formData.warehouse || '').trim().toLowerCase();
                 const targetProdName = (formData.productName || '').trim().toLowerCase();
                 const targetBrand = (formData.brand || '').trim().toLowerCase();
 
-                const targetWh = allWh.find(w => {
-                    const wName = (w.whName || w.name || w.warehouse || '').trim().toLowerCase();
-                    const wProd = (w.productName || w.product || '').trim().toLowerCase();
-                    const wBrand = (w.brand || '').trim().toLowerCase();
-                    return wName === targetWhName && wProd === targetProdName && (wBrand === targetBrand || (wBrand === '' && targetBrand === ''));
-                });
-
-                let diffQty = returnQty;
-                let diffPkt = returnPkt;
-
+                // If editing, reverse the previous return's stock from its warehouse first
                 if (editingId) {
                     const oldReturn = returns.find(r => r._id === editingId);
                     if (oldReturn) {
-                        diffQty = returnQty - (parseFloat(oldReturn.quantity) || 0);
-                        diffPkt = returnPkt - (parseFloat(oldReturn.bags) || 0);
+                        const oldWhName = (oldReturn.warehouse || '').trim().toLowerCase();
+                        const oldProdName = (oldReturn.productName || '').trim().toLowerCase();
+                        const oldBrand = (oldReturn.brand || '').trim().toLowerCase();
+                        const oldQty = parseFloat(oldReturn.quantity) || 0;
+                        const oldPkt = parseFloat(oldReturn.bags) || 0;
+
+                        const oldStockEntry = allWh.find(w => {
+                            const isRet = (w.location || '').trim().toLowerCase() === 'returned stock' && !w.isTransferLog;
+                            const wName = (w.whName || w.name || w.warehouse || '').trim().toLowerCase();
+                            const wProd = (w.productName || w.product || '').trim().toLowerCase();
+                            const wBrand = (w.brand || '').trim().toLowerCase();
+                            return isRet && wName === oldWhName && wProd === oldProdName && (wBrand === oldBrand || (!wBrand && !oldBrand));
+                        });
+
+                        if (oldStockEntry) {
+                            const currentQty = parseFloat(oldStockEntry.whQty ?? oldStockEntry.inHouseQuantity) || 0;
+                            if (currentQty - oldQty <= 0) {
+                                await axios.delete(`${API_BASE_URL}/api/warehouses/${oldStockEntry._id}`);
+                                allWh = allWh.filter(w => w._id !== oldStockEntry._id);
+                            } else {
+                                const decrementedWh = {
+                                    ...oldStockEntry,
+                                    whQty: Math.max(0, (parseFloat(oldStockEntry.whQty) || 0) - oldQty),
+                                    whPkt: Math.max(0, (parseFloat(oldStockEntry.whPkt) || 0) - oldPkt),
+                                    inHouseQuantity: Math.max(0, (parseFloat(oldStockEntry.inHouseQuantity || oldStockEntry.whQty) || 0) - oldQty),
+                                    inHousePacket: Math.max(0, (parseFloat(oldStockEntry.inHousePacket || oldStockEntry.whPkt) || 0) - oldPkt),
+                                    recordType: 'warehouse',
+                                    isTransferLog: false,
+                                    location: 'Returned Stock'
+                                };
+                                await axios.put(`${API_BASE_URL}/api/warehouses/${oldStockEntry._id}`, decrementedWh);
+                                const idx = allWh.findIndex(w => w._id === oldStockEntry._id);
+                                if (idx !== -1) allWh[idx] = decrementedWh;
+                            }
+                        }
                     }
                 }
 
-                if (targetWh) {
+                // Find or create 'Returned Stock' entry in target warehouse
+                const existingReturnedStock = allWh.find(w => {
+                    const isRet = (w.location || '').trim().toLowerCase() === 'returned stock' && !w.isTransferLog;
+                    const wName = (w.whName || w.name || w.warehouse || '').trim().toLowerCase();
+                    const wProd = (w.productName || w.product || '').trim().toLowerCase();
+                    const wBrand = (w.brand || '').trim().toLowerCase();
+                    return isRet && wName === targetWhName && wProd === targetProdName && (wBrand === targetBrand || (!wBrand && !targetBrand));
+                });
+
+                if (existingReturnedStock) {
                     const updatedWh = {
-                        ...targetWh,
-                        whQty: (parseFloat(targetWh.whQty) || 0) + diffQty,
-                        whPkt: (parseFloat(targetWh.whPkt) || 0) + diffPkt,
-                        inHouseQuantity: (parseFloat(targetWh.inHouseQuantity || targetWh.whQty) || 0) + diffQty,
-                        inHousePacket: (parseFloat(targetWh.inHousePacket || targetWh.whPkt) || 0) + diffPkt,
-                        recordType: targetWh.recordType || 'warehouse'
+                        ...existingReturnedStock,
+                        whQty: (parseFloat(existingReturnedStock.whQty) || 0) + returnQty,
+                        whPkt: (parseFloat(existingReturnedStock.whPkt) || 0) + returnPkt,
+                        inHouseQuantity: (parseFloat(existingReturnedStock.inHouseQuantity || existingReturnedStock.whQty) || 0) + returnQty,
+                        inHousePacket: (parseFloat(existingReturnedStock.inHousePacket || existingReturnedStock.whPkt) || 0) + returnPkt,
+                        date: formData.date || new Date().toISOString().split('T')[0],
+                        recordType: 'warehouse',
+                        isTransferLog: false,
+                        location: 'Returned Stock'
                     };
-                    await axios.put(`${API_BASE_URL}/api/warehouses/${targetWh._id}`, updatedWh);
-                } else if (!editingId) {
+                    await axios.put(`${API_BASE_URL}/api/warehouses/${existingReturnedStock._id}`, updatedWh);
+                } else {
                     const newWh = {
                         whName: formData.warehouse,
+                        warehouse: formData.warehouse,
                         productName: formData.productName,
+                        product: formData.productName,
                         brand: formData.brand,
                         whQty: returnQty,
                         whPkt: returnPkt,
@@ -265,17 +409,24 @@ const ReturnProduct = ({ currentUser }) => {
                         location: 'Returned Stock',
                         packetSize: formData.packetSize || 0,
                         recordType: 'warehouse',
-                        date: formData.date || new Date().toISOString()
+                        isTransferLog: false,
+                        invoiceNo: formData.invoiceNo || '',
+                        date: formData.date || new Date().toISOString().split('T')[0]
                     };
                     await axios.post(`${API_BASE_URL}/api/warehouses`, newWh);
                 }
             }
 
             // 2. Save Return Record
+            const dataToSave = {
+                ...formData,
+                entryBy: editingId ? (formData.entryBy || currentUser?.username || currentUser?.employeeId || currentUser?.name || 'Administrator') : (currentUser?.username || currentUser?.employeeId || currentUser?.name || 'Administrator'),
+                entryByName: currentUser?.name || currentUser?.username || 'Administrator'
+            };
             if (editingId) {
-                await axios.put(`${API_BASE_URL}/api/returns/${editingId}`, formData);
+                await axios.put(`${API_BASE_URL}/api/returns/${editingId}`, dataToSave);
             } else {
-                await axios.post(`${API_BASE_URL}/api/returns`, formData);
+                await axios.post(`${API_BASE_URL}/api/returns`, dataToSave);
             }
 
             // 4. Update Quantity in Original Sale Invoice (Absolute Sync)
@@ -342,7 +493,13 @@ const ReturnProduct = ({ currentUser }) => {
                         }
                         return item;
                     });
-                    updatedSale.totalAmount = updatedSale.items.reduce((sum, item) => sum + (parseFloat(item.totalAmount) || 0), 0).toFixed(2);
+                    const calcItemTotal = (item) => {
+                        if (item.brandEntries && item.brandEntries.length > 0) {
+                            return item.brandEntries.reduce((bSum, be) => bSum + (parseFloat(be.totalAmount) || (parseFloat(be.quantity) || 0) * (parseFloat(be.unitPrice || be.rate) || 0)), 0);
+                        }
+                        return parseFloat(item.totalAmount) || (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice || item.rate) || 0);
+                    };
+                    updatedSale.totalAmount = updatedSale.items.reduce((sum, item) => sum + calcItemTotal(item), 0).toFixed(2);
                 } else {
                     // Legacy format
                     const productReturns = invoiceReturns.filter(r => r.productName === updatedSale.productName);
@@ -388,15 +545,27 @@ const ReturnProduct = ({ currentUser }) => {
                 warehouse: '',
                 reason: '',
                 returnPrice: '',
+                returnExpense: '',
+                entryBy: '',
+                entryByName: '',
                 status: 'Pending',
                 packetSize: 0,
                 originalQuantity: '',
                 purchaseItems: []
             });
-            fetchReturns();
+            await fetchReturns();
+            if (typeof onReturnsUpdated === 'function') {
+                onReturnsUpdated();
+            }
+            if (typeof refreshPendingIndicators === 'function') {
+                refreshPendingIndicators();
+            }
+            window.dispatchEvent(new CustomEvent('returnsUpdated'));
+            window.dispatchEvent(new CustomEvent('stockUpdated'));
+            window.dispatchEvent(new CustomEvent('warehousesUpdated'));
         } catch (error) {
             console.error('Error saving return:', error);
-            alert('Error saving return record. Please try again.');
+            showToast('Error saving return record. Please try again.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -407,6 +576,9 @@ const ReturnProduct = ({ currentUser }) => {
         const originalSale = sales.find(s => s.invoiceNo === ret.invoiceNo);
         setFormData({
             ...ret,
+            entryBy: ret.entryBy || '',
+            entryByName: ret.entryByName || '',
+            returnExpense: ret.returnExpense !== undefined ? ret.returnExpense : '',
             purchaseItems: originalSale ? (originalSale.items || []) : []
         });
         setEditingId(ret._id);
@@ -415,111 +587,190 @@ const ReturnProduct = ({ currentUser }) => {
         setShowForm(true);
     };
 
-    const handleDelete = async (id) => {
+    const handleDelete = (idOrRecord) => {
         if (!canDelete) {
-            alert('Forbidden: You do not have permission to delete return records');
+            showToast('Forbidden: You do not have permission to delete return records', 'error');
             return;
         }
-        if (window.confirm('Are you sure you want to delete this return record?')) {
-            try {
-                const returnToDelete = returns.find(r => r._id === id);
-                if (!returnToDelete) return;
+        const record = (typeof idOrRecord === 'object' && idOrRecord !== null)
+            ? idOrRecord
+            : returns.find(r => r._id === idOrRecord);
+        if (!record) {
+            setDeleteConfirmReturn({ _id: idOrRecord });
+        } else {
+            setDeleteConfirmReturn(record);
+        }
+    };
 
-                // 1. Reverse Warehouse Stock
-                const whResponse = await axios.get(`${API_BASE_URL}/api/warehouses`);
-                const allWh = Array.isArray(whResponse.data) ? whResponse.data : [];
-                
-                const targetWhName = (returnToDelete.warehouse || '').trim().toLowerCase();
-                const targetProdName = (returnToDelete.productName || '').trim().toLowerCase();
-                const targetBrand = (returnToDelete.brand || '').trim().toLowerCase();
+    const handleConfirmDelete = async () => {
+        if (!deleteConfirmReturn) return;
+        setIsDeleting(true);
+        try {
+            const id = deleteConfirmReturn._id;
+            let returnToDelete = returns.find(r => r._id === id) || deleteConfirmReturn;
+            if (!returnToDelete || !returnToDelete.quantity) {
+                const res = await axios.get(`${API_BASE_URL}/api/returns/${id}`).catch(() => null);
+                returnToDelete = res?.data || returnToDelete;
+            }
+            if (!returnToDelete) {
+                setDeleteConfirmReturn(null);
+                return;
+            }
 
-                const targetWh = allWh.find(w => {
-                    const wName = (w.whName || w.name || w.warehouse || '').trim().toLowerCase();
+            const retQty = parseFloat(returnToDelete.quantity) || 0;
+            const retPkt = parseFloat(returnToDelete.bags) || 0;
+            const targetWhName = (returnToDelete.warehouse || '').trim().toLowerCase();
+            const targetProdName = (returnToDelete.productName || '').trim().toLowerCase();
+            const targetBrand = (returnToDelete.brand || '').trim().toLowerCase();
+
+            // 1. Reverse Warehouse Stock
+            const whResponse = await axios.get(`${API_BASE_URL}/api/warehouses`);
+            const allWh = Array.isArray(whResponse.data) ? whResponse.data : [];
+
+            // Check for a warehouse record that was created as "Returned Stock"
+            let returnedStockWh = allWh.find(w => {
+                const loc = (w.location || '').trim().toLowerCase();
+                const isRet = loc === 'returned stock' && !w.isTransferLog;
+                const wProd = (w.productName || w.product || '').trim().toLowerCase();
+                const wBrand = (w.brand || '').trim().toLowerCase();
+                const wName = (w.whName || w.name || w.warehouse || '').trim().toLowerCase();
+                return isRet && wProd === targetProdName && (wBrand === targetBrand || !targetBrand || !wBrand) && (!targetWhName || wName === targetWhName);
+            });
+
+            if (!returnedStockWh) {
+                returnedStockWh = allWh.find(w => {
+                    const loc = (w.location || '').trim().toLowerCase();
+                    const isRet = loc === 'returned stock' && !w.isTransferLog;
                     const wProd = (w.productName || w.product || '').trim().toLowerCase();
                     const wBrand = (w.brand || '').trim().toLowerCase();
-                    return wName === targetWhName && wProd === targetProdName && (wBrand === targetBrand || (wBrand === '' && targetBrand === ''));
+                    return isRet && wProd === targetProdName && (wBrand === targetBrand || !targetBrand || !wBrand);
                 });
-
-                if (targetWh) {
-                    const retQty = parseFloat(returnToDelete.quantity) || 0;
-                    const retPkt = parseFloat(returnToDelete.bags) || 0;
-
-                    const updatedWh = {
-                        ...targetWh,
-                        whQty: Math.max(0, (parseFloat(targetWh.whQty) || 0) - retQty),
-                        whPkt: Math.max(0, (parseFloat(targetWh.whPkt) || 0) - retPkt),
-                        inHouseQuantity: Math.max(0, (parseFloat(targetWh.inHouseQuantity || targetWh.whQty) || 0) - retQty),
-                        inHousePacket: Math.max(0, (parseFloat(targetWh.inHousePacket || targetWh.whPkt) || 0) - retPkt),
-                        recordType: targetWh.recordType || 'warehouse'
-                    };
-                    await axios.put(`${API_BASE_URL}/api/warehouses/${targetWh._id}`, updatedWh);
-                }
-
-                // 2. Delete the Return Record
-                await axios.delete(`${API_BASE_URL}/api/returns/${id}`);
-
-                // 3. Sync Sale Invoice (Recalculate based on REMAINING returns)
-                const originalSale = sales.find(s => s.invoiceNo === returnToDelete.invoiceNo);
-                if (originalSale) {
-                    // Fetch remaining returns to get new absolute truth
-                    const allReturnsResponse = await axios.get(`${API_BASE_URL}/api/returns`);
-                    const remainingReturns = (Array.isArray(allReturnsResponse.data) ? allReturnsResponse.data : [])
-                        .filter(r => r.invoiceNo === returnToDelete.invoiceNo && r._id !== id);
-
-                    const updatedSale = JSON.parse(JSON.stringify(originalSale));
-                    let itemModified = false;
-
-                    if (updatedSale.items && updatedSale.items.length > 0) {
-                        updatedSale.items = updatedSale.items.map(item => {
-                            const productReturns = remainingReturns.filter(r => r.productName === item.productName);
-                            if (item.brandEntries && item.brandEntries.length > 0) {
-                                item.brandEntries = item.brandEntries.map(be => {
-                                    const brandName = be.brandName || be.brand;
-                                    const brandReturns = productReturns.filter(r => (r.brandName || r.brand) === brandName);
-                                    const totalRetQty = brandReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
-                                    const totalRetPkt = brandReturns.reduce((sum, r) => sum + (parseFloat(r.bags) || 0), 0);
-
-                                    // Use stored original quantity
-                                    const originalQty = be.originalQuantity || (parseFloat(be.quantity) || 0) + (parseFloat(be.returnQty) || 0);
-                                    be.originalQuantity = originalQty;
-                                    be.returnQty = totalRetQty;
-                                    be.returnPkt = totalRetPkt;
-                                    be.quantity = Math.max(0, originalQty - totalRetQty);
-                                    
-                                    const price = parseFloat(be.unitPrice) || 0;
-                                    be.totalAmount = (be.quantity * price).toFixed(2);
-                                    itemModified = true;
-                                    return be;
-                                });
-                            } else if (item.productName === returnToDelete.productName) {
-                                const totalRetQty = productReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
-                                const originalQty = item.originalQuantity || (parseFloat(item.quantity) || 0) + (parseFloat(item.returnQty) || 0);
-                                item.originalQuantity = originalQty;
-                                item.returnQty = totalRetQty;
-                                item.quantity = Math.max(0, originalQty - totalRetQty);
-                                item.totalAmount = (item.quantity * (parseFloat(item.unitPrice || item.rate) || 0)).toFixed(2);
-                                itemModified = true;
-                            }
-                            return item;
-                        });
-                        updatedSale.totalAmount = updatedSale.items.reduce((sum, item) => sum + (parseFloat(item.totalAmount) || 0), 0).toFixed(2);
-                    }
-
-                    if (itemModified) {
-                        const total = parseFloat(updatedSale.totalAmount) || 0;
-                        const disc = parseFloat(updatedSale.discount) || 0;
-                        const paid = parseFloat(updatedSale.paidAmount) || 0;
-                        updatedSale.dueAmount = Math.max(0, total - disc - paid);
-                        const { _id, createdAt, updatedAt, __v, ...dataToSend } = updatedSale;
-                        await axios.put(`${API_BASE_URL}/api/sales/${originalSale._id}`, dataToSend);
-                    }
-                }
-
-                fetchReturns();
-            } catch (error) {
-                console.error('Error deleting return:', error);
-                alert('Error deleting return record. Please try again.');
             }
+
+            if (returnedStockWh) {
+                const currentWhQty = parseFloat(returnedStockWh.whQty ?? returnedStockWh.inHouseQuantity) || 0;
+                if (currentWhQty - retQty <= 0) {
+                    // Completely remove the orphaned / returned stock record!
+                    await axios.delete(`${API_BASE_URL}/api/warehouses/${returnedStockWh._id}`);
+                } else {
+                    const updatedWh = {
+                        ...returnedStockWh,
+                        whQty: Math.max(0, (parseFloat(returnedStockWh.whQty) || 0) - retQty),
+                        whPkt: Math.max(0, (parseFloat(returnedStockWh.whPkt) || 0) - retPkt),
+                        inHouseQuantity: Math.max(0, (parseFloat(returnedStockWh.inHouseQuantity || returnedStockWh.whQty) || 0) - retQty),
+                        inHousePacket: Math.max(0, (parseFloat(returnedStockWh.inHousePacket || returnedStockWh.whPkt) || 0) - retPkt),
+                        recordType: 'warehouse',
+                        isTransferLog: false,
+                        location: 'Returned Stock'
+                    };
+                    await axios.put(`${API_BASE_URL}/api/warehouses/${returnedStockWh._id}`, updatedWh);
+                }
+            }
+
+            // 2. Delete the Return Record
+            await axios.delete(`${API_BASE_URL}/api/returns/${id}`);
+
+            // 3. Sync Sale Invoice (Recalculate based on REMAINING returns)
+            let originalSale = sales.find(s => s.invoiceNo === returnToDelete.invoiceNo);
+            if (!originalSale && returnToDelete.invoiceNo) {
+                const salesRes = await axios.get(`${API_BASE_URL}/api/sales`);
+                const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
+                originalSale = allSales.find(s => s.invoiceNo === returnToDelete.invoiceNo);
+            }
+
+            if (originalSale) {
+                // Fetch remaining returns to get new absolute truth
+                const allReturnsResponse = await axios.get(`${API_BASE_URL}/api/returns`);
+                const remainingReturns = (Array.isArray(allReturnsResponse.data) ? allReturnsResponse.data : [])
+                    .filter(r => r.invoiceNo === returnToDelete.invoiceNo && r._id !== id);
+
+                const updatedSale = JSON.parse(JSON.stringify(originalSale));
+                let itemModified = false;
+
+                const calcItemTotal = (item) => {
+                    if (item.brandEntries && item.brandEntries.length > 0) {
+                        return item.brandEntries.reduce((bSum, be) => bSum + (parseFloat(be.totalAmount) || (parseFloat(be.quantity) || 0) * (parseFloat(be.unitPrice || be.rate) || 0)), 0);
+                    }
+                    return parseFloat(item.totalAmount) || (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice || item.rate) || 0);
+                };
+
+                if (updatedSale.items && updatedSale.items.length > 0) {
+                    updatedSale.items = updatedSale.items.map(item => {
+                        const productReturns = remainingReturns.filter(r => (r.productName || '').trim().toLowerCase() === (item.productName || '').trim().toLowerCase());
+                        if (item.brandEntries && item.brandEntries.length > 0) {
+                            item.brandEntries = item.brandEntries.map(be => {
+                                const brandName = (be.brandName || be.brand || '').trim().toLowerCase();
+                                const brandReturns = productReturns.filter(r => (r.brandName || r.brand || '').trim().toLowerCase() === brandName);
+                                const totalRetQty = brandReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+                                const totalRetPkt = brandReturns.reduce((sum, r) => sum + (parseFloat(r.bags) || 0), 0);
+
+                                // Use stored original quantity
+                                const originalQty = be.originalQuantity || (parseFloat(be.quantity) || 0) + (parseFloat(be.returnQty) || 0);
+                                be.originalQuantity = originalQty;
+                                be.returnQty = totalRetQty;
+                                be.returnPkt = totalRetPkt;
+                                be.quantity = Math.max(0, originalQty - totalRetQty);
+                                
+                                const price = parseFloat(be.unitPrice || be.rate) || 0;
+                                be.totalAmount = (be.quantity * price).toFixed(2);
+                                itemModified = true;
+                                return be;
+                            });
+                        } else if ((item.productName || '').trim().toLowerCase() === targetProdName) {
+                            const totalRetQty = productReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+                            const originalQty = item.originalQuantity || (parseFloat(item.quantity) || 0) + (parseFloat(item.returnQty) || 0);
+                            item.originalQuantity = originalQty;
+                            item.returnQty = totalRetQty;
+                            item.quantity = Math.max(0, originalQty - totalRetQty);
+                            item.totalAmount = (item.quantity * (parseFloat(item.unitPrice || item.rate) || 0)).toFixed(2);
+                            itemModified = true;
+                        }
+                        return item;
+                    });
+                    updatedSale.totalAmount = updatedSale.items.reduce((sum, item) => sum + calcItemTotal(item), 0).toFixed(2);
+                } else {
+                    // Legacy format
+                    const productReturns = remainingReturns.filter(r => (r.productName || '').trim().toLowerCase() === (updatedSale.productName || '').trim().toLowerCase());
+                    const totalRetQty = productReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+                    
+                    if (!updatedSale.originalQuantity) {
+                        updatedSale.originalQuantity = (parseFloat(updatedSale.quantity) || 0) + (parseFloat(updatedSale.returnQty) || 0);
+                    }
+                    
+                    updatedSale.returnQty = totalRetQty;
+                    updatedSale.quantity = Math.max(0, updatedSale.originalQuantity - totalRetQty);
+                    const price = parseFloat(updatedSale.unitPrice || updatedSale.rate) || 0;
+                    updatedSale.totalAmount = (updatedSale.quantity * price).toFixed(2);
+                    itemModified = true;
+                }
+
+                if (itemModified) {
+                    const total = parseFloat(updatedSale.totalAmount) || 0;
+                    const disc = parseFloat(updatedSale.discount) || 0;
+                    const paid = parseFloat(updatedSale.paidAmount) || 0;
+                    updatedSale.dueAmount = Math.max(0, total - disc - paid);
+                    const { _id, createdAt, updatedAt, __v, ...dataToSend } = updatedSale;
+                    await axios.put(`${API_BASE_URL}/api/sales/${originalSale._id}`, dataToSend);
+                }
+            }
+
+            setDeleteConfirmReturn(null);
+            await fetchReturns();
+            showToast('Return record deleted successfully.', 'success');
+            if (typeof onReturnsUpdated === 'function') {
+                onReturnsUpdated();
+            }
+            if (typeof refreshPendingIndicators === 'function') {
+                refreshPendingIndicators();
+            }
+            window.dispatchEvent(new CustomEvent('returnsUpdated'));
+            window.dispatchEvent(new CustomEvent('stockUpdated'));
+            window.dispatchEvent(new CustomEvent('warehousesUpdated'));
+        } catch (error) {
+            console.error('Error deleting return:', error);
+            showToast('Error deleting return record. Please try again.', 'error');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -527,7 +778,12 @@ const ReturnProduct = ({ currentUser }) => {
         (ret.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (ret.productName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (ret.invoiceNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (ret.companyName || '').toLowerCase().includes(searchQuery.toLowerCase())
+        (ret.companyName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ret.brand || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ret.warehouse || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ret.entryBy || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ret.entryByName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        getEntryByFirstName(ret).toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const filteredSales = sales.filter(sale =>
@@ -552,17 +808,30 @@ const ReturnProduct = ({ currentUser }) => {
             });
         }
 
-        setFormData({
-            ...formData,
+        let defaultWh = sale.port || '';
+        if (items.length > 0) {
+            const firstItem = items[0];
+            if (firstItem.brandEntries && firstItem.brandEntries.length > 0) {
+                defaultWh = firstItem.brandEntries[0].warehouseName || firstItem.brandEntries[0].warehouse || defaultWh;
+            } else {
+                defaultWh = firstItem.warehouseName || firstItem.warehouse || defaultWh;
+            }
+        }
+
+        setFormData(prev => ({
+            ...prev,
             invoiceNo: sale.invoiceNo,
             invoiceDate: sale.date || '',
             companyName: sale.companyName || '',
             phone: sale.contact || sale.phone || '',
             customerName: sale.customerName || sale.companyName || '',
+            customerId: sale.customerId || '',
             productName: prodName,
-            purchaseItems: items
-        });
+            purchaseItems: items,
+            warehouse: defaultWh || prev.warehouse || ''
+        }));
         setInvoiceSearch(sale.invoiceNo);
+        if (defaultWh) setWarehouseSearch(defaultWh);
         setShowInvoiceDropdown(false);
         setHighlightedInvoiceIndex(-1);
     };
@@ -611,6 +880,7 @@ const ReturnProduct = ({ currentUser }) => {
                                     productName: '',
                                     quantity: '',
                                     returnPrice: '',
+                                    returnExpense: '',
                                     reason: '',
                                     status: 'Pending',
                                     originalQuantity: ''
@@ -761,41 +1031,53 @@ const ReturnProduct = ({ currentUser }) => {
                                             {formData.purchaseItems.map((item, idx) => (
                                                 <React.Fragment key={idx}>
                                                     {item.brandEntries && item.brandEntries.length > 0 ? (
-                                                        item.brandEntries.map((be, beIdx) => (
-                                                            <tr key={`${idx}-${beIdx}`} className="cursor-pointer hover:bg-blue-50/50" onClick={() => {
-                                                                setFormData({
-                                                                    ...formData,
-                                                                    productName: item.productName,
-                                                                    brand: be.brand || be.brandName || '',
-                                                                    quantity: '',
-                                                                    returnPrice: be.unitPrice || 0,
-                                                                    originalQuantity: parseFloat(be.quantity || 0) + (parseFloat(be.returnQty) || 0),
-                                                                    packetSize: parseFloat(be.packetSize || item.packetSize || be.bagSize || item.bagSize || 50)
-                                                                });
-                                                            }}>
-                                                                <td>{item.productName}</td>
-                                                                <td>{be.brandName || be.brand}</td>
-                                                                <td className="text-center font-bold text-blue-600">{parseFloat(be.quantity || 0) + (parseFloat(be.returnQty) || 0)}</td>
-                                                                <td className="text-right">৳ {parseFloat(be.unitPrice || 0).toLocaleString()}</td>
-                                                            </tr>
-                                                        ))
+                                                        item.brandEntries.map((be, beIdx) => {
+                                                            const beWh = be.warehouseName || be.warehouse || item.warehouseName || item.warehouse || '';
+                                                            return (
+                                                                <tr key={`${idx}-${beIdx}`} className="cursor-pointer hover:bg-blue-50/50" onClick={() => {
+                                                                    setFormData(prev => ({
+                                                                        ...prev,
+                                                                        productName: item.productName,
+                                                                        brand: be.brand || be.brandName || '',
+                                                                        quantity: '',
+                                                                        returnPrice: be.unitPrice || 0,
+                                                                        originalQuantity: parseFloat(be.quantity || 0) + (parseFloat(be.returnQty) || 0),
+                                                                        packetSize: parseFloat(be.packetSize || item.packetSize || be.bagSize || item.bagSize || 50),
+                                                                        warehouse: beWh || prev.warehouse || ''
+                                                                    }));
+                                                                    if (beWh) setWarehouseSearch(beWh);
+                                                                }}>
+                                                                    <td>{item.productName}</td>
+                                                                    <td>{be.brandName || be.brand}</td>
+                                                                    <td className="text-center font-bold text-blue-600">{parseFloat(be.quantity || 0) + (parseFloat(be.returnQty) || 0)}</td>
+                                                                    <td className="text-right">৳ {parseFloat(be.unitPrice || 0).toLocaleString()}</td>
+                                                                </tr>
+                                                            );
+                                                        })
                                                     ) : (
-                                                        <tr className="cursor-pointer hover:bg-blue-50/50" onClick={() => {
-                                                            setFormData({
-                                                                ...formData,
-                                                                productName: item.productName,
-                                                                brand: '-',
-                                                                quantity: '',
-                                                                returnPrice: item.unitPrice || item.rate || 0,
-                                                                originalQuantity: parseFloat(item.quantity || 0) + (parseFloat(item.returnQty) || 0),
-                                                                packetSize: parseFloat(item.packetSize || item.bagSize || 50)
-                                                            });
-                                                        }}>
-                                                            <td>{item.productName}</td>
-                                                            <td>-</td>
-                                                            <td className="text-center font-bold text-blue-600">{parseFloat(item.quantity || 0) + (parseFloat(item.returnQty) || 0)}</td>
-                                                            <td className="text-right">৳ {parseFloat(item.unitPrice || 0).toLocaleString()}</td>
-                                                        </tr>
+                                                        (() => {
+                                                            const itemWh = item.warehouseName || item.warehouse || '';
+                                                            return (
+                                                                <tr className="cursor-pointer hover:bg-blue-50/50" onClick={() => {
+                                                                    setFormData(prev => ({
+                                                                        ...prev,
+                                                                        productName: item.productName,
+                                                                        brand: '-',
+                                                                        quantity: '',
+                                                                        returnPrice: item.unitPrice || item.rate || 0,
+                                                                        originalQuantity: parseFloat(item.quantity || 0) + (parseFloat(item.returnQty) || 0),
+                                                                        packetSize: parseFloat(item.packetSize || item.bagSize || 50),
+                                                                        warehouse: itemWh || prev.warehouse || ''
+                                                                    }));
+                                                                    if (itemWh) setWarehouseSearch(itemWh);
+                                                                }}>
+                                                                    <td>{item.productName}</td>
+                                                                    <td>-</td>
+                                                                    <td className="text-center font-bold text-blue-600">{parseFloat(item.quantity || 0) + (parseFloat(item.returnQty) || 0)}</td>
+                                                                    <td className="text-right">৳ {parseFloat(item.unitPrice || 0).toLocaleString()}</td>
+                                                                </tr>
+                                                            );
+                                                        })()
                                                     )}
                                                 </React.Fragment>
                                             ))}
@@ -806,7 +1088,7 @@ const ReturnProduct = ({ currentUser }) => {
                             </div>
                         )}
 
-                        <div className="return-product-form-field-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+                        <div className="return-product-form-field-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
                             <div className="return-product-form-field">
                                 <label className="return-product-form-label">Product Name</label>
                                 <input
@@ -865,6 +1147,19 @@ const ReturnProduct = ({ currentUser }) => {
                                 />
                             </div>
 
+                            <div className="return-product-form-field">
+                                <label className="return-product-form-label">Return Expense</label>
+                                <input
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    className="return-product-form-input"
+                                    placeholder="Expense (৳)"
+                                    value={formData.returnExpense}
+                                    onChange={(e) => setFormData({ ...formData, returnExpense: e.target.value })}
+                                />
+                            </div>
+
                             <div className="return-product-form-field" ref={warehouseRef}>
                                 <label className="return-product-form-label">Warehouse</label>
                                 <div className="relative">
@@ -874,7 +1169,9 @@ const ReturnProduct = ({ currentUser }) => {
                                         placeholder="Search..."
                                         value={warehouseSearch}
                                         onChange={(e) => {
-                                            setWarehouseSearch(e.target.value);
+                                            const val = e.target.value;
+                                            setWarehouseSearch(val);
+                                            setFormData(prev => ({ ...prev, warehouse: val }));
                                             setShowWarehouseDropdown(true);
                                             setHighlightedWarehouseIndex(-1);
                                         }}
@@ -886,7 +1183,12 @@ const ReturnProduct = ({ currentUser }) => {
                                         required
                                         autoComplete="off"
                                     />
-                                    <ChevronDownIcon className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform duration-200 ${showWarehouseDropdown ? 'rotate-180' : ''} w-4 h-4`} />
+                                    <div 
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer p-1"
+                                        onClick={() => setShowWarehouseDropdown(prev => !prev)}
+                                    >
+                                        <ChevronDownIcon className={`transition-transform duration-200 ${showWarehouseDropdown ? 'rotate-180' : ''} w-4 h-4`} />
+                                    </div>
 
                                     {showWarehouseDropdown && filteredWarehouses.length > 0 && (
                                         <div className="invoice-dropdown-list">
@@ -896,7 +1198,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                     className={`invoice-dropdown-item ${highlightedWarehouseIndex === idx ? 'bg-blue-50' : ''}`}
                                                     onClick={() => {
                                                         const selectedName = w.whName || w.name || w.warehouse;
-                                                        setFormData({ ...formData, warehouse: selectedName });
+                                                        setFormData(prev => ({ ...prev, warehouse: selectedName }));
                                                         setWarehouseSearch(selectedName);
                                                         setShowWarehouseDropdown(false);
                                                         setHighlightedWarehouseIndex(-1);
@@ -958,6 +1260,8 @@ const ReturnProduct = ({ currentUser }) => {
                                         <th className="return-product-table-header text-center">Quantity</th>
                                         <th className="return-product-table-header text-center">Bags</th>
                                         <th className="return-product-table-header text-right">Return Price</th>
+                                        <th className="return-product-table-header text-right">Return Expense</th>
+                                        <th className="return-product-table-header text-center whitespace-nowrap">Entry By</th>
                                         {canManage && <th className="return-product-table-header text-right">Actions</th>}
                                     </tr>
                                 </thead>
@@ -997,11 +1301,14 @@ const ReturnProduct = ({ currentUser }) => {
                                                     }
                                                     
                                                     const qty = parseFloat(ret.quantity) || 0;
-                                                    if (rate > 0) {
-                                                        return `৳ ${(rate * qty).toLocaleString()}`;
-                                                    }
-                                                    return '-';
+                                                    return rate > 0 ? `৳ ${(rate * qty).toLocaleString()}` : '-';
                                                 })()}
+                                            </td>
+                                            <td className="return-product-table-cell text-right font-bold text-rose-600">
+                                                {parseFloat(ret.returnExpense || 0) > 0 ? `৳ ${parseFloat(ret.returnExpense).toLocaleString()}` : '-'}
+                                            </td>
+                                            <td className="return-product-table-cell text-center font-bold text-gray-700 whitespace-nowrap text-xs">
+                                                {getEntryByFirstName(ret)}
                                             </td>
                                             {canManage && (
                                             <td className="return-product-table-cell">
@@ -1016,7 +1323,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                     )}
                                                     {canDelete && (
                                                         <button
-                                                            onClick={() => handleDelete(ret._id)}
+                                                            onClick={() => handleDelete(ret)}
                                                             className="return-product-action-btn return-product-action-delete"
                                                         >
                                                             <TrashIcon className="w-5 h-5" />
@@ -1029,7 +1336,7 @@ const ReturnProduct = ({ currentUser }) => {
                                     ))}
                                     {filteredReturns.length === 0 && (
                                         <tr>
-                                            <td colSpan={(canManage) ? 9 : 8} className="py-20 text-center text-gray-400">
+                                            <td colSpan={(canManage) ? 11 : 10} className="py-20 text-center text-gray-400">
                                                 <RotateCcwIcon className="w-12 h-12 mx-auto mb-4 opacity-20" />
                                                 <p className="text-sm">No return records found</p>
                                             </td>
@@ -1092,12 +1399,22 @@ const ReturnProduct = ({ currentUser }) => {
                                                     <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Quantity</span>
                                                     <span className="text-gray-900 font-black font-mono">{ret.quantity}</span>
                                                 </div>
+                                                {parseFloat(ret.returnExpense || 0) > 0 && (
+                                                    <div className="flex justify-between items-center text-xs">
+                                                        <span className="text-rose-500 font-bold uppercase tracking-widest text-[9px]">Return Expense</span>
+                                                        <span className="text-rose-600 font-black">৳ {parseFloat(ret.returnExpense).toLocaleString()}</span>
+                                                    </div>
+                                                )}
                                                 {ret.reason && (
                                                     <div className="flex justify-between items-start text-xs pt-1">
                                                         <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px] shrink-0">Reason</span>
                                                         <span className="text-gray-900 font-black text-right max-w-[65%] line-clamp-2">{ret.reason}</span>
                                                     </div>
                                                 )}
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Entry By</span>
+                                                    <span className="text-gray-900 font-black">{getEntryByFirstName(ret)}</span>
+                                                </div>
                                             </div>
 
                                             {canManage && (
@@ -1112,7 +1429,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                 )}
                                                 {canDelete && (
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); handleDelete(ret._id); }}
+                                                        onClick={(e) => { e.stopPropagation(); handleDelete(ret); }}
                                                         className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
                                                     >
                                                         <TrashIcon className="w-4 h-4" />
@@ -1127,6 +1444,59 @@ const ReturnProduct = ({ currentUser }) => {
                         })}
                     </div>
                 </>
+            )}
+
+            {/* Standard Delete Confirmation Modal */}
+            {deleteConfirmReturn && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div
+                        className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm"
+                        onClick={() => !isDeleting && setDeleteConfirmReturn(null)}
+                    />
+                    <div className="relative bg-white/80 backdrop-blur-2xl border border-white/50 rounded-2xl shadow-2xl p-8 max-w-md w-full animate-in zoom-in duration-300">
+                        <div className="flex items-center justify-center w-16 h-16 bg-red-100/50 rounded-full mx-auto mb-6">
+                            <TrashIcon className="w-8 h-8 text-red-600" />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900 text-center mb-2">Delete Confirmation</h3>
+                        <p className="text-gray-600 text-center mb-8">
+                            Are you sure you want to delete this record? This action cannot be undone.
+                        </p>
+                        <div className="flex space-x-4">
+                            <button
+                                type="button"
+                                disabled={isDeleting}
+                                onClick={() => setDeleteConfirmReturn(null)}
+                                className="flex-1 px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-all disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isDeleting}
+                                onClick={handleConfirmDelete}
+                                className="flex-1 px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl shadow-lg shadow-red-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <span>Deleting...</span>
+                                    </>
+                                ) : (
+                                    <span>Confirm Delete</span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Notification Toast */}
+            {toast && typeof document !== 'undefined' && document.body && createPortal(
+                <div className={`fixed top-4 right-4 z-[99999] px-4 py-3 rounded-xl shadow-xl border text-sm font-medium animate-in fade-in slide-in-from-top-2 duration-200 flex items-center gap-2 ${toast.type === 'error' ? 'bg-red-50/95 border-red-200 text-red-700 shadow-red-500/10' : 'bg-emerald-50/95 border-emerald-200 text-emerald-700 shadow-emerald-500/10'}`}>
+                    <span>{toast.message}</span>
+                </div>,
+                document.body
             )}
         </div>
     );

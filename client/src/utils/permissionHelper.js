@@ -218,7 +218,13 @@ export const MODULES_LIST = [
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
-    { key: 'returnProduct', label: 'Return Product' },
+    {
+        key: 'returnProduct',
+        label: 'Return Product',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     { key: 'backupRestore', label: 'Backup & Restore' },
     { key: 'log', label: 'Log' }
 ].sort((a, b) => (a.label || '').localeCompare(b.label || ''));

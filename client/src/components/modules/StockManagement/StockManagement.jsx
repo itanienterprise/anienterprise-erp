@@ -185,10 +185,24 @@ const StockManagement = ({
             }
         };
         fetchReturns();
-        return () => { isMounted = false; };
-    }, []);
 
-    const returnsList = (externalReturnsList && externalReturnsList.length > 0) ? externalReturnsList : localReturnsList;
+        const handleUpdate = () => {
+            fetchReturns();
+            if (typeof fetchStockRecords === 'function') {
+                fetchStockRecords();
+            }
+        };
+        window.addEventListener('returnsUpdated', handleUpdate);
+        window.addEventListener('stockUpdated', handleUpdate);
+
+        return () => {
+            isMounted = false;
+            window.removeEventListener('returnsUpdated', handleUpdate);
+            window.removeEventListener('stockUpdated', handleUpdate);
+        };
+    }, [fetchStockRecords]);
+
+    const returnsList = (externalReturnsList !== undefined && externalReturnsList !== null) ? externalReturnsList : localReturnsList;
 
     // Filtering & Search (Main View)
     const [displayUnit, setDisplayUnit] = useState(() => {

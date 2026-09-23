@@ -1086,6 +1086,23 @@ function App() {
 
   }, [currentView]);
 
+  useEffect(() => {
+    const handleSyncData = () => {
+      fetchReturns();
+      fetchWarehouses();
+      fetchSales();
+      fetchStockRecords();
+    };
+    window.addEventListener('returnsUpdated', handleSyncData);
+    window.addEventListener('stockUpdated', handleSyncData);
+    window.addEventListener('warehousesUpdated', handleSyncData);
+    return () => {
+      window.removeEventListener('returnsUpdated', handleSyncData);
+      window.removeEventListener('stockUpdated', handleSyncData);
+      window.removeEventListener('warehousesUpdated', handleSyncData);
+    };
+  }, []);
+
 
   const toggleSelection = (id) => {
     const newSelection = new Set(selectedItems);
@@ -2238,7 +2255,18 @@ function App() {
       case 'lc-management-section':
         return <LCManagement addNotification={addNotification} currentUser={currentUser} highlightId={notifHighlightId} isRequestedNotif={notifIsRequested} />;
       case 'return-product-section':
-        return <ReturnProduct currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} />;
+        return (
+          <ReturnProduct
+            currentUser={currentUser}
+            refreshPendingIndicators={fetchPendingEntries}
+            onReturnsUpdated={() => {
+              fetchReturns();
+              fetchWarehouses();
+              fetchSales();
+              fetchStockRecords();
+            }}
+          />
+        );
       case 'profit-loss-section':
         return <ProfitLoss salesRecords={salesRecords} products={products} />;
       case 'cost-of-goods-section':
