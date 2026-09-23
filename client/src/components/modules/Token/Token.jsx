@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
     TicketIcon, SearchIcon, PlusIcon, EditIcon, TrashIcon, 
     XIcon, CheckIcon, ChevronDownIcon, ClockIcon, AlertCircleIcon,
@@ -8,6 +8,8 @@ import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Token.css';
 import { hasPermission } from '../../../utils/permissionHelper';
+import CustomDatePicker from '../../shared/CustomDatePicker';
+import { decryptData } from '../../../utils/encryption';
 
 const CATEGORIES = [
     'Entry Edit / Update',
@@ -36,6 +38,130 @@ const MODULE_OPTIONS = [
 
 const STATUSES = ['Pending', 'In Progress', 'Resolved', 'Rejected'];
 
+// Custom Searchable Dropdown - Mirrored from ReturnProduct / Exporter module style
+const CustomSelect = ({
+    label,
+    value,
+    onChange,
+    options = [],
+    placeholder = "Select...",
+    required = false,
+    searchable = true,
+    disabled = false
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const containerRef = useRef(null);
+
+    // Close on click outside
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (containerRef.current && !containerRef.current.contains(e.target)) {
+                setIsOpen(false);
+                setSearchTerm('');
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const normalizedOptions = useMemo(() => {
+        return (options || []).map(opt => {
+            if (typeof opt === 'string') {
+                return { value: opt, label: opt };
+            }
+            return opt;
+        });
+    }, [options]);
+
+    const filteredOptions = useMemo(() => {
+        if (!searchTerm) return normalizedOptions;
+        const q = searchTerm.toLowerCase();
+        return normalizedOptions.filter(opt => 
+            (opt.label && String(opt.label).toLowerCase().includes(q)) ||
+            (opt.sublabel && String(opt.sublabel).toLowerCase().includes(q)) ||
+            (opt.value && String(opt.value).toLowerCase().includes(q))
+        );
+    }, [normalizedOptions, searchTerm]);
+
+    const selectedOption = normalizedOptions.find(opt => opt.value === value);
+    const displayValue = isOpen ? searchTerm : (selectedOption?.label || value || '');
+
+    return (
+        <div className="token-form-field" ref={containerRef}>
+            {label && <label className="token-form-label">{label}</label>}
+            <div className="relative">
+                <input
+                    type="text"
+                    className="token-form-input pr-10 cursor-pointer"
+                    placeholder={placeholder}
+                    value={displayValue}
+                    readOnly={!searchable}
+                    disabled={disabled}
+                    required={required && !value}
+                    onFocus={() => {
+                        if (!disabled) {
+                            setIsOpen(true);
+                            setSearchTerm('');
+                        }
+                    }}
+                    onChange={(e) => {
+                        if (searchable) {
+                            setSearchTerm(e.target.value);
+                            setIsOpen(true);
+                        }
+                    }}
+                    autoComplete="off"
+                />
+                <div 
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer p-1 flex items-center"
+                    onClick={() => {
+                        if (!disabled) {
+                            setIsOpen(prev => !prev);
+                            if (isOpen) setSearchTerm('');
+                        }
+                    }}
+                >
+                    <ChevronDownIcon className={`transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-600' : ''} w-4 h-4`} />
+                </div>
+
+                {isOpen && !disabled && (
+                    <div className="token-dropdown-list animate-in fade-in zoom-in-95 duration-150">
+                        {filteredOptions.length === 0 ? (
+                            <div className="px-4 py-3 text-xs text-gray-400 text-center">
+                                No options found
+                            </div>
+                        ) : (
+                            filteredOptions.map((opt, idx) => {
+                                const isSelected = opt.value === value;
+                                return (
+                                    <div
+                                        key={opt.value || idx}
+                                        className={`token-dropdown-item ${isSelected ? 'active' : ''}`}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            onChange(opt.value);
+                                            setIsOpen(false);
+                                            setSearchTerm('');
+                                        }}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-sm font-medium text-gray-800">{opt.label}</span>
+                                            {opt.sublabel && (
+                                                <span className="text-xs text-gray-400 font-normal">{opt.sublabel}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const generateTokenNo = (existingTokens = []) => {
     const now = new Date();
     const prefix = `TK-${now.getFullYear().toString().slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -59,6 +185,7 @@ const generateTokenNo = (existingTokens = []) => {
 
 const Token = ({ currentUser, addNotification }) => {
     const [tokens, setTokens] = useState([]);
+    const [employees, setEmployees] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedStatusTab, setSelectedStatusTab] = useState('All');
@@ -85,6 +212,7 @@ const Token = ({ currentUser, addNotification }) => {
         employeeName: currentUser?.name || currentUser?.username || 'Employee',
         employeeId: currentUser?.employeeId || currentUser?.username || '',
         employeeRole: currentUser?.role || 'Staff',
+        needApproveFrom: '',
         category: CATEGORIES[0],
         module: MODULE_OPTIONS[0],
         referenceNo: '',
@@ -102,6 +230,7 @@ const Token = ({ currentUser, addNotification }) => {
 
     useEffect(() => {
         fetchTokens();
+        fetchEmployees();
     }, []);
 
     const fetchTokens = async () => {
@@ -119,6 +248,37 @@ const Token = ({ currentUser, addNotification }) => {
         }
     };
 
+    const fetchEmployees = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(res.data) ? res.data : [];
+            const list = rawData.map(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const name = (d.name || d.nameEn || d.employeeName || d.username || '').trim();
+                return {
+                    _id: d._id || e._id,
+                    name: name,
+                    username: d.username || '',
+                    employeeId: d.employeeId || '',
+                    role: d.role || d.designation || 'Staff',
+                    designation: d.designation || d.role || ''
+                };
+            }).filter(emp => emp.name || emp.username);
+
+            list.sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
+            setEmployees(list);
+        } catch (error) {
+            console.error('Error fetching employees in Token:', error);
+        }
+    };
+
     const handleOpenNew = () => {
         setFormData({
             ...emptyForm,
@@ -127,7 +287,8 @@ const Token = ({ currentUser, addNotification }) => {
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             employeeName: currentUser?.name || currentUser?.username || 'Employee',
             employeeId: currentUser?.employeeId || currentUser?.username || '',
-            employeeRole: currentUser?.role || 'Staff'
+            employeeRole: currentUser?.role || 'Staff',
+            needApproveFrom: ''
         });
         setEditingId(null);
         setViewingToken(null);
@@ -137,12 +298,47 @@ const Token = ({ currentUser, addNotification }) => {
     const handleEditToken = (token) => {
         setFormData({
             ...emptyForm,
+            needApproveFrom: '',
             ...token
         });
         setEditingId(token._id);
         setViewingToken(null);
         setShowForm(true);
     };
+
+    const requestedOptions = useMemo(() => {
+        const list = employees.map(emp => ({
+            value: emp.name || emp.username,
+            label: emp.name || emp.username,
+            sublabel: emp.designation ? emp.designation : emp.role ? emp.role : ''
+        }));
+        if (formData.employeeName && !list.some(o => o.value === formData.employeeName)) {
+            list.unshift({
+                value: formData.employeeName,
+                label: formData.employeeName,
+                sublabel: currentUser?.role || 'Staff'
+            });
+        }
+        return list;
+    }, [employees, formData.employeeName, currentUser]);
+
+    const approverOptions = useMemo(() => {
+        const list = [
+            { value: 'Admin', label: 'Admin', sublabel: 'Administrator' },
+            { value: 'Incharge', label: 'Incharge', sublabel: 'System Incharge / Manager' }
+        ];
+        employees.forEach(emp => {
+            const name = emp.name || emp.username;
+            if (!list.some(l => l.value === name)) {
+                list.push({
+                    value: name,
+                    label: name,
+                    sublabel: emp.designation ? emp.designation : emp.role ? emp.role : ''
+                });
+            }
+        });
+        return list;
+    }, [employees]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -379,70 +575,73 @@ const Token = ({ currentUser, addNotification }) => {
                     </div>
 
                     <form onSubmit={handleSubmit} className="token-form-card-body">
-                        {/* Row 1: Requested Date, Requester */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Row 1: Requested Date, Requested, Need Approve From */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="token-form-field">
                                 <label className="token-form-label">Requested Date</label>
-                                <input
-                                    type="date"
+                                <CustomDatePicker
                                     value={formData.date}
                                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                    className="token-form-input"
-                                    required
+                                    required={true}
                                 />
                             </div>
-                            <div className="token-form-field">
-                                <label className="token-form-label">Requester</label>
-                                <input
-                                    type="text"
-                                    value={formData.employeeName}
-                                    readOnly
-                                    className="token-form-input bg-gray-50 font-semibold cursor-not-allowed"
-                                />
-                            </div>
+                            <CustomSelect
+                                label="Requested"
+                                value={formData.employeeName}
+                                onChange={(val) => {
+                                    const foundEmp = employees.find(emp => (emp.name || emp.username) === val);
+                                    setFormData({
+                                        ...formData,
+                                        employeeName: val,
+                                        employeeId: foundEmp ? (foundEmp.employeeId || foundEmp.username) : formData.employeeId,
+                                        employeeRole: foundEmp ? (foundEmp.role || foundEmp.designation) : formData.employeeRole
+                                    });
+                                }}
+                                options={requestedOptions}
+                                placeholder="Select requester..."
+                                required={true}
+                            />
+                            <CustomSelect
+                                label="Need Approve From"
+                                value={formData.needApproveFrom}
+                                onChange={(val) => setFormData({ ...formData, needApproveFrom: val })}
+                                options={approverOptions}
+                                placeholder="Select approver..."
+                                required={true}
+                            />
                         </div>
 
                         {/* Row 2: Category, ERP Module, Priority, Reference */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="token-form-field">
-                                <label className="token-form-label">Request Category</label>
-                                <select
-                                    value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    className="token-form-select"
-                                    required
-                                >
-                                    {CATEGORIES.map(c => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="token-form-field">
-                                <label className="token-form-label">ERP Module</label>
-                                <select
-                                    value={formData.module}
-                                    onChange={(e) => setFormData({ ...formData, module: e.target.value })}
-                                    className="token-form-select"
-                                    required
-                                >
-                                    {MODULE_OPTIONS.map(m => (
-                                        <option key={m} value={m}>{m}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="token-form-field">
-                                <label className="token-form-label">Priority</label>
-                                <select
-                                    value={formData.priority}
-                                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                                    className="token-form-select"
-                                >
-                                    <option value="Low">Low</option>
-                                    <option value="Medium">Medium</option>
-                                    <option value="High">High</option>
-                                    <option value="Urgent">Urgent (Immediate attention)</option>
-                                </select>
-                            </div>
+                            <CustomSelect
+                                label="Request Category"
+                                value={formData.category}
+                                onChange={(val) => setFormData({ ...formData, category: val })}
+                                options={CATEGORIES}
+                                placeholder="Select category..."
+                                required={true}
+                            />
+                            <CustomSelect
+                                label="ERP Module"
+                                value={formData.module}
+                                onChange={(val) => setFormData({ ...formData, module: val })}
+                                options={MODULE_OPTIONS}
+                                placeholder="Select module..."
+                                required={true}
+                            />
+                            <CustomSelect
+                                label="Priority"
+                                value={formData.priority}
+                                onChange={(val) => setFormData({ ...formData, priority: val })}
+                                options={[
+                                    { value: 'Low', label: 'Low', sublabel: 'Minor' },
+                                    { value: 'Medium', label: 'Medium', sublabel: 'Standard' },
+                                    { value: 'High', label: 'High', sublabel: 'Urgent' },
+                                    { value: 'Critical', label: 'Critical', sublabel: 'Emergency' }
+                                ]}
+                                placeholder="Select priority..."
+                                required={true}
+                            />
                             <div className="token-form-field">
                                 <label className="token-form-label">Reference No (Invoice #, LC #, ID)</label>
                                 <input
@@ -491,18 +690,13 @@ const Token = ({ currentUser, addNotification }) => {
                                     Admin Resolution & Status
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="token-form-field">
-                                        <label className="token-form-label">Status</label>
-                                        <select
-                                            value={formData.status}
-                                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                            className="token-form-select font-bold"
-                                        >
-                                            {STATUSES.map(s => (
-                                                <option key={s} value={s}>{s}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    <CustomSelect
+                                        label="Status"
+                                        value={formData.status}
+                                        onChange={(val) => setFormData({ ...formData, status: val })}
+                                        options={STATUSES}
+                                        required={true}
+                                    />
                                     <div className="token-form-field">
                                         <label className="token-form-label">Assigned Handler</label>
                                         <input
@@ -583,10 +777,14 @@ const Token = ({ currentUser, addNotification }) => {
 
                     <div className="p-6 space-y-5">
                         {/* Metadata Pills */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100 text-xs">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100 text-xs">
                             <div>
                                 <span className="text-gray-400 block text-[10px] uppercase font-bold">Requested By</span>
                                 <span className="font-bold text-gray-900">{viewingToken.employeeName}</span>
+                            </div>
+                            <div>
+                                <span className="text-gray-400 block text-[10px] uppercase font-bold">Need Approve From</span>
+                                <span className="font-bold text-amber-700">{viewingToken.needApproveFrom || '—'}</span>
                             </div>
                             <div>
                                 <span className="text-gray-400 block text-[10px] uppercase font-bold">Module</span>
@@ -822,7 +1020,13 @@ const Token = ({ currentUser, addNotification }) => {
                                             </td>
                                             <td>
                                                 <div className="font-bold text-gray-900 text-xs">{t.employeeName}</div>
-                                                <div className="text-[10px] text-gray-400">{t.employeeRole || t.employeeId || 'Employee'}</div>
+                                                {t.needApproveFrom ? (
+                                                    <div className="text-[10px] text-amber-700 font-medium flex items-center gap-1 mt-0.5">
+                                                        <span className="text-gray-400 font-normal">Appr:</span> {t.needApproveFrom}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-[10px] text-gray-400">{t.employeeRole || t.employeeId || 'Employee'}</div>
+                                                )}
                                             </td>
                                             <td>
                                                 <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700">
@@ -925,6 +1129,11 @@ const Token = ({ currentUser, addNotification }) => {
                                 <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
                                     <div className="text-gray-600">
                                         By: <span className="font-bold text-gray-800">{t.employeeName}</span>
+                                        {t.needApproveFrom && (
+                                            <span className="text-[10px] text-amber-700 font-medium ml-1.5">
+                                                (Appr: {t.needApproveFrom})
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex items-center gap-1">
                                         <button

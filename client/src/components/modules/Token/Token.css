@@ -60,10 +60,10 @@
     color: #111827;
 }
 
-/* Inline Form Card - Same style as ReturnProduct & Port modules */
+/* Inline Form Card - Same style as ReturnProduct & other modules */
 .token-form-container {
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     border-radius: 1.25rem;
     background: #ffffff;
     border: 1px solid #e5e7eb;
@@ -126,22 +126,71 @@
 .token-form-textarea,
 .token-form-select {
     width: 100%;
-    padding: 0.625rem 1rem;
+    padding: 0.5rem 0.875rem;
+    min-height: 42px;
     background: #ffffff;
-    border: 1px solid #d1d5db;
-    border-radius: 0.625rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
     outline: none;
     transition: all 0.2s;
     font-size: 0.875rem;
     color: #111827;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.token-form-select {
+    padding-right: 2.25rem;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1.25em 1.25em;
+    cursor: pointer;
 }
 
 .token-form-input:focus,
 .token-form-textarea:focus,
 .token-form-select:focus {
-    box-shadow: 0 0 0 2px #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
     border-color: #3b82f6;
     outline: none;
+}
+
+/* Custom Searchable Dropdown - Matching ReturnProduct & other cards */
+.token-dropdown-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    margin-top: 4px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.token-dropdown-item {
+    padding: 0.625rem 1rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border-bottom: 1px solid #f9fafb;
+}
+
+.token-dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.token-dropdown-item:hover {
+    background-color: #eff6ff;
+}
+
+.token-dropdown-item.active {
+    background-color: #eff6ff;
+    color: #2563eb;
+    font-weight: 600;
 }
 
 .token-form-actions {
