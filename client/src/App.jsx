@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon, TruckIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon, ActivityLogIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon, ActivityLogIcon, TicketIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -76,6 +76,7 @@ import NotificationMenu from './components/modules/Notification/NotificationMenu
 import ReturnProduct from './components/modules/ReturnProduct/ReturnProduct';
 import BackupRestore from './components/modules/BackupRestore/BackupRestore';
 import CostOfGoods from './components/modules/CostOfGoods/CostOfGoods';
+import Token from './components/modules/Token/Token';
 import LogManagement from './components/modules/Log/LogManagement';
 import { initActivityTracker } from './utils/activityTracker';
 import { hasPermission } from './utils/permissionHelper';
@@ -2291,6 +2292,9 @@ function App() {
         if (!isAdminUser && !isAdminRole) return null;
         return <BackupRestore addNotification={addNotification} />;
       }
+      case 'token-section': {
+        return <Token currentUser={currentUser} addNotification={addNotification} />;
+      }
       case 'log-section': {
         const isAdminUser = currentUser?.username === 'admin';
         const isAdminRole = (currentUser?.role || '').toLowerCase().trim() === 'admin';
@@ -3179,6 +3183,20 @@ function App() {
                   <DatabaseIcon className="w-5 h-5 flex-shrink-0" />
                   <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
                     Backup & Restore
+                  </span>
+                </button>
+              )}
+
+              {/* Token — Service & Support Requests */}
+              {(currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase().trim() === 'admin' || hasPermission(currentUser, 'token', 'view') || Boolean(currentUser?.username)) && (
+                <button
+                  onClick={() => { handleViewChange('token-section'); }}
+                  title={isMini ? 'Token' : undefined}
+                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'token-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                >
+                  <TicketIcon className="w-5 h-5 flex-shrink-0" />
+                  <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                    Token
                   </span>
                 </button>
               )}

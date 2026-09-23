@@ -226,6 +226,13 @@ export const MODULES_LIST = [
         ]
     },
     { key: 'backupRestore', label: 'Backup & Restore' },
+    { 
+        key: 'token', 
+        label: 'Token',
+        specialLabels: [
+            { key: 'special', label: 'Manage All Tokens' }
+        ]
+    },
     { key: 'log', label: 'Log' }
 ].sort((a, b) => (a.label || '').localeCompare(b.label || ''));
 

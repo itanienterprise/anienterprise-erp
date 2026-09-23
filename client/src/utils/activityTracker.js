@@ -76,6 +76,7 @@ const VIEW_MODULE_MAP = {
     'cost-of-goods-section': 'Cost of Goods',
     'cost-of-goods': 'Cost of Goods',
     'backup-restore-section': 'Backup & Restore',
+    'token-section': 'Token',
     'log-section': 'Activity Log'
 };
 

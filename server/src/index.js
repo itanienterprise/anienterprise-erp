@@ -84,6 +84,7 @@ const Sale = require('./models/Sale');
 const Purchase = require('./models/Purchase');
 const PurchaseReceive = require('./models/PurchaseReceive');
 const Return = require('./models/Return');
+const Token = require('./models/Token');
 const User = require('./models/User');
 const Employee = require('./models/Employee');
 const Notification = require('./models/Notification');
@@ -2793,6 +2794,52 @@ apiRouter.delete('/api/returns/:id', async (req, res) => {
     const deletedReturn = await Return.findByIdAndDelete(req.params.id);
     if (!deletedReturn) return res.status(404).json({ message: 'Return not found' });
     res.json({ message: 'Return deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Token APIs (Support & Service Requests)
+apiRouter.post('/api/tokens', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newToken = new Token({ data: encryptedData });
+    const savedToken = await newToken.save();
+    res.status(201).json({ ...req.body, _id: savedToken._id, createdAt: savedToken.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/tokens', async (req, res) => {
+  try {
+    const records = await Token.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/tokens/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedToken = await Token.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
+    if (!updatedToken) return res.status(404).json({ message: 'Token not found' });
+    res.json({ ...req.body, _id: updatedToken._id, createdAt: updatedToken.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/tokens/:id', async (req, res) => {
+  try {
+    const deletedToken = await Token.findByIdAndDelete(req.params.id);
+    if (!deletedToken) return res.status(404).json({ message: 'Token not found' });
+    res.json({ message: 'Token deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
