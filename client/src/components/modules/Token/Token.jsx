@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
     TicketIcon, SearchIcon, PlusIcon, EditIcon, TrashIcon, 
     XIcon, CheckIcon, ChevronDownIcon, ClockIcon, AlertCircleIcon,
-    RefreshCwIcon, FileTextIcon, UserIcon, CheckCircle2Icon, ArrowLeftIcon
+    RefreshCwIcon, EyeIcon, UserIcon, CheckCircle2Icon, ArrowLeftIcon
 } from '../../Icons';
 import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -962,134 +962,166 @@ const Token = ({ currentUser, addNotification }) => {
 
                     {/* Desktop Table View */}
                     <div className="token-table-container">
-                        <table className="token-table">
-                            <thead>
-                                <tr>
-                                    <th onClick={() => handleSort('tokenNo')} className="cursor-pointer">
-                                        <div className="flex items-center gap-1.5">
-                                            Token No <SortIcon config={sortConfig} columnKey="tokenNo" />
-                                        </div>
-                                    </th>
-                                    <th onClick={() => handleSort('date')} className="cursor-pointer">
-                                        <div className="flex items-center gap-1.5">
-                                            Date & Time <SortIcon config={sortConfig} columnKey="date" />
-                                        </div>
-                                    </th>
-                                    <th onClick={() => handleSort('employeeName')} className="cursor-pointer">
-                                        <div className="flex items-center gap-1.5">
-                                            Requested By <SortIcon config={sortConfig} columnKey="employeeName" />
-                                        </div>
-                                    </th>
-                                    <th>Module & Ref</th>
-                                    <th>Subject & Category</th>
-                                    <th className="text-center">Priority</th>
-                                    <th className="text-center">Status</th>
-                                    <th className="text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {isLoading ? (
+                        <div className="token-table-wrapper">
+                            <table className="token-table">
+                                <thead>
                                     <tr>
-                                        <td colSpan={8} className="py-16 text-center text-gray-400">
-                                            <RefreshCwIcon className="w-8 h-8 mx-auto mb-2 animate-spin text-blue-500 opacity-60" />
-                                            Loading service tokens...
-                                        </td>
+                                        <th className="w-32 whitespace-nowrap cursor-pointer" onClick={() => handleSort('tokenNo')}>
+                                            <div className="flex items-center gap-1.5">
+                                                Token No <SortIcon config={sortConfig} columnKey="tokenNo" />
+                                            </div>
+                                        </th>
+                                        <th className="w-28 whitespace-nowrap cursor-pointer" onClick={() => handleSort('date')}>
+                                            <div className="flex items-center gap-1.5">
+                                                Date <SortIcon config={sortConfig} columnKey="date" />
+                                            </div>
+                                        </th>
+                                        <th className="w-36 whitespace-nowrap cursor-pointer" onClick={() => handleSort('employeeName')}>
+                                            <div className="flex items-center gap-1.5">
+                                                Requested By <SortIcon config={sortConfig} columnKey="employeeName" />
+                                            </div>
+                                        </th>
+                                        <th className="w-36 whitespace-nowrap">
+                                            Need Approve From
+                                        </th>
+                                        <th className="w-28 whitespace-nowrap cursor-pointer" onClick={() => handleSort('module')}>
+                                            <div className="flex items-center gap-1.5">
+                                                Module <SortIcon config={sortConfig} columnKey="module" />
+                                            </div>
+                                        </th>
+                                        <th className="w-24 whitespace-nowrap">
+                                            Ref #
+                                        </th>
+                                        <th className="w-40 whitespace-nowrap cursor-pointer" onClick={() => handleSort('category')}>
+                                            <div className="flex items-center gap-1.5">
+                                                Category <SortIcon config={sortConfig} columnKey="category" />
+                                            </div>
+                                        </th>
+                                        <th className="min-w-[180px]">
+                                            Subject
+                                        </th>
+                                        <th className="w-24 whitespace-nowrap text-center">
+                                            Priority
+                                        </th>
+                                        <th className="w-28 whitespace-nowrap text-center">
+                                            Status
+                                        </th>
+                                        <th className="w-24 whitespace-nowrap text-right">
+                                            Actions
+                                        </th>
                                     </tr>
-                                ) : filteredTokens.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={8} className="py-20 text-center text-gray-400">
-                                            <TicketIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                            <p className="font-semibold text-gray-600">No service tokens found</p>
-                                            <p className="text-xs text-gray-400 mt-1">Need help or a data change? Click "Open New Token" above.</p>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredTokens.map(t => (
-                                        <tr key={t._id} className="hover:bg-blue-50/30 transition-colors">
-                                            <td>
-                                                <span 
-                                                    onClick={() => setViewingToken(t)}
-                                                    className="font-black text-blue-600 cursor-pointer hover:underline text-xs tracking-wide"
-                                                >
-                                                    {t.tokenNo}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="text-xs font-semibold text-gray-800">{t.date}</div>
-                                                <div className="text-[10px] text-gray-400 font-mono">{t.time || ''}</div>
-                                            </td>
-                                            <td>
-                                                <div className="font-bold text-gray-900 text-xs">{t.employeeName}</div>
-                                                {t.needApproveFrom ? (
-                                                    <div className="text-[10px] text-amber-700 font-medium flex items-center gap-1 mt-0.5">
-                                                        <span className="text-gray-400 font-normal">Appr:</span> {t.needApproveFrom}
-                                                    </div>
-                                                ) : (
-                                                    <div className="text-[10px] text-gray-400">{t.employeeRole || t.employeeId || 'Employee'}</div>
-                                                )}
-                                            </td>
-                                            <td>
-                                                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700">
-                                                    {t.module || 'General'}
-                                                </span>
-                                                {t.referenceNo && (
-                                                    <div className="text-[10px] font-mono text-blue-600 font-bold mt-0.5">
-                                                        Ref: {t.referenceNo}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="max-w-[280px]">
-                                                <div 
-                                                    onClick={() => setViewingToken(t)}
-                                                    className="font-bold text-gray-900 text-xs truncate hover:text-blue-600 cursor-pointer"
-                                                    title={t.subject}
-                                                >
-                                                    {t.subject}
-                                                </div>
-                                                <div className="text-[10px] text-gray-500 truncate mt-0.5">
-                                                    {t.category}
-                                                </div>
-                                            </td>
-                                            <td className="text-center">
-                                                {getPriorityBadge(t.priority)}
-                                            </td>
-                                            <td className="text-center">
-                                                {getStatusBadge(t.status)}
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    <button
-                                                        onClick={() => setViewingToken(t)}
-                                                        className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                                        title="View Details"
-                                                    >
-                                                        <FileTextIcon className="w-4 h-4" />
-                                                    </button>
-                                                    {(canManageAll || t.employeeName === currentUser?.name || t.employeeId === currentUser?.username) && (
-                                                        <button
-                                                            onClick={() => handleEditToken(t)}
-                                                            className="p-1.5 rounded-lg text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                                                            title="Edit Token"
-                                                        >
-                                                            <EditIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    {canDelete && (
-                                                        <button
-                                                            onClick={() => setDeleteConfirmId(t._id)}
-                                                            className="p-1.5 rounded-lg text-gray-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                                                            title="Delete Token"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                </div>
+                                </thead>
+                                <tbody>
+                                    {isLoading ? (
+                                        <tr>
+                                            <td colSpan={11} className="py-16 text-center text-gray-400">
+                                                <RefreshCwIcon className="w-8 h-8 mx-auto mb-2 animate-spin text-blue-500 opacity-60" />
+                                                Loading service tokens...
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                                    ) : filteredTokens.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={11} className="py-20 text-center text-gray-400">
+                                                <TicketIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                                <p className="font-semibold text-gray-600">No service tokens found</p>
+                                                <p className="text-xs text-gray-400 mt-1">Need help or a data change? Click "Open New Token" above.</p>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredTokens.map(t => (
+                                            <tr key={t._id}>
+                                                <td className="whitespace-nowrap font-bold">
+                                                    <span 
+                                                        onClick={() => setViewingToken(t)}
+                                                        className="font-mono font-bold text-blue-600 cursor-pointer hover:underline text-xs tracking-wide"
+                                                    >
+                                                        {t.tokenNo}
+                                                    </span>
+                                                </td>
+                                                <td className="whitespace-nowrap text-xs font-semibold text-gray-800">
+                                                    {t.date}
+                                                </td>
+                                                <td className="whitespace-nowrap font-bold text-gray-900 text-xs">
+                                                    {t.employeeName}
+                                                </td>
+                                                <td className="whitespace-nowrap">
+                                                    {t.needApproveFrom ? (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                                            {t.needApproveFrom}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-300">—</span>
+                                                    )}
+                                                </td>
+                                                <td className="whitespace-nowrap">
+                                                    <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700">
+                                                        {t.module || 'General'}
+                                                    </span>
+                                                </td>
+                                                <td className="whitespace-nowrap">
+                                                    {t.referenceNo ? (
+                                                        <span className="font-mono text-xs font-bold text-blue-600">
+                                                            {t.referenceNo}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-300">—</span>
+                                                    )}
+                                                </td>
+                                                <td className="whitespace-nowrap">
+                                                    <span className="text-xs text-gray-700 font-medium">
+                                                        {t.category || '—'}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div 
+                                                        onClick={() => setViewingToken(t)}
+                                                        className="font-bold text-gray-900 text-xs hover:text-blue-600 cursor-pointer line-clamp-1"
+                                                        title={t.subject}
+                                                    >
+                                                        {t.subject}
+                                                    </div>
+                                                </td>
+                                                <td className="whitespace-nowrap text-center">
+                                                    {getPriorityBadge(t.priority)}
+                                                </td>
+                                                <td className="whitespace-nowrap text-center">
+                                                    {getStatusBadge(t.status)}
+                                                </td>
+                                                <td className="whitespace-nowrap text-right">
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        <button
+                                                            onClick={() => setViewingToken(t)}
+                                                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                            title="View Details"
+                                                        >
+                                                            <EyeIcon className="w-4 h-4" />
+                                                        </button>
+                                                        {(canManageAll || t.employeeName === currentUser?.name || t.employeeId === currentUser?.username) && (
+                                                            <button
+                                                                onClick={() => handleEditToken(t)}
+                                                                className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                                                title="Edit Token"
+                                                            >
+                                                                <EditIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        {canDelete && (
+                                                            <button
+                                                                onClick={() => setDeleteConfirmId(t._id)}
+                                                                className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                                                title="Delete Token"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     {/* Mobile Card List */}
