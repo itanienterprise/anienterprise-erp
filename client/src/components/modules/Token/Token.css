@@ -1,81 +1,191 @@
-/* Token Module Styles */
+/* Token Module Styles - Mirrored from ReturnProduct / Exporter Modules */
 
-.token-module-container {
+.token-container {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
-    padding: 1.5rem;
-    max-width: 1600px;
-    margin: 0 auto;
+    gap: 1.5rem;
     width: 100%;
 }
 
-.token-header-wrapper {
+.token-header {
     display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 1.25rem;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+    align-items: center;
+    justify-content: space-between;
 }
 
-.token-header-title {
+.token-title {
     font-size: 1.5rem;
-    font-weight: 800;
-    color: #111827;
-    letter-spacing: -0.025em;
-    margin: 0;
+    font-weight: 700;
+    color: #1f2937;
 }
 
-.token-header-subtitle {
-    font-size: 0.8125rem;
-    color: #6b7280;
-    margin-top: 0.25rem;
-}
-
-.token-action-primary-btn {
+.token-add-btn {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 0.625rem 1.25rem;
-    background: linear-gradient(135deg, #2563eb, #4f46e5);
-    color: #ffffff;
-    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(to right, #2563eb, #4f46e5);
+    color: white;
     font-weight: 600;
-    border-radius: 0.75rem;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+    transition: all 0.2s;
     border: none;
     cursor: pointer;
-    white-space: nowrap;
 }
 
-.token-action-primary-btn:hover {
-    background: linear-gradient(135deg, #1d4ed8, #4338ca);
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+.token-add-btn:hover {
+    background: linear-gradient(to right, #1d4ed8, #4338ca);
     transform: translateY(-1px);
 }
 
-.token-action-secondary-btn {
+.token-refresh-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.625rem 1rem;
-    background: #f9fafb;
+    padding: 0.5rem 0.875rem;
+    background: #ffffff;
     border: 1px solid #e5e7eb;
     color: #374151;
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     font-weight: 600;
-    border-radius: 0.75rem;
+    border-radius: 0.5rem;
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
-.token-action-secondary-btn:hover {
-    background: #f3f4f6;
+.token-refresh-btn:hover {
+    background: #f9fafb;
     border-color: #d1d5db;
+    color: #111827;
+}
+
+/* Inline Form Card - Same style as ReturnProduct & Port modules */
+.token-form-container {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.25rem;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+    padding: 2rem;
+    transition: all 0.3s;
+    width: 100%;
+}
+
+.token-form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.8);
+    padding-bottom: 1rem;
+}
+
+.token-form-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0;
+}
+
+.token-form-close {
+    color: #9ca3af;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 0.5rem;
+}
+
+.token-form-close:hover {
+    color: #ef4444;
+    background: #fee2e2;
+}
+
+.token-form-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.token-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.token-form-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.token-form-input,
+.token-form-textarea,
+.token-form-select {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 0.625rem;
+    outline: none;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    color: #111827;
+}
+
+.token-form-input:focus,
+.token-form-textarea:focus,
+.token-form-select:focus {
+    box-shadow: 0 0 0 2px #3b82f6;
+    border-color: #3b82f6;
+    outline: none;
+}
+
+.token-form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #f3f4f6;
+    margin-top: 0.5rem;
+}
+
+.token-btn-primary {
+    padding: 0.625rem 1.5rem;
+    background: linear-gradient(to right, #2563eb, #4f46e5);
+    color: #ffffff;
+    font-size: 0.875rem;
+    font-weight: 700;
+    border-radius: 0.625rem;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+    transition: all 0.15s ease;
+}
+
+.token-btn-primary:hover {
+    background: linear-gradient(to right, #1d4ed8, #4338ca);
+    transform: translateY(-1px);
+}
+
+.token-btn-secondary {
+    padding: 0.625rem 1.25rem;
+    background: #f9fafb;
+    color: #4b5563;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 0.625rem;
+    border: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.token-btn-secondary:hover {
+    background: #f3f4f6;
     color: #111827;
 }
 
@@ -95,14 +205,15 @@
 .token-stat-card {
     padding: 1rem 1.25rem;
     border-radius: 1rem;
-    background: #f9fafb;
-    border: 1px solid #f3f4f6;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
     cursor: pointer;
     transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .token-stat-card:hover {
-    background: #f3f4f6;
+    border-color: #cbd5e1;
     transform: translateY(-1px);
 }
 
@@ -117,7 +228,7 @@
     font-weight: 700;
     color: #6b7280;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
 }
 
 .token-stat-val {
@@ -144,15 +255,14 @@
 .token-search-wrapper {
     position: relative;
     flex: 1;
-    min-width: 260px;
-    max-width: 480px;
+    min-width: 240px;
 }
 
 .token-search-input {
     width: 100%;
     padding: 0.5rem 2rem 0.5rem 2.25rem;
     font-size: 0.8125rem;
-    border-radius: 0.75rem;
+    border-radius: 0.625rem;
     border: 1px solid #e5e7eb;
     background: #f9fafb;
     color: #111827;
@@ -173,7 +283,7 @@
     color: #374151;
     background: #f9fafb;
     border: 1px solid #e5e7eb;
-    border-radius: 0.75rem;
+    border-radius: 0.625rem;
     cursor: pointer;
     outline: none;
     transition: all 0.2s ease;
@@ -190,7 +300,7 @@
     gap: 0.25rem;
     background: #f3f4f6;
     padding: 0.25rem;
-    border-radius: 0.75rem;
+    border-radius: 0.625rem;
 }
 
 .token-tab-btn {
@@ -224,6 +334,7 @@
     border-radius: 1.25rem;
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    width: 100%;
 }
 
 @media (min-width: 900px) {
@@ -350,133 +461,15 @@
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-/* Modals */
-.token-modal-overlay {
+/* Compact Delete Modal */
+.token-delete-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(15, 23, 42, 0.5);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 1rem;
     z-index: 1000;
-}
-
-.token-modal-container {
-    background: #ffffff;
-    border-radius: 1.25rem;
-    width: 100%;
-    max-width: 48rem;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    border: 1px solid #e5e7eb;
-    animation: tokenModalIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes tokenModalIn {
-    from {
-        opacity: 0;
-        transform: scale(0.96) translateY(8px);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-}
-
-.token-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid #f3f4f6;
-}
-
-.token-modal-body {
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.token-form-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-}
-
-.token-form-label {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #4b5563;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-
-.token-form-input,
-.token-form-select,
-.token-form-textarea {
-    width: 100%;
-    padding: 0.625rem 0.875rem;
-    font-size: 0.8125rem;
-    border-radius: 0.625rem;
-    border: 1px solid #d1d5db;
-    background: #ffffff;
-    color: #111827;
-    outline: none;
-    transition: all 0.2s ease;
-}
-
-.token-form-input:focus,
-.token-form-select:focus,
-.token-form-textarea:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
-
-.token-modal-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    padding-top: 1rem;
-    border-top: 1px solid #f3f4f6;
-    margin-top: 0.5rem;
-}
-
-.token-btn-primary {
-    padding: 0.625rem 1.5rem;
-    background: linear-gradient(135deg, #2563eb, #4f46e5);
-    color: #ffffff;
-    font-size: 0.8125rem;
-    font-weight: 700;
-    border-radius: 0.75rem;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
-    transition: all 0.15s ease;
-}
-
-.token-btn-primary:hover {
-    background: linear-gradient(135deg, #1d4ed8, #4338ca);
-    transform: translateY(-1px);
-}
-
-.token-btn-secondary {
-    padding: 0.625rem 1.25rem;
-    background: #f9fafb;
-    color: #4b5563;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    border-radius: 0.75rem;
-    border: 1px solid #e5e7eb;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.token-btn-secondary:hover {
-    background: #f3f4f6;
-    color: #111827;
 }
