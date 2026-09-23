@@ -437,16 +437,56 @@ const Token = ({ currentUser, addNotification }) => {
         }));
     };
 
-    // Filter tokens based on user role: Regular employees see their own tokens, admins see all
+    // Check if token was created by / belongs to the current user
+    const checkIsOwnToken = (t) => {
+        if (!t || !currentUser) return false;
+        const currentUserId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
+        const currentUserName = (currentUser?.name || '').toLowerCase().trim();
+        const currentUserLogin = (currentUser?.username || '').toLowerCase().trim();
+
+        const tEmpId = (t.employeeId || '').toLowerCase().trim();
+        const tEmpName = (t.employeeName || '').toLowerCase().trim();
+
+        return (
+            (currentUserId && tEmpId === currentUserId) ||
+            (currentUserName && (tEmpName === currentUserName || tEmpName.includes(currentUserName))) ||
+            (currentUserLogin && (tEmpName === currentUserLogin || tEmpId === currentUserLogin))
+        );
+    };
+
+    // Check if current user is the designated approver or assigned handler for this token
+    const checkIsApprover = (t) => {
+        if (!t || !currentUser) return false;
+        const currentUserId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
+        const currentUserName = (currentUser?.name || '').toLowerCase().trim();
+        const currentUserLogin = (currentUser?.username || '').toLowerCase().trim();
+
+        const tApprover = (t.needApproveFrom || '').toLowerCase().trim();
+        const tAssigned = (t.assignedTo || '').toLowerCase().trim();
+
+        return (
+            (currentUserName && (tApprover === currentUserName || tApprover.includes(currentUserName))) ||
+            (currentUserLogin && (tApprover === currentUserLogin || tApprover.includes(currentUserLogin))) ||
+            (currentUserId && tApprover === currentUserId) ||
+            (currentUserName && (tAssigned === currentUserName || tAssigned.includes(currentUserName))) ||
+            (currentUserLogin && (tAssigned === currentUserLogin || tAssigned.includes(currentUserLogin))) ||
+            (currentUserId && tAssigned === currentUserId)
+        );
+    };
+
+    const canEditToken = (t) => {
+        return canManageAll || checkIsOwnToken(t) || checkIsApprover(t);
+    };
+
+    const canApproveToken = (t) => {
+        return canManageAll || checkIsApprover(t);
+    };
+
+    // Filter tokens based on user role:
+    // Admin can see all tokens; other users only see their own and tokens assigned to them for approval
     const accessibleTokens = useMemo(() => {
         if (canManageAll) return tokens;
-        const currentUserId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
-        const currentUserName = (currentUser?.name || currentUser?.username || '').toLowerCase().trim();
-        return tokens.filter(t => {
-            const tEmpId = (t.employeeId || '').toLowerCase().trim();
-            const tEmpName = (t.employeeName || '').toLowerCase().trim();
-            return tEmpId === currentUserId || tEmpName === currentUserName || tEmpName.includes(currentUserName);
-        });
+        return tokens.filter(t => checkIsOwnToken(t) || checkIsApprover(t));
     }, [tokens, canManageAll, currentUser]);
 
     // Statistics
@@ -682,12 +722,12 @@ const Token = ({ currentUser, addNotification }) => {
                             />
                         </div>
 
-                        {/* Admin Resolution & Status Section */}
-                        {canManageAll && (
+                        {/* Admin / Approver Resolution & Status Section */}
+                        {(canManageAll || checkIsApprover(formData)) && (
                             <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200/80 space-y-3">
                                 <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
                                     <CheckCircle2Icon className="w-4 h-4 text-amber-600" />
-                                    Admin Resolution & Status
+                                    {canManageAll ? 'Admin Resolution & Status' : 'Approval & Status Resolution'}
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <CustomSelect
@@ -838,7 +878,7 @@ const Token = ({ currentUser, addNotification }) => {
                             </button>
 
                             <div className="flex items-center gap-2">
-                                {canManageAll && (
+                                {canApproveToken(viewingToken) && (
                                     <>
                                         {viewingToken.status !== 'In Progress' && (
                                             <button
@@ -866,7 +906,7 @@ const Token = ({ currentUser, addNotification }) => {
                                         )}
                                     </>
                                 )}
-                                {(canManageAll || viewingToken.employeeName === currentUser?.name) && (
+                                {canEditToken(viewingToken) && (
                                     <button
                                         onClick={() => handleEditToken(viewingToken)}
                                         className="token-btn-primary"
@@ -1096,7 +1136,7 @@ const Token = ({ currentUser, addNotification }) => {
                                                         >
                                                             <EyeIcon className="w-4 h-4" />
                                                         </button>
-                                                        {(canManageAll || t.employeeName === currentUser?.name || t.employeeId === currentUser?.username) && (
+                                                        {canEditToken(t) && (
                                                             <button
                                                                 onClick={() => handleEditToken(t)}
                                                                 className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
@@ -1174,7 +1214,7 @@ const Token = ({ currentUser, addNotification }) => {
                                         >
                                             Details
                                         </button>
-                                        {(canManageAll || t.employeeName === currentUser?.name) && (
+                                        {canEditToken(t) && (
                                             <button
                                                 onClick={() => handleEditToken(t)}
                                                 className="p-1 text-gray-500 hover:text-emerald-600"
