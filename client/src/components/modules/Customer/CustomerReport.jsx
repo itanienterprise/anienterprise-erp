@@ -15,7 +15,8 @@ const CustomerReport = ({
     salesRecords = [],
     purchaseReceivesList = [],
     stockList = [],
-    asOfDate = ''
+    asOfDate = '',
+    returnsList = []
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState('General Customer');
@@ -49,9 +50,9 @@ const CustomerReport = ({
 
     if (!isOpen) return null;
 
-    // --- Calculate running balance per customer from all history (sales, payments, payouts, purchases) ---
+    // --- Calculate running balance per customer from all history (sales, payments, payouts, purchases, returns) ---
     const computeDue = (customer) => {
-        return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate: reportDate });
+        return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate: reportDate, returnsList });
     };
 
     const getLastTransDay = (customer) => {
@@ -131,7 +132,8 @@ const CustomerReport = ({
             salesRecords,
             purchaseReceivesList,
             reportDate,
-            stockList
+            stockList,
+            returnsList
         );
     };
 
@@ -145,7 +147,8 @@ const CustomerReport = ({
             salesRecords,
             purchaseReceivesList,
             reportDate,
-            stockList
+            stockList,
+            returnsList
         );
     };
 

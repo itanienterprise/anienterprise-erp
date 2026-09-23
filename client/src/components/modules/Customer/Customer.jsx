@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
-import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, compareTransactions, getItemTimestamp, getLocalDateString } from '../../../utils/helpers';
+import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, compareTransactions, getItemTimestamp, getLocalDateString, getCustomerReturns } from '../../../utils/helpers';
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF, generateMoneyReceiptPDF, generatePayToCustomerVoucherPDF } from '../../../utils/pdfGenerator';
 import { generateCustomerHistoryExcel } from '../../../utils/excelGenerator';
 import { api } from '../../../utils/api';
@@ -14,6 +14,7 @@ import './Customer.css';
 const Customer = ({
     currentUser,
     salesRecords = [],
+    returnsList: propReturnsList = [],
     fetchSalesGlobal,
     isSelectionMode,
     setIsSelectionMode,
@@ -47,6 +48,14 @@ const Customer = ({
     const [purchasesList, setPurchasesList] = useState([]);
     const [stockList, setStockList] = useState([]);
     const [purchaseReceivesList, setPurchaseReceivesList] = useState([]);
+    const [returnsList, setReturnsList] = useState(propReturnsList);
+
+    useEffect(() => {
+        if (propReturnsList && propReturnsList.length > 0) {
+            setReturnsList(propReturnsList);
+        }
+    }, [propReturnsList]);
+
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewData, setViewData] = useState(null);
@@ -283,13 +292,14 @@ const Customer = ({
     const fetchCustomers = async () => {
         setIsLoading(true);
         try {
-            const [decryptedCustomers, gpRecords, lcData, purchasesData, stockData, prData] = await Promise.all([
+            const [decryptedCustomers, gpRecords, lcData, purchasesData, stockData, prData, returnsData] = await Promise.all([
                 api.get('/api/customers'),
                 api.get('/api/lc-gp'),
                 api.get('/api/lc-management'),
                 api.get('/api/purchases').catch(() => []),
                 api.get('/api/stock').catch(() => []),
-                api.get('/api/purchase-receives').catch(() => [])
+                api.get('/api/purchase-receives').catch(() => []),
+                api.get('/api/returns').catch(() => [])
             ]);
             setCustomers(decryptedCustomers);
             setGatePasses(gpRecords);
@@ -297,6 +307,7 @@ const Customer = ({
             setPurchasesList(Array.isArray(purchasesData) ? purchasesData : []);
             setStockList(Array.isArray(stockData) ? stockData : []);
             setPurchaseReceivesList(Array.isArray(prData) ? prData : []);
+            setReturnsList(Array.isArray(returnsData) ? returnsData : []);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -520,7 +531,7 @@ const Customer = ({
 
     const getCustomerFinalBalance = (c, customDate = null) => {
         const targetDate = customDate !== null ? customDate : filters.asOfDate;
-        return computeCustomerBalance(c, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate: targetDate });
+        return computeCustomerBalance(c, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate: targetDate, returnsList });
     };
 
     const handleDownloadMoneyReceipt = (payment) => {
@@ -1163,10 +1174,14 @@ const Customer = ({
         });
     }, [viewData, historySearchQuery, historyFilters, historySortConfig]);
 
+    const matchedReturns = useMemo(() => {
+        return getCustomerReturns(viewData, returnsList, salesRecords);
+    }, [viewData, returnsList, salesRecords]);
+
     const combinedHistory = useMemo(() => {
         if (!viewData) return [];
 
-        // Combine sales, payments, payouts, and purchases
+        // Combine sales, payments, payouts, purchases, and returns
         const sales = rawSalesWithUpdatedPrices.map(s => ({
             ...s,
             type: 'sale',
@@ -1271,8 +1286,13 @@ const Customer = ({
 
         const purchases = prEntries.length > 0 ? prEntries : matchedPurchases;
 
+        const returns = (matchedReturns || []).map(r => ({
+            ...r,
+            sortDate: new Date(r.date)
+        }));
+
         // Combine and sort chronologically (earliest first for absolute balance calculation)
-        const all = [...sales, ...payments, ...payouts, ...purchases].sort(compareTransactions);
+        const all = [...sales, ...payments, ...payouts, ...purchases, ...returns].sort(compareTransactions);
 
         // Calculate running balance on ALL history records
         let currentBalance = 0;
@@ -1294,6 +1314,9 @@ const Customer = ({
                 const pd = parseFloat(item.paid) || 0;
                 const disc = parseFloat(item.discount) || 0;
                 currentBalance -= (amt - pd - disc);
+            } else if (item.type === 'return') {
+                const amt = parseFloat(item.amount) || 0;
+                currentBalance -= amt;
             }
             return { ...item, runningBalance: currentBalance };
         });
@@ -1311,7 +1334,7 @@ const Customer = ({
             const matchesFilters =
                 (!historyFilters.startDate || new Date(item.date) >= new Date(historyFilters.startDate)) &&
                 (!historyFilters.endDate || new Date(item.date) <= new Date(historyFilters.endDate)) &&
-                (!historyFilters.lcNo || item.lcNo === historyFilters.lcNo) &&
+                (!historyFilters.lcNo || item.lcNo === historyFilters.lcNo || item.invoiceNo === historyFilters.lcNo) &&
                 (!historyFilters.product || item.product === historyFilters.product) &&
                 (!historyFilters.method || item.method === historyFilters.method) &&
                 (!historyFilters.bankName || item.bankName === historyFilters.bankName) &&
@@ -1337,8 +1360,8 @@ const Customer = ({
                 aVal = a.type === 'sale' ? (parseFloat(a.amount) || 0) : (a.type === 'payToCustomer' ? (parseFloat(a.amount) || 0) : 0);
                 bVal = b.type === 'sale' ? (parseFloat(b.amount) || 0) : (b.type === 'payToCustomer' ? (parseFloat(b.amount) || 0) : 0);
             } else if (key === 'paid') {
-                aVal = a.type === 'payment' ? (parseFloat(a.amount) || 0) : (a.type === 'sale' ? (parseFloat(a.paid) || 0) : 0);
-                bVal = b.type === 'payment' ? (parseFloat(b.amount) || 0) : (a.type === 'sale' ? (parseFloat(b.paid) || 0) : 0);
+                aVal = (a.type === 'payment' || a.type === 'return') ? (parseFloat(a.amount) || 0) : (a.type === 'sale' ? (parseFloat(a.paid) || 0) : (a.type === 'purchase' ? (parseFloat(a.amount) || 0) : 0));
+                bVal = (b.type === 'payment' || b.type === 'return') ? (parseFloat(b.amount) || 0) : (b.type === 'sale' ? (parseFloat(b.paid) || 0) : (b.type === 'purchase' ? (parseFloat(b.amount) || 0) : 0));
             } else if (key === 'balance') {
                 aVal = a.runningBalance;
                 bVal = b.runningBalance;
@@ -1354,7 +1377,7 @@ const Customer = ({
             if (aVal > bVal) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [viewData, purchasesList, historySearchQuery, historyFilters, historySortConfig]);
+    }, [viewData, purchasesList, matchedReturns, historySearchQuery, historyFilters, historySortConfig]);
 
     const openingBalance = useMemo(() => {
         if (!viewData) return 0;
@@ -1371,7 +1394,12 @@ const Customer = ({
                 type: 'payment',
                 sortDate: new Date(p.date)
             }));
-        const all = [...sales, ...payments].sort(compareTransactions);
+        const returns = (matchedReturns || []).map(r => ({
+            ...r,
+            type: 'return',
+            sortDate: new Date(r.date)
+        }));
+        const all = [...sales, ...payments, ...returns].sort(compareTransactions);
 
         let currentBalance = 0;
         const historyWithBalance = all.map(item => {
@@ -1380,6 +1408,9 @@ const Customer = ({
                 const pd = parseFloat(item.paid) || 0;
                 const disc = parseFloat(item.discount) || 0;
                 currentBalance += (amt - pd - disc);
+            } else if (item.type === 'return') {
+                const amt = parseFloat(item.amount) || 0;
+                currentBalance -= amt;
             } else {
                 const amt = parseFloat(item.amount) || 0;
                 const disc = parseFloat(item.discount) || 0;
@@ -1415,7 +1446,7 @@ const Customer = ({
             return historyWithBalance[firstIdx - 1].runningBalance;
         }
         return 0;
-    }, [viewData, historySearchQuery, historyFilters]);
+    }, [viewData, matchedReturns, historySearchQuery, historyFilters]);
 
     const isFiltered = useMemo(() => {
         return !!(
@@ -1483,7 +1514,8 @@ const Customer = ({
     const totalDiscount = totalSalesDiscount + totalPaymentDiscount;
     const totalHistoryPaid = filteredPaymentHistory.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
     const totalPaidCalculated = totalSalesPaid + totalHistoryPaid;
-    const totalDueCalculated = Math.max(0, totalAmount - totalSalesPaid - totalDiscount - totalHistoryPaid);
+    const totalReturnAmount = (matchedReturns || []).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const totalDueCalculated = Math.max(0, totalAmount - totalSalesPaid - totalDiscount - totalHistoryPaid - totalReturnAmount);
     const totalTruck = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.truck) || 0), 0);
     const totalQuantity = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
 
@@ -2567,7 +2599,7 @@ const Customer = ({
                                                             </div>
                                                             <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md">
                                                                 <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Total Balance</p>
-                                                                <p className="text-base md:text-lg font-black text-orange-700">৳{(isPurchaseMode ? purchaseTotalBalance : totalDueCalculated).toLocaleString('en-IN')}</p>
+                                                                <p className="text-base md:text-lg font-black text-orange-700">৳{(isPurchaseMode ? purchaseTotalBalance : (activeHistoryTab === 'all' && combinedHistory.length > 0 ? combinedHistory[combinedHistory.length - 1].runningBalance : totalDueCalculated)).toLocaleString('en-IN')}</p>
                                                             </div>
                                                         </>
                                                     );
@@ -3757,7 +3789,7 @@ const Customer = ({
                                                                     });
                                                                     return acc;
                                                                 }, []).map((item, index) => (
-                                                                    <tr key={index} className={`border-b border-gray-100 transition-colors hover:bg-gray-50 ${item.type === 'payment' ? 'bg-emerald-50/10' : (item.type === 'payToCustomer' ? 'bg-indigo-50/10' : (item.type === 'purchase' ? 'bg-amber-50/10' : 'bg-white'))}`}>
+                                                                    <tr key={index} className={`border-b border-gray-100 transition-colors hover:bg-gray-50 ${item.type === 'payment' ? 'bg-emerald-50/10' : (item.type === 'payToCustomer' ? 'bg-indigo-50/10' : (item.type === 'purchase' ? 'bg-amber-50/10' : (item.type === 'return' ? 'bg-rose-50/10' : 'bg-white')))}`}>
                                                                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
                                                                         <td className="px-4 py-3 font-bold text-gray-900 uppercase text-xs">{item.invoiceNo || item.lcNo || item.receiptNo || '—'}</td>
                                                                         <td className="px-4 py-3 text-gray-800 text-xs">
@@ -3770,9 +3802,11 @@ const Customer = ({
                                                                                                 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                                                                                                 : (item.type === 'payToCustomer'
                                                                                                     ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
-                                                                                                    : 'bg-amber-50 text-amber-600 border border-amber-100'))
+                                                                                                    : (item.type === 'return'
+                                                                                                        ? 'bg-rose-50 text-rose-600 border border-rose-100'
+                                                                                                        : 'bg-amber-50 text-amber-600 border border-amber-100')))
                                                                                     }`}>
-                                                                                        {item.type === 'sale' ? 'Sale' : (item.type === 'payment' ? 'Collection' : (item.type === 'payToCustomer' ? 'Payout' : 'Purchase'))}
+                                                                                        {item.type === 'sale' ? 'Sale' : (item.type === 'payment' ? 'Collection' : (item.type === 'payToCustomer' ? 'Payout' : (item.type === 'return' ? 'Return' : 'Purchase')))}
                                                                                     </span>
                                                                                     <span className="whitespace-pre-wrap font-medium">
                                                                                         {item.type === 'sale'
@@ -3783,9 +3817,14 @@ const Customer = ({
                                                                                                 ? (item.product
                                                                                                     ? `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}`
                                                                                                     : 'Purchase Invoice')
-                                                                                                : (item.type === 'payment'
-                                                                                                    ? `${item.method}${item.bankName || item.receiveBy ? ` (${item.bankName || item.receiveBy})` : ''}`
-                                                                                                    : `${item.method}${item.bankName || item.paidBy ? ` (${item.bankName || item.paidBy})` : ''}`
+                                                                                                : (item.type === 'return'
+                                                                                                    ? (item.product
+                                                                                                        ? `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}`
+                                                                                                        : 'Product Return')
+                                                                                                    : (item.type === 'payment'
+                                                                                                        ? `${item.method}${item.bankName || item.receiveBy ? ` (${item.bankName || item.receiveBy})` : ''}`
+                                                                                                        : `${item.method}${item.bankName || item.paidBy ? ` (${item.bankName || item.paidBy})` : ''}`
+                                                                                                    )
                                                                                                 )
                                                                                             )
                                                                                         }
@@ -3794,6 +3833,11 @@ const Customer = ({
                                                                                 {(item.type === 'sale' || item.type === 'purchase') && parseFloat(item.paid || item.truckFare || 0) > 0 && (
                                                                                     <div className="text-[10px] text-teal-600 font-medium pl-0.5">
                                                                                         Truck Fare paid (৳{parseFloat(item.paid || item.truckFare).toLocaleString('en-IN')})
+                                                                                    </div>
+                                                                                )}
+                                                                                {item.type === 'return' && item.reason && (
+                                                                                    <div className="text-[10px] text-gray-500 italic pl-0.5">
+                                                                                        Reason: {item.reason}
                                                                                     </div>
                                                                                 )}
                                                                                 {(item.remarks || item.note || item.reference || item.narration) && (
@@ -3815,14 +3859,11 @@ const Customer = ({
                                                                             }
                                                                         </td>
                                                                         <td className="px-4 py-3 text-left font-black text-emerald-600 text-xs">
-                                                                            {item.type === 'payment'
+                                                                            {item.type === 'payment' || item.type === 'purchase' || item.type === 'return'
                                                                                 ? `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`
-                                                                                : (item.type === 'purchase'
-                                                                                    ? `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`
-                                                                                    : (item.type === 'sale' && parseFloat(item.paid || 0) > 0
-                                                                                        ? `৳${parseFloat(item.paid).toLocaleString('en-IN')}`
-                                                                                        : '—'
-                                                                                    )
+                                                                                : (item.type === 'sale' && parseFloat(item.paid || 0) > 0
+                                                                                    ? `৳${parseFloat(item.paid).toLocaleString('en-IN')}`
+                                                                                    : '—'
                                                                                 )
                                                                             }
                                                                         </td>
@@ -3932,19 +3973,19 @@ const Customer = ({
                                                                 return (
                                                                     <div
                                                                         key={index}
-                                                                        className={`mobile-card transition-all duration-300 ${item.type === 'payment' ? 'border-l-4 border-l-emerald-500' : ''} ${isExpanded ? 'expanded' : 'collapsed'}`}
+                                                                        className={`mobile-card transition-all duration-300 ${item.type === 'payment' ? 'border-l-4 border-l-emerald-500' : (item.type === 'return' ? 'border-l-4 border-l-rose-500' : '')} ${isExpanded ? 'expanded' : 'collapsed'}`}
                                                                         onClick={() => setExpandedAllHistoryCards(isExpanded ? null : index)}
                                                                     >
                                                                         <div className="mobile-card-header">
                                                                             <div>
                                                                                 <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{formatDate(item.date)}</div>
                                                                                 <div className="text-sm font-black text-gray-900">
-                                                                                    {item.type === 'sale' ? (item.invoiceNo || item.lcNo) : `Payment: ${item.method}`}
+                                                                                    {item.type === 'sale' ? (item.invoiceNo || item.lcNo) : (item.type === 'return' ? `Return: ${item.invoiceNo || '—'}` : (item.type === 'payToCustomer' ? `Payout: ${item.method || 'Cash'}` : `Payment: ${item.method}`))}
                                                                                 </div>
                                                                             </div>
                                                                             <div className="text-left">
-                                                                                <div className={`text-sm font-black ${item.type === 'sale' ? 'text-violet-700' : 'text-emerald-600'}`}>
-                                                                                    {item.type === 'sale' ? `+৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}` : `-৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`}
+                                                                                <div className={`text-sm font-black ${item.type === 'sale' || item.type === 'payToCustomer' ? 'text-violet-700' : (item.type === 'return' ? 'text-rose-600' : 'text-emerald-600')}`}>
+                                                                                    {item.type === 'sale' || item.type === 'payToCustomer' ? `+৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}` : `-৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`}
                                                                                 </div>
                                                                                 <div className="text-[10px] font-bold text-orange-600">Balance: ৳{item.runningBalance.toLocaleString('en-IN')}</div>
                                                                             </div>
@@ -3979,6 +4020,23 @@ const Customer = ({
                                                                                                 <FileTextIcon className="w-3.5 h-3.5" /> Print Invoice
                                                                                             </button>
                                                                                         </div>
+                                                                                    </>
+                                                                                ) : item.type === 'return' ? (
+                                                                                    <>
+                                                                                        <div className="flex justify-between items-start">
+                                                                                            <span className="text-gray-500">Product:</span>
+                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.product}</span>
+                                                                                        </div>
+                                                                                        <div className="flex justify-between items-start">
+                                                                                            <span className="text-gray-500">Qty:</span>
+                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString('en-US') : '—')}</span>
+                                                                                        </div>
+                                                                                        <div className="flex justify-between items-start">
+                                                                                            <span className="text-gray-500">Rate:</span>
+                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString('en-IN')}` : '—')}</span>
+                                                                                        </div>
+                                                                                        <div className="flex justify-between"><span className="text-gray-500">Return Amt:</span><span className="font-bold text-rose-600">৳{parseFloat(item.amount || 0).toLocaleString('en-IN')}</span></div>
+                                                                                        {item.reason && <div className="flex justify-between"><span className="text-gray-500">Reason:</span><span className="font-medium text-gray-700">{item.reason}</span></div>}
                                                                                     </>
                                                                                 ) : (
                                                                                     <>
@@ -4049,6 +4107,7 @@ const Customer = ({
                 purchaseReceivesList={purchaseReceivesList}
                 stockList={stockList}
                 asOfDate={filters.asOfDate}
+                returnsList={returnsList}
             />
 
             {/* Customer History Export Format Selection Modal */}

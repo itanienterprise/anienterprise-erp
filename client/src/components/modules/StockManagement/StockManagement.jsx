@@ -147,7 +147,8 @@ const StockManagement = ({
     showRate,
     setShowRate,
     activeBaseline,
-    fetchStockBaseline
+    fetchStockBaseline,
+    returnsList: externalReturnsList
 }) => {
 
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
@@ -169,6 +170,25 @@ const StockManagement = ({
     const [baselineHistory, setBaselineHistory] = useState([]);
     const [baselineSearchQuery, setBaselineSearchQuery] = useState('');
     const [baselineWhFilter, setBaselineWhFilter] = useState('All');
+
+    const [localReturnsList, setLocalReturnsList] = useState([]);
+    useEffect(() => {
+        let isMounted = true;
+        const fetchReturns = async () => {
+            try {
+                const res = await axios.get(`${API_BASE_URL}/api/returns`);
+                if (isMounted && res.data) {
+                    setLocalReturnsList(Array.isArray(res.data) ? res.data : []);
+                }
+            } catch (err) {
+                console.error('Error fetching returns in StockManagement:', err);
+            }
+        };
+        fetchReturns();
+        return () => { isMounted = false; };
+    }, []);
+
+    const returnsList = (externalReturnsList && externalReturnsList.length > 0) ? externalReturnsList : localReturnsList;
 
     // Filtering & Search (Main View)
     const [displayUnit, setDisplayUnit] = useState(() => {
@@ -2346,8 +2366,8 @@ const StockManagement = ({
     // --- Calculations (Memoized) ---
 
     const stockData = useMemo(() => {
-        return calculateStockData(stockRecords, { ...stockFilters, showRate: effectiveShowRate }, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline);
-    }, [stockRecords, stockFilters, effectiveShowRate, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline]);
+        return calculateStockData(stockRecords, { ...stockFilters, showRate: effectiveShowRate }, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline, returnsList);
+    }, [stockRecords, stockFilters, effectiveShowRate, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
 
     // Function to calculate raw in-house snapshot across all warehouses for baseline
     const generateCurrentStockSnapshot = () => {
@@ -2376,7 +2396,8 @@ const StockManagement = ({
                 salesRecords,
                 products,
                 damages,
-                activeBaseline // Carry forward active baseline calculations so current verified physical stock is captured!
+                activeBaseline, // Carry forward active baseline calculations so current verified physical stock is captured!
+                returnsList
             );
 
             (whRes.displayRecords || []).forEach(prod => {

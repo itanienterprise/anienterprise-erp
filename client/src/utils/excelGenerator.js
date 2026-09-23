@@ -2593,11 +2593,12 @@ export const generateCustomerReportExcel = (
     salesRecords = [],
     purchaseReceivesList = [],
     asOfDate = null,
-    stockList = []
+    stockList = [],
+    returnsList = []
 ) => {
     try {
         const computeDue = (customer) => {
-            return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate });
+            return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate, returnsList });
         };
 
         const targetCutoff = asOfDate ? getIsoDateString(asOfDate) : null;
@@ -2861,20 +2862,21 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
             let totalDiscount = 0;
 
             sortedHistory.forEach(item => {
-                const typeLabel = item.type === 'sale' ? 'SALE' : (item.type === 'payment' ? 'COLLECTION' : (item.type === 'payToCustomer' ? 'PAYOUT' : 'PURCHASE'));
+                const typeLabel = item.type === 'sale' ? 'SALE' : (item.type === 'payment' ? 'COLLECTION' : (item.type === 'payToCustomer' ? 'PAYOUT' : (item.type === 'return' ? 'RETURN' : 'PURCHASE')));
                 const refNo = item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '-';
 
                 let particulars = item.product || '';
                 if (item.brand && item.brand !== '-') particulars += ` (${item.brand})`;
                 if (item.method) particulars += (particulars ? ' - ' : '') + item.method;
                 if (item.bankName) particulars += ` (${item.bankName})`;
+                if (item.reason) particulars += (particulars ? ' - ' : '') + item.reason;
 
                 const debitVal = (item.type === 'sale' || item.type === 'payToCustomer') ? (parseFloat(item.amount || 0)) : 0;
-                const creditVal = (item.type === 'payment' || item.type === 'purchase')
+                const creditVal = (item.type === 'payment' || item.type === 'purchase' || item.type === 'return')
                     ? (parseFloat(item.amount || 0))
                     : (item.type === 'sale' && parseFloat(item.paid || 0) > 0 ? parseFloat(item.paid || 0) : 0);
                 const discVal = parseFloat(item.discount || 0);
-                const qtyVal = (item.type === 'sale' || item.type === 'purchase') ? parseFloat(item.quantity || item.qty || 0) : 0;
+                const qtyVal = (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? parseFloat(item.quantity || item.qty || 0) : 0;
 
                 totalQty += qtyVal;
                 totalDebit += debitVal;

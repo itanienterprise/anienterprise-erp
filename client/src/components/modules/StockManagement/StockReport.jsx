@@ -21,7 +21,8 @@ const StockReport = ({
     salesRecords,
     damages,
     showRate,
-    activeBaseline
+    activeBaseline,
+    returnsList = []
 }) => {
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const canShowRate = hasPermission(currentUser, 'stock', 'showRate');
@@ -131,11 +132,12 @@ const StockReport = ({
                 salesRecords,
                 products,
                 damages,
-                activeBaseline
+                activeBaseline,
+                returnsList
             );
         }
         return stockData;
-    }, [stockData, stockRecords, stockFilters, reportType, searchQuery, warehouseData, salesRecords, products, damages, activeBaseline]);
+    }, [stockData, stockRecords, stockFilters, reportType, searchQuery, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
 
     // --- Search & Filter Logic ---
     const filteredRecords = React.useMemo(() => {
@@ -271,10 +273,10 @@ const StockReport = ({
             // However, we want the SEARCH to also apply to the multi-warehouse view.
             return {
                 warehouseName: wh,
-                data: calculateStockData(stockRecords, filters, searchQuery, warehouseData, salesRecords, products, damages, activeBaseline)
+                data: calculateStockData(stockRecords, filters, searchQuery, warehouseData, salesRecords, products, damages, activeBaseline, returnsList)
             };
         }).filter(item => item.data.displayRecords.length > 0);
-    }, [stockFilters.warehouse, warehouseOptions, stockRecords, searchQuery, warehouseData, salesRecords, products, damages, reportType, activeBaseline]);
+    }, [stockFilters.warehouse, warehouseOptions, stockRecords, searchQuery, warehouseData, salesRecords, products, damages, reportType, activeBaseline, returnsList]);
 
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);

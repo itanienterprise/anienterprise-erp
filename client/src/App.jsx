@@ -813,6 +813,7 @@ function App() {
 
   const [warehouseData, setWarehouseData] = useState([]);
   const [salesRecords, setSalesRecords] = useState([]);
+  const [returnsList, setReturnsList] = useState([]);
   const [stockFilters, setStockFilters] = useState({
     startDate: new Date(Date.now() - 86400000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
@@ -1069,6 +1070,7 @@ function App() {
       fetchStockBaseline();
       fetchWarehouses(); // Fetch warehouse data
       fetchSales(); // Fetch sales data
+      fetchReturns(); // Fetch returns data for accurate stock order tracking
       fetchPorts(); // Fetch ports to populate the dropdown
       fetchImporters(); // Fetch importers to populate the dropdown
       fetchExporters(); // Fetch exporters to populate the dropdown
@@ -1606,6 +1608,15 @@ function App() {
     }
   };
 
+  const fetchReturns = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/returns`);
+      setReturnsList(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching returns:', error);
+    }
+  };
+
   // Products CRUD Functions
   const fetchProducts = async () => {
     setIsLoading(true);
@@ -1977,6 +1988,7 @@ function App() {
             setShowRate={setShowRate}
             activeBaseline={activeBaseline}
             fetchStockBaseline={fetchStockBaseline}
+            returnsList={returnsList}
           />
         );
       case 'products-section':
@@ -2264,12 +2276,12 @@ function App() {
   };
 
   const getGlobalStockData = () => {
-    return calculateStockData(stockRecords, stockFilters, '', warehouseData, salesRecords, products, damages, activeBaseline);
+    return calculateStockData(stockRecords, stockFilters, '', warehouseData, salesRecords, products, damages, activeBaseline, returnsList);
   };
 
   const stockData = useMemo(() => {
     return getGlobalStockData();
-  }, [stockRecords, stockFilters, warehouseData, salesRecords, products, damages, activeBaseline]);
+  }, [stockRecords, stockFilters, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
 
   if (isCheckingSession) {
     return (
@@ -3289,6 +3301,7 @@ function App() {
         damages={damages}
         showRate={showRate}
         activeBaseline={activeBaseline}
+        returnsList={returnsList}
       />
 
       {/* Product History Report Modal */}

@@ -49,6 +49,7 @@ const OrderManagement = ({
     // --- State Management ---
     const [sales, setSales] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
+    const [returnsList, setReturnsList] = useState([]);
     const [activeBaseline, setActiveBaseline] = useState(propActiveBaseline || null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -337,6 +338,7 @@ const OrderManagement = ({
         fetchDamagesRecords();
         fetchEmployees();
         fetchStockBaseline();
+        fetchReturns();
     }, []);
 
     const fetchCustomers = async () => {
@@ -408,6 +410,16 @@ const OrderManagement = ({
             setProducts(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
             console.error('Error fetching products:', err);
+        }
+    };
+
+    const fetchReturns = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/returns`);
+            const data = Array.isArray(res.data) ? res.data : [];
+            setReturnsList(data);
+        } catch (err) {
+            console.error('Error fetching returns:', err);
         }
     };
 
@@ -584,9 +596,13 @@ const OrderManagement = ({
     const fetchOrders = async () => {
         setIsLoading(true);
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/sales`);
-            const data = Array.isArray(res.data) ? res.data : [];
+            const [salesRes, returnsRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/sales`),
+                axios.get(`${API_BASE_URL}/api/returns`).catch(() => ({ data: [] }))
+            ]);
+            const data = Array.isArray(salesRes.data) ? salesRes.data : [];
             setAllSalesRecords(data);
+            setReturnsList(Array.isArray(returnsRes?.data) ? returnsRes.data : []);
 
             const filtered = data.filter(item => {
                 const sType = (item.saleType || '').toLowerCase();
@@ -1179,7 +1195,7 @@ const OrderManagement = ({
     };
 
     // Helper function to calculate exact fulfillment and remaining quantities for each line of an order
-    const computeOrderFulfillment = (order, salesHistory = allSalesRecords) => {
+    const computeOrderFulfillment = (order, salesHistory = allSalesRecords, returns = returnsList) => {
         if (!order) {
             return {
                 deliveryMap: {},
@@ -1187,6 +1203,7 @@ const OrderManagement = ({
                 totalDeliveredQty: 0,
                 totalOrderedBag: 0,
                 totalDeliveredBag: 0,
+                totalReturnedQty: 0,
                 statusText: 'Accepted',
                 statusBadgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
             };
@@ -1235,6 +1252,8 @@ const OrderManagement = ({
 
             return customerMatches && hasOrderedProduct;
         });
+
+        const fulfillingInvoices = fulfillingSales.map(s => (s.invoiceNo || '').trim().toUpperCase()).filter(Boolean);
 
         // Gather all delivered lines matching products in this order
         const deliveredLines = [];
@@ -1387,12 +1406,55 @@ const OrderManagement = ({
             };
         });
 
+        // Calculate returns matching this order or any of its fulfilling deliveries
+        const matchingReturns = (returns || []).filter(r => {
+            const rStatus = (r.status || '').toLowerCase();
+            if (rStatus === 'cancelled' || rStatus === 'rejected') return false;
+            const rInv = (r.invoiceNo || '').trim().toUpperCase();
+            if (rInv && (validRefs.includes(rInv) || fulfillingInvoices.includes(rInv))) return true;
+            const rOrdNo = (r.orderNo || r.orderRef || '').trim().toUpperCase();
+            if (rOrdNo && validRefs.includes(rOrdNo)) return true;
+            return false;
+        });
+
+        let returnsTableQty = 0;
+        matchingReturns.forEach(r => {
+            returnsTableQty += parseFloat(r.quantity || 0);
+        });
+
+        let salesReturnedQty = 0;
+        fulfillingSales.forEach(s => {
+            (s.items || []).forEach(si => {
+                if (si.brandEntries && si.brandEntries.length > 0) {
+                    si.brandEntries.forEach(be => {
+                        salesReturnedQty += parseFloat(be.returnQty || 0);
+                    });
+                } else {
+                    salesReturnedQty += parseFloat(si.returnQty || 0);
+                }
+            });
+        });
+
+        let orderReturnedQty = 0;
+        (order.items || []).forEach(si => {
+            if (si.brandEntries && si.brandEntries.length > 0) {
+                si.brandEntries.forEach(be => {
+                    orderReturnedQty += parseFloat(be.returnQty || 0);
+                });
+            } else {
+                orderReturnedQty += parseFloat(si.returnQty || 0);
+            }
+        });
+
+        const totalReturnedQty = Math.max(returnsTableQty, salesReturnedQty, orderReturnedQty);
+
         let statusText = 'Accepted';
         let statusBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200/60';
 
         const st = (order.status || '').toLowerCase();
         const isRequested = st === 'requested';
         const isEditRequested = order.isEdited === true && !isRequested;
+        const isExplicitReturn = st === 'return' || st === 'returned';
 
         if (isEditRequested) {
             statusText = 'Edit Requested';
@@ -1400,6 +1462,12 @@ const OrderManagement = ({
         } else if (isRequested) {
             statusText = 'Requested';
             statusBadgeClass = 'bg-amber-50 text-amber-700 border-amber-200/60';
+        } else if (isExplicitReturn || (totalReturnedQty > 0 && (totalReturnedQty >= totalOrderedQty - 0.1 || (totalDeliveredQty > 0 && totalReturnedQty >= totalDeliveredQty - 0.1)))) {
+            statusText = 'Return';
+            statusBadgeClass = 'bg-rose-50 text-rose-700 border-rose-200/60';
+        } else if (totalReturnedQty > 0) {
+            statusText = 'Partial Return';
+            statusBadgeClass = 'bg-rose-50 text-rose-700 border-rose-200/60';
         } else if (totalDeliveredQty > totalOrderedQty + 0.1) {
             statusText = 'Over Delivered';
             statusBadgeClass = 'bg-purple-50 text-purple-700 border-purple-200/60';
@@ -1420,6 +1488,7 @@ const OrderManagement = ({
             totalOrderedBag,
             totalDeliveredQty,
             totalDeliveredBag,
+            totalReturnedQty,
             statusText,
             statusBadgeClass
         };
@@ -1544,8 +1613,9 @@ const OrderManagement = ({
                 const smApproved = (sale.smApprovedByName || sale.smApprovedBy || '').toLowerCase();
                 const edited = (sale.editedByName || sale.editedBy || '').toLowerCase();
                 const editedFirst = (getEditedByFirstName(sale) || '').toLowerCase();
+                const orderStatus = (computeOrderFulfillment(sale, allSalesRecords, returnsList).statusText || '').toLowerCase();
 
-                return inv.includes(q) || cust.includes(q) || remarks.includes(q) || matchesItems || entry.includes(q) || entryFirst.includes(q) || approved.includes(q) || smApproved.includes(q) || edited.includes(q) || editedFirst.includes(q);
+                return inv.includes(q) || cust.includes(q) || remarks.includes(q) || matchesItems || entry.includes(q) || entryFirst.includes(q) || approved.includes(q) || smApproved.includes(q) || edited.includes(q) || editedFirst.includes(q) || orderStatus.includes(q);
             }
 
             return true;
@@ -1560,8 +1630,8 @@ const OrderManagement = ({
                 aVal = calculateOrderTotal(a.items);
                 bVal = calculateOrderTotal(b.items);
             } else if (sortConfig.key === 'status') {
-                aVal = computeOrderFulfillment(a).statusText;
-                bVal = computeOrderFulfillment(b).statusText;
+                aVal = computeOrderFulfillment(a, allSalesRecords, returnsList).statusText;
+                bVal = computeOrderFulfillment(b, allSalesRecords, returnsList).statusText;
             } else if (sortConfig.key === 'companyName' || sortConfig.key === 'customerName') {
                 aVal = (a.companyName || a.customerName || '').toLowerCase();
                 bVal = (b.companyName || b.customerName || '').toLowerCase();
@@ -1574,7 +1644,7 @@ const OrderManagement = ({
             if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [sales, allSalesRecords, isRequestedOnly, isEditRequestedOnly, saleFilters, searchQuery, sortConfig]);
+    }, [sales, allSalesRecords, returnsList, isRequestedOnly, isEditRequestedOnly, saleFilters, searchQuery, sortConfig]);
 
     // Counters for Toggle Pills
     const requestedCount = useMemo(() => {
@@ -2574,7 +2644,7 @@ const OrderManagement = ({
                                 ) : getFilteredData.length === 0 ? (
                                     <tr><td colSpan={15 + (canShowEntryBy ? 1 : 0)} className="px-3 py-20 text-center text-gray-400 font-medium">No order records found</td></tr>
                                 ) : getFilteredData.map((order, index) => {
-                                    const { deliveryMap, totalOrderedQty, totalDeliveredQty, statusText, statusBadgeClass } = computeOrderFulfillment(order, allSalesRecords);
+                                    const { deliveryMap, totalOrderedQty, totalDeliveredQty, statusText, statusBadgeClass } = computeOrderFulfillment(order, allSalesRecords, returnsList);
                                     const totalAmt = calculateOrderTotal(order.items);
                                     const allEntriesCount = (order.items || []).reduce((acc, item) => acc + Math.max(1, (item.brandEntries || []).length), 0);
                                     const isRequested = (order.status || '').toLowerCase() === 'requested';
@@ -2977,12 +3047,22 @@ const OrderManagement = ({
                                 <div className="space-y-1">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status / Payment</span>
                                     <div className="flex flex-col gap-1.5">
-                                        <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold uppercase tracking-wider ${viewRecord.status === 'Requested' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                            viewRecord.status === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                                'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                                            }`}>
-                                            {viewRecord.status || 'Completed'}
-                                        </div>
+                                        {(() => {
+                                            const modalFulfillment = viewRecord ? computeOrderFulfillment(viewRecord, allSalesRecords, returnsList) : null;
+                                            const modalStatusText = modalFulfillment?.statusText || viewRecord.status || 'Completed';
+                                            const isModalReturn = modalStatusText === 'Return' || modalStatusText === 'Partial Return';
+                                            return (
+                                                <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold uppercase tracking-wider ${
+                                                    modalStatusText === 'Requested' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                    modalStatusText === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                    isModalReturn ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                                                    modalStatusText === 'Completed' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                                                    'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                                }`}>
+                                                    {modalStatusText}
+                                                </div>
+                                            );
+                                        })()}
                                         <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold inline-flex items-center gap-1 ${parseFloat(viewRecord.dueAmount) > 0 ? 'bg-amber-50 text-amber-600 border border-amber-100/50' : 'bg-emerald-50 text-emerald-600 border border-emerald-100/50'}`}>
                                             <div className={`w-1 h-1 rounded-full ${parseFloat(viewRecord.dueAmount) > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
                                             {parseFloat(viewRecord.dueAmount) > 0 ? 'Partial Pay' : 'Paid in Full'}

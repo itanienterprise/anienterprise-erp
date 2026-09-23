@@ -237,7 +237,7 @@ export const reconcilePriceReportBrandList = (brandList) => {
     });
 };
 
-export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = [], activeBaseline = null) => {
+export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = [], activeBaseline = null, returnsList = []) => {
     const isPriceReport = Boolean(stockFilters && (stockFilters.reportType === 'price' || stockFilters.showRate === true));
 
     const isWhFilter = stockFilters && stockFilters.warehouse &&
@@ -273,7 +273,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const combinedProductsMap = {};
             whList.forEach(whName => {
                 const subFilters = { ...(stockFilters || {}), warehouse: whName, _isSubCall: true };
-                const whRes = calculateStockData(stockRecords, subFilters, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline);
+                const whRes = calculateStockData(stockRecords, subFilters, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline, returnsList);
                 (whRes.displayRecords || []).forEach(rec => {
                     const pName = rec.productName;
                     if (!combinedProductsMap[pName]) {
@@ -605,6 +605,31 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         });
     }
 
+    // Map returns by invoice, orderNo, and (ref + product + brand)
+    const returnQtyMap = {};
+    (returnsList || []).forEach(r => {
+        const rStatus = (r.status || '').toLowerCase();
+        if (rStatus === 'cancelled' || rStatus === 'rejected') return;
+        const inv = (r.invoiceNo || '').trim().toUpperCase();
+        const ord = (r.orderNo || r.orderRef || '').trim().toUpperCase();
+        const p = (r.productName || r.product || '').trim().toLowerCase();
+        const b = (r.brandName || r.brand || '').trim().toLowerCase();
+        const q = parseFloat(r.quantity) || 0;
+        if (q > 0) {
+            [inv, ord].filter(Boolean).forEach(ref => {
+                if (p && b) {
+                    const k1 = `${ref}_${p}_${b}`;
+                    returnQtyMap[k1] = (returnQtyMap[k1] || 0) + q;
+                }
+                if (p) {
+                    const k2 = `${ref}_${p}`;
+                    returnQtyMap[k2] = (returnQtyMap[k2] || 0) + q;
+                }
+                returnQtyMap[ref] = (returnQtyMap[ref] || 0) + q;
+            });
+        }
+    });
+
     // Build list & map of fulfilling sales entries from General Sales to track order fulfillment accurately
     const fulfilledSaleEntries = [];
     const orderFulfilledQtyMap = {};
@@ -630,7 +655,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         const bName = (be.brand || be.brandName || '').trim().toLowerCase();
                         const wName = (be.warehouseName || be.warehouse || item.warehouseName || item.whName || item.warehouse || s.warehouse || s.whName || '').trim().toLowerCase();
                         const key = `${ref}_${pName}_${bName}`;
-                        const qty = parseFloat(be.quantity) || 0;
+                        const netQty = parseFloat(be.quantity) || 0;
+                        const retQty = parseFloat(be.returnQty) || 0;
+                        const origQty = parseFloat(be.originalQuantity) || 0;
+                        const invRef = (s.invoiceNo || '').trim().toUpperCase();
+                        const listRet = returnQtyMap[`${invRef}_${pName}_${bName}`] || returnQtyMap[`${invRef}_${pName}`] || 0;
+                        // Fulfilled delivery quantity reflects total goods shipped against the order, even if later returned by the customer
+                        const qty = origQty > 0 ? origQty : Math.max(netQty + retQty, netQty + listRet);
                         orderFulfilledQtyMap[key] = (orderFulfilledQtyMap[key] || 0) + qty;
                         if (qty > 0) {
                             fulfilledSaleEntries.push({
@@ -682,6 +713,23 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                 const noWh = !f.wName || !cleanOrderWh;
                 if (noWh && f.remainingQty > 0) {
+                    const take = Math.min(remainingNeeded, f.remainingQty);
+                    f.remainingQty -= take;
+                    allocated += take;
+                    remainingNeeded -= take;
+                }
+            }
+        }
+
+        // Pass 3: cross-warehouse match if fulfilling sale referenced this order for same product & brand
+        if (remainingNeeded > 0) {
+            for (const f of fulfilledSaleEntries) {
+                if (remainingNeeded <= 0) break;
+                const matchesRef = f.refs.some(r => ordRefs.includes(r));
+                if (!matchesRef) continue;
+                if (f.pName !== pKeyName || f.bName !== bKeyName) continue;
+
+                if (f.remainingQty > 0) {
                     const take = Math.min(remainingNeeded, f.remainingQty);
                     f.remainingQty -= take;
                     allocated += take;
@@ -1039,7 +1087,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const isOrderSale = sType === 'order' ||
                     (sale.invoiceNo || sale.orderNo || '').toUpperCase().startsWith('ORD') ||
                     sale.isOrderEntry === true;
-                if (sStatus === 'rejected' || sStatus === 'cancelled') return;
+                if (sStatus === 'rejected' || sStatus === 'cancelled' || (isOrderSale && (sStatus === 'return' || sStatus === 'returned'))) return;
                 if (isOrderSale && (sStatus === 'requested' || sStatus === 'pending')) return;
                 if (!isOrderSale && sStatus === 'requested') return;
 
@@ -1105,21 +1153,30 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 consumedSales.add(saleEntryId);
 
                                 const sType = (sale.saleType || '').toLowerCase();
+                                const sStatus = (sale.status || '').toLowerCase();
                                 const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
                                 const ordNo = (sale.orderNo || sale.invoiceNo || '').trim().toUpperCase();
                                 const ordId = sale._id ? sale._id.toString().trim().toUpperCase() : '';
                                 const isOrder = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
-                                const isFulfilled = (sale.status || '').toLowerCase() === 'complete' || (sale.status || '').toLowerCase() === 'completed' || sale.isFulfilled === true;
+                                const isFulfilled = sStatus === 'complete' || sStatus === 'completed' || sale.isFulfilled === true;
 
                                 const pKeyName = (si.productName || item.productName || item.product || '').trim().toLowerCase();
                                 const bKeyName = (be.brand || '').trim().toLowerCase();
                                 if (isOrder) {
-                                    if (isFulfilled || (sale.status || '').toLowerCase() === 'rejected') return;
+                                    if (isFulfilled || sStatus === 'rejected' || sStatus === 'return' || sStatus === 'returned' || sStatus === 'cancelled') return;
 
                                     const ordRefs = [inv, ordNo, ordId].filter(Boolean);
                                     const allocatedSoldQty = allocateFulfilledQtyForOrder(ordRefs, pKeyName, bKeyName, saleWH, sq);
 
-                                    const netOrderSq = Math.max(0, sq - allocatedSoldQty);
+                                    // Deduct any direct return on this order entry or matching return records
+                                    const orderEntryRetQty = parseFloat(be.returnQty) || parseFloat(si.returnQty) || 0;
+                                    const listRetQty = ordRefs.reduce((max, r) => {
+                                        const rQty = returnQtyMap[`${r}_${pKeyName}_${bKeyName}`] || returnQtyMap[`${r}_${pKeyName}`] || 0;
+                                        return Math.max(max, rQty);
+                                    }, 0);
+                                    const totalOrderReturn = Math.max(orderEntryRetQty, listRetQty);
+
+                                    const netOrderSq = Math.max(0, sq - allocatedSoldQty - totalOrderReturn);
                                     if (netOrderSq <= 0) return;
 
                                     const pktRatio = sq > 0 ? (sp / sq) : 0;
@@ -1245,7 +1302,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (isBorderSale) return; // Exclude Border sales from Warehouse Stock
         const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
         const isOrderSale = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
-        if (sStatus === 'rejected' || sStatus === 'cancelled') return;
+        if (sStatus === 'rejected' || sStatus === 'cancelled' || (isOrderSale && (sStatus === 'return' || sStatus === 'returned'))) return;
         if (isOrderSale && (sStatus === 'requested' || sStatus === 'pending')) return;
         if (!isOrderSale && sStatus === 'requested') return;
         if (!isOrderSale && isPreBaselineRecord(sale.date, sale.createdAt)) return;
@@ -1410,21 +1467,29 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     }
 
                     const sType = (sale.saleType || '').toLowerCase();
+                    const sStatus = (sale.status || '').toLowerCase();
                     const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
                     const ordNo = (sale.orderNo || sale.invoiceNo || '').trim().toUpperCase();
                     const ordId = sale._id ? sale._id.toString().trim().toUpperCase() : '';
                     const isOrder = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
-                    const isFulfilled = (sale.status || '').toLowerCase() === 'complete' || (sale.status || '').toLowerCase() === 'completed' || sale.isFulfilled === true;
+                    const isFulfilled = sStatus === 'complete' || sStatus === 'completed' || sale.isFulfilled === true;
 
                     const pKeyName = (si.productName || '').trim().toLowerCase();
                     const bKeyName = (be.brand || '').trim().toLowerCase();
                     if (isOrder) {
-                        if (isFulfilled || (sale.status || '').toLowerCase() === 'rejected') return;
+                        if (isFulfilled || sStatus === 'rejected' || sStatus === 'return' || sStatus === 'returned' || sStatus === 'cancelled') return;
 
                         const ordRefs = [inv, ordNo, ordId].filter(Boolean);
                         const allocatedSoldQty = allocateFulfilledQtyForOrder(ordRefs, pKeyName, bKeyName, saleWH, sq);
 
-                        const netOrderSq = Math.max(0, sq - allocatedSoldQty);
+                        const orderEntryRetQty = parseFloat(be.returnQty) || parseFloat(si.returnQty) || 0;
+                        const listRetQty = ordRefs.reduce((max, r) => {
+                            const rQty = returnQtyMap[`${r}_${pKeyName}_${bKeyName}`] || returnQtyMap[`${r}_${pKeyName}`] || 0;
+                            return Math.max(max, rQty);
+                        }, 0);
+                        const totalOrderReturn = Math.max(orderEntryRetQty, listRetQty);
+
+                        const netOrderSq = Math.max(0, sq - allocatedSoldQty - totalOrderReturn);
                         if (netOrderSq <= 0) return;
 
                         const pktRatio = sq > 0 ? (sp / sq) : 0;

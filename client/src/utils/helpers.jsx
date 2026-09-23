@@ -103,8 +103,81 @@ export const getIsoDateString = (val) => {
     return '';
 };
 
-// Calculate exact customer final balance across sales, payments, payToCustomer, and purchases/purchaseReceives
-export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [], purchaseReceivesList = [], stockList = [], asOfDate = null } = {}) => {
+// Helper to extract matching return records for a customer
+export const getCustomerReturns = (c, returnsList = [], salesRecords = []) => {
+    if (!c) return [];
+    const cId = String(c._id || '');
+    const cCustId = (c.customerId || '').trim().toLowerCase();
+    const cComp = (c.companyName || '').trim().toLowerCase();
+    const cCust = (c.customerName || '').trim().toLowerCase();
+    const cPhone = (c.phone || '').trim();
+
+    const custInvoices = new Set();
+    (c.salesHistory || []).forEach(s => {
+        if (s.invoiceNo) custInvoices.add(s.invoiceNo.trim().toUpperCase());
+        if (s.lcNo) custInvoices.add(s.lcNo.trim().toUpperCase());
+    });
+
+    return (returnsList || []).filter(r => {
+        if ((r.status || '').toLowerCase() === 'requested' || (r.status || '').toLowerCase() === 'cancelled') return false;
+
+        const rId = String(r.customerId || '');
+        if (cId && rId && rId === cId) return true;
+        if (cCustId && (r.customerId || '').trim().toLowerCase() === cCustId) return true;
+
+        const rInv = (r.invoiceNo || '').trim().toUpperCase();
+        if (rInv && custInvoices.has(rInv)) return true;
+
+        const rComp = (r.companyName || '').trim().toLowerCase();
+        if (cComp && rComp && (rComp === cComp || rComp.includes(cComp) || cComp.includes(rComp))) return true;
+
+        const rCust = (r.customerName || '').trim().toLowerCase();
+        if (cCust && rCust && (rCust === cCust || rCust.includes(cCust) || cCust.includes(rCust))) return true;
+
+        const rPhone = (r.phone || '').trim();
+        if (cPhone && rPhone && cPhone === rPhone && cPhone !== '+8800000000000') return true;
+
+        return false;
+    }).map(r => {
+        let rate = parseFloat(r.returnPrice || r.rate || r.unitPrice) || 0;
+        const qty = parseFloat(r.quantity) || 0;
+        if (!rate && r.invoiceNo) {
+            const originalSale = (salesRecords || []).find(s => (s.invoiceNo || '').trim().toUpperCase() === (r.invoiceNo || '').trim().toUpperCase());
+            if (originalSale && originalSale.items) {
+                const item = originalSale.items.find(i => (i.productName || i.product || '').trim().toLowerCase() === (r.productName || r.product || '').trim().toLowerCase());
+                if (item) {
+                    if (item.brandEntries && item.brandEntries.length > 0) {
+                        const be = item.brandEntries.find(b => (b.brandName || b.brand || '').trim().toLowerCase() === (r.brand || '').trim().toLowerCase());
+                        if (be) rate = parseFloat(be.unitPrice || be.rate) || 0;
+                    } else {
+                        rate = parseFloat(item.unitPrice || item.rate) || 0;
+                    }
+                }
+            } else if (originalSale) {
+                rate = parseFloat(originalSale.rate || originalSale.unitPrice) || 0;
+            }
+        }
+        const amt = parseFloat(r.amount) || (rate * qty);
+        return {
+            ...r,
+            _id: r._id,
+            invoiceNo: r.invoiceNo,
+            date: r.date,
+            product: r.productName || r.product || 'Product Return',
+            brand: r.brand || '-',
+            quantity: qty,
+            rate: rate,
+            amount: amt,
+            paid: 0,
+            discount: 0,
+            type: 'return',
+            sortDate: r.date
+        };
+    });
+};
+
+// Calculate exact customer final balance across sales, payments, payToCustomer, purchases/purchaseReceives, and returns
+export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [], purchaseReceivesList = [], stockList = [], asOfDate = null, returnsList = [] } = {}) => {
     if (!c) return 0;
     const targetCutoff = asOfDate ? getIsoDateString(asOfDate) : null;
 
@@ -374,7 +447,17 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
     });
 
     const purchases = prEntries.length > 0 ? prEntries : matchedPurchases;
-    const all = [...sales, ...payments, ...payouts, ...purchases].sort(compareTransactions);
+
+    const rawReturns = getCustomerReturns(c, returnsList, salesRecords);
+    const returns = rawReturns.filter(r => {
+        if (targetCutoff) {
+            const rDate = getIsoDateString(r.date);
+            if (rDate && rDate >= targetCutoff) return false;
+        }
+        return true;
+    });
+
+    const all = [...sales, ...payments, ...payouts, ...purchases, ...returns].sort(compareTransactions);
 
     let currentBalance = 0;
     all.forEach(item => {
@@ -395,6 +478,9 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
             const pd = parseFloat(item.paid) || 0;
             const disc = parseFloat(item.discount) || 0;
             currentBalance -= (amt - pd - disc);
+        } else if (item.type === 'return') {
+            const amt = parseFloat(item.amount) || 0;
+            currentBalance -= amt;
         }
     });
 
