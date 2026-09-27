@@ -91,6 +91,7 @@ const loginLimiter = rateLimit({
   max: 30, // max 30 attempts per username/IP
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   keyGenerator: (req) => {
     const user = (req.body?.username || req.body?.d?.username || '').toLowerCase().trim();
     const cleanIp = (req.ip || req.connection?.remoteAddress || 'unknown').replace(/^::ffff:/, '');
@@ -104,6 +105,7 @@ const generalLimiter = rateLimit({
   max: 50000, // High ceiling for active ERP office sessions
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   skip: (req) => {
     const ip = req.ip || req.connection?.remoteAddress || '';
     if (isPrivateIP(ip)) return true;
