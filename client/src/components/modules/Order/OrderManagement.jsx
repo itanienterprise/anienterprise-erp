@@ -986,11 +986,28 @@ const OrderManagement = ({
             const origStatus = (originalData?.status || '').toLowerCase();
             const isAcceptedEdit = editingId && origStatus !== 'requested';
 
+            let resolvedCustomerId = formData.customerId;
+            const compTrim = (formData.companyName || '').trim().toLowerCase();
+            const custTrim = (formData.customerName || '').trim().toLowerCase();
+            const matchedCust = (customers || []).find(c => 
+                (compTrim && (c.companyName || '').trim().toLowerCase() === compTrim) ||
+                (custTrim && (c.customerName || '').trim().toLowerCase() === custTrim)
+            );
+            if (matchedCust) {
+                resolvedCustomerId = matchedCust._id;
+            } else if (originalData?.customerId) {
+                const origComp = (originalData.companyName || '').trim().toLowerCase();
+                const origCust = (originalData.customerName || '').trim().toLowerCase();
+                if ((compTrim && compTrim !== origComp) || (custTrim && custTrim !== origCust)) {
+                    resolvedCustomerId = '';
+                }
+            }
+
             const payload = {
                 date: formData.date,
                 companyName: formData.companyName || formData.customerName,
                 customerName: formData.customerName || formData.companyName,
-                customerId: formData.customerId || originalData?.customerId || '',
+                customerId: resolvedCustomerId || '',
                 phone: formData.phone,
                 contact: formData.phone,
                 address: formData.address,

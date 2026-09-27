@@ -947,7 +947,7 @@ const SaleManagement = ({
 
                 // Clean up old entries from other customers if customer was changed during edit
                 if (targetInv) {
-                    customers.forEach(async (c) => {
+                    for (const c of (customers || [])) {
                         if (c._id !== targetCustomerId && c.salesHistory && Array.isArray(c.salesHistory)) {
                             const hasInv = c.salesHistory.some(h => (h.invoiceNo || '').trim().toLowerCase() === targetInv);
                             if (hasInv) {
@@ -961,7 +961,7 @@ const SaleManagement = ({
                                 } catch (e) { }
                             }
                         }
-                    });
+                    }
                 }
             } catch (err) {
                 console.error('Error updating customer history:', err);
@@ -1046,7 +1046,7 @@ const SaleManagement = ({
             const response = await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
 
             if (response.status >= 200 && response.status < 300) {
-                if (newStatus === 'accepted') {
+                if ((newStatus || '').toLowerCase() === 'accepted') {
                     try {
                         await processSaleEffects(updatedData, false);
                     } catch (err) {
@@ -2071,8 +2071,26 @@ const SaleManagement = ({
                     }
                 }
 
+                let resolvedCustomerId = formData.customerId;
+                const compTrim = (formData.companyName || '').trim().toLowerCase();
+                const custTrim = (formData.customerName || '').trim().toLowerCase();
+                const matchedCust = (customers || []).find(c => 
+                    (compTrim && (c.companyName || '').trim().toLowerCase() === compTrim) ||
+                    (custTrim && (c.customerName || '').trim().toLowerCase() === custTrim)
+                );
+                if (matchedCust) {
+                    resolvedCustomerId = matchedCust._id;
+                } else if (originalData?.customerId) {
+                    const origComp = (originalData.companyName || '').trim().toLowerCase();
+                    const origCust = (originalData.customerName || '').trim().toLowerCase();
+                    if ((compTrim && compTrim !== origComp) || (custTrim && custTrim !== origCust)) {
+                        resolvedCustomerId = '';
+                    }
+                }
+
                 const payload = {
                     ...formData,
+                    customerId: resolvedCustomerId || formData.customerId || '',
                     isEdited: isAdminUser ? false : (isAcceptedEdit ? true : false),
                     editedBy: editorUsername || editorName,
                     editedByName: editorName || editorUsername,
@@ -2085,7 +2103,17 @@ const SaleManagement = ({
                 };
                 response = await axios.put(url, payload);
             } else {
-                response = await axios.post(url, formData);
+                let resolvedCustomerId = formData.customerId;
+                const compTrim = (formData.companyName || '').trim().toLowerCase();
+                const custTrim = (formData.customerName || '').trim().toLowerCase();
+                const matchedCust = (customers || []).find(c => 
+                    (compTrim && (c.companyName || '').trim().toLowerCase() === compTrim) ||
+                    (custTrim && (c.customerName || '').trim().toLowerCase() === custTrim)
+                );
+                if (matchedCust) {
+                    resolvedCustomerId = matchedCust._id;
+                }
+                response = await axios.post(url, { ...formData, customerId: resolvedCustomerId || formData.customerId || '' });
             }
 
             if (response.status >= 200 && response.status < 300) {

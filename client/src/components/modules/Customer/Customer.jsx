@@ -671,9 +671,13 @@ const Customer = ({
         return sortData(filtered);
     };
 
-    // Map raw sales history with updated prices from live salesRecords
+    // Map raw sales history with updated prices and accurate customer ownership from live salesRecords
     const rawSalesWithUpdatedPrices = useMemo(() => {
-        return (viewData?.salesHistory || []).map(item => {
+        const targetId = (viewData?._id || viewData?.customerId || '').toString().trim();
+        const vComp = (viewData?.companyName || '').trim().toLowerCase();
+        const vCust = (viewData?.customerName || '').trim().toLowerCase();
+
+        const history = (viewData?.salesHistory || []).map(item => {
             if (salesRecords && salesRecords.length > 0) {
                 const itemInv = (item.invoiceNo || '').trim().toUpperCase();
                 const itemOrd = (item.orderNo || '').trim().toUpperCase();
@@ -685,6 +689,19 @@ const Customer = ({
                 });
 
                 if (matchingSale) {
+                    // Check if this sale actually belongs to this customer
+                    const sCustId = (matchingSale.customerId || matchingSale.customer?._id || '').toString().trim();
+                    const sComp = (matchingSale.companyName || '').trim().toLowerCase();
+                    const sCust = (matchingSale.customerName || '').trim().toLowerCase();
+
+                    const idMatch = Boolean(targetId && sCustId && (targetId === sCustId));
+                    const nameMatch = Boolean((vComp && sComp && vComp === sComp) || (vCust && sCust && vCust === sCust));
+
+                    // If matching sale has customer info and neither ID nor company/customer name match this customer, exclude it!
+                    if ((sCustId || sComp || sCust) && !idMatch && !nameMatch) {
+                        return null;
+                    }
+
                     const pName = (item.product || item.productName || '').trim().toLowerCase();
                     const bName = (item.brand || item.brandName || '').trim().toLowerCase();
                     let latestRate = null;
@@ -724,7 +741,100 @@ const Customer = ({
                 }
             }
             return item;
-        });
+        }).filter(Boolean);
+
+        // Include any sales from salesRecords that belong to this customer but are not in viewData.salesHistory
+        if (salesRecords && salesRecords.length > 0 && viewData) {
+            const existingInvoices = new Set(history.map(h => (h.invoiceNo || '').trim().toUpperCase()).filter(Boolean));
+
+            salesRecords.forEach(s => {
+                const sType = (s.saleType || '').toLowerCase();
+                const sInv = (s.invoiceNo || '').trim().toUpperCase();
+                if (sType === 'order' || sInv.startsWith('ORD') || s.isOrderEntry === true) return;
+                if ((s.status || '').toLowerCase() === 'requested' || (s.status || '').toLowerCase() === 'rejected') return;
+                if (existingInvoices.has(sInv)) return;
+
+                const sCustId = (s.customerId || s.customer?._id || '').toString().trim();
+                const sComp = (s.companyName || '').trim().toLowerCase();
+                const sCust = (s.customerName || '').trim().toLowerCase();
+
+                const idMatch = Boolean(targetId && sCustId && (targetId === sCustId));
+                const nameMatch = Boolean((vComp && sComp && vComp === sComp) || (vCust && sCust && vCust === sCust));
+
+                if (idMatch || nameMatch) {
+                    const items = s.items && Array.isArray(s.items) ? s.items : [];
+                    if (items.length > 0) {
+                        items.forEach((product, pIdx) => {
+                            const brandEntries = product.brandEntries && Array.isArray(product.brandEntries) ? product.brandEntries : [];
+                            if (brandEntries.length > 0) {
+                                brandEntries.forEach((entry, eIdx) => {
+                                    const isFirstEntry = pIdx === 0 && eIdx === 0;
+                                    const qty = parseFloat(entry.quantity) || 0;
+                                    const rate = parseFloat(entry.rate !== undefined && entry.rate !== null && entry.rate !== '' ? entry.rate : (entry.unitPrice || 0)) || 0;
+                                    const amt = parseFloat(entry.totalAmount || entry.amount) || (qty * rate);
+                                    const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
+                                    const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
+                                    const due = isFirstEntry ? (parseFloat(s.dueAmount || s.due) || Math.max(0, amt - paid - discount)) : amt;
+
+                                    history.push({
+                                        id: `${s._id || s.invoiceNo}_${pIdx}_${eIdx}`,
+                                        date: s.date,
+                                        invoiceNo: s.invoiceNo,
+                                        orderNo: s.orderNo || '',
+                                        lcNo: entry.lcNo || product.lcNo || s.lcNo || '',
+                                        product: product.productName || product.product || '',
+                                        brand: entry.brand || entry.brandName || '',
+                                        quantity: qty,
+                                        rate: rate,
+                                        unitPrice: rate,
+                                        truck: entry.truck || s.truck || '',
+                                        amount: amt,
+                                        totalAmount: amt,
+                                        paid: paid,
+                                        due: due,
+                                        discount: discount,
+                                        warehouse: entry.warehouseName || '',
+                                        status: s.status || 'Pending'
+                                    });
+                                });
+                            } else {
+                                const isFirstEntry = pIdx === 0;
+                                const qty = parseFloat(product.quantity || s.quantity) || 0;
+                                const rate = parseFloat(product.unitPrice || product.rate || s.unitPrice || 0) || 0;
+                                const amt = parseFloat(product.totalAmount || product.amount) || (qty * rate);
+                                const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
+                                const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
+                                const due = isFirstEntry ? (parseFloat(s.dueAmount || s.due) || Math.max(0, amt - paid - discount)) : amt;
+
+                                history.push({
+                                    id: `${s._id || s.invoiceNo}_${pIdx}_0`,
+                                    date: s.date,
+                                    invoiceNo: s.invoiceNo,
+                                    orderNo: s.orderNo || '',
+                                    lcNo: product.lcNo || s.lcNo || '',
+                                    product: product.productName || product.product || '',
+                                    brand: product.brand || '',
+                                    quantity: qty,
+                                    rate: rate,
+                                    unitPrice: rate,
+                                    truck: product.truck || s.truck || '',
+                                    amount: amt,
+                                    totalAmount: amt,
+                                    paid: paid,
+                                    due: due,
+                                    discount: discount,
+                                    warehouse: product.warehouseName || '',
+                                    status: s.status || 'Pending'
+                                });
+                            }
+                        });
+                    }
+                    existingInvoices.add(sInv);
+                }
+            });
+        }
+
+        return history;
     }, [viewData, salesRecords]);
 
     // Calculate Filtered History Data

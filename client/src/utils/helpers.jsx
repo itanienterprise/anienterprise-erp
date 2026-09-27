@@ -229,8 +229,12 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
         return { quantity: finalInHouseQty, rate, amount };
     };
 
+    const targetId = (c?._id || c?.customerId || '').toString().trim();
+    const vComp = (c?.companyName || '').trim().toLowerCase();
+    const vCust = (c?.customerName || '').trim().toLowerCase();
+
     const sales = (c.salesHistory || []).filter(s => {
-        if ((s.status || '').toLowerCase() === 'requested') return false;
+        if ((s.status || '').toLowerCase() === 'requested' || (s.status || '').toLowerCase() === 'rejected') return false;
         if (s.saleType === 'Order' || (s.invoiceNo || '').startsWith('ORD') || s.isOrderEntry === true) return false;
         if (targetCutoff) {
             const sDate = getIsoDateString(s.date);
@@ -250,6 +254,18 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
             });
 
             if (matchingSale) {
+                // Check if matchingSale belongs to this customer
+                const sCustId = (matchingSale.customerId || matchingSale.customer?._id || '').toString().trim();
+                const sComp = (matchingSale.companyName || '').trim().toLowerCase();
+                const sCust = (matchingSale.customerName || '').trim().toLowerCase();
+
+                const idMatch = Boolean(targetId && sCustId && (targetId === sCustId));
+                const nameMatch = Boolean((vComp && sComp && vComp === sComp) || (vCust && sCust && vCust === sCust));
+
+                if ((sCustId || sComp || sCust) && !idMatch && !nameMatch) {
+                    return null; // Belongs to a different customer, exclude from balance!
+                }
+
                 const pName = (s.product || s.productName || '').trim().toLowerCase();
                 const bName = (s.brand || s.brandName || '').trim().toLowerCase();
                 let latestRate = null;
@@ -290,7 +306,85 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
             type: 'sale',
             sortDate: s.date
         };
-    });
+    }).filter(Boolean);
+
+    // Include sales from salesRecords that belong to this customer but are missing in salesHistory
+    if (salesRecords && salesRecords.length > 0 && c) {
+        const existingInvoices = new Set(sales.map(s => (s.invoiceNo || '').trim().toUpperCase()).filter(Boolean));
+        salesRecords.forEach(s => {
+            const sType = (s.saleType || '').toLowerCase();
+            const sInv = (s.invoiceNo || '').trim().toUpperCase();
+            if (sType === 'order' || sInv.startsWith('ORD') || s.isOrderEntry === true) return;
+            if ((s.status || '').toLowerCase() === 'requested' || (s.status || '').toLowerCase() === 'rejected') return;
+            if (targetCutoff) {
+                const sDate = getIsoDateString(s.date);
+                if (sDate && sDate >= targetCutoff) return false;
+            }
+            if (existingInvoices.has(sInv)) return;
+
+            const sCustId = (s.customerId || s.customer?._id || '').toString().trim();
+            const sComp = (s.companyName || '').trim().toLowerCase();
+            const sCust = (s.customerName || '').trim().toLowerCase();
+
+            const idMatch = Boolean(targetId && sCustId && (targetId === sCustId));
+            const nameMatch = Boolean((vComp && sComp && vComp === sComp) || (vCust && sCust && vCust === sCust));
+
+            if (idMatch || nameMatch) {
+                const items = s.items && Array.isArray(s.items) ? s.items : [];
+                if (items.length > 0) {
+                    items.forEach((product, pIdx) => {
+                        const brandEntries = product.brandEntries && Array.isArray(product.brandEntries) ? product.brandEntries : [];
+                        if (brandEntries.length > 0) {
+                            brandEntries.forEach((entry, eIdx) => {
+                                const isFirstEntry = pIdx === 0 && eIdx === 0;
+                                const qty = parseFloat(entry.quantity) || 0;
+                                const rate = parseFloat(entry.rate !== undefined && entry.rate !== null && entry.rate !== '' ? entry.rate : (entry.unitPrice || 0)) || 0;
+                                const amt = parseFloat(entry.totalAmount || entry.amount) || (qty * rate);
+                                const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
+                                const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
+                                const due = isFirstEntry ? (parseFloat(s.dueAmount || s.due) || Math.max(0, amt - paid - discount)) : amt;
+
+                                sales.push({
+                                    id: `${s._id || s.invoiceNo}_${pIdx}_${eIdx}`,
+                                    date: s.date,
+                                    invoiceNo: s.invoiceNo,
+                                    orderNo: s.orderNo || '',
+                                    amount: amt,
+                                    paid: paid,
+                                    due: due,
+                                    discount: discount,
+                                    type: 'sale',
+                                    sortDate: s.date
+                                });
+                            });
+                        } else {
+                            const isFirstEntry = pIdx === 0;
+                            const qty = parseFloat(product.quantity || s.quantity) || 0;
+                            const rate = parseFloat(product.unitPrice || product.rate || s.unitPrice || 0) || 0;
+                            const amt = parseFloat(product.totalAmount || product.amount) || (qty * rate);
+                            const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
+                            const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
+                            const due = isFirstEntry ? (parseFloat(s.dueAmount || s.due) || Math.max(0, amt - paid - discount)) : amt;
+
+                            sales.push({
+                                id: `${s._id || s.invoiceNo}_${pIdx}_0`,
+                                date: s.date,
+                                invoiceNo: s.invoiceNo,
+                                orderNo: s.orderNo || '',
+                                amount: amt,
+                                paid: paid,
+                                due: due,
+                                discount: discount,
+                                type: 'sale',
+                                sortDate: s.date
+                            });
+                        }
+                    });
+                }
+                existingInvoices.add(sInv);
+            }
+        });
+    }
 
     const payments = (c.paymentHistory || []).filter(p => {
         if ((p.status || '').toLowerCase() === 'requested') return false;
