@@ -5405,8 +5405,6 @@ const checkAndRunBackup = async () => {
     const currentMinute = String(userLocalTime.getUTCMinutes()).padStart(2, '0');
     const currentTimeStr = `${currentHour}:${currentMinute}`;
 
-    console.log(`[AutoBackup] Tick. Current: "${currentTimeStr}", Scheduled: "${setting.time}", Enabled: ${setting.enabled}, Offset: ${setting.timezoneOffset}`);
-
     if (currentTimeStr !== setting.time) return;
 
     if (setting.lastRun && (now.getTime() - new Date(setting.lastRun).getTime()) < 90 * 1000) {
