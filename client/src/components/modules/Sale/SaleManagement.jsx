@@ -2074,10 +2074,11 @@ const SaleManagement = ({
                 let resolvedCustomerId = formData.customerId;
                 const compTrim = (formData.companyName || '').trim().toLowerCase();
                 const custTrim = (formData.customerName || '').trim().toLowerCase();
-                const matchedCust = (customers || []).find(c => 
-                    (compTrim && (c.companyName || '').trim().toLowerCase() === compTrim) ||
-                    (custTrim && (c.customerName || '').trim().toLowerCase() === custTrim)
-                );
+                const matchedCust = (customers || []).find(c => {
+                    if (saleType === 'Border' && !(c.customerType || '').trim().toLowerCase().includes('party')) return false;
+                    return (compTrim && (c.companyName || '').trim().toLowerCase() === compTrim) ||
+                           (custTrim && (c.customerName || '').trim().toLowerCase() === custTrim);
+                });
                 if (matchedCust) {
                     resolvedCustomerId = matchedCust._id;
                 } else if (originalData?.customerId) {
@@ -2106,10 +2107,11 @@ const SaleManagement = ({
                 let resolvedCustomerId = formData.customerId;
                 const compTrim = (formData.companyName || '').trim().toLowerCase();
                 const custTrim = (formData.customerName || '').trim().toLowerCase();
-                const matchedCust = (customers || []).find(c => 
-                    (compTrim && (c.companyName || '').trim().toLowerCase() === compTrim) ||
-                    (custTrim && (c.customerName || '').trim().toLowerCase() === custTrim)
-                );
+                const matchedCust = (customers || []).find(c => {
+                    if (saleType === 'Border' && !(c.customerType || '').trim().toLowerCase().includes('party')) return false;
+                    return (compTrim && (c.companyName || '').trim().toLowerCase() === compTrim) ||
+                           (custTrim && (c.customerName || '').trim().toLowerCase() === custTrim);
+                });
                 if (matchedCust) {
                     resolvedCustomerId = matchedCust._id;
                 }
@@ -2975,9 +2977,19 @@ const SaleManagement = ({
     };
 
     const getFilteredCompanies = () => {
-        return customers.filter(c =>
-            (c.companyName || '').toLowerCase().includes(companyNameSearch.toLowerCase())
-        );
+        const query = (companyNameSearch || '').toLowerCase().trim();
+        return customers.filter(c => {
+            if (saleType === 'Border') {
+                const type = (c.customerType || '').trim().toLowerCase();
+                const isParty = type === 'party customer' || type.includes('party');
+                if (!isParty) return false;
+            }
+            if (!query) return true;
+            return (
+                (c.companyName || '').toLowerCase().includes(query) ||
+                (c.customerName || '').toLowerCase().includes(query)
+            );
+        });
     };
 
     const getFilteredIndianCnfs = () => {
