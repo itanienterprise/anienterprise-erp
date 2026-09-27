@@ -2313,6 +2313,8 @@ function IPManagement({
                     piRecords={piRecords}
                     employeesMap={employeesMap}
                     employeesFullNameMap={employeesFullNameMap}
+                    currentUser={currentUser}
+                    importers={importers}
                     onClose={() => setViewIpLcData(null)}
                 />
             )}

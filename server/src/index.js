@@ -32,14 +32,122 @@ const app = express();
 const apiRouter = express.Router();
 const PORT = process.env.PORT || 5000;
 
+// Security Packages
+const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
+const rateLimit = require('express-rate-limit');
+const bcrypt = require('bcryptjs');
+
+// Password Hashing & Verification Utilities
+const hashPassword = async (plainPassword) => {
+  return await bcrypt.hash(plainPassword, 10);
+};
+
+const verifyPassword = async (plainPassword, storedPasswordHash, userDoc = null) => {
+  if (!storedPasswordHash || !plainPassword) return false;
+
+  // 1. Bcrypt hash check ($2a$ or $2b$)
+  if (storedPasswordHash.startsWith('$2a$') || storedPasswordHash.startsWith('$2b$')) {
+    return await bcrypt.compare(plainPassword, storedPasswordHash);
+  }
+
+  // 2. Legacy SHA-256 fallback (auto-upgrades to bcrypt on match)
+  const sha256Hash = CryptoJS.SHA256(plainPassword).toString(CryptoJS.enc.Hex);
+  if (sha256Hash === storedPasswordHash) {
+    if (userDoc) {
+      try {
+        userDoc.password = await hashPassword(plainPassword);
+        await userDoc.save();
+        console.log(`[Security] Upgraded password for '${userDoc.username}' to bcrypt.`);
+      } catch (e) {
+        console.error('Failed to auto-upgrade password hash:', e);
+      }
+    }
+    return true;
+  }
+
+  return false;
+};
+
+// Rate Limiters
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // max 15 attempts per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many login attempts from this IP. Please try again after 15 minutes.' }
+});
+
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 2500, // Safe ceiling for an active ERP office session
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests from this IP. Please try again later.' }
+});
+
 // Middleware
+// 1. HTTP Security Headers
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false // Keep disabled for dev HMR / inline styles
+}));
+
+// 2. Restricted CORS Whitelisting
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // allow non-browser / same-origin requests
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname;
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+    ) {
+      return true;
+    }
+    if (process.env.CLIENT_URL && (origin === process.env.CLIENT_URL || origin.startsWith(process.env.CLIENT_URL))) {
+      return true;
+    }
+  } catch (e) {}
+  return false;
+};
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS blocked: Unauthorized origin'));
+    }
+  },
   credentials: true
 }));
-app.use(express.json({ limit: '200mb' }));
-app.use(express.urlencoded({ limit: '200mb', extended: true }));
+
+// 3. Payload limits (Safe 15mb default to prevent memory-exhaustion DoS)
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ limit: '15mb', extended: true }));
+
+// 4. NoSQL injection sanitizer (Express 5 compatible)
+app.use((req, res, next) => {
+  if (req.body && typeof req.body === 'object') {
+    mongoSanitize.sanitize(req.body, { replaceWith: '_' });
+  }
+  if (req.params && typeof req.params === 'object') {
+    mongoSanitize.sanitize(req.params, { replaceWith: '_' });
+  }
+  next();
+});
+
+// 5. Cookie parser
 app.use(cookieParser());
+
+// 6. General rate limit for API and Gateway
+app.use('/api', generalLimiter);
+app.use('/v', generalLimiter);
 
 // Security Middleware (Decryption and Signature Verification)
 const securityMiddleware = require('./middleware/securityMiddleware');
@@ -58,7 +166,7 @@ app.use(session({
   cookie: {
     // maxAge removed for session-only cookies
     httpOnly: true,
-    secure: false, // Set to true if using HTTPS
+    secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE === 'true',
     sameSite: 'lax'
   }
 }));
@@ -125,7 +233,7 @@ const seedAdminUser = async () => {
   try {
     const userCount = await User.countDocuments();
     if (userCount === 0) {
-      const hashedPassword = CryptoJS.SHA256('admin123').toString(CryptoJS.enc.Hex);
+      const hashedPassword = await hashPassword('admin123');
       const adminUser = new User({
         username: 'admin',
         password: hashedPassword,
@@ -343,29 +451,70 @@ app.post('/v', (req, res, next) => {
   const { p, m, d } = req.body;
   if (!p || !m) return res.status(400).json({ message: 'Invalid gateway request' });
 
-  // Internal dispatching
-  req.url = p;
-  req.originalUrl = p;
-  req.method = m;
-  req.body = d;
+  const executeDispatch = () => {
+    // Internal dispatching
+    req.url = p;
+    req.originalUrl = p;
+    req.method = m;
+    req.body = d;
 
-  // Extract and populate req.query from p so router handlers receive query parameters
-  try {
-    const qIndex = p.indexOf('?');
-    if (qIndex !== -1) {
-      const qs = p.slice(qIndex + 1);
-      const searchParams = new URLSearchParams(qs);
-      req.query = Object.fromEntries(searchParams.entries());
-    } else {
+    // Extract and populate req.query from p so router handlers receive query parameters
+    try {
+      const qIndex = p.indexOf('?');
+      if (qIndex !== -1) {
+        const qs = p.slice(qIndex + 1);
+        const searchParams = new URLSearchParams(qs);
+        req.query = Object.fromEntries(searchParams.entries());
+      } else {
+        req.query = {};
+      }
+    } catch (e) {
       req.query = {};
     }
-  } catch (e) {
-    req.query = {};
+
+    // Pass to internal router
+    apiRouter(req, res, next);
+  };
+
+  // If this gateway call is attempting to login, apply loginLimiter to stop brute force
+  if (typeof p === 'string' && (p === '/api/auth/login' || p.startsWith('/api/auth/login'))) {
+    return loginLimiter(req, res, executeDispatch);
   }
 
-  // Pass to internal router
-  apiRouter(req, res, next);
+  executeDispatch();
 });
+
+// Universal Authentication Middleware for ERP API
+const requireAuth = (req, res, next) => {
+  if (req.method === 'OPTIONS') return next();
+
+  // Extract path without query parameters or trailing slashes
+  const rawPath = (req.originalUrl || req.url || '').split('?')[0].replace(/\/+$/, '') || '/';
+
+  // Whitelisted public routes that do not require an active session
+  const publicPaths = [
+    '/',
+    '/api/auth/login',
+    '/api/auth/check',
+    '/api/auth/logout',
+    '/api/health',
+    '/api/logs/client-action'
+  ];
+
+  if (publicPaths.includes(rawPath)) {
+    return next();
+  }
+
+  // Reject unauthenticated requests
+  if (!req.session || !req.session.user) {
+    return res.status(401).json({ message: 'Unauthorized: Please log in to continue.' });
+  }
+
+  next();
+};
+
+// Protect all internal API routes with authentication
+apiRouter.use(requireAuth);
 
 // Mount apiRouter for direct API requests (e.g. backup & restore uploads/downloads)
 app.use(apiRouter);
@@ -373,6 +522,10 @@ app.use(apiRouter);
 // Routes
 app.get('/', (req, res) => {
   res.send('API is running...');
+});
+
+apiRouter.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', uptime: Math.floor(process.uptime()), timestamp: Date.now() });
 });
 
 // Admin Authorization Helper & Middleware
@@ -3704,7 +3857,7 @@ apiRouter.post('/api/employees', verifyPermission('employees', 'add'), async (re
     }
 
     const plainPassword = generatePassword();
-    const hashedPassword = CryptoJS.SHA256(plainPassword).toString(CryptoJS.enc.Hex);
+    const hashedPassword = await hashPassword(plainPassword);
 
     const newUser = new User({
       username: newEmployeeId,
@@ -3831,7 +3984,7 @@ apiRouter.post('/api/employees/:id/reset-password', async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User account not found' });
 
     const newPassword = generatePassword();
-    const hashedPassword = CryptoJS.SHA256(newPassword).toString(CryptoJS.enc.Hex);
+    const hashedPassword = await hashPassword(newPassword);
 
     user.password = hashedPassword;
     await user.save();
@@ -3871,7 +4024,7 @@ apiRouter.post('/api/employees/:id/change-password', async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 4 characters long' });
     }
 
-    const hashedPassword = CryptoJS.SHA256(newPassword).toString(CryptoJS.enc.Hex);
+    const hashedPassword = await hashPassword(newPassword);
     user.password = hashedPassword;
     await user.save();
 
@@ -3903,7 +4056,7 @@ apiRouter.get('/api/employees', verifyPermission('employees', 'view'), async (re
 });
 
 // Authentication APIs
-apiRouter.post('/api/auth/login', async (req, res) => {
+apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
     const { username, password, rememberMe } = req.body;
 
@@ -3913,9 +4066,9 @@ apiRouter.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid username or password' });
     }
 
-    // Verify password
-    const hashedPassword = CryptoJS.SHA256(password).toString(CryptoJS.enc.Hex);
-    if (user.password !== hashedPassword) {
+    // Verify password (supports bcrypt and legacy SHA-256 with auto-upgrade)
+    const isPasswordValid = await verifyPassword(password, user.password, user);
+    if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid username or password' });
     }
 
@@ -4158,13 +4311,12 @@ apiRouter.post('/api/auth/change-password', async (req, res) => {
     const user = await User.findOne({ username });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const hashedCurrent = CryptoJS.SHA256(currentPassword).toString(CryptoJS.enc.Hex);
-    if (user.password !== hashedCurrent) {
+    const isCurrentValid = await verifyPassword(currentPassword, user.password);
+    if (!isCurrentValid) {
       return res.status(401).json({ message: 'Current password is incorrect' });
     }
 
-    const hashedNew = CryptoJS.SHA256(newPassword).toString(CryptoJS.enc.Hex);
-    user.password = hashedNew;
+    user.password = await hashPassword(newPassword);
     await user.save();
 
     res.json({ success: true, message: 'Password changed successfully' });
@@ -4428,7 +4580,7 @@ apiRouter.post('/api/restore-database-upload', adminOnly, backupUpload.single('b
 });
 
 // Restore Database API (JSON body fallback)
-apiRouter.post('/api/restore-database', adminOnly, async (req, res) => {
+apiRouter.post('/api/restore-database', adminOnly, express.json({ limit: '200mb' }), async (req, res) => {
   try {
     const backupJson = req.body.backupData || req.body;
     const selectedModels = req.body.selectedModels || null;

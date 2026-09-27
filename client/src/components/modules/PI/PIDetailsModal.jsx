@@ -9,6 +9,10 @@ import { generateBankApplicationPDF } from '../../../utils/islbankApplicationGen
 import { formatDate } from '../../../utils/helpers';
 import { IPDetailsModal } from '../IPManagement/IPDetailsModal';
 
+const ViewDetailsModal = React.lazy(() =>
+    import('../LCManagement/LCManagement').then(m => ({ default: m.ViewDetailsModal }))
+);
+
 export const PIDetailsModal = ({
     piRecord,
     piRecords = [],
@@ -22,9 +26,12 @@ export const PIDetailsModal = ({
     employeesMap = {},
     employeesFullNameMap = {},
     initialRevisionIndex = null,
+    currentUser = null,
+    modalZIndex = 'z-[9999]',
     onClose
 }) => {
     const [selectedIpForModal, setSelectedIpForModal] = useState(null);
+    const [selectedLcForModal, setSelectedLcForModal] = useState(null);
 
     // Resolve full target PI record if available
     const resolvedPi = useMemo(() => {
@@ -178,15 +185,16 @@ export const PIDetailsModal = ({
     const [activeHistoryIndex, setActiveHistoryIndex] = useState(defaultIndex);
 
     // Look up linked LC number for this PI
-    const linkedLcNo = useMemo(() => {
+    const linkedLcRecord = useMemo(() => {
         if (!resolvedPi?.piNumber) return null;
         const cleanPiNum = String(resolvedPi.piNumber).replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
-        const linked = (lcRecords || []).find(lc => {
+        return (lcRecords || []).find(lc => {
             const lcPi = String(lc.piNo || lc.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
             return lcPi === cleanPiNum;
         });
-        return linked ? linked.lcNo : null;
     }, [resolvedPi, lcRecords]);
+
+    const linkedLcNo = linkedLcRecord ? linkedLcRecord.lcNo : null;
 
     const activeRevision = timeline[activeHistoryIndex] || timeline[0] || {};
     const activeProducts = activeRevision.productsList || [];
@@ -314,7 +322,7 @@ export const PIDetailsModal = ({
     if (!resolvedPi || typeof document === 'undefined' || !document.body) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className={`fixed inset-0 ${modalZIndex} flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200`}>
             <div className="bg-white w-full max-w-[95vw] 2xl:max-w-[1550px] xl:max-w-[1450px] h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
                 {/* Modal Header */}
                 <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
@@ -325,11 +333,22 @@ export const PIDetailsModal = ({
                         <div>
                             <h3 className="text-lg font-black text-gray-900 tracking-tight">Proforma Invoice History Explorer</h3>
                             <p className="text-sm text-gray-500 font-medium">
-                                PI Number: <span className="font-bold text-blue-600 font-mono">{resolvedPi.piNumber}{resolvedPi.revisions && resolvedPi.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}</span>
+                                PI Number:{' '}
+                                <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 border border-blue-200/90 rounded-lg shadow-2xs">
+                                    {resolvedPi.piNumber}{resolvedPi.revisions && resolvedPi.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}
+                                </span>
                                 {' • '}Date: <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate || resolvedPi.date)}</span>
                                 {linkedLcNo && (
                                     <>
-                                        {' • '}LC: <span className="font-bold text-emerald-600 font-mono">{linkedLcNo}</span>
+                                        {' • '}LC:{' '}
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedLcForModal(linkedLcRecord)}
+                                            className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none"
+                                            title={`View LC Details (${linkedLcNo})`}
+                                        >
+                                            {linkedLcNo}
+                                        </button>
                                     </>
                                 )}
                             </p>
@@ -482,9 +501,14 @@ export const PIDetailsModal = ({
                                             <div>
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">LC Number</span>
                                                 {linkedLcNo ? (
-                                                    <span className="text-sm font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-100 font-mono inline-block mt-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedLcForModal(linkedLcRecord)}
+                                                        className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none mt-1"
+                                                        title={`View LC Details (${linkedLcNo})`}
+                                                    >
                                                         {linkedLcNo}
-                                                    </span>
+                                                    </button>
                                                 ) : (
                                                     <span className="text-gray-500 font-bold text-sm">No LC Linked</span>
                                                 )}
@@ -608,8 +632,29 @@ export const PIDetailsModal = ({
                     employeesMap={employeesMap}
                     employeesFullNameMap={employeesFullNameMap}
                     currentPi={resolvedPi}
+                    currentUser={currentUser}
+                    modalZIndex="z-[10001]"
                     onClose={() => setSelectedIpForModal(null)}
                 />
+            )}
+
+            {/* Nested LC Details Modal when clicking linked LC within PI Details */}
+            {selectedLcForModal && (
+                <React.Suspense fallback={null}>
+                    <ViewDetailsModal
+                        data={selectedLcForModal}
+                        lcRecords={lcRecords}
+                        piRecordsRaw={piRecords}
+                        ipRecordsRaw={ipRecords}
+                        allStockRecords={allStockRecords}
+                        allSalesRecords={allSalesRecords}
+                        employeesFullNameMap={employeesFullNameMap}
+                        currentUser={currentUser}
+                        showDetailsFirst={true}
+                        modalZIndex="z-[10001]"
+                        onClose={() => setSelectedLcForModal(null)}
+                    />
+                </React.Suspense>
             )}
         </div>,
         document.body

@@ -67,7 +67,7 @@ const getShipmentDateColorClass = (shipmentDateStr) => {
     }
 };
 
-export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onDeleteAmendment, onUpdateDollarRate, canManage, canDelete, canDeleteAmendment, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [], showDetailsFirst = false, initialShowDetails = false, getLcEntryDetails, employeesFullNameMap }) => {
+export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onDeleteAmendment, onUpdateDollarRate, canManage, canDelete, canDeleteAmendment, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [], showDetailsFirst = false, initialShowDetails = false, getLcEntryDetails, employeesFullNameMap, modalZIndex = 'z-[5000]' }) => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const [showConsumption, setShowConsumption] = useState(!(showDetailsFirst || initialShowDetails));
 
@@ -1717,7 +1717,7 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
     }, [data, lcExpenses, insurancePayments, cnfPayments, consolidatedBills, lcNoClean, marginReturns]);
 
     return createPortal(
-        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
+        <div className={`fixed inset-0 ${modalZIndex} flex items-center justify-center p-4 app-modal-overlay`}>
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}></div>
             <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-[95vw] md:max-w-[92vw] lg:max-w-8xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
                 {/* Desktop Header */}

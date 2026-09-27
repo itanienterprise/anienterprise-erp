@@ -6,6 +6,13 @@ import {
 } from '../../Icons';
 import { formatDate } from '../../../utils/helpers';
 
+const PIDetailsModal = React.lazy(() =>
+    import('../PI/PIDetailsModal').then(m => ({ default: m.PIDetailsModal }))
+);
+const ViewDetailsModal = React.lazy(() =>
+    import('../LCManagement/LCManagement').then(m => ({ default: m.ViewDetailsModal }))
+);
+
 // Helper modal specifically for viewing attached PDFs
 export const PDFViewerModal = ({ pdfData, fileName, onClose, onDownload }) => {
     if (!pdfData || typeof document === 'undefined' || !document.body) return null;
@@ -24,7 +31,7 @@ export const PDFViewerModal = ({ pdfData, fileName, onClose, onDownload }) => {
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4">
             <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-md" onClick={onClose}></div>
             <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-in zoom-in duration-300 z-10">
                 {/* Header */}
@@ -91,10 +98,17 @@ export const IPDetailsModal = ({
     employeesMap = {},
     employeesFullNameMap = {},
     currentPi = null,
+    importers = [],
+    exporters = [],
+    banks = [],
+    currentUser = null,
+    modalZIndex = 'z-[9999]',
     onClose
 }) => {
     const [viewingPdf, setViewingPdf] = useState(null);
     const [viewingPdfName, setViewingPdfName] = useState('');
+    const [selectedPiForModal, setSelectedPiForModal] = useState(null);
+    const [selectedLcForModal, setSelectedLcForModal] = useState(null);
 
     const cleanLc = (val) => String(val || '').replace(/\D/g, '');
 
@@ -698,7 +712,7 @@ export const IPDetailsModal = ({
     if (!ipRecord || typeof document === 'undefined' || !document.body) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5">
+        <div className={`fixed inset-0 ${modalZIndex} flex items-center justify-center p-3 sm:p-5`}>
             <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
             <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-7xl animate-in zoom-in duration-300 flex flex-col max-h-[92vh] overflow-hidden z-10">
                 {/* Header - Fixed at top */}
@@ -864,7 +878,25 @@ export const IPDetailsModal = ({
 
                             <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Reference No.</span>
-                                <span className="font-bold text-gray-700 truncate block">{resolvedReferenceNo}</span>
+                                {(() => {
+                                    const matchingPi = (piRecords || []).find(p => {
+                                        const pNum = String(p.piNumber || '').trim();
+                                        return pNum && (pNum === resolvedReferenceNo || cleanLc(pNum) === cleanLc(resolvedReferenceNo));
+                                    });
+                                    if (matchingPi) {
+                                        return (
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedPiForModal(matchingPi)}
+                                                className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none tracking-tight"
+                                                title={`View PI Details (${resolvedReferenceNo})`}
+                                            >
+                                                {resolvedReferenceNo}
+                                            </button>
+                                        );
+                                    }
+                                    return <span className="font-bold text-gray-700 truncate block">{resolvedReferenceNo}</span>;
+                                })()}
                             </div>
 
                             <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
@@ -1005,9 +1037,19 @@ export const IPDetailsModal = ({
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                                 {relatedPIs.map(pi => (
-                                    <div key={pi._id} className="p-3 bg-gray-50/60 hover:bg-blue-50/30 rounded-xl border border-gray-100 transition-all">
+                                    <div
+                                        key={pi._id || pi.piNumber}
+                                        onClick={() => setSelectedPiForModal(pi)}
+                                        className="p-3 bg-gray-50/60 hover:bg-blue-50/50 rounded-xl border border-gray-100 hover:border-blue-200 transition-all cursor-pointer shadow-2xs hover:shadow-md active:scale-[0.99] group/picard"
+                                        title={`Click to view Proforma Invoice (${pi.piNumber}) details`}
+                                    >
                                         <div className="flex items-center justify-between gap-2">
-                                            <span className="font-mono font-black text-blue-600 text-xs truncate" title={pi.piNumber}>{pi.piNumber}</span>
+                                            <span
+                                                className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 group-hover/picard:bg-blue-600 group-hover/picard:text-white border border-blue-200/90 group-hover/picard:border-blue-600 rounded-lg shadow-2xs transition-all tracking-tight truncate max-w-[190px]"
+                                                title={pi.piNumber}
+                                            >
+                                                {pi.piNumber}
+                                            </span>
                                             <span className="text-[10px] font-bold text-gray-500 font-mono">{formatDate(pi.date)}</span>
                                         </div>
                                         <div className="flex items-center justify-between text-[11px] text-gray-600 mt-1.5">
@@ -1098,10 +1140,18 @@ export const IPDetailsModal = ({
                                                         <td className="px-4 py-3 text-sm font-medium whitespace-nowrap">{formatDate(state.amendmentDate || state.openingDate || lc.openingDate)}</td>
                                                         <td className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${isLastState ? 'text-red-500' : 'text-red-400'}`}>{formatDate(state.expiryDate)}</td>
                                                         <td className="px-4 py-3 text-sm whitespace-nowrap">
-                                                            <div className="flex flex-col gap-0.5">
-                                                                <span className={`font-black ${isLastState ? 'text-blue-600' : 'text-blue-400'}`}>
+                                                            <div className="flex flex-col items-start gap-1">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedLcForModal(lc);
+                                                                    }}
+                                                                    className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none tracking-tight"
+                                                                    title={`View LC Details (${lc.lcNo || 'N/A'})`}
+                                                                >
                                                                     {lc.lcNo || '-'}
-                                                                </span>
+                                                                </button>
                                                                 {!isOriginalState && (
                                                                     <span className={`self-start px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide border ${
                                                                         isLastState 
@@ -1230,9 +1280,17 @@ export const IPDetailsModal = ({
                                                 <div className="flex justify-between items-center mb-2.5">
                                                     <div className="flex items-center gap-1.5 min-w-0">
                                                         <span className="text-[10px] font-black uppercase text-blue-500 tracking-wider">LC No:</span>
-                                                        <span className={`text-sm font-black font-mono truncate ${isLastState ? 'text-gray-900' : 'text-gray-500'}`}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedLcForModal(lc);
+                                                            }}
+                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none tracking-tight"
+                                                            title={`View LC Details (${lc.lcNo || 'N/A'})`}
+                                                        >
                                                             {lc.lcNo || '-'}
-                                                        </span>
+                                                        </button>
                                                         {!isOriginalState && (
                                                             <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-50 text-amber-600 border border-amber-200">
                                                                 {state.amendmentNo}
@@ -1296,6 +1354,47 @@ export const IPDetailsModal = ({
                         </div>
                     </div>
                 </div>
+
+                {/* Nested Proforma Invoice (PI) Details Modal */}
+                {selectedPiForModal && (
+                    <React.Suspense fallback={null}>
+                        <PIDetailsModal
+                            piRecord={selectedPiForModal}
+                            piRecords={piRecords}
+                            lcRecords={lcRecords}
+                            ipRecords={ipRecords}
+                            allStockRecords={allStockRecords}
+                            allSalesRecords={allSalesRecords}
+                            importers={importers}
+                            exporters={exporters}
+                            banks={banks}
+                            employeesMap={employeesMap}
+                            employeesFullNameMap={employeesFullNameMap}
+                            currentUser={currentUser}
+                            modalZIndex="z-[10001]"
+                            onClose={() => setSelectedPiForModal(null)}
+                        />
+                    </React.Suspense>
+                )}
+
+                {/* Nested Letter of Credit (LC) Details Modal */}
+                {selectedLcForModal && (
+                    <React.Suspense fallback={null}>
+                        <ViewDetailsModal
+                            data={selectedLcForModal}
+                            lcRecords={lcRecords}
+                            piRecordsRaw={piRecords}
+                            ipRecordsRaw={ipRecords}
+                            allStockRecords={allStockRecords}
+                            allSalesRecords={allSalesRecords}
+                            employeesFullNameMap={employeesFullNameMap}
+                            currentUser={currentUser}
+                            showDetailsFirst={true}
+                            modalZIndex="z-[10001]"
+                            onClose={() => setSelectedLcForModal(null)}
+                        />
+                    </React.Suspense>
+                )}
 
                 {/* Sub-modal for Viewing Attached PDF */}
                 {viewingPdf && (

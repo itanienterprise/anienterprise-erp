@@ -7959,6 +7959,7 @@ function PI({
                     employeesMap={employeesMap}
                     employeesFullNameMap={employeesFullNameMap}
                     currentPi={selectedIpForDetails?.currentPi || null}
+                    currentUser={currentUser}
                     onClose={() => setSelectedIpForDetails(null)}
                 />
             )}
