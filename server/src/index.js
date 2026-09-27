@@ -29,6 +29,7 @@ const backupUpload = multer ? multer({
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 const apiRouter = express.Router();
 const PORT = process.env.PORT || 5000;
 
@@ -37,6 +38,21 @@ const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
+
+// Private & Local IP Helper
+const isPrivateIP = (ip) => {
+  if (!ip) return true;
+  const clean = ip.replace(/^::ffff:/, '').trim();
+  return (
+    clean === '127.0.0.1' ||
+    clean === '::1' ||
+    clean === 'localhost' ||
+    clean.startsWith('192.168.') ||
+    clean.startsWith('10.') ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(clean) ||
+    clean.startsWith('169.254.')
+  );
+};
 
 // Password Hashing & Verification Utilities
 const hashPassword = async (plainPassword) => {
@@ -72,17 +88,30 @@ const verifyPassword = async (plainPassword, storedPasswordHash, userDoc = null)
 // Rate Limiters
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // max 15 attempts per IP
+  max: 30, // max 30 attempts per username/IP
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many login attempts from this IP. Please try again after 15 minutes.' }
+  keyGenerator: (req) => {
+    const user = (req.body?.username || req.body?.d?.username || '').toLowerCase().trim();
+    const cleanIp = (req.ip || req.connection?.remoteAddress || 'unknown').replace(/^::ffff:/, '');
+    return `${cleanIp}_${user}`;
+  },
+  message: { message: 'Too many login attempts from this account. Please try again after 15 minutes.' }
 });
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 2500, // Safe ceiling for an active ERP office session
+  max: 50000, // High ceiling for active ERP office sessions
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    if (isPrivateIP(ip)) return true;
+    if (req.session && req.session.user) return true;
+    const path = req.originalUrl || req.url || '';
+    if (path.includes('/api/auth/login')) return true;
+    return false;
+  },
   message: { message: 'Too many requests from this IP. Please try again later.' }
 });
 
@@ -145,9 +174,8 @@ app.use((req, res, next) => {
 // 5. Cookie parser
 app.use(cookieParser());
 
-// 6. General rate limit for API and Gateway
+// 6. General rate limit for direct API requests
 app.use('/api', generalLimiter);
-app.use('/v', generalLimiter);
 
 // Security Middleware (Decryption and Signature Verification)
 const securityMiddleware = require('./middleware/securityMiddleware');
