@@ -1660,11 +1660,26 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
+            const isCustomerChanged = Boolean(editingPayment?.customerId && editingPayment.customerId !== newPayment.customerId);
+
+            // If customer was changed, remove payment history entries from the old customer
+            if (isCustomerChanged) {
+                const oldCustRes = await axios.get(`${API_BASE_URL}/api/customers/${editingPayment.customerId}`);
+                const oldCustomer = oldCustRes.data;
+                const oldRemainingHistory = (oldCustomer.paymentHistory || []).filter(p => p.receiptNo !== editingPayment.receiptNo);
+                await axios.put(`${API_BASE_URL}/api/customers/${editingPayment.customerId}`, {
+                    ...oldCustomer,
+                    paymentHistory: oldRemainingHistory
+                });
+            }
+
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${newPayment.customerId}`);
             const customer = custRes.data;
 
             // Find existing payment history items for this receipt
-            const existingEntries = (customer.paymentHistory || []).filter(p => p.receiptNo === editingPayment.receiptNo);
+            const existingEntries = !isCustomerChanged
+                ? (customer.paymentHistory || []).filter(p => p.receiptNo === editingPayment.receiptNo)
+                : (payments.filter(p => p.receiptNo === editingPayment.receiptNo && p.customerId === editingPayment.customerId));
             const remainingHistory = (customer.paymentHistory || []).filter(p => p.receiptNo !== editingPayment.receiptNo);
 
             const isEditReq = !isCreatorEditingBeforeApproval && ((!isAdmin && !canApproveEditRequest) || editingPayment?.isEdited === true);
@@ -3014,15 +3029,13 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder={newPayment.customerId ? rawCustomers.find(c => c._id === newPayment.customerId)?.companyName || 'Search customer...' : "Search by Company, Name or ID..."}
+                                        placeholder={newPayment.customerId ? (rawCustomers.find(c => c._id === newPayment.customerId)?.companyName || rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Search customer...') : "Search by Company, Name or ID..."}
                                         value={customerSearchQuery}
                                         onChange={(e) => {
-                                            if (!isEditMode) {
-                                                setCustomerSearchQuery(e.target.value);
-                                                setActiveDropdown('customer');
-                                            }
+                                            setCustomerSearchQuery(e.target.value);
+                                            setActiveDropdown('customer');
                                         }}
-                                        onFocus={() => !isEditMode && setActiveDropdown('customer')}
+                                        onFocus={() => setActiveDropdown('customer')}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                                 e.preventDefault();
@@ -3038,24 +3051,23 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                 }
                                             }
                                         }}
-                                        className={`payment-form-input pl-10 ${isEditMode ? 'bg-gray-50 cursor-not-allowed opacity-75' : ''}`}
+                                        className="payment-form-input pl-10"
                                         autoComplete="off"
-                                        readOnly={isEditMode}
                                     />
                                     <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center">
-                                        {newPayment.customerId && !isEditMode ? (
+                                        {newPayment.customerId ? (
                                             <span
                                                 role="button"
                                                 onClick={(e) => { e.stopPropagation(); setNewPayment(prev => ({ ...prev, customerId: '' })); setCustomerSearchQuery(''); setActiveDropdown(null); }}
                                                 className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer text-lg leading-none"
                                             >×</span>
                                         ) : (
-                                            !isEditMode && <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${activeDropdown === 'customer' ? 'rotate-180' : ''}`} />
+                                            <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${activeDropdown === 'customer' ? 'rotate-180' : ''}`} />
                                         )}
                                     </div>
                                 </div>
 
-                                {activeDropdown === 'customer' && !isEditMode && (
+                                {activeDropdown === 'customer' && (
                                     <div className="absolute z-[130] left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-60 overflow-y-auto py-2 animate-in slide-in-from-top-2 duration-200">
                                         {rawCustomers
                                             .filter(c =>
