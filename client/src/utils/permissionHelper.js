@@ -114,7 +114,8 @@ export const MODULES_LIST = [
         label: 'Stock & Inventory',
         specialLabels: [
             { key: 'special', label: 'Transfer from Stock' },
-            { key: 'showRate', label: 'Show Rate' }
+            { key: 'showRate', label: 'Show Price / Rate' },
+            { key: 'showPrice', label: 'Show Price' }
         ]
     },
     {
@@ -393,6 +394,31 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
     // 1. Admin bypass
     if (username === 'admin' || roleLower === 'admin') {
         return true;
+    }
+
+    // Special alias check for showPrice <-> showRate
+    if (checkAction === 'showPrice' || checkAction === 'showRate') {
+        if (currentUser.permissions) {
+            const modPerms = currentUser.permissions[moduleName];
+            if (modPerms) {
+                if (modPerms.showPrice !== undefined) return !!modPerms.showPrice;
+                if (modPerms.showRate !== undefined) return !!modPerms.showRate;
+            }
+            if (moduleName === 'stock' && currentUser.permissions.purchase) {
+                if (currentUser.permissions.purchase.showPrice !== undefined) return !!currentUser.permissions.purchase.showPrice;
+                if (currentUser.permissions.purchase.showRate !== undefined) return !!currentUser.permissions.purchase.showRate;
+            }
+            if (moduleName === 'purchase' && currentUser.permissions.stock) {
+                if (currentUser.permissions.stock.showPrice !== undefined) return !!currentUser.permissions.stock.showPrice;
+                if (currentUser.permissions.stock.showRate !== undefined) return !!currentUser.permissions.stock.showRate;
+            }
+        }
+        const defaults = getDefaultPermissionsForRole(currentUser.role);
+        if (defaults[moduleName]) {
+            if (defaults[moduleName].showPrice !== undefined) return !!defaults[moduleName].showPrice;
+            if (defaults[moduleName].showRate !== undefined) return !!defaults[moduleName].showRate;
+        }
+        return false;
     }
 
     // 2. Custom permission check

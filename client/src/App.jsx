@@ -3355,6 +3355,7 @@ function App() {
         isOpen={showProductHistoryReport}
         onClose={() => setShowProductHistoryReport(false)}
         reportData={productHistoryReportData}
+        currentUser={currentUser}
       />
 
       {/* Sales Report Modal */}

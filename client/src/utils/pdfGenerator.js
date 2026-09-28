@@ -2766,7 +2766,7 @@ export const generateSaleChallanPDF = async (sale, allCustomers = []) => {
 };
 
 
-export const generateProductHistoryPDF = async (productName, category, activeTab, purchaseData, saleData, summary, filters, damageData = [], transferData = []) => {
+export const generateProductHistoryPDF = async (productName, category, activeTab, purchaseData, saleData, summary, filters, damageData = [], transferData = [], canShowRate = true) => {
     try {
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.width;
@@ -2949,7 +2949,8 @@ export const generateProductHistoryPDF = async (productName, category, activeTab
         const cardGap = 16;
         const cardLineHeight = 4.8;
 
-        const startX = (pageWidth - (cardWidth * 2 + cardGap)) / 2;
+        const showFinancialSummary = canShowRate || activeTab === 'sale';
+        const startX = showFinancialSummary ? (pageWidth - (cardWidth * 2 + cardGap)) / 2 : (pageWidth - cardWidth) / 2;
         const leftCardX = startX;
         const rightCardX = startX + cardWidth + cardGap;
         const cardY = currentY;
@@ -3002,46 +3003,55 @@ export const generateProductHistoryPDF = async (productName, category, activeTab
         doc.text(`${Math.round(summary.totalInHouseQty || 0).toLocaleString('en-US')} kg`, leftCardX + cardWidth - 5, cardY + cardHeight - 2.5, { align: 'right' });
 
         // --- Right Card: FINANCIAL SUMMARY ---
-        doc.setFillColor(245, 248, 255);
-        doc.setDrawColor(200, 200, 200);
-        doc.roundedRect(rightCardX, cardY, cardWidth, cardHeight, 2, 2, 'FD');
+        if (showFinancialSummary) {
+            doc.setFillColor(245, 248, 255);
+            doc.setDrawColor(200, 200, 200);
+            doc.roundedRect(rightCardX, cardY, cardWidth, cardHeight, 2, 2, 'FD');
 
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(37, 99, 235);
-        doc.text("FINANCIAL SUMMARY", rightCardX + 5, cardY + 5);
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(37, 99, 235);
+            doc.text("FINANCIAL SUMMARY", rightCardX + 5, cardY + 5);
 
-        doc.setFontSize(8.5);
-        let rY = cardY + 11;
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(70, 70, 70);
-        doc.text("Total Purchase Value:", rightCardX + 5, rY);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0, 0, 0);
-        doc.text(`Tk ${Math.round(summary.totalPurchaseValue || 0).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, rY, { align: 'right' });
+            doc.setFontSize(8.5);
+            let rY = cardY + 11;
+            if (canShowRate) {
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(70, 70, 70);
+                doc.text("Total Purchase Value:", rightCardX + 5, rY);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(0, 0, 0);
+                doc.text(`Tk ${Math.round(summary.totalPurchaseValue || 0).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, rY, { align: 'right' });
 
-        rY += cardLineHeight + 1.2;
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(70, 70, 70);
-        doc.text("Total Sales Value:", rightCardX + 5, rY);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(37, 99, 235);
-        doc.text(`Tk ${Math.round(summary.totalAmount || 0).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, rY, { align: 'right' });
+                rY += cardLineHeight + 1.2;
+            }
 
-        // Profit / Loss Divider & Row
-        doc.setDrawColor(210, 210, 210);
-        doc.line(rightCardX + 5, cardY + cardHeight - 6.5, rightCardX + cardWidth - 5, cardY + cardHeight - 6.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        const isProfit = (summary.netProfitLoss || 0) >= 0;
-        if (isProfit) {
-            doc.setTextColor(5, 150, 105);
-            doc.text("PROFIT:", rightCardX + 5, cardY + cardHeight - 2.5);
-            doc.text(`+Tk ${Math.round(summary.netProfitLoss || 0).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, cardY + cardHeight - 2.5, { align: 'right' });
-        } else {
-            doc.setTextColor(225, 29, 72);
-            doc.text("LOSS:", rightCardX + 5, cardY + cardHeight - 2.5);
-            doc.text(`-Tk ${Math.round(Math.abs(summary.netProfitLoss || 0)).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, cardY + cardHeight - 2.5, { align: 'right' });
+            if (activeTab === 'total' || activeTab === 'sale') {
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(70, 70, 70);
+                doc.text("Total Sales Value:", rightCardX + 5, rY);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(37, 99, 235);
+                doc.text(`Tk ${Math.round(summary.totalAmount || 0).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, rY, { align: 'right' });
+            }
+
+            if (canShowRate && activeTab === 'total') {
+                // Profit / Loss Divider & Row
+                doc.setDrawColor(210, 210, 210);
+                doc.line(rightCardX + 5, cardY + cardHeight - 6.5, rightCardX + cardWidth - 5, cardY + cardHeight - 6.5);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(9);
+                const isProfit = (summary.netProfitLoss || 0) >= 0;
+                if (isProfit) {
+                    doc.setTextColor(5, 150, 105);
+                    doc.text("PROFIT:", rightCardX + 5, cardY + cardHeight - 2.5);
+                    doc.text(`+Tk ${Math.round(summary.netProfitLoss || 0).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, cardY + cardHeight - 2.5, { align: 'right' });
+                } else {
+                    doc.setTextColor(225, 29, 72);
+                    doc.text("LOSS:", rightCardX + 5, cardY + cardHeight - 2.5);
+                    doc.text(`-Tk ${Math.round(Math.abs(summary.netProfitLoss || 0)).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, cardY + cardHeight - 2.5, { align: 'right' });
+                }
+            }
         }
 
         currentY = cardY + cardHeight + 6;
@@ -3185,7 +3195,7 @@ export const generateProductHistoryPDF = async (productName, category, activeTab
                     { content: 'Exporter', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
                     { content: 'Invoice', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
                     { content: 'Party', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
-                    { content: 'Purchase', colSpan: 3, styles: { halign: 'center' } },
+                    { content: 'Purchase', colSpan: canShowRate ? 3 : 1, styles: { halign: 'center' } },
                     { content: 'Sale', colSpan: 3, styles: { halign: 'center' } },
                     { content: 'InHouse', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
                     { content: 'Short', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
@@ -3193,8 +3203,10 @@ export const generateProductHistoryPDF = async (productName, category, activeTab
                 ],
                 [
                     { content: 'QTY', styles: { halign: 'center' } },
-                    { content: 'Rate', styles: { halign: 'center' } },
-                    { content: 'Value', styles: { halign: 'center' } },
+                    ...(canShowRate ? [
+                        { content: 'Rate', styles: { halign: 'center' } },
+                        { content: 'Value', styles: { halign: 'center' } }
+                    ] : []),
                     { content: 'QTY', styles: { halign: 'center' } },
                     { content: 'Rate', styles: { halign: 'center' } },
                     { content: 'Value', styles: { halign: 'center' } }
@@ -3251,22 +3263,26 @@ export const generateProductHistoryPDF = async (productName, category, activeTab
                     saleQty = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
                 }
 
-                return [
+                const row = [
                     formatDate(item.date),
                     item.lcNo && item.lcNo !== '-' ? (item.lcNo.length > 4 ? item.lcNo.slice(-4) : item.lcNo) : '-',
                     item.itemExporter || '-',
                     item.invoiceNo || '-',
                     partyText,
-                    purchaseQty,
-                    purchaseRate,
-                    purchaseVal,
+                    purchaseQty
+                ];
+                if (canShowRate) {
+                    row.push(purchaseRate, purchaseVal);
+                }
+                row.push(
                     saleQty,
                     saleRate,
                     saleVal,
                     `${Math.round(item.runningInHouse).toLocaleString('en-US')} kg`,
                     item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-',
                     item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'
-                ];
+                );
+                return row;
             });
 
             const formatRate = (rate) => {
@@ -3282,18 +3298,55 @@ export const generateProductHistoryPDF = async (productName, category, activeTab
             const saleAvgRate = saleTotals.qty > 0 ? (saleTotals.totalValue / saleTotals.qty) : 0;
             const finalInHouse = Math.round(unifiedData[unifiedData.length - 1]?.runningInHouse || 0);
 
-            const unifiedFoot = [[
+            const unifiedFootRow = [
                 { content: 'TOTAL HISTORY', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: '-', styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
-                { content: purchaseTotals.totalValue ? Math.round(purchaseTotals.totalValue).toLocaleString('en-IN') : '-', styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } }
+            ];
+            if (canShowRate) {
+                unifiedFootRow.push(
+                    { content: '-', styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                    { content: purchaseTotals.totalValue ? Math.round(purchaseTotals.totalValue).toLocaleString('en-IN') : '-', styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                );
+            }
+            unifiedFootRow.push(
                 { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: '-', styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: saleTotals.totalValue ? Math.round(saleTotals.totalValue).toLocaleString('en-IN') : '-', styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: `${finalInHouse.toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: `${Math.round(damageTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
-            ]];
+            );
+            const unifiedFoot = [unifiedFootRow];
+
+            const unifiedColumnStyles = canShowRate ? {
+                0: { cellWidth: 20, halign: 'center' }, // Date
+                1: { cellWidth: 14, halign: 'center' }, // LC No
+                2: { cellWidth: 26, halign: 'left', overflow: 'hidden' },   // Exporter
+                3: { cellWidth: 28, halign: 'center' }, // Invoice
+                4: { cellWidth: 26, halign: 'left', overflow: 'hidden' },   // Party
+                5: { cellWidth: 20, halign: 'right' },  // Purchase QTY
+                6: { cellWidth: 14, halign: 'right' },  // Purchase Rate
+                7: { cellWidth: 23, halign: 'right' },  // Purchase Value
+                8: { cellWidth: 20, halign: 'right' },  // Sale QTY
+                9: { cellWidth: 14, halign: 'right' },  // Sale Rate
+                10: { cellWidth: 23, halign: 'right' }, // Sale Value
+                11: { cellWidth: 21, halign: 'right' }, // InHouse
+                12: { cellWidth: 17, halign: 'right' }, // Short
+                13: { cellWidth: 17, halign: 'right' }  // Damage
+            } : {
+                0: { cellWidth: 22, halign: 'center' }, // Date
+                1: { cellWidth: 16, halign: 'center' }, // LC No
+                2: { cellWidth: 36, halign: 'left', overflow: 'hidden' },   // Exporter
+                3: { cellWidth: 32, halign: 'center' }, // Invoice
+                4: { cellWidth: 36, halign: 'left', overflow: 'hidden' },   // Party
+                5: { cellWidth: 24, halign: 'right' },  // Purchase QTY
+                6: { cellWidth: 24, halign: 'right' },  // Sale QTY
+                7: { cellWidth: 16, halign: 'right' },  // Sale Rate
+                8: { cellWidth: 25, halign: 'right' },  // Sale Value
+                9: { cellWidth: 22, halign: 'right' },  // InHouse
+                10: { cellWidth: 15, halign: 'right' }, // Short
+                11: { cellWidth: 15, halign: 'right' }  // Damage
+            };
 
             autoTable(doc, {
                 startY: currentY,
@@ -3306,22 +3359,7 @@ export const generateProductHistoryPDF = async (productName, category, activeTab
                 headStyles: { fontSize: 9, fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fontSize: 9, fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
                 bodyStyles: { fontSize: 9 },
-                columnStyles: {
-                    0: { cellWidth: 20, halign: 'center' }, // Date
-                    1: { cellWidth: 14, halign: 'center' }, // LC No
-                    2: { cellWidth: 26, halign: 'left', overflow: 'hidden' },   // Exporter
-                    3: { cellWidth: 28, halign: 'center' }, // Invoice
-                    4: { cellWidth: 26, halign: 'left', overflow: 'hidden' },   // Party
-                    5: { cellWidth: 20, halign: 'right' },  // Purchase QTY
-                    6: { cellWidth: 14, halign: 'right' },  // Purchase Rate
-                    7: { cellWidth: 23, halign: 'right' },  // Purchase Value
-                    8: { cellWidth: 20, halign: 'right' },  // Sale QTY
-                    9: { cellWidth: 14, halign: 'right' },  // Sale Rate
-                    10: { cellWidth: 23, halign: 'right' }, // Sale Value
-                    11: { cellWidth: 21, halign: 'right' }, // InHouse
-                    12: { cellWidth: 17, halign: 'right' }, // Short
-                    13: { cellWidth: 17, halign: 'right' }  // Damage
-                },
+                columnStyles: unifiedColumnStyles,
                 margin: { left: 7, right: 7 }
             });
 
@@ -3339,26 +3377,66 @@ export const generateProductHistoryPDF = async (productName, category, activeTab
                 };
             }, { pkt: 0, qty: 0, inHouse: 0, shortage: 0, totalValue: 0 });
 
-            const purchaseHead = [['Date', 'LC No', 'Exporter', 'Brand', 'Price', 'Bag', 'LC Qty', 'InHouse', 'Short']];
-            const purchaseBody = sortedPurchaseData.map(item => [
-                formatDate(item.date),
-                item.lcNo && item.lcNo !== '-' ? (item.lcNo.length > 4 ? item.lcNo.slice(-4) : item.lcNo) : '-',
-                item.itemExporter || '-',
-                item.itemBrand || '-',
-                parseFloat(item.itemPurchasedPrice || 0).toLocaleString('en-IN'),
-                parseFloat(item.itemPacket || 0).toLocaleString('en-US'),
-                `${Math.round(parseFloat(item.itemQty || 0)).toLocaleString('en-US')} kg`,
-                `${Math.round(parseFloat(item.itemInHouseQty || 0)).toLocaleString('en-US')} kg`,
-                `${Math.round(parseFloat(item.itemShortageQty || 0)).toLocaleString('en-US')} kg`
-            ]);
-            const purchaseFoot = [[
-                { content: 'TOTAL PURCHASE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: Math.round(purchaseTotals.totalValue).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+            const purchaseHead = [
+                canShowRate
+                    ? ['Date', 'LC No', 'Exporter', 'Brand', 'Price', 'Bag', 'LC Qty', 'InHouse', 'Short']
+                    : ['Date', 'LC No', 'Exporter', 'Brand', 'Bag', 'LC Qty', 'InHouse', 'Short']
+            ];
+            const purchaseBody = sortedPurchaseData.map(item => {
+                const row = [
+                    formatDate(item.date),
+                    item.lcNo && item.lcNo !== '-' ? (item.lcNo.length > 4 ? item.lcNo.slice(-4) : item.lcNo) : '-',
+                    item.itemExporter || '-',
+                    item.itemBrand || '-'
+                ];
+                if (canShowRate) {
+                    row.push(parseFloat(item.itemPurchasedPrice || 0).toLocaleString('en-IN'));
+                }
+                row.push(
+                    parseFloat(item.itemPacket || 0).toLocaleString('en-US'),
+                    `${Math.round(parseFloat(item.itemQty || 0)).toLocaleString('en-US')} kg`,
+                    `${Math.round(parseFloat(item.itemInHouseQty || 0)).toLocaleString('en-US')} kg`,
+                    `${Math.round(parseFloat(item.itemShortageQty || 0)).toLocaleString('en-US')} kg`
+                );
+                return row;
+            });
+            const purchaseFootRow = [
+                { content: 'TOTAL PURCHASE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }
+            ];
+            if (canShowRate) {
+                purchaseFootRow.push({
+                    content: Math.round(purchaseTotals.totalValue).toLocaleString('en-IN'),
+                    styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] }
+                });
+            }
+            purchaseFootRow.push(
                 { content: purchaseTotals.pkt.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.inHouse).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
-            ]];
+            );
+            const purchaseFoot = [purchaseFootRow];
+
+            const purchaseColumnStyles = canShowRate ? {
+                0: { cellWidth: 24, halign: 'center' }, // Date
+                1: { cellWidth: 24, halign: 'center' }, // LC No
+                2: { cellWidth: 45, halign: 'left' },   // Exporter
+                3: { cellWidth: 50, halign: 'left' },   // Brand
+                4: { cellWidth: 24, halign: 'right' },  // Price
+                5: { cellWidth: 20, halign: 'right' },  // Bag
+                6: { cellWidth: 30, halign: 'right' },  // LC Qty
+                7: { cellWidth: 30, halign: 'right' },  // InHouse
+                8: { cellWidth: 30, halign: 'right' }   // Short
+            } : {
+                0: { cellWidth: 24, halign: 'center' }, // Date
+                1: { cellWidth: 24, halign: 'center' }, // LC No
+                2: { cellWidth: 55, halign: 'left' },   // Exporter
+                3: { cellWidth: 58, halign: 'left' },   // Brand
+                4: { cellWidth: 24, halign: 'right' },  // Bag
+                5: { cellWidth: 32, halign: 'right' },  // LC Qty
+                6: { cellWidth: 33, halign: 'right' },  // InHouse
+                7: { cellWidth: 33, halign: 'right' }   // Short
+            };
 
             autoTable(doc, {
                 startY: currentY,
@@ -3371,17 +3449,7 @@ export const generateProductHistoryPDF = async (productName, category, activeTab
                 headStyles: { fontSize: 9, fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fontSize: 9, fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
                 bodyStyles: { fontSize: 9 },
-                columnStyles: {
-                    0: { cellWidth: 24, halign: 'center' }, // Date
-                    1: { cellWidth: 24, halign: 'center' }, // LC No
-                    2: { cellWidth: 45, halign: 'left' },   // Exporter
-                    3: { cellWidth: 50, halign: 'left' },   // Brand
-                    4: { cellWidth: 24, halign: 'right' },  // Price
-                    5: { cellWidth: 20, halign: 'right' },  // Bag
-                    6: { cellWidth: 30, halign: 'right' },  // LC Qty
-                    7: { cellWidth: 30, halign: 'right' },  // InHouse
-                    8: { cellWidth: 30, halign: 'right' }   // Short
-                },
+                columnStyles: purchaseColumnStyles,
                 margin: { left: margin, right: margin }
             });
 

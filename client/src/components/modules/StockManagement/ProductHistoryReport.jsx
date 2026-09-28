@@ -92,9 +92,15 @@ const ProductHistoryReport = ({
     isOpen,
     onClose,
     reportData, // { productName, filters, purchaseHistory, saleHistory }
+    currentUser: propCurrentUser
 }) => {
-    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    const canShowRate = hasPermission(currentUser, 'stock', 'showRate');
+    const currentUser = propCurrentUser || JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const canShowRate = Boolean(
+        hasPermission(currentUser, 'stock', 'showRate') ||
+        hasPermission(currentUser, 'stock', 'showPrice') ||
+        hasPermission(currentUser, 'purchase', 'showRate') ||
+        hasPermission(currentUser, 'purchase', 'showPrice')
+    );
 
     const [activeTab, setActiveTab] = useState('total');
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
@@ -446,7 +452,8 @@ const ProductHistoryReport = ({
             summary,
             modalFilters,
             damageHistory,
-            transferHistory
+            transferHistory,
+            canShowRate
         );
     };
 
@@ -462,7 +469,8 @@ const ProductHistoryReport = ({
             modalFilters,
             damageHistory,
             transferHistory,
-            unifiedHistory
+            unifiedHistory,
+            canShowRate
         );
     };
 
@@ -791,7 +799,7 @@ const ProductHistoryReport = ({
                                                 <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">Exporter</th>
                                                 <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">Invoice</th>
                                                 <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">Party</th>
-                                                <th colSpan="3" className="border-r border-b border-gray-900 px-3 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Purchase</th>
+                                                <th colSpan={canShowRate ? "3" : "1"} className="border-r border-b border-gray-900 px-3 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Purchase</th>
                                                 <th colSpan="3" className="border-r border-b border-gray-900 px-3 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Sale</th>
                                                 <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">InHouse</th>
                                                 <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">Short</th>
@@ -799,8 +807,12 @@ const ProductHistoryReport = ({
                                             </tr>
                                             <tr className="bg-gray-50 border-b border-gray-900 text-center whitespace-nowrap">
                                                 <th className="border-r border-gray-900 px-2.5 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">QTY</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Rate</th>
-                                                <th className="border-r border-gray-900 px-2.5 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Value</th>
+                                                {canShowRate && (
+                                                    <>
+                                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Rate</th>
+                                                        <th className="border-r border-gray-900 px-2.5 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Value</th>
+                                                    </>
+                                                )}
                                                 <th className="border-r border-gray-900 px-2.5 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">QTY</th>
                                                 <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Rate</th>
                                                 <th className="border-r border-gray-900 px-2.5 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Value</th>
@@ -859,8 +871,12 @@ const ProductHistoryReport = ({
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 text-center">{item.invoiceNo || '-'}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium whitespace-nowrap">{partyText}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold whitespace-nowrap">{purchaseQty}</td>
-                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-700 whitespace-nowrap">{purchaseRate}</td>
-                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold whitespace-nowrap">{purchaseVal}</td>
+                                                        {canShowRate && (
+                                                            <>
+                                                                <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-700 whitespace-nowrap">{purchaseRate}</td>
+                                                                <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold whitespace-nowrap">{purchaseVal}</td>
+                                                            </>
+                                                        )}
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold whitespace-nowrap">{saleQty}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 whitespace-nowrap">{saleRate}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold whitespace-nowrap">{saleVal}</td>
@@ -895,12 +911,16 @@ const ProductHistoryReport = ({
                                                         <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 font-bold whitespace-nowrap">
                                                             {Math.round(totalPurchQty).toLocaleString('en-US')} kg
                                                         </td>
-                                                        <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 font-bold whitespace-nowrap">
-                                                            -
-                                                        </td>
-                                                        <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 font-bold whitespace-nowrap">
-                                                            {Math.round(totalPurchVal).toLocaleString('en-IN')}
-                                                        </td>
+                                                        {canShowRate && (
+                                                            <>
+                                                                <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 font-bold whitespace-nowrap">
+                                                                    -
+                                                                </td>
+                                                                <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 font-bold whitespace-nowrap">
+                                                                    {Math.round(totalPurchVal).toLocaleString('en-IN')}
+                                                                </td>
+                                                            </>
+                                                        )}
                                                         <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-600 font-bold whitespace-nowrap">
                                                             {Math.round(totalSaleQty).toLocaleString('en-US')} kg
                                                         </td>
@@ -949,8 +969,8 @@ const ProductHistoryReport = ({
                                                     {item.type === 'purchase' && <><div className="text-gray-500">LC No</div><div className="font-bold text-gray-900 text-right">{item.lcNo || '-'}</div>
                                                         <div className="text-gray-500">Exporter</div><div className="font-medium text-gray-800 text-right truncate">{item.itemExporter || '-'}</div>
                                                         <div className="text-gray-500">Purchase QTY</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemQty).toLocaleString('en-US')} kg</div>
-                                                        {pRate > 0 && <><div className="text-gray-500">Rate</div><div className="font-bold text-gray-900 text-right">৳{formatRate(pRate)}</div></>}
-                                                        {item.itemTotalValue > 0 && <><div className="text-gray-500">Purchase Value</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemTotalValue).toLocaleString('en-IN')}</div></>}
+                                                        {canShowRate && pRate > 0 && <><div className="text-gray-500">Rate</div><div className="font-bold text-gray-900 text-right">৳{formatRate(pRate)}</div></>}
+                                                        {canShowRate && item.itemTotalValue > 0 && <><div className="text-gray-500">Purchase Value</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemTotalValue).toLocaleString('en-IN')}</div></>}
                                                         {item.itemShortageQty > 0 && <><div className="text-rose-500">Shortage</div><div className="font-bold text-rose-600 text-right">{Math.round(item.itemShortageQty).toLocaleString('en-US')} kg</div></>}</>
                                                     }
                                                     {item.type === 'sale' && <><div className="text-gray-500">Invoice</div><div className="font-bold text-gray-900 text-right">{item.invoiceNo || '-'}</div>
@@ -969,7 +989,11 @@ const ProductHistoryReport = ({
                                     <div className="rounded-xl border-2 border-gray-900 bg-gray-100 p-3 text-xs font-black">
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                                             <div className="text-gray-700 uppercase">Purchase QTY</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-US')} kg</div>
-                                            <div className="text-gray-700 uppercase">Purchase Value</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (i.itemTotalValue ? parseFloat(i.itemTotalValue) : ((parseFloat(i.itemQty) || 0) * (parseFloat(i.itemPurchasedPrice) || 0))), 0)).toLocaleString('en-IN')}</div>
+                                            {canShowRate && (
+                                                <>
+                                                    <div className="text-gray-700 uppercase">Purchase Value</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (i.itemTotalValue ? parseFloat(i.itemTotalValue) : ((parseFloat(i.itemQty) || 0) * (parseFloat(i.itemPurchasedPrice) || 0))), 0)).toLocaleString('en-IN')}</div>
+                                                </>
+                                            )}
                                             <div className="text-blue-600 uppercase">Sale QTY</div><div className="text-blue-600 text-right">{Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString('en-US')} kg</div>
                                             <div className="text-blue-600 uppercase">Sale Value</div><div className="text-blue-600 text-right">{Math.round(saleHistory.reduce((sum, s) => sum + (s.itemTotal ? parseFloat(s.itemTotal) : ((parseFloat(s.itemQty) || 0) * (parseFloat(s.itemPrice) || 0))), 0)).toLocaleString('en-IN')}</div>
                                             <div className="text-blue-700 uppercase">InHouse</div><div className="text-blue-700 text-right">{Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg</div>
@@ -1188,11 +1212,15 @@ const ProductHistoryReport = ({
                                     });
                                 };
 
+                                if (!canShowRate && activeTab === 'purchase') {
+                                    return null;
+                                }
+
                                 return (
                                     <div className="border border-gray-200 p-4 md:p-5 rounded-2xl bg-blue-50/30 shadow-sm print:border-gray-200 w-full md:min-w-[350px] md:max-w-[450px]">
                                         <div className="text-[10px] md:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2 text-center md:text-left">Financial Summary</div>
                                         <div className="space-y-1">
-                                            {(activeTab === 'total' || activeTab === 'purchase') && (
+                                            {canShowRate && (activeTab === 'total' || activeTab === 'purchase') && (
                                                 <div className="flex justify-between text-xs md:text-sm">
                                                     <span className="text-gray-600">Total Purchase Value:</span>
                                                     <span className="font-bold">৳{Math.round(totalPurchVal).toLocaleString('en-IN')}</span>
@@ -1204,13 +1232,13 @@ const ProductHistoryReport = ({
                                                     <span className="font-bold text-blue-700">৳{Math.round(totalSaleVal).toLocaleString('en-IN')}</span>
                                                 </div>
                                             )}
-                                            {activeTab === 'total' && currentStockVal > 0 && (
+                                            {canShowRate && activeTab === 'total' && currentStockVal > 0 && (
                                                 <div className="flex justify-between text-xs md:text-sm">
                                                     <span className="text-gray-600">InHouse Stock Value:</span>
                                                     <span className="font-bold text-gray-700">৳{Math.round(currentStockVal).toLocaleString('en-IN')}</span>
                                                 </div>
                                             )}
-                                            {activeTab === 'total' && (
+                                            {canShowRate && activeTab === 'total' && (
                                                 <div className="border-t border-gray-300 pt-1 mt-1 flex justify-between text-sm md:text-base font-black">
                                                     <span className={netProfitLoss >= 0 ? "text-emerald-600 uppercase" : "text-rose-600 uppercase"}>
                                                         {netProfitLoss >= 0 ? "Profit:" : "Loss:"}

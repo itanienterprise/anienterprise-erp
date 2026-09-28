@@ -758,7 +758,9 @@ function PI({
     const fetchMetaData = async (category, setter) => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/metadata?category=${category}`);
-            setter(response.data);
+            const data = Array.isArray(response.data) ? response.data : [];
+            data.sort((a, b) => (a.value || '').localeCompare(b.value || '', undefined, { sensitivity: 'base', numeric: true }));
+            setter(data);
         } catch (error) {
             console.error(`Error fetching meta ${category}:`, error);
         }
@@ -1783,6 +1785,41 @@ function PI({
         } else if (e.key === 'Escape') {
             setActiveDropdown(null);
         }
+    };
+
+    const getSortedPackingTypes = (searchTerm = '') => {
+        const defaultPacks = [
+            { _id: 'default-ppbags', value: 'Export Standard P.P Bags', isDefault: true },
+            { _id: 'default-gunnybags', value: 'Gunny Bags', isDefault: true },
+            { _id: 'default-jutebags', value: 'Jute Bags', isDefault: true }
+        ];
+        const merged = [...defaultPacks];
+        packingTypes.forEach(pack => {
+            if (!merged.some(d => d.value.toLowerCase() === pack.value.toLowerCase())) {
+                merged.push(pack);
+            }
+        });
+        return merged
+            .filter(v => !searchTerm || v.value.toLowerCase().includes(searchTerm.toLowerCase()))
+            .sort((a, b) => (a.value || '').localeCompare(b.value || '', undefined, { sensitivity: 'base', numeric: true }));
+    };
+
+    const getSortedCertifications = (searchTerm = '') => {
+        const defaultCerts = [
+            { _id: 'default-packing', value: 'Packing', isDefault: true },
+            { _id: 'default-valqty', value: 'Value & Quantity', isDefault: true },
+            { _id: 'default-coo', value: 'Country of Origin', isDefault: true },
+            { _id: 'default-safta', value: 'SAFTA', isDefault: true }
+        ];
+        const merged = [...defaultCerts];
+        certifications.forEach(cert => {
+            if (!merged.some(d => d.value.toLowerCase() === cert.value.toLowerCase())) {
+                merged.push(cert);
+            }
+        });
+        return merged
+            .filter(v => !searchTerm || v.value.toLowerCase().includes(searchTerm.toLowerCase()))
+            .sort((a, b) => (a.value || '').localeCompare(b.value || '', undefined, { sensitivity: 'base', numeric: true }));
     };
 
     const getEmptyFieldsForPi = (data) => {
@@ -5217,7 +5254,7 @@ function PI({
                                         setCertSearch(lastPart);
                                     }}
                                     onFocus={() => { setActiveDropdown('certification'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'certification', certifications.filter(v => !certSearch || v.value.toLowerCase().includes(certSearch.toLowerCase())), 'certification')}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'certification', getSortedCertifications(certSearch), 'certification')}
                                     autoComplete="off"
                                     placeholder="e.g. ISO 9001:2015"
                                     className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
@@ -5237,19 +5274,7 @@ function PI({
                                     <PlusIcon className="w-4 h-4" />
                                 </button>
                                 {activeDropdown === 'certification' && (() => {
-                                    const defaultCerts = [
-                                        { _id: 'default-packing', value: 'Packing', isDefault: true },
-                                        { _id: 'default-valqty', value: 'Value & Quantity', isDefault: true },
-                                        { _id: 'default-coo', value: 'Country of Origin', isDefault: true },
-                                        { _id: 'default-safta', value: 'SAFTA', isDefault: true }
-                                    ];
-                                    const merged = [...defaultCerts];
-                                    certifications.forEach(cert => {
-                                        if (!merged.some(d => d.value.toLowerCase() === cert.value.toLowerCase())) {
-                                            merged.push(cert);
-                                        }
-                                    });
-                                    const filtered = merged.filter(v => !certSearch || v.value.toLowerCase().includes(certSearch.toLowerCase()));
+                                    const filtered = getSortedCertifications(certSearch);
                                     return (
                                         <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                             {filtered.map((v, idx) => {
@@ -5308,7 +5333,7 @@ function PI({
                                                 setPackSearch(lastPart);
                                             }}
                                             onFocus={() => { setActiveDropdown('packingType'); setHighlightedIndex(-1); }}
-                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'packingType', packingTypes.filter(v => !packSearch || v.value.toLowerCase().includes(packSearch.toLowerCase())), 'packingType')}
+                                            onKeyDown={(e) => handleDropdownKeyDown(e, 'packingType', getSortedPackingTypes(packSearch), 'packingType')}
                                             autoComplete="off"
                                             placeholder="e.g. Export Standard P.P Bags"
                                             className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-10"
@@ -5328,18 +5353,7 @@ function PI({
                                             <PlusIcon className="w-4 h-4" />
                                         </button>
                                         {activeDropdown === 'packingType' && (() => {
-                                            const defaultPacks = [
-                                                { _id: 'default-ppbags', value: 'Export Standard P.P Bags', isDefault: true },
-                                                { _id: 'default-gunnybags', value: 'Gunny Bags', isDefault: true },
-                                                { _id: 'default-jutebags', value: 'Jute Bags', isDefault: true }
-                                            ];
-                                            const merged = [...defaultPacks];
-                                            packingTypes.forEach(pack => {
-                                                if (!merged.some(d => d.value.toLowerCase() === pack.value.toLowerCase())) {
-                                                    merged.push(pack);
-                                                }
-                                            });
-                                            const filtered = merged.filter(v => !packSearch || v.value.toLowerCase().includes(packSearch.toLowerCase()));
+                                            const filtered = getSortedPackingTypes(packSearch);
                                             return (
                                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                                     {filtered.map((v, idx) => {
@@ -6014,19 +6028,7 @@ function PI({
                                                     autoComplete="off"
                                                 />
                                                 {activeDropdown === 'reviseCertification' && (() => {
-                                                    const defaultCerts = [
-                                                        { _id: 'default-packing', value: 'Packing', isDefault: true },
-                                                        { _id: 'default-valqty', value: 'Value & Quantity', isDefault: true },
-                                                        { _id: 'default-coo', value: 'Country of Origin', isDefault: true },
-                                                        { _id: 'default-safta', value: 'SAFTA', isDefault: true }
-                                                    ];
-                                                    const merged = [...defaultCerts];
-                                                    certifications.forEach(cert => {
-                                                        if (!merged.some(d => d.value.toLowerCase() === cert.value.toLowerCase())) {
-                                                            merged.push(cert);
-                                                        }
-                                                    });
-                                                    const filtered = merged.filter(v => !certSearch || v.value.toLowerCase().includes(certSearch.toLowerCase()));
+                                                    const filtered = getSortedCertifications(certSearch);
                                                     return (
                                                         <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                                             {filtered.map((v, idx) => {
@@ -6080,18 +6082,7 @@ function PI({
                                                         autoComplete="off"
                                                     />
                                                     {activeDropdown === 'revisePackingType' && (() => {
-                                                        const defaultPacks = [
-                                                            { _id: 'default-ppbags', value: 'Export Standard P.P Bags', isDefault: true },
-                                                            { _id: 'default-gunnybags', value: 'Gunny Bags', isDefault: true },
-                                                            { _id: 'default-jutebags', value: 'Jute Bags', isDefault: true }
-                                                        ];
-                                                        const merged = [...defaultPacks];
-                                                        packingTypes.forEach(pack => {
-                                                            if (!merged.some(d => d.value.toLowerCase() === pack.value.toLowerCase())) {
-                                                                merged.push(pack);
-                                                            }
-                                                        });
-                                                        const filtered = merged.filter(v => !packSearch || v.value.toLowerCase().includes(packSearch.toLowerCase()));
+                                                        const filtered = getSortedPackingTypes(packSearch);
                                                         return (
                                                             <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                                                 {filtered.map((v, idx) => {

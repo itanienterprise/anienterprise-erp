@@ -4467,7 +4467,8 @@ export const generateProductHistoryExcel = (
     filters = {},
     damageData = [],
     transferData = [],
-    unifiedHistory = []
+    unifiedHistory = [],
+    canShowRate = true
 ) => {
     try {
         const rows = [];
@@ -4517,14 +4518,24 @@ export const generateProductHistoryExcel = (
         const netProfitLoss = Math.round(summary?.netProfitLoss || 0);
         const isProfit = netProfitLoss >= 0;
 
-        rows.push(['--- FINAL CONCLUSION ---', '', '', '--- FINANCIAL SUMMARY ---']);
-        rows.push(['Total Purchase (kg):', totalPurchQty, '', 'Total Purchase Value (Tk):', totalPurchVal]);
-        rows.push(['Total Short (kg):', totalShortQty, '', 'Total Sales Value (Tk):', totalSaleVal]);
-        if (activeTab === 'total') {
-            rows.push(['Total Sale (kg):', totalSaleQty, '', inHouseStockVal > 0 ? 'InHouse Stock Value (Tk):' : '', inHouseStockVal > 0 ? inHouseStockVal : '']);
-            rows.push(['INHOUSE (kg):', finalInHouse, '', isProfit ? 'PROFIT (Tk):' : 'LOSS (Tk):', isProfit ? `+${netProfitLoss}` : `-${Math.abs(netProfitLoss)}`]);
+        if (canShowRate) {
+            rows.push(['--- FINAL CONCLUSION ---', '', '', '--- FINANCIAL SUMMARY ---']);
+            rows.push(['Total Purchase (kg):', totalPurchQty, '', 'Total Purchase Value (Tk):', totalPurchVal]);
+            rows.push(['Total Short (kg):', totalShortQty, '', 'Total Sales Value (Tk):', totalSaleVal]);
+            if (activeTab === 'total') {
+                rows.push(['Total Sale (kg):', totalSaleQty, '', inHouseStockVal > 0 ? 'InHouse Stock Value (Tk):' : '', inHouseStockVal > 0 ? inHouseStockVal : '']);
+                rows.push(['INHOUSE (kg):', finalInHouse, '', isProfit ? 'PROFIT (Tk):' : 'LOSS (Tk):', isProfit ? `+${netProfitLoss}` : `-${Math.abs(netProfitLoss)}`]);
+            } else {
+                rows.push(['INHOUSE (kg):', finalInHouse, '', '', '']);
+            }
         } else {
-            rows.push(['INHOUSE (kg):', finalInHouse, '', '', '']);
+            rows.push(['--- FINAL CONCLUSION ---']);
+            rows.push(['Total Purchase (kg):', totalPurchQty]);
+            rows.push(['Total Short (kg):', totalShortQty]);
+            if (activeTab === 'total') {
+                rows.push(['Total Sale (kg):', totalSaleQty]);
+            }
+            rows.push(['INHOUSE (kg):', finalInHouse]);
         }
         rows.push([]);
 
@@ -4532,12 +4543,18 @@ export const generateProductHistoryExcel = (
         let colWidths = [];
 
         if (activeTab === 'total') {
-            rows.push([
+            const headers = [
                 'Date', 'LC No', 'Exporter', 'Invoice', 'Party',
-                'Purchase Qty (kg)', 'Purchase Rate (Tk)', 'Purchase Value (Tk)',
+                'Purchase Qty (kg)'
+            ];
+            if (canShowRate) {
+                headers.push('Purchase Rate (Tk)', 'Purchase Value (Tk)');
+            }
+            headers.push(
                 'Sale Qty (kg)', 'Sale Rate (Tk)', 'Sale Value (Tk)',
                 'InHouse (kg)', 'Short (kg)', 'Damage (kg)'
-            ]);
+            );
+            rows.push(headers);
 
             const list = Array.isArray(unifiedHistory) && unifiedHistory.length > 0 ? unifiedHistory : [];
             list.forEach(item => {
@@ -4570,66 +4587,94 @@ export const generateProductHistoryExcel = (
                 const shortStr = item.type === 'purchase' && item.itemShortageQty ? Math.round(item.itemShortageQty) : '-';
                 const damageStr = item.type === 'damage' ? Math.round(item.itemQty || 0) : '-';
 
-                rows.push([
+                const row = [
                     formatDate(item.date),
                     item.lcNo && item.lcNo !== '-' ? (item.lcNo.length > 4 ? item.lcNo.slice(-4) : item.lcNo) : '-',
                     item.itemExporter || '-',
                     item.invoiceNo || '-',
                     partyText,
-                    pQty,
-                    pRate,
-                    pVal,
+                    pQty
+                ];
+                if (canShowRate) {
+                    row.push(pRate, pVal);
+                }
+                row.push(
                     sQty,
                     sRate,
                     sVal,
                     inHouseStr,
                     shortStr,
                     damageStr
-                ]);
+                );
+                rows.push(row);
             });
 
             // Summary row
-            rows.push([
+            const summaryRow = [
                 'TOTAL HISTORY', '', '', '', '',
-                totalPurchQty, '-', totalPurchVal,
+                totalPurchQty
+            ];
+            if (canShowRate) {
+                summaryRow.push('-', totalPurchVal);
+            }
+            summaryRow.push(
                 totalSaleQty, '-', totalSaleVal,
                 finalInHouse, totalShortQty, Math.round(damageData?.reduce((s, d) => s + (parseFloat(d.itemQty || d.quantity) || 0), 0) || 0)
-            ]);
+            );
+            rows.push(summaryRow);
 
-            colWidths = [
+            colWidths = canShowRate ? [
                 { wch: 12 }, { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 24 },
                 { wch: 18 }, { wch: 16 }, { wch: 20 },
                 { wch: 16 }, { wch: 16 }, { wch: 18 },
                 { wch: 14 }, { wch: 12 }, { wch: 12 }
+            ] : [
+                { wch: 12 }, { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 24 },
+                { wch: 18 },
+                { wch: 16 }, { wch: 16 }, { wch: 18 },
+                { wch: 14 }, { wch: 12 }, { wch: 12 }
             ];
         } else if (activeTab === 'purchase') {
-            rows.push([
-                'Date', 'LC No', 'Exporter', 'Brand', 'Price (Tk)', 'Bag', 'LC Qty (kg)', 'InHouse (kg)', 'Short (kg)'
-            ]);
+            rows.push(
+                canShowRate
+                    ? ['Date', 'LC No', 'Exporter', 'Brand', 'Price (Tk)', 'Bag', 'LC Qty (kg)', 'InHouse (kg)', 'Short (kg)']
+                    : ['Date', 'LC No', 'Exporter', 'Brand', 'Bag', 'LC Qty (kg)', 'InHouse (kg)', 'Short (kg)']
+            );
 
             let totalPkt = 0;
             (purchaseData || []).forEach(item => {
                 const pkt = parseInt(item.itemPacket) || 0;
                 totalPkt += pkt;
-                rows.push([
+                const row = [
                     formatDate(item.date),
                     item.lcNo && item.lcNo !== '-' ? (item.lcNo.length > 4 ? item.lcNo.slice(-4) : item.lcNo) : '-',
                     item.itemExporter || '-',
-                    item.itemBrand || '-',
-                    parseFloat(item.itemPurchasedPrice || 0),
+                    item.itemBrand || '-'
+                ];
+                if (canShowRate) {
+                    row.push(parseFloat(item.itemPurchasedPrice || 0));
+                }
+                row.push(
                     pkt,
                     Math.round(parseFloat(item.itemQty || 0)),
                     Math.round(parseFloat(item.itemInHouseQty || 0)),
                     Math.round(parseFloat(item.itemShortageQty || 0))
-                ]);
+                );
+                rows.push(row);
             });
 
-            rows.push([
-                'TOTAL PURCHASE', '', '', '', '-', totalPkt, totalPurchQty, finalInHouse, totalShortQty
-            ]);
+            const purchSummaryRow = ['TOTAL PURCHASE', '', '', ''];
+            if (canShowRate) {
+                purchSummaryRow.push('-');
+            }
+            purchSummaryRow.push(totalPkt, totalPurchQty, finalInHouse, totalShortQty);
+            rows.push(purchSummaryRow);
 
-            colWidths = [
+            colWidths = canShowRate ? [
                 { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 20 }, { wch: 14 },
+                { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 }
+            ] : [
+                { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 20 },
                 { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 }
             ];
         } else {
