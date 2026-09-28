@@ -16,7 +16,31 @@ const userSchema = new mongoose.Schema({
         default: 'admin'
     },
     profilePhoto: {
-        type: String, // Base64 encoded image
+        type: String, // Base64 encoded image (original portrait)
+        default: null
+    },
+    avatarPhoto: {
+        type: String, // Base64 encoded cropped avatar for navbar
+        default: null
+    },
+    phone: {
+        type: String,
+        default: '+880XXXXXXXXXX'
+    },
+    email: {
+        type: String,
+        default: 'admin@ani-enterprise.com'
+    },
+    name: {
+        type: String,
+        default: null
+    },
+    designation: {
+        type: String,
+        default: null
+    },
+    department: {
+        type: String,
         default: null
     }
 }, { timestamps: true });

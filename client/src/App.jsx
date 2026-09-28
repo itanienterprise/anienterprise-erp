@@ -606,9 +606,9 @@ function App() {
     }
   }, [isAuthenticated, currentUser]);
 
-  // Sync profile details (including profilePhoto) on load
+  // Sync profile details (including profilePhoto and avatarPhoto) on load
   useEffect(() => {
-    if (isAuthenticated && currentUser && currentUser.profilePhoto === undefined) {
+    if (isAuthenticated && currentUser && (currentUser.profilePhoto === undefined || currentUser.avatarPhoto === undefined)) {
       axios.get(`${API_BASE_URL}/api/profile`)
         .then(res => {
           if (res.data) {
@@ -616,6 +616,7 @@ function App() {
               const updated = {
                 ...prev,
                 profilePhoto: res.data.profilePhoto || null,
+                avatarPhoto: res.data.avatarPhoto || null,
                 name: prev?.name || res.data.name
               };
               localStorage.setItem('currentUser', JSON.stringify(updated));
@@ -625,7 +626,7 @@ function App() {
         })
         .catch(() => {});
     }
-  }, [isAuthenticated, currentUser?.username, currentUser?.profilePhoto]);
+  }, [isAuthenticated, currentUser?.username, currentUser?.profilePhoto, currentUser?.avatarPhoto]);
 
 
   // Global auto-backup auto-download polling for administrators
@@ -2366,9 +2367,9 @@ function App() {
                 className="relative group focus:outline-none flex-shrink-0"
                 title={isMini ? (currentUser?.name || currentUser?.username || 'Profile (Click to expand)') : undefined}
               >
-                {currentUser?.profilePhoto ? (
+                {(currentUser?.avatarPhoto || currentUser?.profilePhoto) ? (
                   <img
-                    src={currentUser.profilePhoto}
+                    src={currentUser.avatarPhoto || currentUser.profilePhoto}
                     alt="Profile"
                     className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
                   />
@@ -3379,9 +3380,13 @@ function App() {
         <Profile
           currentUser={currentUser}
           onClose={() => setShowProfile(false)}
-          onPhotoUpdate={(newPhoto) => {
+          onPhotoUpdate={(newPhoto, newAvatar) => {
             setCurrentUser(prev => {
-              const updated = { ...prev, profilePhoto: newPhoto };
+              const updated = {
+                ...prev,
+                ...(newPhoto !== undefined ? { profilePhoto: newPhoto } : {}),
+                ...(newAvatar !== undefined ? { avatarPhoto: newAvatar } : {})
+              };
               localStorage.setItem('currentUser', JSON.stringify(updated));
               return updated;
             });

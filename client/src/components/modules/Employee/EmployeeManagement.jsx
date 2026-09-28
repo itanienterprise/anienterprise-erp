@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, ShieldIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, ShieldIcon, PhoneIcon, MailIcon, UploadIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import '../Profile/Profile.css';
 import './EmployeeManagement.css';
 
 const EmployeeManagement = ({
@@ -33,6 +34,7 @@ const EmployeeManagement = ({
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewData, setViewData] = useState(null);
+    const [viewDrawerOpen, setViewDrawerOpen] = useState(false);
     const [expandedCards, setExpandedCards] = useState(new Set());
     const [openDropdown, setOpenDropdown] = useState(null);
     const roleDropdownRef = useRef(null);
@@ -40,6 +42,70 @@ const EmployeeManagement = ({
     const [resettingPassword, setResettingPassword] = useState(false);
     const [resetPasswordValue, setResetPasswordValue] = useState(null);
     const [showConfirmReset, setShowConfirmReset] = useState(false);
+    const employeePhotoInputRef = useRef(null);
+    const [isUploadingEmployeePhoto, setIsUploadingEmployeePhoto] = useState(false);
+
+    const getNameFontSize = (name = '') => {
+        if (!name) return '1.75rem';
+        if (name.length > 25) return '1.32rem';
+        if (name.length > 18) return '1.52rem';
+        return '1.75rem';
+    };
+
+    const handleEmployeePhotoUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !viewData) return;
+        if (employeePhotoInputRef.current) employeePhotoInputRef.current.value = '';
+
+        if (!file.type.startsWith('image/')) {
+            alert('Please select a valid image file.');
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            alert('Image must be under 10 MB.');
+            return;
+        }
+
+        setIsUploadingEmployeePhoto(true);
+        try {
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                const dataUrl = ev.target.result;
+                try {
+                    const response = await axios.post(`${API_BASE_URL}/api/employees/${viewData._id}/photo`, { photo: dataUrl });
+                    if (response.data?.success) {
+                        setViewData(prev => ({ ...prev, profilePhoto: dataUrl }));
+                        setEmployees(prev => prev.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: dataUrl } : emp));
+                    }
+                } catch (err) {
+                    console.error('Error uploading employee photo:', err);
+                    alert('Failed to upload employee photo.');
+                } finally {
+                    setIsUploadingEmployeePhoto(false);
+                }
+            };
+            reader.readAsDataURL(file);
+        } catch (err) {
+            setIsUploadingEmployeePhoto(false);
+        }
+    };
+
+    const handleRemoveEmployeePhoto = async () => {
+        if (!viewData || isUploadingEmployeePhoto) return;
+        setIsUploadingEmployeePhoto(true);
+        try {
+            const response = await axios.post(`${API_BASE_URL}/api/employees/${viewData._id}/photo`, { photo: null });
+            if (response.data?.success) {
+                setViewData(prev => ({ ...prev, profilePhoto: null }));
+                setEmployees(prev => prev.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: null } : emp));
+            }
+        } catch (err) {
+            console.error('Error removing employee photo:', err);
+            alert('Failed to remove photo.');
+        } finally {
+            setIsUploadingEmployeePhoto(false);
+        }
+    };
 
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const isAdminUser = currentUser?.username === 'admin';
@@ -848,81 +914,255 @@ const EmployeeManagement = ({
             )}
 
             {viewData && typeof document !== 'undefined' && document.body && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setResetPasswordValue(null); setShowConfirmReset(false); }}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-lg w-full p-8 animate-in zoom-in duration-200 z-10">
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900 font-sans">{viewData.name}</h2>
-                                <p className="text-blue-600 font-semibold font-sans">{viewData.designation}</p>
+                <div className="profile-overlay">
+                    <div
+                        className="profile-backdrop"
+                        onClick={() => {
+                            setViewData(null);
+                            setResetPasswordValue(null);
+                            setShowConfirmReset(false);
+                            setViewDrawerOpen(false);
+                        }}
+                    ></div>
+
+                    {/* Main Portrait Card */}
+                    <div className="profile-card-portrait">
+                        {/* Portrait Photo or Studio Fallback */}
+                        {viewData.profilePhoto ? (
+                            <img
+                                src={viewData.profilePhoto}
+                                alt={viewData.name}
+                                className="profile-portrait-bg"
+                            />
+                        ) : (
+                            <div className="profile-portrait-fallback">
+                                <div className="profile-fallback-avatar">
+                                    <span>{viewData.name?.charAt(0)?.toUpperCase() || 'U'}</span>
+                                </div>
                             </div>
-                            <button onClick={() => { setViewData(null); setResetPasswordValue(null); setShowConfirmReset(false); }} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                                <XIcon className="w-6 h-6 text-gray-400" />
-                            </button>
+                        )}
+
+                        {/* Dark Vignette Overlay */}
+                        <div className="profile-portrait-vignette"></div>
+
+                        {/* Top Bar: Left = Employee ID, Right = Role Tag */}
+                        <div className="profile-top-bar">
+                            <div className="profile-role-pill" title="Employee ID">
+                                <UserIcon className="w-3.5 h-3.5 mr-1.5 text-white/90" />
+                                <span>{viewData.employeeId}</span>
+                            </div>
+                            <div className="profile-role-pill" title="Role">
+                                <ShieldIcon className="w-3.5 h-3.5 mr-1.5 text-white/90" />
+                                <span>{viewData.role}</span>
+                            </div>
                         </div>
 
-                        <div className="space-y-4 font-sans text-left">
-                            <div className="grid grid-cols-2 gap-4 border-b border-gray-50 pb-4">
-                                <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Employee ID</p><p className="text-sm text-gray-700">{viewData.employeeId}</p></div>
-                                <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Role</p><p className="text-sm text-blue-600 font-bold">{viewData.role}</p></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 border-b border-gray-50 pb-4">
-                                <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Department</p><p className="text-sm text-gray-700">{viewData.department}</p></div>
-                                <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Status</p><p className="text-sm text-gray-700">{viewData.status}</p></div>
-                            </div>
-                            <div className="border-b border-gray-50 pb-4">
-                                <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Email</p>
-                                <p className="text-sm text-gray-700">{viewData.email || 'N/A'}</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 pb-2">
-                                <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Joining Date</p><p className="text-sm text-gray-700">{formatDate(viewData.joiningDate)}</p></div>
-                                <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Salary</p><p className="text-sm text-gray-700">{viewData.salary ? `${viewData.salary} BDT` : 'N/A'}</p></div>
+                        {/* Bottom Info Content */}
+                        <div className="profile-bottom-info">
+                            {/* Name */}
+                            <div className="profile-name-row">
+                                <h2
+                                    className="profile-name-text"
+                                    style={{ fontSize: getNameFontSize(viewData.name) }}
+                                    title={viewData.name}
+                                >
+                                    {viewData.name}
+                                </h2>
                             </div>
 
-                            {(isAdmin || canSpecial) && (
-                                <div className="border-t border-gray-100 pt-4 mt-2 flex flex-col gap-2">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-xs text-gray-500 font-medium">Account Security</p>
-                                            <p className="text-[10px] text-gray-400">Generate a new password for this employee.</p>
-                                        </div>
-                                        {resetPasswordValue ? (
-                                            <div className="flex flex-col items-end w-1/2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-bold text-emerald-600">New Password:</span>
-                                                    <span className="text-sm font-mono bg-emerald-50 text-emerald-700 px-3 py-1 rounded-md border border-emerald-100">{resetPasswordValue}</span>
-                                                </div>
-                                                <span className="text-[9px] text-gray-400 mt-1 italic text-right">Please copy and share this with the employee.</span>
-                                            </div>
-                                        ) : showConfirmReset ? (
-                                            <div className="flex items-center gap-2 animate-in slide-in-from-right-4 duration-200">
-                                                <p className="text-xs text-rose-600 font-bold mr-2">Are you sure?</p>
-                                                <button
-                                                    onClick={() => setShowConfirmReset(false)}
-                                                    disabled={resettingPassword}
-                                                    className="px-3 py-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-bold rounded-lg transition-colors border border-gray-200 disabled:opacity-50"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={() => handleResetPassword(viewData._id)}
-                                                    disabled={resettingPassword}
-                                                    className="px-4 py-2 bg-rose-600 text-white hover:bg-rose-700 text-xs font-bold rounded-lg shadow-sm shadow-rose-500/30 transition-all disabled:opacity-50 flex items-center gap-2"
-                                                >
-                                                    {resettingPassword ? 'Resetting...' : 'Yes, Reset'}
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <button
-                                                onClick={() => setShowConfirmReset(true)}
-                                                className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 text-xs font-bold rounded-lg transition-colors border border-red-100 flex items-center gap-2 hover:shadow-sm"
-                                            >
-                                                Reset Password
-                                            </button>
-                                        )}
+                            {/* Designation */}
+                            <p className="profile-card-designation">{viewData.designation || 'Staff Member'}</p>
+
+                            {/* Department */}
+                            {viewData.department && (
+                                <p className="profile-card-dept">{viewData.department}</p>
+                            )}
+
+                            {/* Bottom Row: Contact Info on Left, Details Button on Right */}
+                            <div className="profile-bottom-row">
+                                <div className="profile-contact-list">
+                                    <div className="profile-contact-row" title="Phone">
+                                        <span className="profile-contact-icon">
+                                            <PhoneIcon className="w-3.5 h-3.5 text-white/75" />
+                                        </span>
+                                        <span>{viewData.phone || 'N/A'}</span>
+                                    </div>
+                                    <div className="profile-contact-row" title="Email">
+                                        <span className="profile-contact-icon">
+                                            <MailIcon className="w-3.5 h-3.5 text-white/75" />
+                                        </span>
+                                        <span className="profile-contact-email">{viewData.email || 'N/A'}</span>
                                     </div>
                                 </div>
-                            )}
+
+                                <button
+                                    type="button"
+                                    className="profile-pill-btn"
+                                    onClick={() => setViewDrawerOpen(true)}
+                                >
+                                    <span>Details</span>
+                                    <span className="profile-pill-plus">+</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* ─── Slide-Up Details & Management Drawer ─────────── */}
+                        <div className={`profile-drawer ${viewDrawerOpen ? 'profile-drawer--open' : ''}`}>
+                            {/* Drawer handle */}
+                            <div className="profile-drawer-handle-bar" onClick={() => setViewDrawerOpen(false)}>
+                                <div className="profile-drawer-handle"></div>
+                            </div>
+
+                            {/* Drawer Header */}
+                            <div className="profile-drawer-header">
+                                <div>
+                                    <h3 className="profile-drawer-title">Employee Details</h3>
+                                    <p className="profile-drawer-subtitle">{viewData.name} &middot; {viewData.role}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="profile-drawer-close-btn"
+                                    onClick={() => setViewDrawerOpen(false)}
+                                    title="Back to Card"
+                                >
+                                    <XIcon className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Drawer Body */}
+                            <div className="profile-drawer-body space-y-4">
+                                {/* ERP Info Grid */}
+                                <div className="profile-info-grid">
+                                    <div className="profile-info-card">
+                                        <span className="profile-info-label">Employee ID</span>
+                                        <span className="profile-info-val">{viewData.employeeId}</span>
+                                    </div>
+                                    <div className="profile-info-card">
+                                        <span className="profile-info-label">Role</span>
+                                        <span className="profile-info-val text-blue-400">{viewData.role}</span>
+                                    </div>
+                                    <div className="profile-info-card">
+                                        <span className="profile-info-label">Department</span>
+                                        <span className="profile-info-val">{viewData.department}</span>
+                                    </div>
+                                    <div className="profile-info-card">
+                                        <span className="profile-info-label">Status</span>
+                                        <span className={`profile-info-val ${viewData.status === 'Active' ? 'text-emerald-400' : 'text-rose-400'}`}>{viewData.status}</span>
+                                    </div>
+                                    <div className="profile-info-card">
+                                        <span className="profile-info-label">Joined</span>
+                                        <span className="profile-info-val">{formatDate(viewData.joiningDate)}</span>
+                                    </div>
+                                    <div className="profile-info-card">
+                                        <span className="profile-info-label">Salary</span>
+                                        <span className="profile-info-val">{viewData.salary ? `${parseFloat(viewData.salary).toLocaleString('en-IN')} BDT` : 'N/A'}</span>
+                                    </div>
+                                </div>
+
+                                {/* Photo Management (Admin or Incharge) */}
+                                {!cannotManage && (
+                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mt-2">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-xs text-white/90 font-bold">Profile Photo</p>
+                                                <p className="text-[10px] text-white/60">Upload or change employee portrait</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    ref={employeePhotoInputRef}
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={handleEmployeePhotoUpload}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    disabled={isUploadingEmployeePhoto}
+                                                    onClick={() => employeePhotoInputRef.current?.click()}
+                                                    className="px-3 py-1.5 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-xs font-bold rounded-xl transition-colors border border-blue-500/30 flex items-center gap-1.5 disabled:opacity-50"
+                                                >
+                                                    <UploadIcon className="w-3.5 h-3.5" />
+                                                    <span>{isUploadingEmployeePhoto ? 'Uploading...' : (viewData.profilePhoto ? 'Change Photo' : 'Upload Photo')}</span>
+                                                </button>
+                                                {viewData.profilePhoto && (
+                                                    <button
+                                                        type="button"
+                                                        disabled={isUploadingEmployeePhoto}
+                                                        onClick={handleRemoveEmployeePhoto}
+                                                        className="p-1.5 bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 rounded-xl transition-colors border border-rose-500/30 disabled:opacity-50"
+                                                        title="Remove Photo"
+                                                    >
+                                                        <TrashIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Account Security: Reset Password */}
+                                {(isAdmin || canSpecial) && (
+                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mt-2">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-xs text-white/90 font-bold">Account Security</p>
+                                                <p className="text-[10px] text-white/60">Generate a new password for this employee.</p>
+                                            </div>
+
+                                            {resetPasswordValue ? (
+                                                <div className="flex flex-col items-end">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-bold text-emerald-400">Password:</span>
+                                                        <span className="text-xs font-mono bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-md border border-emerald-500/30 select-all">{resetPasswordValue}</span>
+                                                    </div>
+                                                    <span className="text-[9px] text-white/50 mt-1 italic text-right">Copy and share with employee</span>
+                                                </div>
+                                            ) : showConfirmReset ? (
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => setShowConfirmReset(false)}
+                                                        disabled={resettingPassword}
+                                                        className="px-2.5 py-1 text-white/70 hover:bg-white/10 text-xs font-semibold rounded-lg transition-colors border border-white/20"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleResetPassword(viewData._id)}
+                                                        disabled={resettingPassword}
+                                                        className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition-all disabled:opacity-50"
+                                                    >
+                                                        {resettingPassword ? 'Resetting...' : 'Confirm'}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => setShowConfirmReset(true)}
+                                                    className="px-3 py-1.5 bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 text-xs font-bold rounded-xl transition-colors border border-rose-500/30"
+                                                >
+                                                    Reset Password
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Edit Action Button */}
+                                {!cannotManage && (
+                                    <button
+                                        type="button"
+                                        className="profile-submit-btn flex items-center justify-center gap-2 mt-3"
+                                        onClick={() => {
+                                            const dataToEdit = viewData;
+                                            setViewData(null);
+                                            setViewDrawerOpen(false);
+                                            handleEdit(dataToEdit);
+                                        }}
+                                    >
+                                        <EditIcon className="w-4 h-4" />
+                                        <span>Edit Employee</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>,

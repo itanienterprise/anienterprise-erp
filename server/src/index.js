@@ -3813,6 +3813,16 @@ apiRouter.post('/api/employees/:id/change-password', async (req, res) => {
 apiRouter.get('/api/employees', verifyPermission('employees', 'view'), async (req, res) => {
   try {
     const records = await Employee.find().sort({ createdAt: -1 });
+
+    // Fetch user profile photos to attach
+    const usersWithPhotos = await User.find({ profilePhoto: { $exists: true, $ne: null } }, 'username profilePhoto');
+    const userPhotoMap = {};
+    usersWithPhotos.forEach(u => {
+      if (u.username && u.profilePhoto) {
+        userPhotoMap[u.username] = u.profilePhoto;
+      }
+    });
+
     const decrypted = await Promise.all(records.map(async (r) => {
       let d = decryptData(r.data);
       // Fallback for double-encrypted
@@ -3822,9 +3832,44 @@ apiRouter.get('/api/employees', verifyPermission('employees', 'view'), async (re
       if (d && d.role) {
         d.role = await resolveRoleToDisplay(d.role);
       }
-      return { ...d, _id: r._id, createdAt: r.createdAt };
+      const profilePhoto = (d && d.employeeId && userPhotoMap[d.employeeId]) || d?.profilePhoto || null;
+      return { ...d, _id: r._id, createdAt: r.createdAt, profilePhoto };
     }));
     res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Upload / update photo for a specific employee
+apiRouter.post('/api/employees/:id/photo', verifyPermission('employees', 'edit'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { photo } = req.body; // base64 data URL string or null
+
+    const employee = await Employee.findById(id);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    let decrypted = decryptData(employee.data);
+    if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
+      try { decrypted = decryptData(decrypted.data); } catch (e) { }
+    }
+
+    decrypted.profilePhoto = photo || null;
+    employee.data = encryptData(decrypted);
+    await employee.save();
+
+    // Also sync to User document if an account exists for this employeeId
+    if (decrypted.employeeId) {
+      await User.findOneAndUpdate(
+        { username: decrypted.employeeId },
+        { profilePhoto: photo || null }
+      );
+    }
+
+    res.json({ success: true, profilePhoto: photo || null });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -3887,7 +3932,8 @@ apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
       role: displayRole,
       name: displayName,
       permissions: resolvedPerms,
-      profilePhoto: user.profilePhoto || null
+      profilePhoto: user.profilePhoto || null,
+      avatarPhoto: user.avatarPhoto || null
     };
 
     // Store user data in session
@@ -3916,6 +3962,7 @@ apiRouter.get('/api/auth/check', async (req, res) => {
       const userRecord = await User.findOne({ username: req.session.user.username });
       if (userRecord) {
         req.session.user.profilePhoto = userRecord.profilePhoto || null;
+        req.session.user.avatarPhoto = userRecord.avatarPhoto || null;
       }
 
       if (req.session.user.username === 'admin') {
@@ -3989,15 +4036,16 @@ apiRouter.get('/api/profile', async (req, res) => {
     if (user.username === 'admin') {
       const adminUserRecord = await User.findOne({ username: 'admin' });
       return res.json({
-        name: 'Administrator',
+        name: adminUserRecord?.name || 'Administrator',
         role: 'Admin',
-        department: 'Management',
-        email: 'admin@ani-enterprise.com',
-        phone: '+880XXXXXXXXXX',
-        designation: 'System Administrator',
+        department: adminUserRecord?.department || 'Management',
+        email: adminUserRecord?.email || 'admin@ani-enterprise.com',
+        phone: adminUserRecord?.phone || '+880XXXXXXXXXX',
+        designation: adminUserRecord?.designation || 'System Administrator',
         employeeId: 'ADMIN-001',
         joiningDate: '2024-01-01',
-        profilePhoto: adminUserRecord?.profilePhoto || null
+        profilePhoto: adminUserRecord?.profilePhoto || null,
+        avatarPhoto: adminUserRecord?.avatarPhoto || null
       });
     }
 
@@ -4016,9 +4064,10 @@ apiRouter.get('/api/profile', async (req, res) => {
       return res.status(404).json({ message: 'Profile not found' });
     }
 
-    // Fetch profilePhoto from User document
+    // Fetch profilePhoto and avatarPhoto from User document
     const userRecord = await User.findOne({ username: user.username });
     const profilePhoto = userRecord?.profilePhoto || null;
+    const avatarPhoto = userRecord?.avatarPhoto || null;
 
     let decrypted = decryptData(matchedEmployee.data);
     if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
@@ -4026,42 +4075,125 @@ apiRouter.get('/api/profile', async (req, res) => {
     }
     const displayRole = await resolveRoleToDisplay(decrypted.role);
 
-    res.json({ ...decrypted, role: displayRole, _id: matchedEmployee._id, createdAt: matchedEmployee.createdAt, profilePhoto });
+    res.json({ ...decrypted, role: displayRole, _id: matchedEmployee._id, createdAt: matchedEmployee.createdAt, profilePhoto, avatarPhoto });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
-// Upload / update profile photo (pass photo: null to remove)
+
+// Update profile details (phone, email)
+apiRouter.put('/api/profile', async (req, res) => {
+  try {
+    const user = req.session.user;
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { phone, email } = req.body;
+
+    if (user.username === 'admin') {
+      const updateFields = {};
+      if (phone !== undefined) updateFields.phone = phone;
+      if (email !== undefined) updateFields.email = email;
+
+      const updatedUser = await User.findOneAndUpdate(
+        { username: 'admin' },
+        updateFields,
+        { new: true }
+      );
+
+      return res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        phone: updatedUser.phone,
+        email: updatedUser.email
+      });
+    }
+
+    const employees = await Employee.find();
+    const matchedEmployee = employees.find(emp => {
+      try {
+        let decrypted = decryptData(emp.data);
+        if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
+          try { decrypted = decryptData(decrypted.data); } catch (e) { }
+        }
+        return decrypted.employeeId === user.username;
+      } catch (e) { return false; }
+    });
+
+    if (!matchedEmployee) {
+      return res.status(404).json({ message: 'Profile not found' });
+    }
+
+    let decrypted = decryptData(matchedEmployee.data);
+    if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
+      try { decrypted = decryptData(decrypted.data); } catch (e) { }
+    }
+
+    if (phone !== undefined) decrypted.phone = phone;
+    if (email !== undefined) decrypted.email = email;
+
+    matchedEmployee.data = encryptData(decrypted);
+    await matchedEmployee.save();
+
+    await User.findOneAndUpdate(
+      { username: user.username },
+      {
+        ...(phone !== undefined ? { phone } : {}),
+        ...(email !== undefined ? { email } : {})
+      }
+    );
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      phone: decrypted.phone,
+      email: decrypted.email
+    });
+  } catch (err) {
+    console.error('Error updating profile:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+// Upload / update profile photo & navbar avatar (pass photo: null to remove)
 apiRouter.post('/api/profile/photo', async (req, res) => {
   try {
     const user = req.session.user;
     if (!user) return res.status(401).json({ message: 'Unauthorized' });
 
-    const { photo } = req.body; // base64 data URL string OR null to remove
+    const { photo, avatarPhoto } = req.body;
 
-    // When photo is not provided at all (key missing), treat as error
-    if (!('photo' in req.body)) {
-      return res.status(400).json({ message: 'No photo field provided' });
+    const updateObj = {};
+    if ('photo' in req.body) {
+      updateObj.profilePhoto = photo || null;
+      if (photo === null) {
+        updateObj.avatarPhoto = null;
+      }
+    }
+    if ('avatarPhoto' in req.body) {
+      updateObj.avatarPhoto = avatarPhoto || null;
     }
 
-    // Size guard only when uploading (not removing)
-    if (photo && photo.length > 5 * 1024 * 1024 * 1.37) {
-      return res.status(413).json({ message: 'Image too large. Please use an image under 5 MB.' });
+    if (Object.keys(updateObj).length === 0) {
+      return res.status(400).json({ message: 'No photo field provided' });
     }
 
     const updatedUser = await User.findOneAndUpdate(
       { username: user.username },
-      { profilePhoto: photo || null },
+      updateObj,
       { new: true }
     );
 
     if (!updatedUser) return res.status(404).json({ message: 'User not found' });
 
     if (req.session?.user) {
-      req.session.user.profilePhoto = updatedUser.profilePhoto || null;
+      if ('profilePhoto' in updateObj) req.session.user.profilePhoto = updatedUser.profilePhoto || null;
+      if ('avatarPhoto' in updateObj) req.session.user.avatarPhoto = updatedUser.avatarPhoto || null;
     }
 
-    res.json({ success: true, profilePhoto: updatedUser.profilePhoto });
+    res.json({
+      success: true,
+      profilePhoto: updatedUser.profilePhoto || null,
+      avatarPhoto: updatedUser.avatarPhoto || null
+    });
   } catch (err) {
     console.error('Error uploading profile photo:', err);
     res.status(500).json({ message: err.message });
