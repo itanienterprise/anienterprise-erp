@@ -97,9 +97,29 @@ export const renderNonIslamiBankApplication = (doc, record) => {
     // Commodity / Description of goods
     const productsList = record.productsList && record.productsList.length > 0
         ? record.productsList
-        : (record.productName ? [{ productName: record.productName }] : []);
-    const productNames = productsList.map(p => p.productName).filter(Boolean);
-    const formattedProduct = productNames.length > 0 ? productNames.join(', ') : (record.productName || record.commodity || 'Goods');
+        : (record.productName ? [{ productName: record.productName, quantity: record.grandTotalQuantity }] : []);
+    const validProducts = productsList.filter(p => p && (p.productName || p.product));
+
+    let formattedProduct = '';
+    if (validProducts.length > 1) {
+        const itemsWithQty = validProducts.map(p => {
+            const pName = (p.productName || p.product || '').trim();
+            const pQtyNum = parseFloat(p.quantity || p.qty || 0);
+            const pQtyStr = pQtyNum > 0
+                ? `${pQtyNum.toLocaleString('en-US')} kg`
+                : (p.quantity || p.qty ? `${p.quantity || p.qty} kg` : '');
+            return pQtyStr ? `${pQtyStr} ${pName}` : pName;
+        }).filter(Boolean);
+
+        if (itemsWithQty.length > 0) {
+            formattedProduct = itemsWithQty.join(', ');
+        }
+    }
+
+    if (!formattedProduct) {
+        const productNames = validProducts.map(p => p.productName || p.product).filter(Boolean);
+        formattedProduct = productNames.length > 0 ? productNames.join(', ') : (record.productName || record.commodity || 'Goods');
+    }
 
     const countryOrigin = (record.countryOrigin || 'INDIA').trim();
 

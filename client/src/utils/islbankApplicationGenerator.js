@@ -92,16 +92,38 @@ export const renderIslamiBankApplication = (doc, record) => {
     }
     const formattedMargin = marginVal || '......%';
 
-    const qtyNum = parseFloat(record.grandTotalQuantity || 0);
-    const formattedQuantity = qtyNum > 0
-        ? `${qtyNum.toLocaleString('en-US')} kg`
-        : (record.grandTotalQuantity ? `${record.grandTotalQuantity} kg` : '.................... kg');
-
     const productsList = record.productsList && record.productsList.length > 0
         ? record.productsList
-        : (record.productName ? [{ productName: record.productName }] : []);
-    const productNames = productsList.map(p => p.productName).filter(Boolean);
-    const formattedProduct = productNames.length > 0 ? productNames.join(', ') : (record.productName || 'Goods');
+        : (record.productName ? [{ productName: record.productName, quantity: record.grandTotalQuantity }] : []);
+    const validProducts = productsList.filter(p => p && (p.productName || p.product));
+
+    let importItemsText = '';
+    if (validProducts.length > 1) {
+        // Multi-product: show quantity separately for each product
+        const itemsWithQty = validProducts.map(p => {
+            const pName = (p.productName || p.product || '').trim();
+            const pQtyNum = parseFloat(p.quantity || p.qty || 0);
+            const pQtyStr = pQtyNum > 0
+                ? `${pQtyNum.toLocaleString('en-US')} kg`
+                : (p.quantity || p.qty ? `${p.quantity || p.qty} kg` : '');
+            return pQtyStr ? `${pQtyStr} ${pName}` : pName;
+        }).filter(Boolean);
+
+        if (itemsWithQty.length > 0) {
+            importItemsText = itemsWithQty.join(', ');
+        }
+    }
+
+    if (!importItemsText) {
+        // Single product or fallback
+        const qtyNum = parseFloat(record.grandTotalQuantity || validProducts[0]?.quantity || validProducts[0]?.qty || 0);
+        const formattedQuantity = qtyNum > 0
+            ? `${qtyNum.toLocaleString('en-US')} kg`
+            : (record.grandTotalQuantity ? `${record.grandTotalQuantity} kg` : '.................... kg');
+
+        const singleProdName = validProducts[0]?.productName || validProducts[0]?.product || record.productName || 'Goods';
+        importItemsText = `${formattedQuantity} ${singleProdName}`;
+    }
 
     const countryOrigin = (record.countryOrigin || 'INDIA').trim();
     const importerName = (record.partyName || record.buyerName || record.importerName || '............................................................').trim();
@@ -109,7 +131,7 @@ export const renderIslamiBankApplication = (doc, record) => {
 
     // Subject Line (Bold, Justified)
     doc.setFont('times', 'bold');
-    const subjectText = `Subject: Regarding establishment of a Letter of Credit (L/C) worth US$ ${formattedGrandTotal} at ${formattedMargin} margin for import of ${formattedQuantity} ${formattedProduct} from ${countryOrigin}.`;
+    const subjectText = `Subject: Regarding establishment of a Letter of Credit (L/C) worth US$ ${formattedGrandTotal} at ${formattedMargin} margin for import of ${importItemsText} from ${countryOrigin}.`;
     const subjectLines = doc.splitTextToSize(subjectText, contentWidth);
     doc.text(subjectText, marginLeft, currentY, { maxWidth: contentWidth, align: 'justify', lineHeightFactor: 1.35 });
     currentY += (subjectLines.length * 6) + 5;
