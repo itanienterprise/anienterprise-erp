@@ -3130,7 +3130,7 @@ apiRouter.put('/api/metadata/:id', async (req, res) => {
     const updated = await MetaData.findByIdAndUpdate(
       req.params.id,
       { category, data: encryptedData },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!updated) return res.status(404).json({ message: 'Record not found' });
     res.json({ ...rest, _id: updated._id, category: updated.category, createdAt: updated.createdAt });
@@ -4133,7 +4133,7 @@ apiRouter.put('/api/profile', async (req, res) => {
       const updatedUser = await User.findOneAndUpdate(
         { username: 'admin' },
         updateFields,
-        { new: true }
+        { returnDocument: 'after' }
       );
 
       return res.json({
@@ -4215,7 +4215,7 @@ apiRouter.post('/api/profile/photo', async (req, res) => {
     const updatedUser = await User.findOneAndUpdate(
       { username: user.username },
       updateObj,
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) return res.status(404).json({ message: 'User not found' });
@@ -5214,7 +5214,7 @@ apiRouter.post('/api/logs/heartbeat', async (req, res) => {
           $set: { lastActive: now, lastHeartbeat: now },
           $setOnInsert: { firstActive: now }
         },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
     } else {
       await UserDailyActivity.findOneAndUpdate(

@@ -727,6 +727,10 @@ export default function ProfitLoss({ salesRecords, products }) {
     return selectedLcSales.reduce((sum, s) => sum + s.totalAmount, 0);
   }, [selectedLcSales]);
 
+  const totalLcSalesQty = useMemo(() => {
+    return selectedLcSales.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
+  }, [selectedLcSales]);
+
   const totalLcReceiveAmount = useMemo(() => {
     return selectedLcStocks.reduce((sum, item) => {
       const qty = parseFloat(item.quantity) || 0;
@@ -908,6 +912,7 @@ export default function ProfitLoss({ salesRecords, products }) {
       totalLcCostOfGoodsQty,
       totalLcReceiveAmount,
       totalLcSalesAmount,
+      totalLcSalesQty,
       filterType,
       selectedMonth,
       selectedYear,
@@ -1793,11 +1798,20 @@ export default function ProfitLoss({ salesRecords, products }) {
                         ))
                       )}
                     </tbody>
+                    {selectedLcSales.length > 0 && (
+                      <tfoot className="bg-slate-50 border-t-2 border-gray-200">
+                        <tr className="text-xs">
+                          <td colSpan="2" className="py-3.5 px-4 font-black text-gray-500 uppercase tracking-wider text-[11px]">Total Sales</td>
+                          <td className="py-3.5 px-4 text-right font-black text-gray-900 whitespace-nowrap">
+                            {Math.round(totalLcSalesQty).toLocaleString('en-US')} KG
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-black text-emerald-600 whitespace-nowrap">
+                            ৳ {Math.round(totalLcSalesAmount).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
-                </div>
-                <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between">
-                  <span className="text-xs font-black text-gray-500 uppercase tracking-wider">Total Sales</span>
-                  <span className="text-sm font-black text-emerald-600">৳ {Math.round(totalLcSalesAmount).toLocaleString('en-IN')}</span>
                 </div>
               </div>
             ) : (
