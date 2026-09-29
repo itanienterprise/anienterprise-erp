@@ -1969,6 +1969,16 @@ const SaleManagement = ({
                 return;
             }
         }
+
+        // Warn if selected LC total sales exceeds LC allocation
+        const exceedingLc = (selectedLcSummaries || []).find(s => s.exceedsLc);
+        if (exceedingLc) {
+            const confirmProceed = window.confirm(`⚠️ WARNING: Total sales for LC #${exceedingLc.lcNo} (${exceedingLc.afterThisSaleKg.toLocaleString('en-IN')} KG) exceeds LC quantity (${exceedingLc.lcTotalKg.toLocaleString('en-IN')} KG) by ${exceedingLc.excessKg.toLocaleString('en-IN')} KG (${exceedingLc.excessMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT).\n\nDo you want to proceed anyway?`);
+            if (!confirmProceed) {
+                return;
+            }
+        }
+
         setIsSubmitting(true);
         setSubmitStatus(null);
         setSubmitError('');
@@ -2827,6 +2837,127 @@ const SaleManagement = ({
         });
         return list;
     }, [lcRecords, stockRecords]);
+
+    // LC Quota & Sales Balance Tracker for Selected LC(s)
+    const selectedLcSummaries = useMemo(() => {
+        if (!formData) return [];
+
+        const lcMap = new Map();
+
+        // 1. Collect LCs selected in brand entries
+        (formData.items || []).forEach(item => {
+            (item.brandEntries || []).forEach(entry => {
+                const rawLc = (entry.lcNo || '').toString().trim();
+                if (!rawLc) return;
+                const existing = lcMap.get(rawLc) || { lcNo: rawLc, currentSaleQty: 0, productName: item.productName || '' };
+                const qty = parseFloat(entry.quantity) || parseFloat(entry.qty) || 0;
+                existing.currentSaleQty += qty;
+                if (!existing.productName && item.productName) existing.productName = item.productName;
+                lcMap.set(rawLc, existing);
+            });
+
+            // If item has lcNo directly but no brand entries
+            if (item.lcNo && (!item.brandEntries || item.brandEntries.length === 0)) {
+                const rawLc = item.lcNo.toString().trim();
+                if (rawLc) {
+                    const existing = lcMap.get(rawLc) || { lcNo: rawLc, currentSaleQty: 0, productName: item.productName || '' };
+                    const qty = parseFloat(item.quantity) || parseFloat(item.qty) || 0;
+                    existing.currentSaleQty += qty;
+                    if (!existing.productName && item.productName) existing.productName = item.productName;
+                    lcMap.set(rawLc, existing);
+                }
+            }
+        });
+
+        // 2. Check form-level lcNo (Border Sale / single LC form)
+        if (formData.lcNo && lcMap.size === 0) {
+            const rawLc = formData.lcNo.toString().trim();
+            if (rawLc) {
+                const existing = { lcNo: rawLc, currentSaleQty: parseFloat(formData.totalQuantity) || 0, productName: '' };
+                lcMap.set(rawLc, existing);
+            }
+        }
+
+        if (lcMap.size === 0) return [];
+
+        const summaries = [];
+        lcMap.forEach(({ lcNo, currentSaleQty, productName }) => {
+            // Find LC details in lcRecords or allAvailableLCs
+            const matchedLc = (lcRecords || []).find(l => isLcMatch(l.lcNo || l.lcNumber, lcNo)) ||
+                              (allAvailableLCs || []).find(l => isLcMatch(l.lcNo || l.lcNumber, lcNo));
+
+            let lcTotalKg = 0;
+            let lcTotalMt = 0;
+            if (matchedLc) {
+                let totalMt = 0;
+                if (Array.isArray(matchedLc.productsList) && matchedLc.productsList.length > 0) {
+                    totalMt = matchedLc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+                }
+                if (!totalMt) {
+                    totalMt = parseFloat(matchedLc.quantity) || 0;
+                }
+                if (totalMt > 2000) {
+                    // Already in KG
+                    lcTotalKg = totalMt;
+                    lcTotalMt = totalMt / 1000;
+                } else {
+                    lcTotalMt = totalMt;
+                    lcTotalKg = totalMt * 1000;
+                }
+            }
+
+            // Calculate total sold quantity for this LC across all previous sales
+            let totalSoldKg = 0;
+            (allSalesRecords || []).forEach(s => {
+                if (editingId && s._id === editingId) return;
+
+                const items = s.items || [];
+                items.forEach(it => {
+                    if (Array.isArray(it.brandEntries) && it.brandEntries.length > 0) {
+                        it.brandEntries.forEach(be => {
+                            if (isLcMatch(be.lcNo, lcNo)) {
+                                totalSoldKg += (parseFloat(be.quantity) || parseFloat(be.qty) || 0);
+                            }
+                        });
+                    } else if (it.lcNo && isLcMatch(it.lcNo, lcNo)) {
+                        totalSoldKg += (parseFloat(it.quantity) || parseFloat(it.qty) || 0);
+                    }
+                });
+                if (items.length === 0 && s.lcNo && isLcMatch(s.lcNo, lcNo)) {
+                    totalSoldKg += (parseFloat(s.totalQuantity) || parseFloat(s.quantity) || parseFloat(s.qty) || 0);
+                }
+            });
+
+            const newTotalSoldKg = totalSoldKg + currentSaleQty;
+            const newTotalSoldMt = newTotalSoldKg / 1000;
+            const totalSoldMt = totalSoldKg / 1000;
+            const remainingKg = lcTotalKg > 0 ? (lcTotalKg - newTotalSoldKg) : 0;
+            const remainingMt = remainingKg / 1000;
+            const exceedsLc = lcTotalKg > 0 && newTotalSoldKg > lcTotalKg;
+            const excessKg = exceedsLc ? (newTotalSoldKg - lcTotalKg) : 0;
+            const excessMt = excessKg / 1000;
+
+            summaries.push({
+                lcNo,
+                productName: productName || matchedLc?.productName || matchedLc?.product || '',
+                importerName: matchedLc?.importerName || '',
+                lcTotalKg,
+                lcTotalMt,
+                totalSoldKg,
+                totalSoldMt,
+                currentSaleQty,
+                afterThisSaleKg: newTotalSoldKg,
+                afterThisSaleMt: newTotalSoldMt,
+                remainingKg,
+                remainingMt,
+                exceedsLc,
+                excessKg,
+                excessMt
+            });
+        });
+
+        return summaries;
+    }, [formData.items, formData.lcNo, formData.totalQuantity, lcRecords, allAvailableLCs, allSalesRecords, editingId]);
 
     const getLcProductNames = (lc) => {
         if (!lc) return [];
@@ -6039,6 +6170,118 @@ const SaleManagement = ({
                                         <ChevronDownIcon className="w-4 h-4 text-gray-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                                     </div>
                                 </div>
+
+                                {/* LC Allocation & Sales Tracking Summary */}
+                                {selectedLcSummaries && selectedLcSummaries.length > 0 && (
+                                    <div className="col-span-full pt-4 mt-1 border-t border-blue-100/70">
+                                        <div className="space-y-3">
+                                            {selectedLcSummaries.map((summary, idx) => {
+                                                const isWarning = summary.exceedsLc;
+                                                return (
+                                                    <div 
+                                                        key={summary.lcNo || idx}
+                                                        className={`bg-white/95 backdrop-blur-sm border rounded-2xl p-4 shadow-sm transition-all ${isWarning ? 'border-red-300 ring-2 ring-red-400/20' : 'border-blue-200/90'}`}
+                                                    >
+                                                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2.5 border-b border-gray-100">
+                                                            <div className="flex items-center flex-wrap gap-2">
+                                                                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-lg text-white font-black text-xs tracking-wider ${isWarning ? 'bg-red-600' : 'bg-blue-600'}`}>
+                                                                    LC
+                                                                </span>
+                                                                <span className="text-sm font-black text-gray-900 tracking-tight">
+                                                                    {summary.lcNo}
+                                                                </span>
+                                                                {summary.productName && (
+                                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                                                                        {summary.productName}
+                                                                    </span>
+                                                                )}
+                                                                {summary.importerName && (
+                                                                    <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                                        {summary.importerName}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                                                                Live LC Balance
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                            {/* LC QTY */}
+                                                            <div className="bg-gradient-to-br from-blue-50/80 to-indigo-50/50 rounded-xl p-3 border border-blue-100/90">
+                                                                <div className="text-[11px] font-bold uppercase tracking-wider text-blue-700 mb-1">
+                                                                    LC QTY
+                                                                </div>
+                                                                <div className="text-lg font-black text-gray-900">
+                                                                    {summary.lcTotalKg.toLocaleString('en-IN')} <span className="text-xs font-bold text-gray-500">KG</span>
+                                                                </div>
+                                                                <div className="text-[11px] font-medium text-gray-500 mt-0.5">
+                                                                    ≈ {summary.lcTotalMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Sales QTY */}
+                                                            <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/50 rounded-xl p-3 border border-amber-100/90">
+                                                                <div className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-1">
+                                                                    Sales QTY
+                                                                </div>
+                                                                <div className="text-lg font-black text-gray-900">
+                                                                    {summary.totalSoldKg.toLocaleString('en-IN')} <span className="text-xs font-bold text-gray-500">KG</span>
+                                                                </div>
+                                                                <div className="text-[11px] font-medium text-gray-500 mt-0.5">
+                                                                    ≈ {summary.totalSoldMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT
+                                                                </div>
+                                                            </div>
+
+                                                            {/* After this sales qty */}
+                                                            <div className={`bg-gradient-to-br ${isWarning ? 'from-rose-50 to-red-100/60 border-red-300' : 'from-indigo-50/80 to-blue-50/50 border-indigo-200/90'} rounded-xl p-3 border`}>
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className={`text-[11px] font-bold uppercase tracking-wider ${isWarning ? 'text-red-700' : 'text-indigo-700'} mb-1`}>
+                                                                        After this sales qty
+                                                                    </div>
+                                                                    {summary.currentSaleQty > 0 && (
+                                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isWarning ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-white/90 text-indigo-700 border border-indigo-200'}`}>
+                                                                            +{summary.currentSaleQty.toLocaleString('en-IN')} KG
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className={`text-lg font-black ${isWarning ? 'text-red-600' : 'text-indigo-900'}`}>
+                                                                    {summary.afterThisSaleKg.toLocaleString('en-IN')} <span className="text-xs font-bold text-gray-500">KG</span>
+                                                                </div>
+                                                                <div className={`text-[11px] font-medium ${isWarning ? 'text-red-500 font-bold' : 'text-gray-500'} mt-0.5`}>
+                                                                    ≈ {summary.afterThisSaleMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT
+                                                                    {summary.lcTotalKg > 0 && !isWarning && (
+                                                                        <span className="text-emerald-600 font-semibold ml-1">
+                                                                            (Bal: {summary.remainingKg.toLocaleString('en-IN')} KG)
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Warning banner when new sales qty exceeds LC quantity */}
+                                                        {summary.exceedsLc && (
+                                                            <div className="mt-3 p-3 bg-red-50/95 border border-red-300 rounded-xl flex items-start gap-2.5 text-red-800 shadow-sm animate-pulse">
+                                                                <svg className="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                                </svg>
+                                                                <div className="flex-1">
+                                                                    <div className="text-xs font-black text-red-700 uppercase tracking-wide">
+                                                                        Warning: Sales Exceeds LC Quantity!
+                                                                    </div>
+                                                                    <div className="text-xs font-semibold text-red-600 mt-0.5">
+                                                                        New Sales QTY ({summary.afterThisSaleKg.toLocaleString('en-IN')} KG) exceeds LC QTY ({summary.lcTotalKg.toLocaleString('en-IN')} KG) by <span className="underline font-black">{summary.excessKg.toLocaleString('en-IN')} KG</span> (≈ {summary.excessMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT).
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="col-span-full flex flex-col items-center justify-center border-t border-blue-100/60 pt-4 mt-2 gap-3 w-full text-center">
                                     {submitStatus === 'success' && (
                                         <p className="text-green-600 font-medium flex items-center justify-center animate-bounce">
