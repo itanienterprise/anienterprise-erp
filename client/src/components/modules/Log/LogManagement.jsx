@@ -3163,23 +3163,31 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                         return `${diffHr}h ${diffMin % 60}m ago`;
                                     };
 
-                                    const formatDuration = (start, end, isLive) => {
-                                        if (!start) return '1 min';
-                                        const now = Date.now();
-                                        const startMs = new Date(start).getTime();
-                                        const endMs = end ? new Date(end).getTime() : startMs;
+                                    const formatDuration = (start, end, isLive, activeMs = null) => {
+                                        let durationMs = activeMs;
+                                        if (durationMs === null || durationMs === undefined) {
+                                            if (!start) return '1s';
+                                            const now = Date.now();
+                                            const startMs = new Date(start).getTime();
+                                            const endMs = end ? new Date(end).getTime() : startMs;
+                                            durationMs = isLive ? Math.max(0, now - startMs) : Math.max(0, endMs - startMs);
+                                        }
+                                        const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+                                        if (totalSeconds < 60) {
+                                            return `${totalSeconds}s`;
+                                        }
+                                        const totalMinutes = Math.floor(totalSeconds / 60);
+                                        const remainingSecs = totalSeconds % 60;
+                                        const hours = Math.floor(totalMinutes / 60);
+                                        const mins = totalMinutes % 60;
 
-                                        const durationMs = isLive ? Math.max(0, now - startMs) : Math.max(0, endMs - startMs);
-                                        const diffMin = Math.floor(durationMs / 60000);
-
-                                        if (diffMin < 1) return '1 min';
-                                        if (diffMin < 60) return `${diffMin} ${diffMin === 1 ? 'min' : 'mins'}`;
-                                        const hours = Math.floor(diffMin / 60);
-                                        const remainingMins = diffMin % 60;
-                                        if (remainingMins === 0) {
+                                        if (hours === 0) {
+                                            return remainingSecs > 0 ? `${mins}m ${remainingSecs}s` : `${mins} mins`;
+                                        }
+                                        if (mins === 0) {
                                             return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
                                         }
-                                        return `${hours}h ${remainingMins}m`;
+                                        return `${hours}h ${mins}m`;
                                     };
 
                                     const initials = (user.name || user.username || 'U')
@@ -3266,7 +3274,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                             {/* Micro-Metrics 3-Column Strip */}
                                             <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                                 {/* Metric 1: Total Active Duration */}
-                                                <div className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-center gap-3">
+                                                <div className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-center gap-3" title="Actual time spent actively operating in this ERP">
                                                     <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -3275,7 +3283,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                                     <div className="min-w-0">
                                                         <span className="block text-[11px] font-bold text-indigo-900/60 uppercase tracking-wider">Total Active</span>
                                                         <span className="text-sm font-black text-indigo-700 truncate block">
-                                                            {formatDuration(firstTime, lastTime, isUserLive)}
+                                                            {formatDuration(firstTime, lastTime, isUserLive, user.activeMs)}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -3492,11 +3500,14 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                         <tbody className="divide-y divide-slate-100 bg-white">
                                             {userHistoryModal.history.map((row) => {
                                                 const formatDuration = (ms) => {
-                                                    if (!ms || ms < 60000) return '1 min';
-                                                    const totalMinutes = Math.floor(ms / 60000);
+                                                    if (!ms || ms < 1000) return '0s';
+                                                    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+                                                    if (totalSeconds < 60) return `${totalSeconds}s`;
+                                                    const totalMinutes = Math.floor(totalSeconds / 60);
+                                                    const remainingSecs = totalSeconds % 60;
                                                     const hours = Math.floor(totalMinutes / 60);
                                                     const mins = totalMinutes % 60;
-                                                    if (hours === 0) return `${mins} ${mins === 1 ? 'min' : 'mins'}`;
+                                                    if (hours === 0) return remainingSecs > 0 ? `${mins}m ${remainingSecs}s` : `${mins} mins`;
                                                     if (mins === 0) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
                                                     return `${hours}h ${mins}m`;
                                                 };

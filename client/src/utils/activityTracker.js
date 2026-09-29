@@ -530,12 +530,98 @@ export const trackUserAction = (actionName, moduleName, details = {}) => {
     }
 };
 
+// ==========================================
+// Real-Time Active ERP Usage Tracker (Heartbeat)
+// ==========================================
+let activeEngagementSeconds = 0;
+let lastUserInteractionAt = Date.now();
+let engagementTicker = null;
+let heartbeatTicker = null;
+let isEngagementTrackerActive = false;
+
+const IDLE_TIMEOUT_MS = 60 * 1000; // 60s without user interaction = Idle
+
+export const syncActiveHeartbeat = async () => {
+    const user = getCurrentUser();
+    if (!user || activeEngagementSeconds <= 0) return;
+
+    const secondsToSend = activeEngagementSeconds;
+    activeEngagementSeconds = 0;
+
+    try {
+        await axios.post('/api/logs/heartbeat', {
+            activeSeconds: secondsToSend,
+            tz: '+06:00'
+        });
+    } catch (_err) {
+        // Re-accumulate if failed
+        activeEngagementSeconds += secondsToSend;
+    }
+};
+
+const startEngagementTracker = () => {
+    if (typeof window === 'undefined' || isEngagementTrackerActive) return;
+    isEngagementTrackerActive = true;
+
+    let lastThrottle = 0;
+    const onUserInteraction = () => {
+        const now = Date.now();
+        if (now - lastThrottle > 2000) {
+            lastThrottle = now;
+            lastUserInteractionAt = now;
+        }
+    };
+
+    ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
+        window.addEventListener(evt, onUserInteraction, { passive: true });
+    });
+
+    if (engagementTicker) clearInterval(engagementTicker);
+    engagementTicker = setInterval(() => {
+        const user = getCurrentUser();
+        if (!user) return;
+
+        const isVisible = !document.hidden;
+        const isFocused = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
+        const isIdle = (Date.now() - lastUserInteractionAt) >= IDLE_TIMEOUT_MS;
+
+        // Increment only if tab is visible, focused, and user recently interacted
+        if (isVisible && isFocused && !isIdle) {
+            activeEngagementSeconds += 1;
+        }
+    }, 1000);
+
+    // Sync active time every 30 seconds
+    if (heartbeatTicker) clearInterval(heartbeatTicker);
+    heartbeatTicker = setInterval(() => {
+        if (activeEngagementSeconds > 0) {
+            syncActiveHeartbeat();
+        }
+    }, 30 * 1000);
+
+    // Sync on visibilitychange or unload
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && activeEngagementSeconds > 0) {
+            syncActiveHeartbeat();
+        }
+    });
+
+    window.addEventListener('beforeunload', () => {
+        if (activeEngagementSeconds > 0) {
+            syncActiveHeartbeat();
+        }
+    });
+};
+
 /**
  * Initialize automatic click listener
  */
 export const initActivityTracker = (userGetter, viewGetter) => {
     getCurrentUser = userGetter || getCurrentUser;
     getCurrentView = viewGetter || getCurrentView;
+
+    // Start real-time active ERP usage tracking
+    startEngagementTracker();
 
     if (typeof window !== 'undefined' && window.__activityTrackerClickListener) {
         document.removeEventListener('click', window.__activityTrackerClickListener, true);

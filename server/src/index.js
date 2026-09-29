@@ -248,6 +248,41 @@ const { updateBrandAcrossAllCollections } = require('./services/brandCascadeServ
 const { syncSaleOnSave, syncSaleOnDelete, repairAllCustomerSalesHistory } = require('./services/customerSyncService');
 const CryptoJS = require('crypto-js');
 const ActivityLog = require('./models/ActivityLog');
+const UserDailyActivity = require('./models/UserDailyActivity');
+
+// Intelligent Cluster-based Calculation of Actual ERP Active Usage Time
+const calculateActiveTimeFromTimestamps = (timestamps, isLive = false, idleThresholdMs = 5 * 60 * 1000, baseActionMs = 60 * 1000) => {
+  if (!timestamps || timestamps.length === 0) return 0;
+  const times = timestamps.map(t => new Date(t).getTime()).filter(n => !isNaN(n)).sort((a, b) => a - b);
+  if (times.length === 0) return 0;
+
+  let totalActiveMs = 0;
+  let sessionStart = times[0];
+  let sessionEnd = times[0];
+
+  for (let i = 1; i < times.length; i++) {
+    const diff = times[i] - times[i - 1];
+    if (diff <= idleThresholdMs) {
+      sessionEnd = times[i];
+    } else {
+      const sessionDuration = Math.max(baseActionMs, sessionEnd - sessionStart);
+      totalActiveMs += sessionDuration;
+      sessionStart = times[i];
+      sessionEnd = times[i];
+    }
+  }
+
+  let lastSessionDuration = Math.max(baseActionMs, sessionEnd - sessionStart);
+  if (isLive) {
+    const now = Date.now();
+    const timeSinceLastAction = Math.max(0, now - sessionEnd);
+    if (timeSinceLastAction <= idleThresholdMs) {
+      lastSessionDuration += timeSinceLastAction;
+    }
+  }
+  totalActiveMs += lastSessionDuration;
+  return totalActiveMs;
+};
 const {
   logActivity,
   resolveModuleFromPath,
@@ -529,7 +564,8 @@ const requireAuth = (req, res, next) => {
     '/api/auth/check',
     '/api/auth/logout',
     '/api/health',
-    '/api/logs/client-action'
+    '/api/logs/client-action',
+    '/api/logs/heartbeat'
   ];
 
   if (publicPaths.includes(rawPath)) {
@@ -4832,11 +4868,21 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
             lastModule: { $first: '$module' },
             lastIp: { $first: '$ip' },
             displayName: { $first: '$displayName' },
-            userRole: { $first: '$userRole' }
+            userRole: { $first: '$userRole' },
+            timestamps: { $push: '$timestamp' }
           }
         },
         { $sort: { lastActive: -1 } }
       ]);
+
+      const todayStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: '+06:00'
+      }).format(new Date());
+
+      // Fetch UserDailyActivity tracked engagement today
+      const dailyRecords = await UserDailyActivity.find({ date: todayStr }).lean();
+      const dailyMap = {};
+      dailyRecords.forEach(d => { dailyMap[d.username] = d; });
 
       const currentUser = req.session?.user;
       const nowMs = Date.now();
@@ -4845,6 +4891,12 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
         const lastActiveDate = isCurrent ? new Date() : u.lastActive;
         const lastMs = new Date(u.lastActive).getTime();
         const isLive = isCurrent || (nowMs - lastMs <= 15 * 60 * 1000);
+
+        // Compute true active ERP usage time (clusters of interaction + heartbeat engagement)
+        const logActiveMs = calculateActiveTimeFromTimestamps(u.timestamps || [u.lastActive], isLive);
+        const trackedSeconds = dailyMap[u._id]?.activeSeconds || 0;
+        const activeMs = trackedSeconds > 0 ? Math.max(trackedSeconds * 1000, 1000) : Math.max(logActiveMs, 60000);
+
         return {
           username: u._id,
           name: userNamesMap[u._id] || u.displayName || (u._id === 'admin' ? 'Administrator' : u._id),
@@ -4856,7 +4908,8 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
           lastModule: u.lastModule,
           lastIp: u.lastIp,
           isCurrent,
-          isLive
+          isLive,
+          activeMs
         };
       });
 
@@ -4967,7 +5020,8 @@ apiRouter.get('/api/logs/user-history', adminOnly, async (req, res) => {
           lastActive: { $last: "$timestamp" },
           activityCount: { $sum: 1 },
           lastAction: { $last: "$action" },
-          lastModule: { $last: "$module" }
+          lastModule: { $last: "$module" },
+          timestamps: { $push: "$timestamp" }
         }
       },
       { $sort: { _id: -1 } }
@@ -4977,6 +5031,14 @@ apiRouter.get('/api/logs/user-history', adminOnly, async (req, res) => {
       timeZone: tz === '+06:00' ? 'Asia/Dhaka' : undefined
     }).format(new Date());
 
+    // Fetch daily activity records for this user in target month
+    const userDailyRecords = await UserDailyActivity.find({
+      username: username,
+      date: { $regex: `^${targetMonthKey}` }
+    }).lean();
+    const dailyMap = {};
+    userDailyRecords.forEach(d => { dailyMap[d.date] = d; });
+
     const history = dayAgg.map(day => {
       const isToday = day._id === todayStr;
       let lastActiveDate = day.lastActive;
@@ -4984,9 +5046,9 @@ apiRouter.get('/api/logs/user-history', adminOnly, async (req, res) => {
         lastActiveDate = new Date();
       }
 
-      const startMs = new Date(day.startedTime).getTime();
-      const endMs = new Date(lastActiveDate).getTime();
-      const durationMs = Math.max(60000, endMs - startMs);
+      const logActiveMs = calculateActiveTimeFromTimestamps(day.timestamps || [day.lastActive], isToday && isCurrentLoggedInUser);
+      const trackedSeconds = dailyMap[day._id]?.activeSeconds || 0;
+      const durationMs = Math.max(logActiveMs, trackedSeconds * 1000, 60000);
 
       return {
         date: day._id,
@@ -5103,12 +5165,72 @@ apiRouter.post('/api/logs/client-action', async (req, res) => {
 
     if (logsToInsert.length > 0) {
       await ActivityLog.insertMany(logsToInsert, { ordered: false });
+
+      // Update UserDailyActivity action count
+      const todayStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: '+06:00'
+      }).format(new Date());
+      await UserDailyActivity.findOneAndUpdate(
+        { username: user.username, date: todayStr },
+        {
+          $inc: { actionCount: logsToInsert.length },
+          $set: { lastActive: new Date() },
+          $setOnInsert: { firstActive: new Date() }
+        },
+        { upsert: true }
+      ).catch(() => {});
     }
 
     res.json({ success: true, count: logsToInsert.length });
   } catch (err) {
     console.error('Error logging client actions:', err);
     res.status(500).json({ message: 'Failed to record action log' });
+  }
+});
+
+// 3.5. User Active Engagement Heartbeat API
+apiRouter.post('/api/logs/heartbeat', async (req, res) => {
+  try {
+    const user = req.session?.user;
+    if (!user || !user.username || user.username === 'anonymous') {
+      return res.json({ success: true, recordedSeconds: 0 });
+    }
+
+    const username = user.username;
+    const { activeSeconds = 0, tz = '+06:00' } = req.body || {};
+    const seconds = Math.min(Math.max(parseInt(activeSeconds, 10) || 0, 0), 120);
+
+    const todayStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz === '+06:00' ? 'Asia/Dhaka' : undefined
+    }).format(new Date());
+
+    const now = new Date();
+
+    if (seconds > 0) {
+      await UserDailyActivity.findOneAndUpdate(
+        { username, date: todayStr },
+        {
+          $inc: { activeSeconds: seconds },
+          $set: { lastActive: now, lastHeartbeat: now },
+          $setOnInsert: { firstActive: now }
+        },
+        { upsert: true, new: true }
+      );
+    } else {
+      await UserDailyActivity.findOneAndUpdate(
+        { username, date: todayStr },
+        {
+          $set: { lastActive: now, lastHeartbeat: now },
+          $setOnInsert: { firstActive: now }
+        },
+        { upsert: true }
+      );
+    }
+
+    res.json({ success: true, recordedSeconds: seconds });
+  } catch (err) {
+    console.error('[Heartbeat] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
