@@ -80,6 +80,8 @@ import BackupRestore from './components/modules/BackupRestore/BackupRestore';
 import CostOfGoods from './components/modules/CostOfGoods/CostOfGoods';
 import Token from './components/modules/Token/Token';
 import LogManagement from './components/modules/Log/LogManagement';
+import Attendance from './components/modules/Attendance/Attendance';
+
 import { initActivityTracker } from './utils/activityTracker';
 import { hasPermission } from './utils/permissionHelper';
 
@@ -2338,6 +2340,9 @@ function App() {
             isLongPressTriggered={isLongPressTriggered}
           />
         );
+      case 'attendance-section':
+        return <Attendance currentUser={currentUser} />;
+
       case 'role-creation': {
         const isAdminUser = currentUser?.username === 'admin';
         const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
@@ -2564,7 +2569,7 @@ function App() {
                       }
                     }}
                     title={isMini ? 'HRMS' : undefined}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['employee-section', 'role-creation', 'system-access'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['employee-section', 'attendance-section', 'role-creation', 'system-access'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
                     <div className="flex items-center min-w-0">
                       <BriefcaseIcon className="w-5 h-5 flex-shrink-0" />
@@ -2576,7 +2581,7 @@ function App() {
                       <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${hrmsDropdownOpen ? 'transform rotate-180' : ''}`} />
                     </div>
                   </button>
-                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && hrmsDropdownOpen ? 'max-h-56 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && hrmsDropdownOpen ? 'max-h-72 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                     <div className="pl-7 pr-2 space-y-1">
                       {hasPermission(currentUser, 'employees', 'view') && (
                         <button
@@ -2585,6 +2590,15 @@ function App() {
                         >
                           <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                           <span>Employee</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'employees', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('attendance-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'attendance-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                        >
+                          <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Attendance</span>
                         </button>
                       )}
                       {((currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (

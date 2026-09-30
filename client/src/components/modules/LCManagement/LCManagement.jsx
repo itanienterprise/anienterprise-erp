@@ -68,6 +68,35 @@ const getShipmentDateColorClass = (shipmentDateStr) => {
     }
 };
 
+const isLcMatch = (lc1, lc2) => {
+    const c1 = String(lc1 || '').replace(/\D/g, '');
+    const c2 = String(lc2 || '').replace(/\D/g, '');
+    if (!c1 || !c2) return false;
+    if (c1 === c2) return true;
+    if (c1 !== '0000' && c2 !== '0000') {
+        if (c1.length >= 4 && c2.length >= 8 && c2.endsWith(c1)) return true;
+        if (c2.length >= 4 && c1.length >= 8 && c1.endsWith(c2)) return true;
+    }
+    return false;
+};
+
+const isAcceptedStock = (s) => {
+    if (!s) return false;
+    const status = (s.status || s.entries?.[0]?.status || '').toLowerCase().trim();
+    if (status === 'accepted' || status === 'in stock' || status === 'approved') return true;
+    return !status.includes('requested') && !status.includes('rejected') && !status.includes('pending');
+};
+
+const isSaleLcMatch = (s, targetLc) => {
+    const targetClean = String(targetLc || '').replace(/\D/g, '');
+    if (!targetClean) return false;
+    const sLcs = [
+        s.lcNo, s.lcNumber, s.lc_no,
+        ...(s.items || []).flatMap(i => [i.lcNo, ...(i.brandEntries || []).map(b => b.lcNo)])
+    ].filter(Boolean);
+    return sLcs.some(slc => isLcMatch(slc, targetClean));
+};
+
 export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onDeleteAmendment, onUpdateDollarRate, canManage, canDelete, canDeleteAmendment, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [], showDetailsFirst = false, initialShowDetails = false, getLcEntryDetails, employeesFullNameMap, modalZIndex = 'z-[5000]' }) => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const [showConsumption, setShowConsumption] = useState(!(showDetailsFirst || initialShowDetails));
@@ -627,11 +656,7 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
     // Calculate Consumptions
     const receiptsMap = {};
     allStockRecords
-        .filter(s => {
-            const recordLcNoClean = cleanLc(s.lcNo);
-            const status = (s.status || '').toLowerCase();
-            return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-        })
+        .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
         .forEach(s => {
             // Ensure date key is just the day, so milliseconds in createdAt don't break grouping
             const rawDate = s.date || s.receiveDate || s.createdAt || '';
@@ -827,11 +852,7 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
         // Calculate receipts
         const receiptsMapForBalance = {};
         allStockRecords
-            .filter(s => {
-                const recordLcNoClean = cleanLc(s.lcNo);
-                const status = (s.status || '').toLowerCase();
-                return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-            })
+            .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
             .forEach(s => {
                 const rawDate = s.date || s.receiveDate || s.createdAt || '';
                 const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
@@ -851,12 +872,7 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
 
         const borderSaleQtyKg = allSalesRecords
             .filter(s => {
-                const matchesLc = !!lcNoClean && (
-                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
-                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
-                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
-                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
-                );
+                const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
                 const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                 const status = (s.status || '').toLowerCase();
@@ -900,11 +916,7 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
         const getProductReceivedQtyKg = (pName) => {
             const receiptsMap = {};
             allStockRecords
-                .filter(s => {
-                    const recordLcNoClean = cleanLc(s.lcNo);
-                    const status = (s.status || '').toLowerCase();
-                    return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-                })
+                .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
                 .forEach(s => {
                     const rawDate = s.date || s.receiveDate || s.createdAt || '';
                     const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
@@ -1323,10 +1335,8 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
     // 4. Expenses (C&F and Others)
     // Find all stock arrivals for this LC with C&F info (BD or Indian)
     const cnfArrivals = allStockRecords.filter(s => {
-        const recordLcNoClean = cleanLc(s.lcNo);
-        const status = (s.status || '').toLowerCase();
-        return recordLcNoClean === lcNoClean &&
-            (status === 'accepted' || status === 'in stock') &&
+        return isLcMatch(s.lcNo, lcNoClean) &&
+            isAcceptedStock(s) &&
             (s.bdCnF || s.indianCnF);
     });
 
@@ -2046,10 +2056,8 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
 
                                     const totalReceiveQty = filteredCogRecords.reduce((sum, record) => {
                                         const matchingStocks = allStockRecords.filter(s => {
-                                            const status = (s.status || '').toLowerCase();
-                                            const isAccepted = status === 'accepted' || status === 'in stock';
-                                            return isAccepted &&
-                                                cleanLc(s.lcNo) === lcNoClean &&
+                                            return isAcceptedStock(s) &&
+                                                isLcMatch(s.lcNo, lcNoClean) &&
                                                 String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
                                                 String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                         });
@@ -2058,10 +2066,8 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
 
                                     const totalShort = filteredCogRecords.reduce((sum, record) => {
                                         const matchingStocks = allStockRecords.filter(s => {
-                                            const status = (s.status || '').toLowerCase();
-                                            const isAccepted = status === 'accepted' || status === 'in stock';
-                                            return isAccepted &&
-                                                cleanLc(s.lcNo) === lcNoClean &&
+                                            return isAcceptedStock(s) &&
+                                                isLcMatch(s.lcNo, lcNoClean) &&
                                                 String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
                                                 String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                         });
@@ -6189,26 +6195,26 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             const bankNames = [...new Set(rawBanks.map(b => typeof b === 'string' ? b : (b.bankName || b.name || '')).filter(Boolean))];
             setBanks(bankNames);
 
-            const rawImporters = Array.isArray(impRes.data) ? impRes.data : [];
+            const rawImporters = Array.isArray(impData) ? impData : [];
             const importerNames = [...new Set(rawImporters.map(i => typeof i === 'string' ? i : (i.name || i.importerName || '')).filter(Boolean))];
             setImporters(importerNames);
 
-            const rawExporters = Array.isArray(expRes.data) ? expRes.data : [];
+            const rawExporters = Array.isArray(expData) ? expData : [];
             const exporterNames = [...new Set(rawExporters.map(e => typeof e === 'string' ? e : (e.name || e.exporterName || '')).filter(Boolean))];
             setExporters(exporterNames);
 
-            const rawInsurance = Array.isArray(insRes.data) ? insRes.data : [];
+            const rawInsurance = Array.isArray(insData) ? insData : [];
             setInsuranceRecordsRaw(rawInsurance);
             const insuranceNames = [...new Set(rawInsurance.map(ins => typeof ins === 'string' ? ins : (ins.companyName || ins.name || ins.insuranceCo || '')).filter(Boolean))];
             setInsuranceCos(insuranceNames);
 
-            setIpRecordsRaw(Array.isArray(ipRes.data) ? ipRes.data : []);
-            const validIps = (Array.isArray(ipRes.data) ? ipRes.data : [])
+            setIpRecordsRaw(Array.isArray(ipData) ? ipData : []);
+            const validIps = (Array.isArray(ipData) ? ipData : [])
                 .filter(i => i.ipNo && !i.status?.toLowerCase().includes('rejected'))
                 .map(i => i.ipNo);
             setIpList([...new Set(validIps)]);
 
-            const rawPi = Array.isArray(piRes.data) ? piRes.data : [];
+            const rawPi = Array.isArray(piData) ? piData : [];
             const decryptedPi = rawPi.map(item => {
                 try {
                     let d = item.data ? decryptData(item.data) : item;
@@ -6223,22 +6229,22 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 .map(p => p.piNumber);
             setPiList([...new Set(validPis)]);
 
-            const validProdNames = Array.isArray(prodRes.data)
-                ? [...new Set(prodRes.data.map(p => (typeof p === 'string' ? p : p.ipName || p.name)).filter(Boolean))]
+            const validProdNames = Array.isArray(prodData)
+                ? [...new Set(prodData.map(p => (typeof p === 'string' ? p : p.ipName || p.name)).filter(Boolean))]
                 : [];
             setProductItems(validProdNames);
-            setAllStockRecords(Array.isArray(stockRes.data) ? stockRes.data : []);
-            setAllSalesRecords(Array.isArray(saleRes.data) ? saleRes.data : []);
-            setPorts(Array.isArray(portRes.data) ? portRes.data : []);
+            setAllStockRecords(Array.isArray(stockData) ? stockData : []);
+            setAllSalesRecords(Array.isArray(saleData) ? saleData : []);
+            setPorts(Array.isArray(portData) ? portData : []);
 
             setViewData(prev => {
                 if (!prev) return null;
-                const updated = freshLcRecords.find(item => item._id === prev._id);
+                const updated = lcData.find(item => item._id === prev._id);
                 return updated || prev;
             });
 
             // Build employee maps (first name and full name)
-            const rawEmps = Array.isArray(empRes?.data) ? empRes.data : [];
+            const rawEmps = Array.isArray(empRes) ? empRes : [];
             const empMap = {};
             const empFullMap = {};
             rawEmps.forEach(emp => {
@@ -7725,11 +7731,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
         const receiptsMapForBalance = {};
         allStockRecords
-            .filter(s => {
-                const recordLcNoClean = cleanLc(s.lcNo);
-                const status = (s.status || '').toLowerCase();
-                return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-            })
+            .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
             .forEach(s => {
                 const rawDate = s.date || s.receiveDate || s.createdAt || '';
                 const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
@@ -7749,12 +7751,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
         const borderSaleQtyKg = allSalesRecords
             .filter(s => {
-                const matchesLc = !!lcNoClean && (
-                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
-                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
-                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
-                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
-                );
+                const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
                 const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                 const status = (s.status || '').toLowerCase();
@@ -7806,11 +7803,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             // Stock Receipts
             const receiptsMap = {};
             allStockRecords
-                .filter(s => {
-                    const recordLcNoClean = cleanLc(s.lcNo);
-                    const status = (s.status || '').toLowerCase();
-                    return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-                })
+                .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
                 .forEach(s => {
                     const rawDate = s.date || s.receiveDate || s.createdAt || '';
                     const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
@@ -7841,12 +7834,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             // Border Sales
             const bQty = allSalesRecords
                 .filter(s => {
-                    const matchesLc = !!lcNoClean && (
-                        (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
-                        (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
-                        (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
-                        (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
-                    );
+                    const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
                     const sTypeLow = (s.saleType || '').toLowerCase().trim();
                     const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                     const status = (s.status || '').toLowerCase();
@@ -11329,11 +11317,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
                                         const receiptsMapForBalance = {};
                                         allStockRecords
-                                            .filter(s => {
-                                                const recordLcNoClean = cleanLc(s.lcNo);
-                                                const status = (s.status || '').toLowerCase();
-                                                return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-                                            })
+                                            .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
                                             .forEach(s => {
                                                 const rawDate = s.date || s.receiveDate || s.createdAt || '';
                                                 const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
@@ -11354,12 +11338,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
                                         const borderSaleQtyKg = allSalesRecords
                                             .filter(s => {
-                                                const matchesLc = !!lcNoClean && (
-                                                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
-                                                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
-                                                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
-                                                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
-                                                );
+                                                const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
                                                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
                                                 const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                                                 const status = (s.status || '').toLowerCase();
@@ -11764,9 +11743,7 @@ style={
                                                                                             const pReceiptsMap = {};
                                                                                             allStockRecords
                                                                                                 .filter(s => {
-                                                                                                    const recordLcNoClean = String(s.lcNo || '').replace(/\D/g, '');
-                                                                                                    const status = (s.status || '').toLowerCase();
-                                                                                                    const matchesLc = recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+                                                                                                    const matchesLc = isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s);
                                                                                                     const matchesProduct = String(s.productName || '').toLowerCase().trim() === String(p.productName || '').toLowerCase().trim();
                                                                                                     return matchesLc && matchesProduct;
                                                                                                 })
@@ -11791,14 +11768,15 @@ style={
 
                                                                                             const pBorderSaleQtyKg = allSalesRecords
                                                                                                 .filter(s => {
-                                                                                                    const recordLcNoClean = String(s.lcNo || '').replace(/\D/g, '');
+                                                                                                    const matchesLc = isSaleLcMatch(s, lcNoClean);
                                                                                                     const sTypeLow = (s.saleType || '').toLowerCase().trim();
                                                                                                     const isBorder = sTypeLow.includes('border') ||
                                                                                                         (s.invoiceNo || '').startsWith('BS') ||
                                                                                                         (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                                                                                                        (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
+                                                                                                        (matchesLc && !!(s.port || s.importer));
                                                                                                     const status = (s.status || '').toLowerCase();
-                                                                                                    return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+                                                                                                    const isValidStatus = !status.includes('rejected') && status !== 'requested';
+                                                                                                    return matchesLc && isValidStatus && isBorder;
                                                                                                 })
                                                                                                 .reduce((sum, s) => {
                                                                                                     const matchingItemsQty = (s.items || [])
@@ -12144,11 +12122,7 @@ style={
 
                                 const receiptsMapForBalance = {};
                                 allStockRecords
-                                    .filter(s => {
-                                        const recordLcNoClean = cleanLc(s.lcNo);
-                                        const status = (s.status || '').toLowerCase();
-                                        return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-                                    })
+                                    .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
                                     .forEach(s => {
                                         const rawDate = s.date || s.receiveDate || s.createdAt || '';
                                         const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
@@ -12169,12 +12143,7 @@ style={
                                 // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
                                 const borderSaleQtyKg = allSalesRecords
                                     .filter(s => {
-                                        const matchesLc = !!lcNoClean && (
-                                            (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
-                                            (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
-                                            (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
-                                            (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
-                                        );
+                                        const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
                                         const sTypeLow = (s.saleType || '').toLowerCase().trim();
                                         const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                                         const status = (s.status || '').toLowerCase();

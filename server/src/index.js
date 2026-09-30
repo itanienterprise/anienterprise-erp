@@ -250,6 +250,14 @@ const CryptoJS = require('crypto-js');
 const ActivityLog = require('./models/ActivityLog');
 const UserDailyActivity = require('./models/UserDailyActivity');
 
+// ─── Attendance Module Models ────────────────────────────────────────────────
+const AttendancePunch  = require('./models/AttendancePunch');
+const AttendanceLog    = require('./models/AttendanceLog');
+const ShiftConfig      = require('./models/ShiftConfig');
+const LeaveRequest     = require('./models/LeaveRequest');
+const DeviceMapping    = require('./models/DeviceMapping');
+// ────────────────────────────────────────────────────────────────────────────
+
 // Intelligent Cluster-based Calculation of Actual ERP Active Usage Time
 const calculateActiveTimeFromTimestamps = (timestamps, isLive = false, idleThresholdMs = 5 * 60 * 1000, baseActionMs = 60 * 1000) => {
   if (!timestamps || timestamps.length === 0) return 0;
@@ -5729,6 +5737,471 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is healthy' });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ATTENDANCE MODULE — ZKTech F8 Integration
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Helper: day diff between two YYYY-MM-DD strings ─────────────────────────
+const dayDiff = (from, to) => {
+  const a = new Date(from), b = new Date(to);
+  return Math.max(1, Math.round((b - a) / (1000 * 60 * 60 * 24)) + 1);
+};
+
+// ─── Helper: compute AttendanceLog from punches for one employee on one date ──
+const processEmployeeDay = async (employeeId, date) => {
+  try {
+    const dayStart = new Date(`${date}T00:00:00.000Z`);
+    const dayEnd   = new Date(`${date}T23:59:59.999Z`);
+
+    const punches = await AttendancePunch.find({
+      employeeId,
+      punchTime: { $gte: dayStart, $lte: dayEnd }
+    }).sort({ punchTime: 1 });
+
+    if (punches.length === 0) return null;
+
+    // Get shift for employee
+    const shift = await ShiftConfig.findOne({
+      $or: [{ applicableTo: employeeId }, { isDefault: true, applicableTo: { $size: 0 } }]
+    }).sort({ isDefault: 1 });
+
+    const inPunches  = punches.filter(p => p.punchType === 'IN'  || p.punchType === 'UNKNOWN');
+    const outPunches = punches.filter(p => p.punchType === 'OUT');
+
+    const firstIn  = inPunches[0]?.punchTime  || punches[0].punchTime;
+    const lastOut  = outPunches.length ? outPunches[outPunches.length - 1].punchTime : null;
+
+    let totalHours = 0;
+    let overtimeHours = 0;
+    let status = 'PRESENT';
+
+    if (firstIn && lastOut) {
+      totalHours = Math.round(((lastOut - firstIn) / (1000 * 60 * 60)) * 100) / 100;
+    }
+
+    if (shift) {
+      const [sh, sm] = shift.startTime.split(':').map(Number);
+      const shiftStart = new Date(firstIn);
+      shiftStart.setHours(sh, sm, 0, 0);
+
+      const lateMs = firstIn - shiftStart;
+      const lateMin = lateMs / (1000 * 60);
+
+      if (lateMin > (shift.graceMinutes + 240)) {
+        status = 'HALF_DAY';
+      } else if (lateMin > shift.graceMinutes) {
+        status = 'LATE';
+      }
+
+      const shiftHours = (() => {
+        const [eh, em] = shift.endTime.split(':').map(Number);
+        return eh + em / 60 - sh - sm / 60 - shift.breakMinutes / 60;
+      })();
+
+      if (totalHours > shiftHours) {
+        overtimeHours = Math.round((totalHours - shiftHours) * 100) / 100;
+      }
+    }
+
+    return { firstIn, lastOut, totalHours, overtimeHours, status, shiftId: shift?._id || null };
+  } catch (e) {
+    console.error('[Attendance] processEmployeeDay error:', e.message);
+    return null;
+  }
+};
+
+// ─── 1. ZKTech ADMS Device Push Receiver ─────────────────────────────────────
+// The F8 device sends a POST with query params: sn, table, Stamp, PIN, Checked, Status, Verify
+// GET is used for heartbeat / device registration check
+app.get('/api/attendance/device/push', (req, res) => {
+  res.set('Content-Type', 'text/plain');
+  res.send('OK');
+});
+
+app.post('/api/attendance/device/push', async (req, res) => {
+  try {
+    // ADMS format: body may be urlencoded or JSON; query params also common
+    const raw = { ...req.query, ...req.body };
+    const deviceId  = raw.sn   || raw.DeviceSN || 'F8-DEFAULT';
+    const enrollId  = parseInt(raw.PIN || raw.pin || raw.UserId || 0);
+    const stamp     = raw.Stamp || raw.stamp || raw.DateTime || raw.datetime || new Date().toISOString();
+    const checked   = parseInt(raw.Checked || raw.checked || 0);
+    const verify    = raw.Verify || raw.verify || 'UNKNOWN';
+
+    // Checked codes: 0=IN, 1=OUT, 2=BREAK_OUT, 3=BREAK_IN (ZK standard)
+    const punchTypeMap = { 0: 'IN', 1: 'OUT', 2: 'BREAK_OUT', 3: 'BREAK_IN' };
+    const punchType = punchTypeMap[checked] || 'UNKNOWN';
+
+    const punchTime = new Date(stamp);
+    if (isNaN(punchTime.getTime())) {
+      return res.status(400).set('Content-Type', 'text/plain').send('ERR:Invalid timestamp');
+    }
+
+    // Lookup employee mapping
+    const mapping = await DeviceMapping.findOne({ enrollId });
+    const employeeId = mapping?.employeeId || null;
+
+    const punch = new AttendancePunch({
+      deviceId,
+      enrollId,
+      employeeId,
+      punchTime,
+      punchType,
+      verifyMode: verify,
+      rawPayload: JSON.stringify(raw),
+      processed:  false,
+      unmatched:  !mapping
+    });
+    await punch.save();
+
+    // ZKTech expects plain text "OK" on success
+    res.set('Content-Type', 'text/plain').send('OK');
+  } catch (err) {
+    console.error('[Attendance] Device push error:', err.message);
+    res.set('Content-Type', 'text/plain').send('ERR:' + err.message);
+  }
+});
+
+// ─── 2. Device Mapping CRUD ───────────────────────────────────────────────────
+apiRouter.get('/api/attendance/mappings', verifyPermission('employees', 'view'), async (req, res) => {
+  try {
+    const mappings = await DeviceMapping.find().sort({ enrollId: 1 });
+    res.json(mappings);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+apiRouter.post('/api/attendance/mappings', verifyPermission('employees', 'edit'), async (req, res) => {
+  try {
+    const { enrollId, employeeId, employeeName, employeeEmpId, deviceId, notes } = req.body;
+    if (!enrollId || !employeeId) return res.status(400).json({ message: 'enrollId and employeeId are required' });
+
+    // Upsert: update if exists, create if not
+    const mapping = await DeviceMapping.findOneAndUpdate(
+      { enrollId: Number(enrollId) },
+      { enrollId: Number(enrollId), employeeId, employeeName: employeeName || '', employeeEmpId: employeeEmpId || '', deviceId: deviceId || 'F8-DEFAULT', notes: notes || '' },
+      { upsert: true, new: true }
+    );
+
+    // Retroactively link any unmatched punches for this enrollId
+    await AttendancePunch.updateMany({ enrollId: Number(enrollId), unmatched: true }, { employeeId, unmatched: false });
+
+    res.json(mapping);
+  } catch (err) { res.status(400).json({ message: err.message }); }
+});
+
+apiRouter.delete('/api/attendance/mappings/:id', verifyPermission('employees', 'edit'), async (req, res) => {
+  try {
+    await DeviceMapping.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Mapping deleted' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ─── 3. Raw Punches ───────────────────────────────────────────────────────────
+apiRouter.get('/api/attendance/punches', verifyPermission('employees', 'view'), async (req, res) => {
+  try {
+    const { date, employeeId, unmatched, limit = 200 } = req.query;
+    const query = {};
+    if (date) {
+      const d = new Date(date);
+      query.punchTime = { $gte: new Date(`${date}T00:00:00.000Z`), $lte: new Date(`${date}T23:59:59.999Z`) };
+    }
+    if (employeeId) query.employeeId = employeeId;
+    if (unmatched === 'true') query.unmatched = true;
+
+    const punches = await AttendancePunch.find(query).sort({ punchTime: -1 }).limit(Number(limit));
+    res.json(punches);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ─── 4. Process daily logs (manual trigger or scheduled) ──────────────────────
+apiRouter.post('/api/attendance/process', verifyPermission('employees', 'edit'), async (req, res) => {
+  try {
+    const { date } = req.body; // "YYYY-MM-DD", defaults to today
+    const targetDate = date || new Date().toISOString().split('T')[0];
+
+    const dayStart = new Date(`${targetDate}T00:00:00.000Z`);
+    const dayEnd   = new Date(`${targetDate}T23:59:59.999Z`);
+
+    // Get all unique employeeIds that punched on this date
+    const uniqueEmployees = await AttendancePunch.distinct('employeeId', {
+      punchTime: { $gte: dayStart, $lte: dayEnd },
+      employeeId: { $ne: null }
+    });
+
+    let processed = 0;
+
+    // Also ensure ABSENT records for all known employees
+    const allEmployees = await Employee.find({});
+
+    for (const emp of allEmployees) {
+      let dec;
+      try {
+        dec = decryptData(emp.data);
+        if (dec && dec.data && typeof dec.data === 'string' && !dec.employeeId) {
+          try { dec = decryptData(dec.data); } catch (e) {}
+        }
+      } catch (e) { continue; }
+
+      const empObjId = emp._id;
+      const hasPunch = uniqueEmployees.some(id => id && id.toString() === empObjId.toString());
+
+      if (hasPunch) {
+        const result = await processEmployeeDay(empObjId, targetDate);
+        if (result) {
+          await AttendanceLog.findOneAndUpdate(
+            { employeeId: empObjId, date: targetDate },
+            {
+              employeeId: empObjId,
+              employeeName: dec?.name || dec?.firstName || '',
+              employeeEmpId: dec?.employeeId || '',
+              date: targetDate,
+              shiftId: result.shiftId,
+              firstPunchIn: result.firstIn,
+              lastPunchOut: result.lastOut,
+              totalHours: result.totalHours,
+              overtimeHours: result.overtimeHours,
+              status: result.status,
+              manualOverride: false
+            },
+            { upsert: true, new: true }
+          );
+          await AttendancePunch.updateMany(
+            { employeeId: empObjId, punchTime: { $gte: dayStart, $lte: dayEnd } },
+            { processed: true }
+          );
+          processed++;
+        }
+      } else {
+        // Ensure ABSENT record exists (don't overwrite manual corrections)
+        const existing = await AttendanceLog.findOne({ employeeId: empObjId, date: targetDate });
+        if (!existing) {
+          await AttendanceLog.create({
+            employeeId: empObjId,
+            employeeName: dec?.name || dec?.firstName || '',
+            employeeEmpId: dec?.employeeId || '',
+            date: targetDate,
+            status: 'ABSENT'
+          });
+        }
+      }
+    }
+
+    res.json({ message: `Processed ${processed} employees for ${targetDate}`, date: targetDate });
+  } catch (err) {
+    console.error('[Attendance] Process error:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── 5. Attendance Logs ───────────────────────────────────────────────────────
+apiRouter.get('/api/attendance/logs', verifyPermission('employees', 'view'), async (req, res) => {
+  try {
+    const { date, fromDate, toDate, employeeId, status, limit = 500 } = req.query;
+    const query = {};
+
+    if (date) {
+      query.date = date;
+    } else if (fromDate && toDate) {
+      query.date = { $gte: fromDate, $lte: toDate };
+    } else if (fromDate) {
+      query.date = { $gte: fromDate };
+    }
+
+    if (employeeId) query.employeeId = employeeId;
+    if (status) query.status = status;
+
+    const logs = await AttendanceLog.find(query).sort({ date: -1, employeeName: 1 }).limit(Number(limit));
+    res.json(logs);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+apiRouter.put('/api/attendance/logs/:id', verifyPermission('employees', 'edit'), async (req, res) => {
+  try {
+    const user = req.session.user;
+    const update = {
+      ...req.body,
+      manualOverride: true,
+      overriddenBy: user?.username || 'admin'
+    };
+    const log = await AttendanceLog.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!log) return res.status(404).json({ message: 'Log not found' });
+    res.json(log);
+  } catch (err) { res.status(400).json({ message: err.message }); }
+});
+
+// Today's summary counts
+apiRouter.get('/api/attendance/summary/today', verifyPermission('employees', 'view'), async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const [present, absent, late, halfDay, onLeave] = await Promise.all([
+      AttendanceLog.countDocuments({ date: today, status: 'PRESENT' }),
+      AttendanceLog.countDocuments({ date: today, status: 'ABSENT' }),
+      AttendanceLog.countDocuments({ date: today, status: 'LATE' }),
+      AttendanceLog.countDocuments({ date: today, status: 'HALF_DAY' }),
+      AttendanceLog.countDocuments({ date: today, status: 'LEAVE' }),
+    ]);
+    const totalEmployees = await Employee.countDocuments({});
+    const unmatchedPunches = await AttendancePunch.countDocuments({ unmatched: true });
+
+    res.json({ date: today, present, absent, late, halfDay, onLeave, totalEmployees, unmatchedPunches });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Monthly summary per employee
+apiRouter.get('/api/attendance/report/monthly', verifyPermission('employees', 'view'), async (req, res) => {
+  try {
+    const { month, year, employeeId } = req.query; // month: "01"-"12", year: "2026"
+    const y = year || new Date().getFullYear();
+    const m = (month || String(new Date().getMonth() + 1)).padStart(2, '0');
+    const fromDate = `${y}-${m}-01`;
+    const lastDay = new Date(Number(y), Number(m), 0).getDate();
+    const toDate = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+
+    const query = { date: { $gte: fromDate, $lte: toDate } };
+    if (employeeId) query.employeeId = employeeId;
+
+    const logs = await AttendanceLog.find(query).sort({ employeeName: 1, date: 1 });
+
+    // Group by employee
+    const byEmp = {};
+    for (const log of logs) {
+      const key = log.employeeEmpId || log.employeeId?.toString();
+      if (!byEmp[key]) {
+        byEmp[key] = {
+          employeeId: log.employeeId,
+          employeeName: log.employeeName,
+          employeeEmpId: log.employeeEmpId,
+          present: 0, absent: 0, late: 0, halfDay: 0, leave: 0,
+          totalHours: 0, overtimeHours: 0, logs: []
+        };
+      }
+      const s = log.status;
+      if (s === 'PRESENT') byEmp[key].present++;
+      else if (s === 'ABSENT') byEmp[key].absent++;
+      else if (s === 'LATE') { byEmp[key].present++; byEmp[key].late++; }
+      else if (s === 'HALF_DAY') byEmp[key].halfDay++;
+      else if (s === 'LEAVE') byEmp[key].leave++;
+      byEmp[key].totalHours    = Math.round((byEmp[key].totalHours    + (log.totalHours    || 0)) * 100) / 100;
+      byEmp[key].overtimeHours = Math.round((byEmp[key].overtimeHours + (log.overtimeHours || 0)) * 100) / 100;
+      byEmp[key].logs.push({ date: log.date, status: log.status, firstPunchIn: log.firstPunchIn, lastPunchOut: log.lastPunchOut, totalHours: log.totalHours });
+    }
+
+    res.json({ month: m, year: y, fromDate, toDate, summary: Object.values(byEmp) });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ─── 6. Shift Management ──────────────────────────────────────────────────────
+apiRouter.get('/api/attendance/shifts', verifyPermission('employees', 'view'), async (req, res) => {
+  try {
+    const shifts = await ShiftConfig.find().sort({ createdAt: -1 });
+    res.json(shifts);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+apiRouter.post('/api/attendance/shifts', verifyPermission('employees', 'edit'), async (req, res) => {
+  try {
+    const shift = new ShiftConfig(req.body);
+    const saved = await shift.save();
+    res.status(201).json(saved);
+  } catch (err) { res.status(400).json({ message: err.message }); }
+});
+
+apiRouter.put('/api/attendance/shifts/:id', verifyPermission('employees', 'edit'), async (req, res) => {
+  try {
+    const shift = await ShiftConfig.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!shift) return res.status(404).json({ message: 'Shift not found' });
+    res.json(shift);
+  } catch (err) { res.status(400).json({ message: err.message }); }
+});
+
+apiRouter.delete('/api/attendance/shifts/:id', adminOnly, async (req, res) => {
+  try {
+    await ShiftConfig.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Shift deleted' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ─── 7. Leave Management ──────────────────────────────────────────────────────
+apiRouter.get('/api/attendance/leaves', verifyPermission('employees', 'view'), async (req, res) => {
+  try {
+    const { status, employeeId } = req.query;
+    const query = {};
+    if (status) query.status = status;
+    if (employeeId) query.employeeId = employeeId;
+    const leaves = await LeaveRequest.find(query).sort({ createdAt: -1 });
+    res.json(leaves);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+apiRouter.post('/api/attendance/leaves', verifyPermission('employees', 'view'), async (req, res) => {
+  try {
+    const total = dayDiff(req.body.fromDate, req.body.toDate);
+    const leave = new LeaveRequest({ ...req.body, totalDays: total });
+    const saved = await leave.save();
+    res.status(201).json(saved);
+  } catch (err) { res.status(400).json({ message: err.message }); }
+});
+
+apiRouter.put('/api/attendance/leaves/:id', verifyPermission('employees', 'edit'), async (req, res) => {
+  try {
+    const user = req.session.user;
+    const { status, approveNote } = req.body;
+    const update = { status };
+    if (status === 'APPROVED' || status === 'REJECTED') {
+      update.approvedBy = user?.username || 'admin';
+      update.approvedAt = new Date();
+      update.approveNote = approveNote || '';
+    }
+    const leave = await LeaveRequest.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!leave) return res.status(404).json({ message: 'Leave request not found' });
+
+    // If approved, update AttendanceLog for those dates
+    if (status === 'APPROVED') {
+      let d = new Date(leave.fromDate);
+      const end = new Date(leave.toDate);
+      while (d <= end) {
+        const dateStr = d.toISOString().split('T')[0];
+        await AttendanceLog.findOneAndUpdate(
+          { employeeId: leave.employeeId, date: dateStr },
+          {
+            employeeId: leave.employeeId,
+            employeeName: leave.employeeName,
+            employeeEmpId: leave.employeeEmpId,
+            date: dateStr,
+            status: 'LEAVE',
+            leaveType: leave.leaveType,
+            remarks: `Leave: ${leave.leaveType}`,
+            manualOverride: true,
+            overriddenBy: user?.username || 'admin'
+          },
+          { upsert: true }
+        );
+        d.setDate(d.getDate() + 1);
+      }
+    }
+
+    res.json(leave);
+  } catch (err) { res.status(400).json({ message: err.message }); }
+});
+
+apiRouter.delete('/api/attendance/leaves/:id', verifyPermission('employees', 'edit'), async (req, res) => {
+  try {
+    await LeaveRequest.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Leave request deleted' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ─── 8. Live punch feed (last N punches) ─────────────────────────────────────
+apiRouter.get('/api/attendance/live', verifyPermission('employees', 'view'), async (req, res) => {
+  try {
+    const punches = await AttendancePunch.find({}).sort({ punchTime: -1 }).limit(30);
+    res.json(punches);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
+
