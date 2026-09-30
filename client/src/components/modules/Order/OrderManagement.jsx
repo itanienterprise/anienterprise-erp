@@ -1100,6 +1100,45 @@ const OrderManagement = ({
 
     const handleStatusUpdate = async (order, newStatus) => {
         try {
+            const actionBy = currentUser ? (currentUser.name || currentUser.username || 'Administrator') : 'Administrator';
+            const actionUsername = currentUser ? (currentUser.username || 'admin') : 'admin';
+
+            // Instant optimistic update
+            if (newStatus === 'Rejected') {
+                if (order.isEdited === true && (order.status || '').toLowerCase() !== 'requested') {
+                    const nextOrder = { ...order, isEdited: false };
+                    setAllSalesRecords(prev => (prev || []).map(o => o._id === order._id ? nextOrder : o));
+                    setSales(prev => (prev || []).map(o => o._id === order._id ? nextOrder : o));
+                    queryClient.setQueryData(['sales'], (old = []) =>
+                        Array.isArray(old) ? old.map(o => o._id === order._id ? nextOrder : o) : []
+                    );
+                } else {
+                    setAllSalesRecords(prev => (prev || []).filter(o => o._id !== order._id));
+                    setSales(prev => (prev || []).filter(o => o._id !== order._id));
+                    queryClient.setQueryData(['sales'], (old = []) =>
+                        Array.isArray(old) ? old.filter(o => o._id !== order._id) : []
+                    );
+                }
+            } else {
+                const payload = {
+                    ...order,
+                    status: newStatus,
+                    isEdited: false,
+                    acceptedBy: order.acceptedBy || actionBy,
+                    acceptedByName: order.acceptedByName || actionBy,
+                    acceptedByUsername: order.acceptedByUsername || actionUsername,
+                    approvedBy: order.approvedBy || actionBy,
+                    approvedByName: order.approvedByName || actionBy,
+                    approvedByUsername: order.approvedByUsername || actionUsername,
+                };
+                setAllSalesRecords(prev => (prev || []).map(o => o._id === order._id ? payload : o));
+                setSales(prev => (prev || []).map(o => o._id === order._id ? payload : o));
+                queryClient.setQueryData(['sales'], (old = []) =>
+                    Array.isArray(old) ? old.map(o => o._id === order._id ? payload : o) : []
+                );
+            }
+            if (refreshPendingIndicators) refreshPendingIndicators();
+
             if (newStatus === 'Rejected') {
                 if (order.isEdited === true && (order.status || '').toLowerCase() !== 'requested') {
                     await axios.put(`${API_BASE_URL}/api/sales/${order._id}`, { ...order, isEdited: false });
@@ -1113,8 +1152,6 @@ const OrderManagement = ({
                     }
                 }
             } else {
-                const actionBy = currentUser ? (currentUser.name || currentUser.username || 'Administrator') : 'Administrator';
-                const actionUsername = currentUser ? (currentUser.username || 'admin') : 'admin';
                 const payload = {
                     ...order,
                     status: newStatus,
@@ -1145,6 +1182,82 @@ const OrderManagement = ({
             console.error(`Error updating order status to ${newStatus}:`, err);
             const msg = err.response?.data?.message || 'Failed to update order status';
             alert(msg);
+        }
+    };
+
+    const handleBulkAccept = async () => {
+        if (!selectedItems || selectedItems.size === 0) return;
+        const targetOrders = (sales || []).filter(s => selectedItems.has(s._id));
+        if (targetOrders.length === 0) return;
+
+        const actionBy = currentUser ? (currentUser.name || currentUser.username || 'Administrator') : 'Administrator';
+        const actionUsername = currentUser ? (currentUser.username || 'admin') : 'admin';
+        const targetIds = new Set(targetOrders.map(o => o._id));
+
+        // Optimistic update
+        setAllSalesRecords(prev => (prev || []).map(o => targetIds.has(o._id) ? { ...o, status: 'Accepted', isEdited: false, acceptedBy: actionBy, approvedBy: actionBy } : o));
+        setSales(prev => (prev || []).map(o => targetIds.has(o._id) ? { ...o, status: 'Accepted', isEdited: false, acceptedBy: actionBy, approvedBy: actionBy } : o));
+        queryClient.setQueryData(['sales'], (old = []) =>
+            Array.isArray(old) ? old.map(o => targetIds.has(o._id) ? { ...o, status: 'Accepted', isEdited: false, acceptedBy: actionBy, approvedBy: actionBy } : o) : []
+        );
+        if (refreshPendingIndicators) refreshPendingIndicators();
+
+        try {
+            for (const order of targetOrders) {
+                const payload = {
+                    ...order,
+                    status: 'Accepted',
+                    isEdited: false,
+                    acceptedBy: order.acceptedBy || actionBy,
+                    acceptedByName: order.acceptedByName || actionBy,
+                    acceptedByUsername: order.acceptedByUsername || actionUsername,
+                    approvedBy: order.approvedBy || actionBy,
+                    approvedByName: order.approvedByName || actionBy,
+                    approvedByUsername: order.approvedByUsername || actionUsername,
+                };
+                await axios.put(`${API_BASE_URL}/api/sales/${order._id}`, payload);
+            }
+            if (setSelectedItems) setSelectedItems(new Set());
+            if (setIsSelectionMode) setIsSelectionMode(false);
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            fetchOrders();
+            if (refreshPendingIndicators) refreshPendingIndicators();
+        } catch (err) {
+            console.error('Error bulk accepting orders:', err);
+        }
+    };
+
+    const handleBulkReject = async () => {
+        if (!selectedItems || selectedItems.size === 0) return;
+        const targetOrders = (sales || []).filter(s => selectedItems.has(s._id));
+        if (targetOrders.length === 0) return;
+        const targetIds = new Set(targetOrders.map(o => o._id));
+
+        // Optimistic update
+        setAllSalesRecords(prev => (prev || []).filter(o => !targetIds.has(o._id)));
+        setSales(prev => (prev || []).filter(o => !targetIds.has(o._id)));
+        queryClient.setQueryData(['sales'], (old = []) =>
+            Array.isArray(old) ? old.filter(o => !targetIds.has(o._id)) : []
+        );
+        if (refreshPendingIndicators) refreshPendingIndicators();
+
+        try {
+            for (const order of targetOrders) {
+                if (order.isEdited === true && (order.status || '').toLowerCase() !== 'requested') {
+                    await axios.put(`${API_BASE_URL}/api/sales/${order._id}`, { ...order, isEdited: false });
+                } else {
+                    await axios.delete(`${API_BASE_URL}/api/sales/${order._id}`);
+                }
+            }
+            if (setSelectedItems) setSelectedItems(new Set());
+            if (setIsSelectionMode) setIsSelectionMode(false);
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            fetchOrders();
+            if (refreshPendingIndicators) refreshPendingIndicators();
+        } catch (err) {
+            console.error('Error bulk rejecting orders:', err);
         }
     };
 

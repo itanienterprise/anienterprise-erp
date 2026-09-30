@@ -1268,9 +1268,18 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
             const updated = {
                 ...purchase,
                 status: newStatus,
+                isEdited: false,
                 approvedBy: employeeId,
                 approvedByName: employeeDisplayName
             };
+
+            // Instant optimistic update
+            setPurchaseReceives(prev => (prev || []).map(p => p._id === purchase._id ? updated : p));
+            queryClient.setQueryData(['purchase-receives'], (old = []) =>
+                Array.isArray(old) ? old.map(p => p._id === purchase._id ? updated : p) : []
+            );
+            if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+
             const res = await axios.put(`${API_BASE_URL}/api/purchase-receives/${purchase._id}`, updated);
             const savedPR = res.data || updated;
             const statusLower = (newStatus || '').toLowerCase();

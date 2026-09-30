@@ -518,6 +518,38 @@ const SaleManagement = ({
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const adminName = currentUser?.name || currentUser?.username || 'Admin';
 
+            const acceptedIds = new Set(recordsToAccept.map(r => r._id));
+            setAllSalesRecords(prev => (prev || []).map(s => {
+                if (acceptedIds.has(s._id)) {
+                    const finalStatus = (parseFloat(s.paidAmount || 0) >= parseFloat(s.totalAmount || 0) && parseFloat(s.totalAmount || 0) > 0) ? 'Complete' : 'Pending';
+                    return { ...s, status: finalStatus, isEdited: false, acceptedBy: actionBy, approvedBy: actionBy };
+                }
+                return s;
+            }));
+            setSales(prev => {
+                const next = (prev || []).map(s => {
+                    if (acceptedIds.has(s._id)) {
+                        const finalStatus = (parseFloat(s.paidAmount || 0) >= parseFloat(s.totalAmount || 0) && parseFloat(s.totalAmount || 0) > 0) ? 'Complete' : 'Pending';
+                        return { ...s, status: finalStatus, isEdited: false, acceptedBy: actionBy, approvedBy: actionBy };
+                    }
+                    return s;
+                });
+                if (statusFilter === 'Requested' || statusFilter === 'Pending Requests' || isRequestedListOnly) {
+                    return next.filter(s => (s.status || '').toLowerCase() === 'requested' || s.isEdited === true);
+                }
+                return next;
+            });
+            queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
+                Array.isArray(old) ? old.map(s => {
+                    if (acceptedIds.has(s._id)) {
+                        const finalStatus = (parseFloat(s.paidAmount || 0) >= parseFloat(s.totalAmount || 0) && parseFloat(s.totalAmount || 0) > 0) ? 'Complete' : 'Pending';
+                        return { ...s, status: finalStatus, isEdited: false, acceptedBy: actionBy, approvedBy: actionBy };
+                    }
+                    return s;
+                }) : []
+            );
+            if (refreshPendingIndicators) refreshPendingIndicators();
+
             for (const sale of recordsToAccept) {
                 const { _id, createdAt: _createdAt, ...rest } = sale;
                 const finalStatus = (parseFloat(sale.paidAmount || 0) >= parseFloat(sale.totalAmount || 0) && parseFloat(sale.totalAmount || 0) > 0)
@@ -573,6 +605,9 @@ const SaleManagement = ({
 
             setSelectedItems(new Set());
             if (setIsSelectionMode) setIsSelectionMode(false);
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sales });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
             try { fetchSales(); } catch (e) { console.error('fetchSales error', e); }
             try { fetchCustomers(); } catch (e) { console.error('fetchCustomers error', e); }
             try { fetchWarehouses(); } catch (e) { console.error('fetchWarehouses error', e); }
@@ -645,6 +680,20 @@ const SaleManagement = ({
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const adminName = currentUser?.name || currentUser?.username || 'Admin';
 
+            const rejectedIds = new Set(recordsToReject.map(r => r._id));
+            setAllSalesRecords(prev => (prev || []).map(s => rejectedIds.has(s._id) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s));
+            setSales(prev => {
+                const next = (prev || []).map(s => rejectedIds.has(s._id) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s);
+                if (statusFilter === 'Requested' || statusFilter === 'Pending Requests' || isRequestedListOnly) {
+                    return next.filter(s => (s.status || '').toLowerCase() === 'requested' || s.isEdited === true);
+                }
+                return next;
+            });
+            queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
+                Array.isArray(old) ? old.map(s => rejectedIds.has(s._id) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s) : []
+            );
+            if (refreshPendingIndicators) refreshPendingIndicators();
+
             for (const sale of recordsToReject) {
                 const { _id, createdAt: _createdAt, ...rest } = sale;
                 const updatedData = {
@@ -679,6 +728,9 @@ const SaleManagement = ({
 
             setSelectedItems(new Set());
             if (setIsSelectionMode) setIsSelectionMode(false);
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sales });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
             try { fetchSales(); } catch (e) { console.error('fetchSales error', e); }
             try { fetchCustomers(); } catch (e) { console.error('fetchCustomers error', e); }
             try { fetchWarehouses(); } catch (e) { console.error('fetchWarehouses error', e); }
@@ -1045,9 +1097,28 @@ const SaleManagement = ({
                 ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {}),
             };
 
+            // Instant optimistic update
+            const optimisticSale = { ...sale, ...updatedData, _id };
+            setAllSalesRecords(prev => (prev || []).map(s => s._id === _id ? optimisticSale : s));
+            setSales(prev => {
+                const next = (prev || []).map(s => s._id === _id ? optimisticSale : s);
+                if (statusFilter === 'Requested' || statusFilter === 'Pending Requests' || isRequestedListOnly) {
+                    return next.filter(s => (s.status || '').toLowerCase() === 'requested' || s.isEdited === true);
+                }
+                return next;
+            });
+            queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
+                Array.isArray(old) ? old.map(s => s._id === _id ? optimisticSale : s) : []
+            );
+            if (refreshPendingIndicators) refreshPendingIndicators();
+
             const response = await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
 
             if (response.status >= 200 && response.status < 300) {
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sales });
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
+
                 if ((newStatus || '').toLowerCase() === 'accepted') {
                     try {
                         await processSaleEffects(updatedData, false);

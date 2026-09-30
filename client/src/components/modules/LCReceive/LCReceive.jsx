@@ -457,6 +457,7 @@ const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }
 function LCReceive({
     currentUser,
     stockRecords,
+    setAllStockRecords,
     fetchStockRecords,
     importers,
     exporters = [],
@@ -2204,13 +2205,33 @@ function LCReceive({
         try {
             setIsSubmitting(true);
             const ids = record.allIds || record.ids || (record._id ? [record._id] : []);
+            const idSet = new Set(ids);
+            const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
+
+            // Instant optimistic update
+            if (typeof setAllStockRecords === 'function') {
+                setAllStockRecords(prev => (prev || []).map(r => idSet.has(r._id) ? {
+                    ...r,
+                    status: newStatus,
+                    ...(newStatus === 'In Stock' ? { acceptedBy: actionBy, approvedBy: actionBy, approvedByUsername: currentUser?.username || '' } : {}),
+                    ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {})
+                } : r));
+            }
+            queryClient.setQueryData(['stock'], (old = []) =>
+                Array.isArray(old) ? old.map(r => idSet.has(r._id) ? {
+                    ...r,
+                    status: newStatus,
+                    ...(newStatus === 'In Stock' ? { acceptedBy: actionBy, approvedBy: actionBy, approvedByUsername: currentUser?.username || '' } : {}),
+                    ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {})
+                } : r) : []
+            );
+            if (refreshPendingIndicators) refreshPendingIndicators();
 
             const promises = ids.map(id => {
                 const originalRecord = stockRecords.find(r => r._id === id);
                 if (!originalRecord) return null;
 
                 const { _id, createdAt, __v, ...rest } = originalRecord;
-                const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
                 const updatedData = {
                     ...rest,
                     status: newStatus,
@@ -2256,6 +2277,8 @@ function LCReceive({
                 }
             }
 
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             if (fetchStockRecords) fetchStockRecords();
             fetchWarehouses();
             if (refreshPendingIndicators) refreshPendingIndicators();
@@ -2294,6 +2317,30 @@ function LCReceive({
 
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
             const actionUsername = currentUser?.username || '';
+
+            const allTargetIds = new Set();
+            recordsToAccept.forEach(r => (r.allIds || r.ids || (r._id ? [r._id] : [])).forEach(id => allTargetIds.add(id)));
+
+            // Instant optimistic update
+            if (typeof setAllStockRecords === 'function') {
+                setAllStockRecords(prev => (prev || []).map(r => allTargetIds.has(r._id) ? {
+                    ...r,
+                    status: 'In Stock',
+                    acceptedBy: actionBy,
+                    approvedBy: actionBy,
+                    approvedByUsername: actionUsername
+                } : r));
+            }
+            queryClient.setQueryData(['stock'], (old = []) =>
+                Array.isArray(old) ? old.map(r => allTargetIds.has(r._id) ? {
+                    ...r,
+                    status: 'In Stock',
+                    acceptedBy: actionBy,
+                    approvedBy: actionBy,
+                    approvedByUsername: actionUsername
+                } : r) : []
+            );
+            if (refreshPendingIndicators) refreshPendingIndicators();
 
             const promises = [];
             for (const record of recordsToAccept) {
@@ -2344,6 +2391,8 @@ function LCReceive({
 
             setSelectedItems(new Set());
             if (setIsSelectionMode) setIsSelectionMode(false);
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             if (fetchStockRecords) fetchStockRecords();
             fetchWarehouses();
             if (refreshPendingIndicators) refreshPendingIndicators();
@@ -2428,6 +2477,26 @@ function LCReceive({
 
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
 
+            const allTargetIds = new Set();
+            recordsToReject.forEach(r => (r.allIds || r.ids || (r._id ? [r._id] : [])).forEach(id => allTargetIds.add(id)));
+
+            // Instant optimistic update
+            if (typeof setAllStockRecords === 'function') {
+                setAllStockRecords(prev => (prev || []).map(r => allTargetIds.has(r._id) ? {
+                    ...r,
+                    status: 'Rejected',
+                    rejectedBy: actionBy
+                } : r));
+            }
+            queryClient.setQueryData(['stock'], (old = []) =>
+                Array.isArray(old) ? old.map(r => allTargetIds.has(r._id) ? {
+                    ...r,
+                    status: 'Rejected',
+                    rejectedBy: actionBy
+                } : r) : []
+            );
+            if (refreshPendingIndicators) refreshPendingIndicators();
+
             const promises = [];
             for (const record of recordsToReject) {
                 const ids = record.allIds || record.ids || [];
@@ -2475,6 +2544,8 @@ function LCReceive({
 
             setSelectedItems(new Set());
             if (setIsSelectionMode) setIsSelectionMode(false);
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             if (fetchStockRecords) fetchStockRecords();
             fetchWarehouses();
             if (refreshPendingIndicators) refreshPendingIndicators();

@@ -1140,6 +1140,36 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 return false;
             };
 
+            const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
+            const smApproved = paymentGroup.items?.[0]?.smApproved === true;
+            const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+            const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+
+            // Instant optimistic update
+            setPayments(prev => {
+                if (newStatus === 'Rejected') {
+                    if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
+                        return (prev || []).map(p => isItemMatch(p) ? (p.originalData || { ...p, isEdited: false }) : p);
+                    }
+                    return (prev || []).filter(p => !isItemMatch(p));
+                } else {
+                    return (prev || []).map(p => {
+                        if (isItemMatch(p)) {
+                            return {
+                                ...p,
+                                status: isSMApprovalStep ? p.status : 'Accepted',
+                                smApproved: isSMApprovalStep ? true : p.smApproved,
+                                isEdited: false,
+                                approvedBy: currentUser?.username || 'admin',
+                                approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            };
+                        }
+                        return p;
+                    });
+                }
+            });
+            refreshPendingIndicators?.();
+
             if (newStatus === 'Rejected') {
                 if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
                     // Revert edit request back to original data before edit
@@ -1175,11 +1205,6 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 }
             } else {
                 // Accept
-                const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
-                const smApproved = paymentGroup.items?.[0]?.smApproved === true;
-                const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
-
                 const updatedHistory = (customer.paymentHistory || []).map(p => {
                     if (isItemMatch(p)) {
                         const { originalData, ...rest } = p;
@@ -1204,7 +1229,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 });
                 await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
             }
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
             fetchPayments();
+            refreshPendingIndicators?.();
 
             // Notification
             try {
@@ -1298,6 +1325,24 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             const dateStr = now.toLocaleDateString('en-GB');
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+            // Instant optimistic update
+            const acceptGroupReceipts = new Set(groupsToAccept.map(g => g.receiptNo).filter(Boolean));
+            const acceptItemIds = new Set();
+            groupsToAccept.forEach(g => (g.items || []).forEach(i => { if (i.id) acceptItemIds.add(i.id); }));
+            setPayments(prev => (prev || []).map(p => {
+                if ((p.id && acceptItemIds.has(p.id)) || (p.receiptNo && acceptGroupReceipts.has(p.receiptNo))) {
+                    return {
+                        ...p,
+                        status: 'Accepted',
+                        isEdited: false,
+                        approvedBy: currentUser?.username || 'admin',
+                        approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                    };
+                }
+                return p;
+            }));
+            refreshPendingIndicators?.();
+
             const customerMap = {};
             groupsToAccept.forEach(group => {
                 if (!customerMap[group.customerId]) {
@@ -1365,7 +1410,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             }
 
             setSelectedItems(new Set());
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
             fetchPayments();
+            refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error performing bulk accept:', error);
             setConfirmModalConfig({
@@ -1421,6 +1468,13 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB');
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            // Instant optimistic update
+            const rejectGroupReceipts = new Set(groupsToReject.map(g => g.receiptNo).filter(Boolean));
+            const rejectItemIds = new Set();
+            groupsToReject.forEach(g => (g.items || []).forEach(i => { if (i.id) rejectItemIds.add(i.id); }));
+            setPayments(prev => (prev || []).filter(p => !((p.id && rejectItemIds.has(p.id)) || (p.receiptNo && rejectGroupReceipts.has(p.receiptNo)))));
+            refreshPendingIndicators?.();
 
             const customerMap = {};
             groupsToReject.forEach(group => {
@@ -1498,7 +1552,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             }
 
             setSelectedItems(new Set());
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
             fetchPayments();
+            refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error performing bulk reject:', error);
             setConfirmModalConfig({

@@ -899,9 +899,18 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
             const updated = {
                 ...purchase,
                 status: newStatus,
+                isEdited: false,
                 approvedBy: employeeId,
                 approvedByName: employeeDisplayName
             };
+
+            // Instant optimistic update
+            setPurchases(prev => (prev || []).map(p => p._id === purchase._id ? updated : p));
+            queryClient.setQueryData(['purchases'], (old = []) =>
+                Array.isArray(old) ? old.map(p => p._id === purchase._id ? updated : p) : []
+            );
+            if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+
             await axios.put(`${API_BASE_URL}/api/purchases/${purchase._id}`, updated);
             if (addNotification) {
                 const now = new Date();

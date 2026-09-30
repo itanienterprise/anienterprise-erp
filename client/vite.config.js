@@ -15,7 +15,11 @@ const removeCrossorigin = () => ({
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   plugins: [
-    react(),
+    react({
+      babel: {
+        compact: false
+      }
+    }),
     tailwindcss(),
     legacy({
       targets: ['defaults', 'not IE 11', 'chrome 30', 'safari 7', 'ios 7', 'bb 10'],
@@ -63,12 +67,28 @@ export default defineConfig(({ mode }) => ({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', (err, req, res) => {
+            if (res && !res.headersSent && typeof res.writeHead === 'function') {
+              res.writeHead(502, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Backend server starting up or unreachable' }));
+            }
+          });
+        }
       },
       '/v': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', (err, req, res) => {
+            if (res && !res.headersSent && typeof res.writeHead === 'function') {
+              res.writeHead(502, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Backend server starting up or unreachable' }));
+            }
+          });
+        }
       }
     }
   },

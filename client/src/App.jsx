@@ -1882,6 +1882,7 @@ function App() {
             highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             currentUser={currentUser}
             stockRecords={lcStockRecords}
+            setAllStockRecords={setAllStockRecords}
             addNotification={addNotification}
             fetchStockRecords={fetchStockRecords}
             importers={importers}
@@ -2228,6 +2229,7 @@ function App() {
             highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             currentUser={currentUser}
             addNotification={addNotification}
+            refreshPendingIndicators={fetchPendingEntries}
           />
         );
       case 'purchase-sale-section':
@@ -2368,6 +2370,7 @@ function App() {
             highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             currentUser={currentUser}
             addNotification={addNotification}
+            refreshPendingIndicators={fetchPendingEntries}
           />
         );
       case 'lc-gp-section':

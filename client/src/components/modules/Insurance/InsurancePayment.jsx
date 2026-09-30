@@ -15,7 +15,7 @@ import { formatFirstName } from '../IPManagement/IPManagement';
 import { getLcMilestoneFinances } from '../../../utils/lcValueUtils';
 export { getLcMilestoneFinances };
 
-const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highlightId, isRequestedNotif }) => {
+const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highlightId, isRequestedNotif, refreshPendingIndicators }) => {
     
     const [payments, setPayments] = useState([]);
     const [employeesMap, setEmployeesMap] = useState({});
@@ -609,11 +609,17 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
 
     const handleApprovePayment = async (payment) => {
         try {
-            setIsLoading(true);
             const updatedPayment = {
                 ...payment,
                 status: 'Adjusted'
             };
+            // Instant optimistic update
+            setPayments(prev => (prev || []).map(p => p._id === payment._id ? updatedPayment : p));
+            queryClient.setQueryData(['insurance-payments'], (old = []) =>
+                Array.isArray(old) ? old.map(p => p._id === payment._id ? updatedPayment : p) : []
+            );
+            if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+
             await axios.put(`${API_BASE_URL}/api/insurance-payments/${payment._id}`, updatedPayment);
             queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });
             queryClient.invalidateQueries({ queryKey: ['insurance'] });
@@ -626,6 +632,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             }
             fetchPayments();
             fetchInsurances();
+            if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
         } catch (err) {
             console.error('Error approving payment request:', err);
             alert('Failed to approve payment request.');
@@ -637,7 +644,13 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     const handleRejectPayment = async (payment) => {
         if (!window.confirm(`Are you sure you want to reject the payment request for ${payment.companyName}?`)) return;
         try {
-            setIsLoading(true);
+            // Instant optimistic update
+            setPayments(prev => (prev || []).filter(p => p._id !== payment._id));
+            queryClient.setQueryData(['insurance-payments'], (old = []) =>
+                Array.isArray(old) ? old.filter(p => p._id !== payment._id) : []
+            );
+            if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+
             await axios.delete(`${API_BASE_URL}/api/insurance-payments/${payment._id}`);
             queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });
             queryClient.invalidateQueries({ queryKey: ['insurance'] });
@@ -650,6 +663,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             }
             await fetchPayments();
             await fetchInsurances();
+            if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
         } catch (err) {
             console.error('Error rejecting payment request:', err);
             alert('Failed to reject payment request.');

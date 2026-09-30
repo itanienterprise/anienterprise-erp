@@ -10,7 +10,7 @@ import { encryptData, decryptData } from '../../../utils/encryption';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 import { formatFirstName } from '../IPManagement/IPManagement';
 
-const TransferManagement = ({ currentUser, addNotification, highlightId, isRequestedNotif }) => {
+const TransferManagement = ({ currentUser, addNotification, highlightId, isRequestedNotif, refreshPendingIndicators }) => {
     const canDelete = hasPermission(currentUser, 'warehouse', 'delete') || hasPermission(currentUser, 'transfer', 'delete');
     const canTransfer = hasPermission(currentUser, 'stock', 'special') || hasPermission(currentUser, 'transfer', 'add') || hasPermission(currentUser, 'warehouse', 'edit');
     const canApprove = hasPermission(currentUser, 'transfer', 'approve') || hasPermission(currentUser, 'warehouse', 'approve') || currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
@@ -880,6 +880,12 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             return;
         }
 
+        // Instant optimistic update
+        setTransferLogs(prev => (prev || []).map(l => l._id === item._id ? { ...l, status: 'Approved', approvedAt: new Date().toISOString(), approvedBy: currentUser?.username || 'admin' } : l));
+        if (typeof refreshPendingIndicators === 'function') {
+            refreshPendingIndicators();
+        }
+
         try {
             let transferQty = parseFloat(item.transferQty ?? item.whQty ?? item.inHouseQuantity ?? 0);
             let transferPkt = parseFloat(item.transferPkt ?? item.whPkt ?? item.inHousePacket ?? 0);
@@ -981,6 +987,12 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         }
 
         if (window.confirm('Are you sure you want to reject this transfer request?')) {
+            // Instant optimistic update
+            setTransferLogs(prev => (prev || []).map(l => l._id === item._id ? { ...l, status: 'Rejected', rejectedAt: new Date().toISOString(), rejectedBy: currentUser?.username || 'admin' } : l));
+            if (typeof refreshPendingIndicators === 'function') {
+                refreshPendingIndicators();
+            }
+
             try {
                 const updatedLog = {
                     ...item,
@@ -1012,6 +1024,12 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         const logItem = typeof item === 'object' ? item : (transferLogs || []).find(t => t._id === recordId);
 
         if (window.confirm('Are you sure you want to delete this stock transfer record? Transferred stock will be restored back to the source warehouse.')) {
+            // Instant optimistic update
+            setTransferLogs(prev => (prev || []).filter(l => l._id !== recordId));
+            if (typeof refreshPendingIndicators === 'function') {
+                refreshPendingIndicators();
+            }
+
             try {
                 if (logItem) {
                     await revertTransferStock(logItem);

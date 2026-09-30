@@ -1066,6 +1066,13 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                 };
             }
 
+            // Instant optimistic update
+            setPayments(prev => (prev || []).map(p => p._id === payment._id ? { ...p, ...updatedData } : p));
+            queryClient.setQueryData(['cnf-payments'], (old = []) =>
+                Array.isArray(old) ? old.map(p => p._id === payment._id ? { ...p, ...updatedData } : p) : []
+            );
+            refreshPendingIndicators?.();
+
             await axios.put(`${API_BASE_URL}/api/cnf-payments/${payment._id}`, updatedData);
             queryClient.invalidateQueries({ queryKey: ['cnf-payments'] });
             queryClient.invalidateQueries({ queryKey: ['cnfs'] });
@@ -1165,7 +1172,9 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
         setIsSubmitting(true);
         try {
             const delId = paymentToDelete._id;
+            setPayments(prev => (prev || []).filter(p => p._id !== delId));
             queryClient.setQueryData(['cnf-payments'], (old = []) => old.filter(p => p._id !== delId));
+            refreshPendingIndicators?.();
             setShowDeleteConfirm(false);
             setPaymentToDelete(null);
             setSubmitStatus(null);
