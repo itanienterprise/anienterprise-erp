@@ -1,8 +1,21 @@
-import { defineConfig } from 'vite'
+import { defineConfig, createLogger } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import legacy from '@vitejs/plugin-legacy'
 import obfuscator from 'vite-plugin-javascript-obfuscator'
+
+const logger = createLogger();
+const originalLoggerError = logger.error;
+logger.error = (msg, options) => {
+  // Suppress normal/idle WebSocket disconnect errors from Vite dev proxy (tab sleep, tab close, network idle)
+  if (
+    typeof msg === 'string' &&
+    (msg.includes('ws proxy') || msg.includes('ECONNRESET') || msg.includes('ETIMEDOUT') || msg.includes('EPIPE'))
+  ) {
+    return;
+  }
+  originalLoggerError(msg, options);
+};
 
 const removeCrossorigin = () => ({
   name: 'remove-crossorigin',
@@ -14,6 +27,7 @@ const removeCrossorigin = () => ({
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  customLogger: logger,
   plugins: [
     react({
       babel: {
@@ -66,6 +80,11 @@ export default defineConfig(({ mode }) => ({
     strictPort: true,
     host: true,
     proxy: {
+      '/socket.io': {
+        target: 'http://127.0.0.1:5000',
+        ws: true,
+        changeOrigin: true
+      },
       '/api': {
         target: 'http://127.0.0.1:5000',
         changeOrigin: true,
