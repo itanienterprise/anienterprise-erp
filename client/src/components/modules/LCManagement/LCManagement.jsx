@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import {
     PlusIcon, XIcon, EditIcon, TrashIcon, SearchIcon,
     LCManagerIcon, ShieldIcon, BuildingIcon, GlobeIcon,
@@ -3844,19 +3845,14 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                                     try {
                                                         const deleted = await onDeleteAmendment(data, activeMilestone);
                                                         if (deleted) {
-                                                            setDeleteAmendmentStatus('success');
-                                                            setTimeout(() => {
-                                                                setShowDeleteAmendmentConfirm(false);
-                                                                setDeleteAmendmentStatus(null);
-                                                                setActiveMilestoneIndex(0);
-                                                            }, 1200);
+                                                            setShowDeleteAmendmentConfirm(false);
+                                                            setDeleteAmendmentStatus(null);
+                                                            setActiveMilestoneIndex(0);
                                                         } else {
                                                             setDeleteAmendmentStatus('error');
-                                                            setTimeout(() => setDeleteAmendmentStatus(null), 3000);
                                                         }
                                                     } catch (err) {
                                                         setDeleteAmendmentStatus('error');
-                                                        setTimeout(() => setDeleteAmendmentStatus(null), 3000);
                                                     }
                                                 }}
                                                 className="py-3.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl shadow-lg shadow-red-200 transition-all active:scale-95 flex items-center justify-center gap-2"
@@ -5224,6 +5220,24 @@ const initialLcFilterState = {
     lcStatus: 'All'
 };
 
+// Helper: get short display name for a bank
+const BANK_SUFFIX_STRIP = /\b(PLC|LTD\.?|INC\.?|LLC|CORP|LIMITED|BANK)\b/gi;
+const getBankShortDisplay = (bankName, banksRaw) => {
+    const nameUpper = (bankName || '').trim().toUpperCase();
+    // 1. Exact match
+    let bk = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === nameUpper);
+    // 2. Fuzzy: one name contains the other
+    if (!bk) bk = banksRaw.find(b => {
+        const bu = (b.bankName || '').trim().toUpperCase();
+        return bu && nameUpper && (bu.includes(nameUpper) || nameUpper.includes(bu));
+    });
+    if (bk?.shortName) return bk.shortName;
+    // 3. Auto-abbreviation: strip common suffixes, take initials of remaining words > 2 chars
+    const stripped = (bankName || '').replace(BANK_SUFFIX_STRIP, '').trim();
+    const abbr = stripped.split(/\s+/).filter(w => w.length > 2).map(w => w[0].toUpperCase()).join('');
+    return abbr || bankName || '-';
+};
+
 const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNotif }) => {
     const [localHighlightId, setLocalHighlightId] = useState(null);
     const activeHighlightId = highlightId || localHighlightId;
@@ -6068,8 +6082,11 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
     const fetchLcRecordsOnly = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/lc-management`);
-            const freshLcRecords = Array.isArray(response.data) ? response.data : [];
+            queryClient.invalidateQueries({ queryKey: ['lc-management'] });
+            const freshLcRecords = await queryClient.fetchQuery({
+                queryKey: ['lc-management'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             setLcRecords(freshLcRecords);
         } catch (error) {
             console.error("Failed to fetch LC records in background:", error);
@@ -6077,42 +6094,97 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     };
 
     const fetchInitialData = async () => {
-        setIsLoading(true);
+        const cachedLc = queryClient.getQueryData(['lc-management']);
+        if (cachedLc && Array.isArray(cachedLc) && cachedLc.length > 0) {
+            setLcRecords(cachedLc);
+        } else {
+            setIsLoading(true);
+        }
         try {
             // 1. Fetch main LC records first and render table instantly
-            const lcRes = await axios.get(`${API_BASE_URL}/api/lc-management`);
-            const freshLcRecords = Array.isArray(lcRes.data) ? lcRes.data : [];
-            setLcRecords(freshLcRecords);
+            const lcData = await queryClient.fetchQuery({
+                queryKey: ['lc-management'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setLcRecords(Array.isArray(lcData) ? lcData : []);
             setIsLoading(false);
 
             // 2. Fetch secondary metadata in background without blocking UI
-            const [bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes, insPayRes, marginReturnRes, cogRes, empRes, notifRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/banks`),
-                axios.get(`${API_BASE_URL}/api/importers`),
-                axios.get(`${API_BASE_URL}/api/exporters`),
-                axios.get(`${API_BASE_URL}/api/insurance`),
-                axios.get(`${API_BASE_URL}/api/ip-records`),
-                axios.get(`${API_BASE_URL}/api/pi`),
-                axios.get(`${API_BASE_URL}/api/products`),
-                axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/lc-gp`),
-                axios.get(`${API_BASE_URL}/api/lc-expenses`),
-                axios.get(`${API_BASE_URL}/api/ports`),
-                axios.get(`${API_BASE_URL}/api/insurance-payments`),
-                axios.get(`${API_BASE_URL}/api/margin-returns`).catch(() => ({ data: [] })),
-                axios.get(`${API_BASE_URL}/api/cost-of-goods`).catch(() => ({ data: [] })),
-                axios.get(`${API_BASE_URL}/api/employees`).catch(() => ({ data: [] })),
+            const [bankData, impData, expData, insData, ipData, piData, prodData, stockData, saleData, gpData, expenseData, portData, insPayData, marginReturnRes, cogRes, empRes, notifRes] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['banks'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['importers'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/importers`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['exporters'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/exporters`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['insurance'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/insurance`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['ip-records'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['pi'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/pi`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['products'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['sales'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-gp'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-gp`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-expenses'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-expenses`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['ports'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/ports`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['insurance-payments'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['margin-returns'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/margin-returns`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['cost-of-goods'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['employees'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                }),
                 axios.get(`${API_BASE_URL}/api/notifications`).catch(() => ({ data: [] }))
             ]);
 
-            setGpRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
-            setLcExpenses(Array.isArray(expenseRes.data) ? expenseRes.data : []);
-            setInsurancePayments(Array.isArray(insPayRes.data) ? insPayRes.data : []);
-            setMarginReturns(Array.isArray(marginReturnRes?.data) ? marginReturnRes.data : []);
-            setCostOfGoodsRecords(Array.isArray(cogRes?.data) ? cogRes.data : []);
+            setGpRecords(Array.isArray(gpData) ? gpData : []);
+            setLcExpenses(Array.isArray(expenseData) ? expenseData : []);
+            setInsurancePayments(Array.isArray(insPayData) ? insPayData : []);
+            setMarginReturns(Array.isArray(marginReturnRes) ? marginReturnRes : []);
+            setCostOfGoodsRecords(Array.isArray(cogRes) ? cogRes : []);
 
-            const rawBanks = Array.isArray(bankRes.data) ? bankRes.data : [];
+            const rawBanks = Array.isArray(bankData) ? bankData : [];
             setBanksRaw(rawBanks);
             const bankNames = [...new Set(rawBanks.map(b => typeof b === 'string' ? b : (b.bankName || b.name || '')).filter(Boolean))];
             setBanks(bankNames);
@@ -6768,6 +6840,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             const savedLcNo = formData.lcNo || editingRecord?.lcNo;
             const savedId = editingId;
             resetForm();
+            queryClient.invalidateQueries({ queryKey: ['lc-management'] });
             await fetchInitialData();
             if (savedLcNo || savedId) {
                 setLocalHighlightId(savedLcNo || savedId);
@@ -6977,16 +7050,15 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         try {
             await axios.delete(`${API_BASE_URL}/api/lc-management/${idToDelete}`);
             setDeleteStatus('success');
-            fetchInitialData();
-            setTimeout(() => {
-                setShowDeleteConfirm(false);
-                setDeleteStatus(null);
-                setIdToDelete(null);
-            }, 1500);
+            // Instantly remove from local state and invalidate cache
+            setLcRecords(prev => prev.filter(r => r._id !== idToDelete));
+            queryClient.invalidateQueries({ queryKey: ['lc-management'] });
+            setShowDeleteConfirm(false);
+            setDeleteStatus(null);
+            setIdToDelete(null);
         } catch (error) {
             console.error('Error deleting LC record:', error);
             setDeleteStatus('error');
-            setTimeout(() => setDeleteStatus(null), 3000);
         }
     };
 
@@ -11352,11 +11424,8 @@ style={
                                                     </td>
                                                     <td className="px-2 py-3 text-sm font-medium text-gray-700 whitespace-nowrap truncate max-w-[120px]" title={record.importerName}>{record.importerName}</td>
                                                     <td className="px-2 py-3 text-sm text-gray-600 whitespace-nowrap truncate max-w-[120px]" title={record.exporterName}>{record.exporterName}</td>
-                                                    <td className="px-2 py-3 text-sm text-gray-600 font-medium whitespace-nowrap max-w-[130px]" title={record.bankName}>
-                                                        {(() => {
-                                                            const bk = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (record.bankName || '').trim().toUpperCase());
-                                                            return <span className="truncate">{bk?.shortName || record.bankName}</span>;
-                                                        })()}
+                                                    <td className="px-2 py-3 text-sm text-gray-600 font-medium whitespace-nowrap max-w-[80px]" title={record.bankName}>
+                                                        <span className="font-bold text-gray-700 tracking-wide">{getBankShortDisplay(record.bankName, banksRaw)}</span>
                                                     </td>
                                                     <td className="px-2 py-3 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
                                                     <td className="px-2 py-3 text-sm font-bold text-gray-900 max-w-[120px]">
@@ -12239,10 +12308,7 @@ style={
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    {(() => {
-                                                        const bk = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (record.bankName || '').trim().toUpperCase());
-                                                        return <span className="font-semibold text-gray-850 break-words text-[11px]">{bk?.shortName || record.bankName}</span>;
-                                                    })()}
+                                                    <span className="font-semibold text-gray-850 break-words text-[11px]" title={record.bankName}>{getBankShortDisplay(record.bankName, banksRaw)}</span>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>

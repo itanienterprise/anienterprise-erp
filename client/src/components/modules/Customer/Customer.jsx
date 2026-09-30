@@ -5,6 +5,7 @@ import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, compareTran
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF, generateMoneyReceiptPDF, generatePayToCustomerVoucherPDF } from '../../../utils/pdfGenerator';
 import { generateCustomerHistoryExcel } from '../../../utils/excelGenerator';
 import { api } from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import ReportFormatModal from '../../shared/ReportFormatModal';
@@ -290,16 +291,42 @@ const Customer = ({
     };
 
     const fetchCustomers = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(['customers']);
+        if (cached && cached.length > 0) {
+            setCustomers(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
             const [decryptedCustomers, gpRecords, lcData, purchasesData, stockData, prData, returnsData] = await Promise.all([
-                api.get('/api/customers'),
-                api.get('/api/lc-gp'),
-                api.get('/api/lc-management'),
-                api.get('/api/purchases').catch(() => []),
-                api.get('/api/stock').catch(() => []),
-                api.get('/api/purchase-receives').catch(() => []),
-                api.get('/api/returns').catch(() => [])
+                queryClient.fetchQuery({
+                    queryKey: ['customers'],
+                    queryFn: () => api.get('/api/customers')
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-gp'],
+                    queryFn: () => api.get('/api/lc-gp')
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-management'],
+                    queryFn: () => api.get('/api/lc-management')
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['purchases'],
+                    queryFn: () => api.get('/api/purchases').catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => api.get('/api/stock').catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['purchase-receives'],
+                    queryFn: () => api.get('/api/purchase-receives').catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['returns'],
+                    queryFn: () => api.get('/api/returns').catch(() => [])
+                })
             ]);
             setCustomers(decryptedCustomers);
             setGatePasses(gpRecords);
@@ -359,26 +386,31 @@ const Customer = ({
         try {
             const url = editingId ? `/api/customers/${editingId}` : `/api/customers`;
             if (editingId) {
-                const existingCustomer = await api.get(url);
+                const existingCustomer = customers.find(c => c._id === editingId) || {};
                 const payload = { ...existingCustomer, ...formData };
+                // Optimistic UI update
+                setCustomers(prev => prev.map(c => c._id === editingId ? { ...c, ...payload } : c));
+                queryClient.setQueryData(['customers'], (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map(c => c._id === editingId ? { ...c, ...payload } : c);
+                });
                 await api.put(url, payload);
             } else {
-                await api.post(url, formData);
+                const res = await api.post(url, formData);
+                const newCust = res?.customer || res;
+                if (newCust && newCust._id) {
+                    setCustomers(prev => [newCust, ...prev]);
+                    queryClient.setQueryData(['customers'], (old) => [newCust, ...(Array.isArray(old) ? old : [])]);
+                }
             }
-            setSubmitStatus('success');
-            fetchCustomers();
-            if (typeof fetchSalesGlobal === 'function') {
-                fetchSalesGlobal();
-            }
-            setTimeout(() => {
-                setShowForm(false);
-                setEditingId(null);
-                resetForm();
-                setSubmitStatus(null);
-            }, 2000);
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            setShowForm(false);
+            setEditingId(null);
+            resetForm();
         } catch (error) {
             console.error('Error saving customer:', error);
             setSubmitStatus('error');
+            fetchCustomers();
         } finally {
             setIsSubmitting(false);
         }
@@ -412,24 +444,18 @@ const Customer = ({
             // Save updated customer
             await api.put(`/api/customers/${viewData._id}`, updatedCustomer);
 
-            setSubmitStatus('success');
-            fetchCustomers();
-            setViewData({ ...updatedCustomer, _id: viewData._id }); // Update modal view
-            setTimeout(() => {
-                setShowPaymentForm(false);
-                setSubmitStatus(null);
-                setPaymentFormData({
-                    date: new Date().toISOString().split('T')[0],
-                    method: 'Bank',
-                    bankName: '',
-                    mobileType: '',
-                    accountNo: '',
-                    branch: '',
-                    amount: '',
-                    reference: '',
-                    status: 'Completed'
-                });
-            }, 1500);
+            setShowPaymentForm(false);
+            setPaymentFormData({
+                date: new Date().toISOString().split('T')[0],
+                method: 'Bank',
+                bankName: '',
+                mobileType: '',
+                accountNo: '',
+                branch: '',
+                amount: '',
+                reference: '',
+                status: 'Completed'
+            });
         } catch (error) {
             console.error('Error saving payment:', error);
             setSubmitStatus('error');

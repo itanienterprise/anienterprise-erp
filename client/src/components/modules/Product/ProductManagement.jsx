@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { PlusIcon, XIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, EyeIcon, SearchIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
+import { QUERY_KEYS } from '../../../hooks/useQueries';
 import StockHistoryModal from '../../shared/StockHistoryModal';
 import './ProductManagement.css';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -169,6 +171,14 @@ const ProductManagement = ({
                 ? `${API_BASE_URL}/api/products/${editingId}`
                 : `${API_BASE_URL}/api/products`;
 
+            // Optimistic cache update for products
+            if (editingId) {
+                queryClient.setQueryData(QUERY_KEYS.products, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map(p => p._id === editingId ? { ...p, ...submissionData } : p);
+                });
+            }
+
             if (editingId) {
                 const res = await axios.put(url, submissionData);
                 const cascadeResults = res?.data?.cascadeResults || [];
@@ -185,15 +195,21 @@ const ProductManagement = ({
                     showToast('Product updated successfully!', 'success');
                 }
             } else {
-                await axios.post(url, submissionData);
+                const res = await axios.post(url, submissionData);
+                const newProd = res?.data?.product || res?.data;
+                if (newProd && newProd._id) {
+                    queryClient.setQueryData(QUERY_KEYS.products, (old) => [newProd, ...(Array.isArray(old) ? old : [])]);
+                }
                 showToast('Product created successfully!', 'success');
             }
-            await fetchProducts();
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.products });
+            fetchProducts();
             setShowProductForm(false);
             resetProductForm();
         } catch (error) {
             console.error('Error saving product:', error);
             showToast('Failed to save product.', 'error');
+            fetchProducts();
         } finally {
             setIsSubmitting(false);
         }
@@ -238,11 +254,19 @@ const ProductManagement = ({
         }
         if (!window.confirm('Are you sure you want to delete this product?')) return;
 
+        // Optimistic delete
+        queryClient.setQueryData(QUERY_KEYS.products, (old) => {
+            if (!Array.isArray(old)) return old;
+            return old.filter(p => p._id !== id);
+        });
+
         try {
             await axios.delete(`${API_BASE_URL}/api/products/${id}`);
-            await fetchProducts();
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.products });
+            fetchProducts();
         } catch (error) {
             console.error('Error deleting product:', error);
+            fetchProducts();
         }
     };
 

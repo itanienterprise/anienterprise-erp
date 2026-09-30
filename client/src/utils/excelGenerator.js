@@ -2204,8 +2204,8 @@ export const generateStockReportExcel = (
         const orderBagStr = sumPktRemainder(allRenderedBrands, b => Math.max(0, parseFloat(b.orderQuantity) || 0), b => b.packetSize);
         const saleableBagStr = sumPktRemainder(allRenderedBrands, b => Math.max(0, parseFloat(b.saleableQuantity) || 0), b => b.packetSize);
 
-        const totalInHouseQty = allRenderedBrands.reduce((sum, b) => sum + (parseFloat(b.inHouseQuantity) || 0), 0);
-        const totalOpeningQty = allRenderedBrands.reduce((sum, b) => sum + (parseFloat(b.totalInHouseQuantity) || 0), 0);
+        const totalInHouseQty = allRenderedBrands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0);
+        const totalOpeningQty = allRenderedBrands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.totalInHouseQuantity) || 0), 0);
         const totalSaleQty = allRenderedBrands.reduce((sum, b) => sum + (parseFloat(b.saleQuantity) || 0), 0);
         const totalOrderQty = allRenderedBrands.reduce((sum, b) => sum + (parseFloat(b.orderQuantity) || 0), 0);
         const totalSaleableQty = allRenderedBrands.reduce((sum, b) => sum + (parseFloat(b.saleableQuantity) || 0), 0);
@@ -2407,7 +2407,7 @@ export const generateStockReportExcel = (
                         const isLastOfBrand = (bIdx === brands.length - 1) || ((brands[bIdx + 1]?.brand || '').trim().toUpperCase() !== brandStr.toUpperCase());
                         if (brandCounts[brandStr.toUpperCase()] > 1 && isLastOfBrand) {
                             const matchingBrandRows = brands.filter(x => (x.brand || '').trim().toUpperCase() === brandStr.toUpperCase());
-                            const bTotalQty = matchingBrandRows.reduce((s, x) => s + (parseFloat(x.inHouseQuantity) || 0), 0);
+                            const bTotalQty = matchingBrandRows.reduce((s, x) => s + Math.max(0, parseFloat(x.inHouseQuantity) || 0), 0);
                             const bTotalBagStr = sumPktRemainder(matchingBrandRows, x => Math.max(0, parseFloat(x.inHouseQuantity) || 0), x => x.packetSize);
                             rows.push([
                                 '',
@@ -2429,7 +2429,7 @@ export const generateStockReportExcel = (
                         `${prodName} TOTAL`,
                         '',
                         sumPktRemainder(brands, b => Math.max(0, parseFloat(b.inHouseQuantity) || 0), b => b.packetSize),
-                        Math.round(brands.reduce((s, b) => s + (parseFloat(b.inHouseQuantity) || 0), 0)),
+                        Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0)),
                         sumPktRemainder(brands, b => Math.max(0, parseFloat(b.orderQuantity) || 0), b => b.packetSize),
                         Math.round(brands.reduce((s, b) => s + (parseFloat(b.orderQuantity) || 0), 0)),
                         sumPktRemainder(brands, b => Math.max(0, parseFloat(b.saleableQuantity) || 0), b => b.packetSize),
@@ -2443,11 +2443,11 @@ export const generateStockReportExcel = (
                         `${prodName} TOTAL`,
                         '',
                         sumPktRemainder(brands, b => Math.max(0, parseFloat(b.totalInHouseQuantity) || 0), b => b.packetSize),
-                        Math.round(brands.reduce((s, b) => s + (parseFloat(b.totalInHouseQuantity) || 0), 0)),
+                        Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.totalInHouseQuantity) || 0), 0)),
                         subSalePktStr,
                         Math.round(brands.reduce((s, b) => s + (parseFloat(b.saleQuantity) || 0), 0)),
                         sumPktRemainder(brands, b => Math.max(0, parseFloat(b.inHouseQuantity) || 0), b => b.packetSize),
-                        Math.round(brands.reduce((s, b) => s + (parseFloat(b.inHouseQuantity) || 0), 0))
+                        Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0))
                     ]);
                 } else {
                     rows.push([
@@ -2457,7 +2457,7 @@ export const generateStockReportExcel = (
                         '',
                         '',
                         sumPktRemainder(brands, b => Math.max(0, parseFloat(b.inHouseQuantity) || 0), b => b.packetSize),
-                        Math.round(brands.reduce((s, b) => s + (parseFloat(b.inHouseQuantity) || 0), 0))
+                        Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0))
                     ]);
                 }
             });
@@ -2465,7 +2465,7 @@ export const generateStockReportExcel = (
             // If multi-warehouse, show warehouse total
             if (isMultiWarehouse) {
                 const whBrands = records.flatMap(r => r.brandList || []);
-                const whTotalInHouseQty = whBrands.reduce((s, b) => s + (parseFloat(b.inHouseQuantity) || 0), 0);
+                const whTotalInHouseQty = whBrands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0);
                 const whInHouseBagStr = sumPktRemainder(whBrands, b => Math.max(0, parseFloat(b.inHouseQuantity) || 0), b => b.packetSize);
 
                 if (normalizedReportType === 'short') {
@@ -2483,7 +2483,7 @@ export const generateStockReportExcel = (
                         Math.round(whBrands.reduce((s, b) => s + (parseFloat(b.saleableQuantity) || 0), 0))
                     ]);
                 } else if (normalizedReportType === 'detailed') {
-                    const whTotalOpeningQty = whBrands.reduce((s, b) => s + (parseFloat(b.totalInHouseQuantity) || 0), 0);
+                    const whTotalOpeningQty = whBrands.reduce((s, b) => s + Math.max(0, parseFloat(b.totalInHouseQuantity) || 0), 0);
                     const whOpeningBagStr = sumPktRemainder(whBrands, b => Math.max(0, parseFloat(b.totalInHouseQuantity) || 0), b => b.packetSize);
                     const whSalePkt = whBrands.reduce((s, b) => s + (parseFloat(b.salePacket) || 0), 0);
                     const whSalePktStr = Number.isInteger(whSalePkt) ? String(whSalePkt) : whSalePkt.toFixed(2);

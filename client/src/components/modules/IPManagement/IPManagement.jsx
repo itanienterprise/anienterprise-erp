@@ -6,6 +6,7 @@ import {
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
+import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './IPManagement.css';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -109,8 +110,10 @@ function IPManagement({
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
             const fullMap = {};
             rawData.forEach(emp => {
@@ -397,22 +400,42 @@ function IPManagement({
     }, [showFilters]);
 
     const fetchIpRecords = async () => {
-        setIsLoading(true);
+        const cachedIp = queryClient.getQueryData(['ip-records']);
+        if (cachedIp && Array.isArray(cachedIp) && cachedIp.length > 0) {
+            setIpRecords(cachedIp);
+        } else {
+            setIsLoading(true);
+        }
         try {
             // 1. Fetch IP records first and render table instantly!
-            const ipRes = await axios.get(`${API_BASE_URL}/api/ip-records`);
-            setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
+            const ipData = await queryClient.fetchQuery({
+                queryKey: ['ip-records'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setIpRecords(Array.isArray(ipData) ? ipData : []);
             setIsLoading(false);
 
             // 2. Fetch secondary metadata in background
-            const [lcRes, stockRes, saleRes, piRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/pi`)
+            const [lcData, stockData, saleData, piData] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['lc-management'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['sales'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['pi'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/pi`).then(r => Array.isArray(r.data) ? r.data : [])
+                })
             ]);
-            setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
-            const rawPi = Array.isArray(piRes.data) ? piRes.data : [];
+            setLcRecords(Array.isArray(lcData) ? lcData : []);
+            const rawPi = Array.isArray(piData) ? piData : [];
             const decryptedPi = rawPi.map(item => {
                 try {
                     let d = item.data ? decryptData(item.data) : item;
@@ -1010,11 +1033,10 @@ function IPManagement({
                 }
             }
             setSubmitStatus('success');
-            setTimeout(() => {
-                setShowIpForm(false);
-                resetIpForm();
-                fetchIpRecords();
-            }, 1500);
+            queryClient.invalidateQueries({ queryKey: ['ip-records'] });
+            setShowIpForm(false);
+            resetIpForm();
+            fetchIpRecords();
         } catch (error) {
             console.error('Error saving IP record:', error);
             setSubmitStatus('error');

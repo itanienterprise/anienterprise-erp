@@ -24,6 +24,8 @@ import WarehouseReport from './WarehouseReport';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
+import { QUERY_KEYS } from '../../../hooks/useQueries';
 import { ChevronDownIcon } from '../../Icons';
 import { calculatePktRemainder, calculateStockData } from '../../../utils/stockHelpers';
 
@@ -117,17 +119,26 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
 
     const fetchWarehouses = async () => {
         try {
-            const [whRes, stockRes, salesRes, baselineRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/warehouses`),
-                axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/stock-baseline/active`).catch(() => ({ data: null }))
+            const [whData, stockData, salesData, baselineData] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['rawWarehouses'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: QUERY_KEYS.stock,
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: QUERY_KEYS.sales,
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: QUERY_KEYS.stockBaseline,
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock-baseline/active`).then(r => r.data || null).catch(() => null)
+                })
             ]);
 
-            setActiveBaseline(baselineRes.data || null);
-
-            const whData = Array.isArray(whRes.data) ? whRes.data : [];
-            const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
+            setActiveBaseline(baselineData || null);
 
             // 1. Calculate Global InHouse Totals from ALL Stock Data
             const globalInHouseMap = {};
@@ -147,8 +158,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                 globalInHouseMap[key].qty += parseFloat(d.inHouseQuantity || d.inhouseQty || 0);
             });
 
-            // 1.1 Store Sales records (already decrypted by axios/server)
-            const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
+            // 1.1 Store Sales records
             setSalesRecords(salesData);
 
             // Track which unique product names have LC records (only those with positive stock)
@@ -766,20 +776,19 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
             } else {
                 setWarehouseData(prev => [responseData, ...prev]);
             }
-            setSubmitStatus('success');
-            setTimeout(() => {
-                setShowWarehouseForm(false);
-                setSubmitStatus(null);
-                setEditingWarehouseId(null);
-                setWarehouseFormData({
-                    name: '',
-                    location: '',
-                    manager: '',
-                    capacity: '',
-                    type: 'General',
-                    status: 'Active'
-                });
-            }, 1500);
+            queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
+            setShowWarehouseForm(false);
+            setSubmitStatus(null);
+            setEditingWarehouseId(null);
+            setWarehouseFormData({
+                name: '',
+                location: '',
+                manager: '',
+                capacity: '',
+                type: 'General',
+                status: 'Active'
+            });
         } catch (error) {
             console.error('Error adding warehouse:', error);
             setSubmitStatus('error');

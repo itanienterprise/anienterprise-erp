@@ -4071,12 +4071,13 @@ apiRouter.get('/api/profile', async (req, res) => {
 
     if (user.username === 'admin') {
       const adminUserRecord = await User.findOne({ username: 'admin' });
+      const phoneVal = (adminUserRecord?.phone && !adminUserRecord.phone.includes('X')) ? adminUserRecord.phone : '';
       return res.json({
         name: adminUserRecord?.name || 'Administrator',
         role: 'Admin',
         department: adminUserRecord?.department || 'Management',
-        email: adminUserRecord?.email || 'admin@ani-enterprise.com',
-        phone: adminUserRecord?.phone || '+880XXXXXXXXXX',
+        email: adminUserRecord?.email || '',
+        phone: phoneVal,
         designation: adminUserRecord?.designation || 'System Administrator',
         employeeId: 'ADMIN-001',
         joiningDate: '2024-01-01',
@@ -4110,6 +4111,9 @@ apiRouter.get('/api/profile', async (req, res) => {
       try { decrypted = decryptData(decrypted.data); } catch (e) { }
     }
     const displayRole = await resolveRoleToDisplay(decrypted.role);
+    if (decrypted.phone && decrypted.phone.includes('X')) {
+      decrypted.phone = '';
+    }
 
     res.json({ ...decrypted, role: displayRole, _id: matchedEmployee._id, createdAt: matchedEmployee.createdAt, profilePhoto, avatarPhoto });
   } catch (err) {
@@ -4117,18 +4121,21 @@ apiRouter.get('/api/profile', async (req, res) => {
   }
 });
 
-// Update profile details (phone, email)
+// Update profile details (name, phone, email, designation, department)
 apiRouter.put('/api/profile', async (req, res) => {
   try {
     const user = req.session.user;
     if (!user) return res.status(401).json({ message: 'Unauthorized' });
 
-    const { phone, email } = req.body;
+    const { phone, email, name, designation, department } = req.body;
 
     if (user.username === 'admin') {
       const updateFields = {};
       if (phone !== undefined) updateFields.phone = phone;
       if (email !== undefined) updateFields.email = email;
+      if (name !== undefined) updateFields.name = name;
+      if (designation !== undefined) updateFields.designation = designation;
+      if (department !== undefined) updateFields.department = department;
 
       const updatedUser = await User.findOneAndUpdate(
         { username: 'admin' },
@@ -4136,11 +4143,22 @@ apiRouter.put('/api/profile', async (req, res) => {
         { returnDocument: 'after' }
       );
 
+      if (req.session.user) {
+        if (updatedUser.phone !== undefined) req.session.user.phone = updatedUser.phone;
+        if (updatedUser.email !== undefined) req.session.user.email = updatedUser.email;
+        if (updatedUser.name !== undefined) req.session.user.name = updatedUser.name;
+        if (updatedUser.designation !== undefined) req.session.user.designation = updatedUser.designation;
+        if (updatedUser.department !== undefined) req.session.user.department = updatedUser.department;
+      }
+
       return res.json({
         success: true,
         message: 'Profile updated successfully',
-        phone: updatedUser.phone,
-        email: updatedUser.email
+        name: updatedUser.name || 'Administrator',
+        phone: updatedUser.phone || '',
+        email: updatedUser.email || '',
+        designation: updatedUser.designation || 'System Administrator',
+        department: updatedUser.department || 'Management'
       });
     }
 
@@ -4166,6 +4184,9 @@ apiRouter.put('/api/profile', async (req, res) => {
 
     if (phone !== undefined) decrypted.phone = phone;
     if (email !== undefined) decrypted.email = email;
+    if (name !== undefined) decrypted.name = name;
+    if (designation !== undefined) decrypted.designation = designation;
+    if (department !== undefined) decrypted.department = department;
 
     matchedEmployee.data = encryptData(decrypted);
     await matchedEmployee.save();
@@ -4174,15 +4195,27 @@ apiRouter.put('/api/profile', async (req, res) => {
       { username: user.username },
       {
         ...(phone !== undefined ? { phone } : {}),
-        ...(email !== undefined ? { email } : {})
+        ...(email !== undefined ? { email } : {}),
+        ...(name !== undefined ? { name } : {}),
+        ...(designation !== undefined ? { designation } : {}),
+        ...(department !== undefined ? { department } : {})
       }
     );
+
+    if (req.session.user) {
+      if (phone !== undefined) req.session.user.phone = phone;
+      if (email !== undefined) req.session.user.email = email;
+      if (name !== undefined) req.session.user.name = name;
+    }
 
     res.json({
       success: true,
       message: 'Profile updated successfully',
+      name: decrypted.name,
       phone: decrypted.phone,
-      email: decrypted.email
+      email: decrypted.email,
+      designation: decrypted.designation,
+      department: decrypted.department
     });
   } catch (err) {
     console.error('Error updating profile:', err);

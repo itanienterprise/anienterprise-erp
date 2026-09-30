@@ -181,9 +181,39 @@ export const reconcilePriceReportBrandList = (brandList) => {
     const result = [];
 
     Object.values(brandGroups).forEach(group => {
-        const trueInHouse = Math.max(0, group.totalClosing);
-        if (trueInHouse <= 0.001) {
+        const trueInHouse = group.totalClosing;
+        if (Math.abs(trueInHouse) <= 0.001) {
             // Brand is out of stock - no entries should appear in Price report
+            return;
+        }
+
+        if (trueInHouse < -0.001) {
+            // Pre-sale (negative stock) brand: preserve pre-sold entries in Price report
+            const preSoldEntries = group.entries.filter(e =>
+                (e.inHouseQuantity || 0) < -0.001 || (e.closingQuantity || 0) < -0.001
+            );
+            const entriesToUse = preSoldEntries.length > 0
+                ? preSoldEntries
+                : (group.entries.length > 0 ? group.entries : [{ brand: group.brand, quality: group.quality }]);
+
+            entriesToUse.forEach(entry => {
+                const remainingQty = (entry.closingQuantity !== undefined && entry.closingQuantity < -0.001)
+                    ? entry.closingQuantity
+                    : ((entry.inHouseQuantity !== undefined && entry.inHouseQuantity < -0.001) ? entry.inHouseQuantity : trueInHouse);
+                const pktSize = entry.packetSize || 30;
+                const { whole, remainder } = calculatePktRemainder(remainingQty, pktSize);
+                const inHousePacket = whole + (remainder / pktSize);
+
+                result.push({
+                    ...entry,
+                    inHouseQuantity: remainingQty,
+                    closingQuantity: remainingQty,
+                    inHousePacket: inHousePacket,
+                    closingPacket: inHousePacket,
+                    saleableQuantity: 0,
+                    saleablePacket: 0
+                });
+            });
             return;
         }
 
@@ -318,10 +348,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         (b.orderQuantity || 0) > 0.001
                     );
                 }
-                const inHouseQty = groupedBrands.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
-                const inHousePkt = groupedBrands.reduce((sum, b) => sum + (b.inHousePacket || 0), 0);
-                const openingQty = groupedBrands.reduce((sum, b) => sum + (b.openingQuantity || 0), 0);
-                const openingPkt = groupedBrands.reduce((sum, b) => sum + (b.openingPacket || 0), 0);
+                const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                const inHousePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket || 0), 0);
+                const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity || 0), 0);
+                const openingPkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingPacket || 0), 0);
                 const saleQty = groupedBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
                 const salePkt = groupedBrands.reduce((sum, b) => sum + (b.salePacket || 0), 0);
                 const orderQty = groupedBrands.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
@@ -352,19 +382,19 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
             displayRecords.forEach(group => {
                 group.brandList.forEach(b => {
-                    tOpeningQty += (b.openingQuantity || 0);
+                    tOpeningQty += Math.max(0, b.openingQuantity || 0);
                     tSaleQty += b.saleQuantity || 0;
-                    tInHouseQty += (b.inHouseQuantity || 0);
+                    tInHouseQty += Math.max(0, b.inHouseQuantity || 0);
                     tShortageQty += b.sweepedQuantity || 0;
                     tDamageQty += (b.damageQuantity || 0);
 
-                    const op = calculatePktRemainder(b.openingQuantity || 0, b.packetSize);
+                    const op = calculatePktRemainder(Math.max(0, b.openingQuantity || 0), b.packetSize);
                     tOpeningPkt.whole += op.whole; tOpeningPkt.remainder += op.remainder;
 
                     const sl = calculatePktRemainder(b.saleQuantity || 0, b.packetSize);
                     tSalePkt.whole += sl.whole; tSalePkt.remainder += sl.remainder;
 
-                    const ih = calculatePktRemainder(b.inHouseQuantity || 0, b.packetSize);
+                    const ih = calculatePktRemainder(Math.max(0, b.inHouseQuantity || 0), b.packetSize);
                     tInHousePkt.whole += ih.whole; tInHousePkt.remainder += ih.remainder;
                 });
             });
@@ -1596,12 +1626,12 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (brandList.length === 0) return null;
 
         const groupedBrands = getGroupedBrandList(brandList);
-        const openingQty = groupedBrands.reduce((sum, b) => sum + (b.openingQuantity || 0), 0);
-        const inHouseQty = groupedBrands.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
+        const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity || 0), 0);
+        const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
         const saleQty = groupedBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
         const damageQty = groupedBrands.reduce((sum, b) => sum + (b.damageQuantity || 0), 0);
-        const openingPkt = groupedBrands.reduce((sum, b) => sum + (b.openingPacket || 0), 0);
-        const inHousePkt = groupedBrands.reduce((sum, b) => sum + (b.inHousePacket || 0), 0);
+        const openingPkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingPacket || 0), 0);
+        const inHousePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket || 0), 0);
         const salePkt = groupedBrands.reduce((sum, b) => sum + (b.salePacket || 0), 0);
         const damagePkt = groupedBrands.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
         const orderQty = groupedBrands.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
@@ -1640,19 +1670,19 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     displayRecords.forEach(group => {
         group.brandList.forEach(b => {
-            tOpeningQty += (b.openingQuantity || 0);
+            tOpeningQty += Math.max(0, b.openingQuantity || 0);
             tSaleQty += b.saleQuantity;
-            tInHouseQty += (b.inHouseQuantity || 0);
+            tInHouseQty += Math.max(0, b.inHouseQuantity || 0);
             tShortageQty += b.sweepedQuantity;
             tDamageQty += (b.damageQuantity || 0);
 
-            const op = calculatePktRemainder(b.openingQuantity || 0, b.packetSize);
+            const op = calculatePktRemainder(Math.max(0, b.openingQuantity || 0), b.packetSize);
             tOpeningPkt.whole += op.whole; tOpeningPkt.remainder += op.remainder;
 
             const sl = calculatePktRemainder(b.saleQuantity, b.packetSize);
             tSalePkt.whole += sl.whole; tSalePkt.remainder += sl.remainder;
 
-            const ih = calculatePktRemainder(b.inHouseQuantity || 0, b.packetSize);
+            const ih = calculatePktRemainder(Math.max(0, b.inHouseQuantity || 0), b.packetSize);
             tInHousePkt.whole += ih.whole; tInHousePkt.remainder += ih.remainder;
         });
     });

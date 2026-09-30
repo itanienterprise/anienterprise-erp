@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { SearchIcon, XIcon, ChevronDownIcon, TrashIcon, EyeIcon, RotateCcwIcon, PrinterIcon, PlusIcon, FileTextIcon, HomeIcon, BoxIcon, EditIcon, CheckIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
@@ -124,20 +125,41 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
 
     // Fetch and Decrypt Data
     const fetchData = async () => {
-        setIsLoading(true);
+        const cachedWh = queryClient.getQueryData(['warehouses']);
+        if (!cachedWh) {
+            setIsLoading(true);
+        }
         try {
             const [whRes, stockRes, prodRes, salesRes, damagesRes, baselineRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/warehouses`),
-                axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/products`),
-                axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/damages`),
-                axios.get(`${API_BASE_URL}/api/stock-baseline/active`).catch(() => ({ data: null }))
+                queryClient.fetchQuery({
+                    queryKey: ['warehouses'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['products'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['sales'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['damages'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/damages`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock-baseline-active'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock-baseline/active`).then(r => r.data || null).catch(() => null)
+                })
             ]);
 
-            setActiveBaseline(baselineRes.data || null);
+            setActiveBaseline(baselineRes || null);
 
-            const rawWh = Array.isArray(whRes.data) ? whRes.data : [];
+            const rawWh = Array.isArray(whRes) ? whRes : [];
             const logs = [];
             const allDecryptedWh = [];
 
@@ -229,8 +251,10 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
             const fullMap = {};
 
@@ -833,12 +857,11 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             }
 
             setSubmitStatus('success');
-
-            setTimeout(() => {
-                setShowForm(false);
-                resetForm();
-                fetchData();
-            }, 1200);
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            setShowForm(false);
+            resetForm();
+            fetchData();
 
         } catch (error) {
             console.error('Error submitting stock transfer:', error);
@@ -939,6 +962,8 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
 
             await axios.put(`${API_BASE_URL}/api/warehouses/${item._id}`, updatedLog);
 
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
             if (addNotification) addNotification('success', `Stock transfer for ${item.productName || item.product} approved successfully`);
             fetchData();
         } catch (error) {
@@ -966,6 +991,8 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
 
                 await axios.put(`${API_BASE_URL}/api/warehouses/${item._id}`, updatedLog);
 
+                queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+                queryClient.invalidateQueries({ queryKey: ['stock'] });
                 if (addNotification) addNotification('info', `Stock transfer request for ${item.productName || item.product} rejected`);
                 fetchData();
             } catch (error) {
@@ -990,6 +1017,8 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                     await revertTransferStock(logItem);
                 }
                 await axios.delete(`${API_BASE_URL}/api/warehouses/${recordId}`);
+                queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+                queryClient.invalidateQueries({ queryKey: ['stock'] });
                 if (addNotification) addNotification('success', 'Transfer record deleted and stock restored to source warehouse');
                 fetchData();
             } catch (error) {

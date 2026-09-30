@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import {
     SearchIcon, FunnelIcon, XIcon, BarChartIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, EyeIcon, CheckIcon
 } from '../../Icons';
@@ -627,8 +628,11 @@ function LCReceive({
 
     const fetchCnFs = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/cnfs`);
-            setCnfs(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['cnfs'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/cnfs`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setCnfs(data);
         } catch (error) {
             console.error('Error fetching cnfs:', error);
         }
@@ -636,8 +640,11 @@ function LCReceive({
 
     const fetchCostOfGoods = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/cost-of-goods`);
-            setCostOfGoods(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['cost-of-goods'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setCostOfGoods(data);
         } catch (error) {
             console.error('Error fetching cost of goods:', error);
         }
@@ -651,8 +658,11 @@ function LCReceive({
 
     const fetchLCRecords = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/lc-management`);
-            setLcRecords(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['lc-management'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setLcRecords(data);
         } catch (error) {
             console.error('Error fetching LC records:', error);
         }
@@ -701,7 +711,10 @@ function LCReceive({
     useEffect(() => {
         const fetchEmployeesMap = async () => {
             try {
-                const res = await axios.get(`${API_BASE_URL}/api/employees`);
+                const res = await queryClient.fetchQuery({
+                    queryKey: ['employees'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => r)
+                });
                 if (Array.isArray(res.data)) {
                     const map = {};
                     res.data.forEach(emp => {
@@ -778,7 +791,7 @@ function LCReceive({
                     });
 
                     // Map 'admin' and 'administrator' to admin employee's first name / Administrator
-                    const adminEmp = res.data.find(e => {
+                    const adminEmp = (Array.isArray(res.data) ? res.data : res).find(e => {
                         let d = e;
                         if (e && e.data) {
                             if (typeof e.data === 'string') {
@@ -911,13 +924,16 @@ function LCReceive({
     const fetchWarehouses = async () => {
         try {
             // Fetch from both sources
-            const [whRes, stockRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/warehouses`),
-                axios.get(`${API_BASE_URL}/api/stock`)
+            const [whData, stockData] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['warehouses'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                })
             ]);
-
-            const whData = Array.isArray(whRes.data) ? whRes.data : [];
-            const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
 
             // 1. Calculate Global InHouse Totals from ALL Stock Data
             // Stock records still have an encrypted .data field
@@ -2017,18 +2033,16 @@ function LCReceive({
             const savedLcNo = stockFormData.lcNo;
             const savedId = editingId;
 
-            setSubmitStatus('success');
-            setTimeout(() => {
-                resetStockForm();
-                setShowStockForm(false);
-                setSubmitStatus(null);
-                if (fetchStockRecords) fetchStockRecords();
-                fetchWarehouses(); // Refresh warehouse stock display immediately
-                if (savedLcNo || savedId) {
-                    setLocalHighlightId(savedLcNo || savedId);
-                    setTimeout(() => setLocalHighlightId(null), 6000);
-                }
-            }, 1500);
+            resetStockForm();
+            setShowStockForm(false);
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+            if (fetchStockRecords) fetchStockRecords();
+            fetchWarehouses();
+            if (savedLcNo || savedId) {
+                setLocalHighlightId(savedLcNo || savedId);
+                setTimeout(() => setLocalHighlightId(null), 6000);
+            }
 
         } catch (error) {
             console.error("Error submitting stock:", error);

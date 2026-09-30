@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
+import { QUERY_KEYS } from '../../../hooks/useQueries';
 import './Importer.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 
@@ -73,14 +75,31 @@ const Importer = ({
 
 
     const fetchImporters = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(QUERY_KEYS.importers);
+        if (cached && cached.length > 0) {
+            setImporters(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
             const [impResponse, lcResponse] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/importers`),
-                axios.get(`${API_BASE_URL}/api/lc-management`)
+                queryClient.fetchQuery({
+                    queryKey: QUERY_KEYS.importers,
+                    queryFn: async () => {
+                        const res = await axios.get(`${API_BASE_URL}/api/importers`);
+                        return Array.isArray(res.data) ? res.data : [];
+                    }
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-management'],
+                    queryFn: async () => {
+                        const res = await axios.get(`${API_BASE_URL}/api/lc-management`);
+                        return Array.isArray(res.data) ? res.data : [];
+                    }
+                })
             ]);
-            setImporters(Array.isArray(impResponse.data) ? impResponse.data : []);
-            setLcRecords(Array.isArray(lcResponse.data) ? lcResponse.data : []);
+            setImporters(Array.isArray(impResponse) ? impResponse : []);
+            setLcRecords(Array.isArray(lcResponse) ? lcResponse : []);
         } catch (error) {
             console.error('Error fetching importers:', error);
         } finally {
@@ -153,22 +172,32 @@ const Importer = ({
         setSubmitStatus(null);
 
         try {
+            // Optimistic update
+            if (editingId) {
+                setImporters(prev => prev.map(imp => imp._id === editingId ? { ...imp, ...formData } : imp));
+                queryClient.setQueryData(QUERY_KEYS.importers, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map(imp => imp._id === editingId ? { ...imp, ...formData } : imp);
+                });
+            }
+
             const url = editingId
                 ? `${API_BASE_URL}/api/importers/${editingId}`
                 : `${API_BASE_URL}/api/importers`;
             if (editingId) {
                 await axios.put(url, formData);
             } else {
-                await axios.post(url, formData);
+                const res = await axios.post(url, formData);
+                const newImp = res?.data?.importer || res?.data;
+                if (newImp && newImp._id) {
+                    setImporters(prev => [newImp, ...prev]);
+                    queryClient.setQueryData(QUERY_KEYS.importers, (old) => [newImp, ...(Array.isArray(old) ? old : [])]);
+                }
             }
-            setSubmitStatus('success');
-            fetchImporters();
-            setTimeout(() => {
-                setShowForm(false);
-                setEditingId(null);
-                resetForm();
-                setSubmitStatus(null);
-            }, 2000);
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.importers });
+            setShowForm(false);
+            setEditingId(null);
+            resetForm();
         } catch (error) {
             console.error('Error saving importer:', error);
             setSubmitStatus('error');

@@ -9,6 +9,7 @@ import { generateCnFPaymentsListReportExcel } from '../../../utils/excelGenerato
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 
 const toYYYYMMDD = (dateVal) => {
     if (!dateVal) return '';
@@ -307,8 +308,10 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
             rawData.forEach(emp => {
                 let d = emp;
@@ -670,21 +673,39 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
 
     const fetchCnFs = async () => {
         try {
-            const [cnfsRes, stockRes, salesRes, paymentsRes, expenseRes, banksRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/cnfs`),
-                axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/cnf-payments`),
-                axios.get(`${API_BASE_URL}/api/lc-expenses`),
-                axios.get(`${API_BASE_URL}/api/banks`)
+            const [cnfsData, stockData, salesData, paymentsData, expenseData, banksData] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['cnfs'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/cnfs`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['sales'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['cnf-payments'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/cnf-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-expenses'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-expenses`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['banks'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
+                })
             ]);
 
-            const allCnfs = Array.isArray(cnfsRes.data) ? cnfsRes.data : [];
-            const allStock = Array.isArray(stockRes.data) ? stockRes.data : [];
-            const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
-            const allPayments = Array.isArray(paymentsRes.data) ? paymentsRes.data : [];
-            const allExpenses = Array.isArray(expenseRes.data) ? expenseRes.data : [];
-            const allBanks = Array.isArray(banksRes.data) ? banksRes.data : [];
+            const allCnfs = Array.isArray(cnfsData) ? cnfsData : [];
+            const allStock = Array.isArray(stockData) ? stockData : [];
+            const allSales = Array.isArray(salesData) ? salesData : [];
+            const allPayments = Array.isArray(paymentsData) ? paymentsData : [];
+            const allExpenses = Array.isArray(expenseData) ? expenseData : [];
+            const allBanks = Array.isArray(banksData) ? banksData : [];
 
             setBanks(allBanks);
 
@@ -821,10 +842,18 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
     };
 
     const fetchPayments = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(['cnf-payments']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setPayments(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/cnf-payments`);
-            setPayments(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['cnf-payments'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/cnf-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setPayments(data);
         } catch (error) {
             console.error('Error fetching C&F payments:', error);
         } finally {
@@ -972,14 +1001,15 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
             }
 
             setSubmitStatus('success');
+            queryClient.invalidateQueries({ queryKey: ['cnf-payments'] });
+            queryClient.invalidateQueries({ queryKey: ['cnfs'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
+            setShowAddModal(false);
+            setSubmitStatus(null);
+            resetNewPayment();
             fetchPayments();
             fetchCnFs();
             refreshPendingIndicators?.();
-            setTimeout(() => {
-                setShowAddModal(false);
-                setSubmitStatus(null);
-                resetNewPayment();
-            }, 1200);
         } catch (error) {
             console.error('Error saving C&F payment:', error);
             setSubmitStatus('error');
@@ -1037,6 +1067,9 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
             }
 
             await axios.put(`${API_BASE_URL}/api/cnf-payments/${payment._id}`, updatedData);
+            queryClient.invalidateQueries({ queryKey: ['cnf-payments'] });
+            queryClient.invalidateQueries({ queryKey: ['cnfs'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
 
             if (addNotification) {
                 if (updatedData.status === 'Completed') {
@@ -1131,7 +1164,13 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
         if (!paymentToDelete) return;
         setIsSubmitting(true);
         try {
-            await axios.delete(`${API_BASE_URL}/api/cnf-payments/${paymentToDelete._id}`);
+            const delId = paymentToDelete._id;
+            queryClient.setQueryData(['cnf-payments'], (old = []) => old.filter(p => p._id !== delId));
+            setShowDeleteConfirm(false);
+            setPaymentToDelete(null);
+            setSubmitStatus(null);
+
+            await axios.delete(`${API_BASE_URL}/api/cnf-payments/${delId}`);
             setSubmitStatus('success');
             if (addNotification) {
                 addNotification(
@@ -1142,14 +1181,12 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                     paymentToDelete?.cnfName
                 );
             }
-            setTimeout(() => {
-                setShowDeleteConfirm(false);
-                setPaymentToDelete(null);
-                setSubmitStatus(null);
-                fetchPayments();
-                fetchCnFs();
-                refreshPendingIndicators?.();
-            }, 1000);
+            queryClient.invalidateQueries({ queryKey: ['cnf-payments'] });
+            queryClient.invalidateQueries({ queryKey: ['cnfs'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
+            fetchPayments();
+            fetchCnFs();
+            refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error deleting C&F payment:', error);
             setSubmitStatus('error');

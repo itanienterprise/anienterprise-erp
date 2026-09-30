@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { EditIcon, TrashIcon, SearchIcon, XIcon, ChevronDownIcon, CheckIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
@@ -406,25 +407,38 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                     updatedByName: currentUser?.name || currentUser?.nameEn || currentUser?.username || ''
                 } : {})
             };
+            // Optimistic update
+            const tempId = editingId || `temp-${Date.now()}`;
+            const optimisticRecord = { ...payload, _id: tempId };
+            queryClient.setQueryData(['damages'], (old = []) => {
+                if (editingId) {
+                    return old.map(d => d._id === editingId ? { ...d, ...payload } : d);
+                }
+                return [optimisticRecord, ...old];
+            });
+
+            // Close form immediately
+            setShowForm(false);
+            setEditingId(null);
+            resetForm();
+            setSubmitStatus(null);
+
             if (editingId) {
                 await axios.put(url, payload);
             } else {
                 await axios.post(url, payload);
             }
-            setSubmitStatus('success');
             if (addNotification) addNotification('success', `Damage record ${editingId ? 'updated' : 'added'} successfully`);
+            queryClient.invalidateQueries({ queryKey: ['damages'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
             if (fetchDamages) fetchDamages();
             if (fetchStockRecords) fetchStockRecords();
-            setTimeout(() => {
-                setShowForm(false);
-                setEditingId(null);
-                resetForm();
-                setSubmitStatus(null);
-            }, 2000);
         } catch (error) {
             console.error('Error saving damage record:', error);
             setSubmitStatus('error');
             if (addNotification) addNotification('error', 'Failed to save damage record');
+            if (fetchDamages) fetchDamages();
+            if (fetchStockRecords) fetchStockRecords();
         } finally {
             setIsSubmitting(false);
         }
@@ -473,21 +487,27 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         }
         if (window.confirm('Are you sure you want to delete this damage record?')) {
             try {
+                queryClient.setQueryData(['damages'], (old = []) => old.filter(d => d._id !== id));
                 await axios.delete(`${API_BASE_URL}/api/damages/${id}`);
                 if (addNotification) addNotification('success', 'Damage record deleted');
+                queryClient.invalidateQueries({ queryKey: ['damages'] });
+                queryClient.invalidateQueries({ queryKey: ['stock'] });
                 if (fetchDamages) fetchDamages();
                 if (fetchStockRecords) fetchStockRecords();
             } catch (error) {
                 console.error('Error deleting damage:', error);
                 if (addNotification) addNotification('error', 'Failed to delete damage record');
+                if (fetchDamages) fetchDamages();
             }
         }
     };
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
             rawData.forEach(emp => {
                 let d = emp;

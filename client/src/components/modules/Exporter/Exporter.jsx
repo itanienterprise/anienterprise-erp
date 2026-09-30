@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, PlusIcon, FunnelIcon, FileTextIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
+import { QUERY_KEYS } from '../../../hooks/useQueries';
 import { decryptData } from '../../../utils/encryption';
 import { generateExporterProfileReportPDF } from '../../../utils/pdfGenerator';
 import { generateExporterProfileReportExcel } from '../../../utils/excelGenerator';
@@ -225,10 +227,21 @@ const Exporter = ({
     }, [viewData]);
 
     const fetchExporters = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(QUERY_KEYS.exporters);
+        if (cached && cached.length > 0) {
+            setExporters(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/exporters`);
-            setExporters(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: QUERY_KEYS.exporters,
+                queryFn: async () => {
+                    const response = await axios.get(`${API_BASE_URL}/api/exporters`);
+                    return Array.isArray(response.data) ? response.data : [];
+                }
+            });
+            setExporters(data);
         } catch (error) {
             console.error('Error fetching exporters:', error);
         } finally {
@@ -487,23 +500,32 @@ const Exporter = ({
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
-            const payload = { ...formData };
+            // Optimistic update
+            if (editingId) {
+                setExporters(prev => prev.map(exp => exp._id === editingId ? { ...exp, ...payload } : exp));
+                queryClient.setQueryData(QUERY_KEYS.exporters, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map(exp => exp._id === editingId ? { ...exp, ...payload } : exp);
+                });
+            }
+
             const url = editingId
                 ? `${API_BASE_URL}/api/exporters/${editingId}`
                 : `${API_BASE_URL}/api/exporters`;
             if (editingId) {
                 await axios.put(url, payload);
             } else {
-                await axios.post(url, payload);
+                const res = await axios.post(url, payload);
+                const newExp = res?.data?.exporter || res?.data;
+                if (newExp && newExp._id) {
+                    setExporters(prev => [newExp, ...prev]);
+                    queryClient.setQueryData(QUERY_KEYS.exporters, (old) => [newExp, ...(Array.isArray(old) ? old : [])]);
+                }
             }
-            setSubmitStatus('success');
-            fetchExporters();
-            setTimeout(() => {
-                setShowForm(false);
-                setEditingId(null);
-                resetForm();
-                setSubmitStatus(null);
-            }, 2000);
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exporters });
+            setShowForm(false);
+            setEditingId(null);
+            resetForm();
         } catch (error) {
             console.error('Error saving exporter:', error);
             setSubmitStatus('error');

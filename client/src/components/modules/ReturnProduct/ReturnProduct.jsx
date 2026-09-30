@@ -21,6 +21,7 @@ import './ReturnProduct.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { decryptData } from '../../../utils/encryption';
+import { queryClient } from '../../../utils/queryClient';
 
 const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated }) => {
     const [showForm, setShowForm] = useState(false);
@@ -145,10 +146,18 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
     }, [formData.quantity, formData.packetSize, formData.bags]);
 
     const fetchReturns = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(['returns']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setReturns(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/returns`);
-            setReturns(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['returns'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/returns`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setReturns(data);
         } catch (error) {
             console.error('Error fetching returns:', error);
         } finally {
@@ -157,9 +166,16 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
     };
 
     const fetchSales = async () => {
+        const cached = queryClient.getQueryData(['sales']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setSales(cached);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/sales`);
-            setSales(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['sales'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setSales(data);
         } catch (error) {
             console.error('Error fetching sales:', error);
         }
@@ -167,14 +183,19 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
 
     const fetchWarehouses = async () => {
         try {
-            console.log('Fetching warehouses and stock for names...');
-            const [whRes, stockRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/warehouses`),
-                axios.get(`${API_BASE_URL}/api/stock`)
+            const [whData, stockData] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['warehouses'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                })
             ]);
 
-            const whList = Array.isArray(whRes.data) ? whRes.data : [];
-            const stockList = Array.isArray(stockRes.data) ? stockRes.data : [];
+            const whList = Array.isArray(whData) ? whData : [];
+            const stockList = Array.isArray(stockData) ? stockData : [];
 
             // Get unique warehouse names from both sources
             const names = new Set();
@@ -192,7 +213,6 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                 whName: name
             })).sort((a, b) => a.whName.localeCompare(b.whName));
 
-            console.log('Merged Warehouse List:', uniqueWhList);
             setWarehouses(uniqueWhList);
         } catch (error) {
             console.error('Error fetching warehouses:', error);
@@ -201,8 +221,10 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
 
     const fetchEmployees = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(res.data) ? res.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const firstMap = {};
 
             rawData.forEach(e => {
@@ -589,7 +611,11 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                 originalQuantity: '',
                 purchaseItems: []
             });
-            await fetchReturns();
+            queryClient.invalidateQueries({ queryKey: ['returns'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            fetchReturns();
             if (typeof onReturnsUpdated === 'function') {
                 onReturnsUpdated();
             }
@@ -806,7 +832,11 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
             }
 
             setDeleteConfirmReturn(null);
-            await fetchReturns();
+            queryClient.invalidateQueries({ queryKey: ['returns'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            fetchReturns();
             showToast('Return record deleted successfully.', 'success');
             if (typeof onReturnsUpdated === 'function') {
                 onReturnsUpdated();

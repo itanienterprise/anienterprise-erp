@@ -8,6 +8,7 @@ import { generatePL2PDF } from '../../../utils/pl2pdfgenerator';
 import { preloadAlgerianFont } from '../../../utils/algerianFontLoader';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './PackingList.css';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -430,8 +431,10 @@ function PackingList({
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
             const fullMap = {};
             rawData.forEach(emp => {
@@ -659,9 +662,16 @@ function PackingList({
     };
 
     const fetchTrSetups = async () => {
+        const cached = queryClient.getQueryData(['tr-setups']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setTrSetups(cached);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/tr-setups`);
-            setTrSetups(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['tr-setups'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/tr-setups`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setTrSetups(data);
         } catch (error) {
             console.error('Error fetching TR setups:', error);
             showToast('Failed to load TR Setup names.', 'error');
@@ -669,25 +679,45 @@ function PackingList({
     };
 
     const fetchRecords = async () => {
-        setIsLoading(true);
+        const cachedPl = queryClient.getQueryData(['packing-lists']);
+        if (cachedPl && Array.isArray(cachedPl) && cachedPl.length > 0) {
+            setRecords(cachedPl);
+        } else {
+            setIsLoading(true);
+        }
         try {
             // 1. Fetch Packing Lists first and render table instantly!
-            const plRes = await axios.get(`${API_BASE_URL}/api/packing-lists`);
-            setRecords(Array.isArray(plRes.data) ? plRes.data : []);
+            const plData = await queryClient.fetchQuery({
+                queryKey: ['packing-lists'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/packing-lists`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setRecords(Array.isArray(plData) ? plData : []);
             setIsLoading(false);
 
             // 2. Fetch secondary data in background
-            const [piRes, lcRes, bankRes, ipRes, notifRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/pi`),
-                axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/banks`),
-                axios.get(`${API_BASE_URL}/api/ip-records`),
+            const [piData, lcData, bankData, ipData, notifRes] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['pi'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/pi`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-management'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['banks'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['ip-records'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
                 axios.get(`${API_BASE_URL}/api/notifications`).catch(() => ({ data: [] }))
             ]);
-            setPiRecords(Array.isArray(piRes.data) ? piRes.data : []);
-            setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
-            setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
-            setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
+            setPiRecords(Array.isArray(piData) ? piData : []);
+            setLcRecords(Array.isArray(lcData) ? lcData : []);
+            setBanks(Array.isArray(bankData) ? bankData : []);
+            setIpRecords(Array.isArray(ipData) ? ipData : []);
 
             // Build notificationsMap for Entry By resolution
             const rawNotifs = Array.isArray(notifRes?.data) ? notifRes.data : [];
@@ -1274,6 +1304,7 @@ function PackingList({
                     );
                 }
             }
+            queryClient.invalidateQueries({ queryKey: ['packing-lists'] });
             setShowForm(false);
             resetForm();
         } catch (err) {
@@ -1408,7 +1439,11 @@ function PackingList({
             isBulk: false,
             extraData: {
                 action: () => {
-                    axios.delete(`${API_BASE_URL}/api/packing-lists/${id}`).then(() => fetchRecords());
+                    queryClient.setQueryData(['packing-lists'], (old = []) => old.filter(r => r._id !== id));
+                    axios.delete(`${API_BASE_URL}/api/packing-lists/${id}`).then(() => {
+                        queryClient.invalidateQueries({ queryKey: ['packing-lists'] });
+                        fetchRecords();
+                    });
                 }
             }
         });

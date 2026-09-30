@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, ChevronUpIcon, TrashIcon, EditIcon, ShieldIcon, BarChartIcon, CalendarIcon, CheckIcon, TrendingUpIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateInsurancePaymentReportPDF } from '../../../utils/pdfGenerator';
@@ -223,8 +224,10 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
             rawData.forEach(emp => {
                 let d = emp;
@@ -390,15 +393,24 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
 
     const fetchInsurances = async () => {
         try {
-            const [insRes, lcRes, paymentsRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/insurance`),
-                axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/insurance-payments`)
+            const [insData, lcData, paymentsData] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['insurance'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/insurance`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-management'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['insurance-payments'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+                })
             ]);
 
-            const allInsurances = Array.isArray(insRes.data) ? insRes.data : [];
-            const allLc = Array.isArray(lcRes.data) ? lcRes.data : [];
-            const allPayments = Array.isArray(paymentsRes.data) ? paymentsRes.data : [];
+            const allInsurances = Array.isArray(insData) ? insData : [];
+            const allLc = Array.isArray(lcData) ? lcData : [];
+            const allPayments = Array.isArray(paymentsData) ? paymentsData : [];
 
             const insurancesWithBalance = allInsurances.map(ins => {
                 const targetName = (ins.companyName || '').toLowerCase().trim();
@@ -450,10 +462,18 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     };
 
     const fetchPayments = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(['insurance-payments']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setPayments(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/insurance-payments`);
-            setPayments(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['insurance-payments'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setPayments(data);
         } catch (error) {
             console.error('Error fetching insurance payments:', error);
         } finally {
@@ -572,13 +592,13 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             }
 
             setSubmitStatus('success');
+            queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });
+            queryClient.invalidateQueries({ queryKey: ['insurance'] });
+            setShowAddModal(false);
+            setSubmitStatus(null);
+            resetNewPayment();
             fetchPayments();
-            fetchInsurances(); // Refresh balances
-            setTimeout(() => {
-                setShowAddModal(false);
-                setSubmitStatus(null);
-                resetNewPayment();
-            }, 1500);
+            fetchInsurances();
         } catch (error) {
             console.error('Error saving insurance payment:', error);
             setSubmitStatus('error');
@@ -595,6 +615,8 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 status: 'Adjusted'
             };
             await axios.put(`${API_BASE_URL}/api/insurance-payments/${payment._id}`, updatedPayment);
+            queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });
+            queryClient.invalidateQueries({ queryKey: ['insurance'] });
             if (addNotification) {
                 addNotification(
                     'Insurance Payment Approved',
@@ -602,8 +624,8 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                     ['Admin', 'Incharge', 'Accounts Manager', 'Sales Manager']
                 );
             }
-            await fetchPayments();
-            await fetchInsurances();
+            fetchPayments();
+            fetchInsurances();
         } catch (err) {
             console.error('Error approving payment request:', err);
             alert('Failed to approve payment request.');
@@ -617,6 +639,8 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
         try {
             setIsLoading(true);
             await axios.delete(`${API_BASE_URL}/api/insurance-payments/${payment._id}`);
+            queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });
+            queryClient.invalidateQueries({ queryKey: ['insurance'] });
             if (addNotification) {
                 addNotification(
                     'Insurance Payment Request Rejected',
@@ -689,16 +713,18 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
         if (!paymentToDelete) return;
         setIsSubmitting(true);
         try {
-            await axios.delete(`${API_BASE_URL}/api/insurance-payments/${paymentToDelete._id}`);
-            setSubmitStatus('success');
-            setTimeout(() => {
-                setShowDeleteConfirm(false);
-                setPaymentToDelete(null);
-                setSubmitStatus(null);
-                setExpandedPaymentIdx(null);
-                fetchPayments();
-                fetchInsurances();
-            }, 1000);
+            const delId = paymentToDelete._id;
+            queryClient.setQueryData(['insurance-payments'], (old = []) => old.filter(p => p._id !== delId));
+            setShowDeleteConfirm(false);
+            setPaymentToDelete(null);
+            setSubmitStatus(null);
+            setExpandedPaymentIdx(null);
+
+            await axios.delete(`${API_BASE_URL}/api/insurance-payments/${delId}`);
+            queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });
+            queryClient.invalidateQueries({ queryKey: ['insurance'] });
+            fetchPayments();
+            fetchInsurances();
         } catch (error) {
             console.error('Error deleting insurance payment:', error);
             setSubmitStatus('error');

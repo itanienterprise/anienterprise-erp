@@ -10,6 +10,7 @@ import axios, { api } from '../../../utils/api';
 import PayToCustomerReport from './PayToCustomerReport';
 import './PayToCustomer.css';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { queryClient } from '../../../utils/queryClient';
 
 const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
     const [payments, setPayments] = useState([]);
@@ -328,8 +329,10 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
 
             rawData.forEach(emp => {
@@ -499,8 +502,10 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
 
     const fetchBanks = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/banks`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['banks'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const decryptedBanks = rawData.map(bank => {
                 let d = bank;
                 if (bank && bank.data) {
@@ -626,14 +631,32 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
     const uniqueCustomers = [...new Set(payments.map(p => p.companyName || p.customerName).filter(Boolean))].sort();
 
     const fetchPayments = async () => {
-        setIsLoading(true);
+        const cachedCust = queryClient.getQueryData(['customers']);
+        if (!cachedCust) {
+            setIsLoading(true);
+        }
         try {
             const [customersData, purchasesData, stockData, purchaseReceivesData, salesData] = await Promise.all([
-                api.get('/api/customers').catch(() => []),
-                api.get('/api/purchases').catch(() => []),
-                api.get('/api/stock').catch(() => []),
-                api.get('/api/purchase-receives').catch(() => []),
-                api.get('/api/sales').catch(() => [])
+                queryClient.fetchQuery({
+                    queryKey: ['customers'],
+                    queryFn: () => api.get('/api/customers').catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['purchases'],
+                    queryFn: () => api.get('/api/purchases').catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => api.get('/api/stock').catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['purchase-receives'],
+                    queryFn: () => api.get('/api/purchase-receives').catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['sales'],
+                    queryFn: () => api.get('/api/sales').catch(() => [])
+                })
             ]);
 
             const rawData = Array.isArray(customersData) ? customersData : [];
@@ -1026,12 +1049,13 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             await axios.put(`${API_BASE_URL}/api/customers/${paymentToDelete.customerId}`, updatedCustomer);
 
             setSubmitStatus('success');
-            setTimeout(() => {
-                setShowDeleteConfirm(false);
-                setPaymentToDelete(null);
-                setSubmitStatus(null);
-                fetchPayments();
-            }, 1000);
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
+            setShowDeleteConfirm(false);
+            setPaymentToDelete(null);
+            setSubmitStatus(null);
+            fetchPayments();
 
             try {
                 const now = new Date();
@@ -1568,12 +1592,13 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 );
             } catch (notifErr) { console.error('Notification error:', notifErr); }
 
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
+            setShowAddModal(false);
+            setSubmitStatus(null);
+            resetNewPayment();
             fetchPayments();
-            setTimeout(() => {
-                setShowAddModal(false);
-                setSubmitStatus(null);
-                resetNewPayment();
-            }, 1500);
         } catch (error) {
             console.error('Error saving payout:', error);
             setSubmitStatus('error');
@@ -1697,12 +1722,13 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 );
             } catch (notifErr) { console.error('Notification error:', notifErr); }
 
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
+            setShowAddModal(false);
+            setSubmitStatus(null);
+            resetNewPayment();
             fetchPayments();
-            setTimeout(() => {
-                setShowAddModal(false);
-                setSubmitStatus(null);
-                resetNewPayment();
-            }, 1500);
         } catch (error) {
             console.error('Error updating payout:', error);
             setSubmitStatus('error');

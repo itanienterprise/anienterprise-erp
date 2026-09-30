@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { SearchIcon, PlusIcon, EditIcon, TrashIcon, ShieldIcon, XIcon, ChevronDownIcon, ChevronUpIcon, DollarSignIcon, BarChartIcon, TrendingUpIcon, EyeIcon, PrinterIcon, FunnelIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateInsuranceHistoryReportPDF } from '../../../utils/pdfGenerator';
@@ -201,16 +202,30 @@ const Insurance = ({ onDeleteConfirm }) => {
     });
 
     const fetchInsurance = async () => {
-        setIsInitialLoading(true);
+        const cached = queryClient.getQueryData(['insurance']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setInsuranceRecords(cached);
+        } else {
+            setIsInitialLoading(true);
+        }
         try {
-            const [insRes, lcRes, paymentsRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/insurance`),
-                axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/insurance-payments`)
+            const [insData, lcData, paymentsData] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['insurance'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/insurance`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-management'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['insurance-payments'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+                })
             ]);
-            setInsuranceRecords(Array.isArray(insRes.data) ? insRes.data : []);
-            setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
-            setInsurancePayments(Array.isArray(paymentsRes.data) ? paymentsRes.data : []);
+            setInsuranceRecords(Array.isArray(insData) ? insData : []);
+            setLcRecords(Array.isArray(lcData) ? lcData : []);
+            setInsurancePayments(Array.isArray(paymentsData) ? paymentsData : []);
         } catch (error) {
             console.error('Error fetching insurance data:', error);
         } finally {
@@ -257,6 +272,27 @@ const Insurance = ({ onDeleteConfirm }) => {
         setIsSubmitting(true);
         setSubmitStatus(null);
 
+        // Optimistic update
+        const tempId = editingId || `temp-${Date.now()}`;
+        const newRecord = { ...formData, _id: tempId };
+
+        queryClient.setQueryData(['insurance'], (old = []) => {
+            if (editingId) {
+                return old.map(item => item._id === editingId ? { ...item, ...formData } : item);
+            }
+            return [newRecord, ...old];
+        });
+        setInsuranceRecords(prev => {
+            if (editingId) {
+                return prev.map(item => item._id === editingId ? { ...item, ...formData } : item);
+            }
+            return [newRecord, ...prev];
+        });
+
+        // Close form instantly
+        setShowForm(false);
+        resetForm();
+
         try {
             const url = editingId
                 ? `${API_BASE_URL}/api/insurance/${editingId}`
@@ -268,16 +304,12 @@ const Insurance = ({ onDeleteConfirm }) => {
                 await axios.post(url, formData);
             }
 
-            setSubmitStatus('success');
+            queryClient.invalidateQueries({ queryKey: ['insurance'] });
             fetchInsurance();
-            setTimeout(() => {
-                setShowForm(false);
-                resetForm();
-                setSubmitStatus(null);
-            }, 1500);
         } catch (error) {
             console.error('Error saving insurance record:', error);
-            setSubmitStatus('error');
+            alert('Failed to save insurance record');
+            fetchInsurance();
         } finally {
             setIsSubmitting(false);
         }

@@ -27,6 +27,7 @@ import { generateStockReportPDF, generateProductHistoryPDF } from '../../../util
 import axios from '../../../utils/api';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { queryClient } from '../../../utils/queryClient';
 
 const SortIcon = ({ config, columnKey }) => {
     if (!config || config.key !== columnKey) return <ChevronDownIcon className="w-3 h-3 ml-1 text-gray-300 opacity-0 group-hover:opacity-100" />;
@@ -175,10 +176,17 @@ const StockManagement = ({
     useEffect(() => {
         let isMounted = true;
         const fetchReturns = async () => {
+            const cached = queryClient.getQueryData(['returns']);
+            if (cached && isMounted) {
+                setLocalReturnsList(Array.isArray(cached) ? cached : []);
+            }
             try {
-                const res = await axios.get(`${API_BASE_URL}/api/returns`);
-                if (isMounted && res.data) {
-                    setLocalReturnsList(Array.isArray(res.data) ? res.data : []);
+                const data = await queryClient.fetchQuery({
+                    queryKey: ['returns'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/returns`).then(r => Array.isArray(r.data) ? r.data : [])
+                });
+                if (isMounted) {
+                    setLocalReturnsList(data);
                 }
             } catch (err) {
                 console.error('Error fetching returns in StockManagement:', err);
@@ -336,18 +344,28 @@ const StockManagement = ({
 
     useEffect(() => {
         const fetchWarehouseData = async () => {
+            const cached = queryClient.getQueryData(['warehouses']);
+            if (cached && Array.isArray(cached) && cached.length > 0) {
+                setWarehouseData(cached);
+            }
             try {
-                const res = await axios.get(`${API_BASE_URL}/api/warehouses`);
-                if (Array.isArray(res.data)) {
-                    const dec = res.data.map(item => {
-                        let d = decryptData(item.data);
-                        if (d && d.data && typeof d.data === 'string') {
-                            try { d = decryptData(d.data); } catch (e) { }
+                const data = await queryClient.fetchQuery({
+                    queryKey: ['warehouses'],
+                    queryFn: async () => {
+                        const res = await axios.get(`${API_BASE_URL}/api/warehouses`);
+                        if (Array.isArray(res.data)) {
+                            return res.data.map(item => {
+                                let d = decryptData(item.data);
+                                if (d && d.data && typeof d.data === 'string') {
+                                    try { d = decryptData(d.data); } catch (e) { }
+                                }
+                                return { ...item, ...(d || {}) };
+                            });
                         }
-                        return { ...item, ...(d || {}) };
-                    });
-                    setWarehouseData(dec);
-                }
+                        return [];
+                    }
+                });
+                setWarehouseData(data);
             } catch (e) {
                 console.error('Error fetching warehouses in StockManagement:', e);
             }
@@ -1019,13 +1037,19 @@ const StockManagement = ({
 
     const fetchWarehouses = async () => {
         try {
-            const [whRes, stockRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/warehouses`),
-                axios.get(`${API_BASE_URL}/api/stock`)
+            const [whResData, stockResData] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['warehouses'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                })
             ]);
 
-            const whData = Array.isArray(whRes.data) ? whRes.data : [];
-            const stockDataRes = Array.isArray(stockRes.data) ? stockRes.data : [];
+            const whData = Array.isArray(whResData) ? whResData : [];
+            const stockDataRes = Array.isArray(stockResData) ? stockResData : [];
 
             // 1. Calculate Global InHouse Totals from ALL Stock Data
             const globalInHouseMap = {};
@@ -1744,21 +1768,19 @@ const StockManagement = ({
                 }
             }
             // Refresh data to reflect changes
-            await fetchWarehouses();
-
-            setAddWarehouseStockSubmitStatus('success');
-            setTimeout(() => {
-                setShowAddWarehouseStockForm(false);
-                setAddWarehouseStockSubmitStatus(null);
-                setAddWarehouseStockFormData({
-                    whName: '', manager: '', location: '', capacity: '',
-                    to: '', toManager: '', toLocation: '', toCapacity: '',
-                    productEntries: [{
-                        productName: '',
-                        brandEntries: [{ brand: '', inhousePkt: '', inhouseQty: '', whPkt: '', whQty: '', transferPkt: '', transferQty: '' }]
-                    }]
-                });
-            }, 1500);
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            setShowAddWarehouseStockForm(false);
+            setAddWarehouseStockSubmitStatus(null);
+            setAddWarehouseStockFormData({
+                whName: '', manager: '', location: '', capacity: '',
+                to: '', toManager: '', toLocation: '', toCapacity: '',
+                productEntries: [{
+                    productName: '',
+                    brandEntries: [{ brand: '', inhousePkt: '', inhouseQty: '', whPkt: '', whQty: '', transferPkt: '', transferQty: '' }]
+                }]
+            });
+            fetchWarehouses();
         } catch (error) {
             console.error('Error saving warehouse stock:', error);
             setAddWarehouseStockSubmitStatus('error');
@@ -2217,12 +2239,10 @@ const StockManagement = ({
             }
 
             setSubmitStatus('success');
-            setTimeout(() => {
-                resetStockForm();
-                setShowStockForm(false);
-                setSubmitStatus(null);
-                if (fetchStockRecords) fetchStockRecords();
-            }, 1500);
+            resetStockForm();
+            setShowStockForm(false);
+            setSubmitStatus(null);
+            if (fetchStockRecords) fetchStockRecords();
 
         } catch (error) {
             console.error("Error submitting stock:", error);
@@ -2460,9 +2480,16 @@ const StockManagement = ({
     };
 
     const fetchBaselineHistory = async () => {
+        const cached = queryClient.getQueryData(['stock-baseline-history']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setBaselineHistory(cached);
+        }
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/stock-baseline/history`);
-            setBaselineHistory(Array.isArray(res.data) ? res.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['stock-baseline-history'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/stock-baseline/history`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setBaselineHistory(data);
         } catch (err) {
             console.error('Error fetching baseline history:', err);
         }
@@ -2495,8 +2522,12 @@ const StockManagement = ({
                 snapshotRecords
             });
 
-            if (typeof fetchStockBaseline === 'function') await fetchStockBaseline();
-            if (typeof fetchStockRecords === 'function') await fetchStockRecords();
+            queryClient.invalidateQueries({ queryKey: ['stock-baseline'] });
+            queryClient.invalidateQueries({ queryKey: ['stock-baseline-history'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+
+            if (typeof fetchStockBaseline === 'function') fetchStockBaseline();
+            if (typeof fetchStockRecords === 'function') fetchStockRecords();
 
             setShowBaselineModal(false);
             setBaselineConfirmText('');
@@ -2517,9 +2548,13 @@ const StockManagement = ({
         setBaselineLoading(true);
         try {
             await axios.post(`${API_BASE_URL}/api/stock-baseline/${baselineId}/revert`);
-            if (typeof fetchStockBaseline === 'function') await fetchStockBaseline();
-            if (typeof fetchStockRecords === 'function') await fetchStockRecords();
-            await fetchBaselineHistory();
+            queryClient.invalidateQueries({ queryKey: ['stock-baseline'] });
+            queryClient.invalidateQueries({ queryKey: ['stock-baseline-history'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+
+            if (typeof fetchStockBaseline === 'function') fetchStockBaseline();
+            if (typeof fetchStockRecords === 'function') fetchStockRecords();
+            fetchBaselineHistory();
             alert('Stock baseline reverted successfully!');
         } catch (err) {
             console.error('Error reverting baseline:', err);
@@ -2537,8 +2572,12 @@ const StockManagement = ({
         setBaselineLoading(true);
         try {
             await axios.post(`${API_BASE_URL}/api/stock-baseline/${baselineId}/activate`);
-            if (typeof fetchStockBaseline === 'function') await fetchStockBaseline();
-            if (typeof fetchStockRecords === 'function') await fetchStockRecords();
+            queryClient.invalidateQueries({ queryKey: ['stock-baseline'] });
+            queryClient.invalidateQueries({ queryKey: ['stock-baseline-history'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+
+            if (typeof fetchStockBaseline === 'function') fetchStockBaseline();
+            if (typeof fetchStockRecords === 'function') fetchStockRecords();
             await fetchBaselineHistory();
             alert('Stock baseline activated successfully!');
         } catch (err) {
@@ -3904,7 +3943,7 @@ const StockManagement = ({
                                                                                 <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
                                                                                     {(() => {
                                                                                         const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
-                                                                                        const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
+                                                                                        const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
                                                                                         const pktSize = brand.packetSize || 30;
                                                                                         const { whole, remainder = 0 } = calculatePktRemainder(totalQty, pktSize);
                                                                                         return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
@@ -3913,7 +3952,7 @@ const StockManagement = ({
                                                                                 <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
                                                                                     {(() => {
                                                                                         const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
-                                                                                        const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
+                                                                                        const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
                                                                                         return Math.round(totalQty).toLocaleString('en-US');
                                                                                     })()}
                                                                                 </div>
@@ -3952,7 +3991,7 @@ const StockManagement = ({
                                                                         )}
                                                                         {showQty && (
                                                                             <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
-                                                                                {Math.round(group.openingQuantity).toLocaleString('en-US')}
+                                                                                {Math.round(Math.max(0, group.openingQuantity || 0)).toLocaleString('en-US')}
                                                                             </div>
                                                                         )}
                                                                         {/* Total Sale */}
@@ -3984,8 +4023,8 @@ const StockManagement = ({
                                                                     <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
                                                                         {(() => {
                                                                             const grouped = getGroupedBrandList(group.brandList || []);
-                                                                            let totalWhole = grouped.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity || 0, ent.packetSize).whole, 0);
-                                                                            let totalRem = grouped.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity || 0, ent.packetSize).remainder, 0);
+                                                                            let totalWhole = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0);
+                                                                            let totalRem = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0);
                                                                             const pktSize = group.packetSize || group.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
                                                                             if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
                                                                                 const extra = Math.floor(Math.abs(totalRem) / pktSize);
@@ -3998,7 +4037,7 @@ const StockManagement = ({
                                                                 )}
                                                                 {showQty && (
                                                                     <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
-                                                                        {Math.round(group.inHouseQuantity).toLocaleString('en-US')}
+                                                                        {Math.round(Math.max(0, group.inHouseQuantity || 0)).toLocaleString('en-US')}
                                                                     </div>
                                                                 )}
 

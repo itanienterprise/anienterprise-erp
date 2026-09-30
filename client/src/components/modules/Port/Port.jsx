@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { EditIcon, TrashIcon, AnchorIcon, SearchIcon, XIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
+import { QUERY_KEYS } from '../../../hooks/useQueries';
 import './Port.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 
@@ -46,10 +48,21 @@ const Port = ({
     }, []);
 
     const fetchPorts = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(QUERY_KEYS.ports);
+        if (cached && cached.length > 0) {
+            setPorts(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/ports`);
-            setPorts(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: QUERY_KEYS.ports,
+                queryFn: async () => {
+                    const response = await axios.get(`${API_BASE_URL}/api/ports`);
+                    return Array.isArray(response.data) ? response.data : [];
+                }
+            });
+            setPorts(data);
         } catch (error) {
             console.error('Error fetching ports:', error);
         } finally {
@@ -68,20 +81,30 @@ const Port = ({
         setSubmitStatus(null);
 
         try {
+            // Optimistic update
+            if (editingId) {
+                setPorts(prev => prev.map(p => p._id === editingId ? { ...p, ...formData } : p));
+                queryClient.setQueryData(QUERY_KEYS.ports, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map(p => p._id === editingId ? { ...p, ...formData } : p);
+                });
+            }
+
             const url = editingId ? `${API_BASE_URL}/api/ports/${editingId}` : `${API_BASE_URL}/api/ports`;
             if (editingId) {
                 await axios.put(url, formData);
             } else {
-                await axios.post(url, formData);
+                const res = await axios.post(url, formData);
+                const newPort = res?.data?.port || res?.data;
+                if (newPort && newPort._id) {
+                    setPorts(prev => [newPort, ...prev]);
+                    queryClient.setQueryData(QUERY_KEYS.ports, (old) => [newPort, ...(Array.isArray(old) ? old : [])]);
+                }
             }
-            setSubmitStatus('success');
-            fetchPorts();
-            setTimeout(() => {
-                setShowForm(false);
-                setEditingId(null);
-                resetForm();
-                setSubmitStatus(null);
-            }, 2000);
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ports });
+            setShowForm(false);
+            setEditingId(null);
+            resetForm();
         } catch (error) {
             console.error('Error saving port:', error);
             setSubmitStatus('error');

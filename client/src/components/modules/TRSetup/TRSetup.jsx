@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SearchIcon, PlusIcon, EditIcon, TrashIcon, XIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import { hasPermission } from '../../../utils/permissionHelper';
 
 function TRSetup({ onDeleteConfirm, currentUser }) {
@@ -40,10 +41,18 @@ function TRSetup({ onDeleteConfirm, currentUser }) {
     }, []);
 
     const fetchRecords = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(['tr-setups']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setRecords(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/tr-setups`);
-            setRecords(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['tr-setups'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/tr-setups`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setRecords(data);
         } catch (error) {
             console.error('Error fetching TR setups:', error);
             showToast('Failed to load TR setups.', 'error');
@@ -102,19 +111,37 @@ function TRSetup({ onDeleteConfirm, currentUser }) {
                 trFormat: formData.trFormat
             };
 
-            if (editingId) {
-                await axios.put(`${API_BASE_URL}/api/tr-setups/${editingId}`, payload);
-                showToast('TR Setup updated successfully.');
-            } else {
-                await axios.post(`${API_BASE_URL}/api/tr-setups`, payload);
-                showToast('TR Setup created successfully.');
-            }
+            const tempId = editingId || `temp-${Date.now()}`;
+            const newRecord = { ...payload, _id: tempId };
 
-            await fetchRecords();
+            queryClient.setQueryData(['tr-setups'], (old = []) => {
+                if (editingId) {
+                    return old.map(r => r._id === editingId ? { ...r, ...payload } : r);
+                }
+                return [newRecord, ...old];
+            });
+            setRecords(prev => {
+                if (editingId) {
+                    return prev.map(r => r._id === editingId ? { ...r, ...payload } : r);
+                }
+                return [newRecord, ...prev];
+            });
+
             setShowForm(false);
             resetForm();
+            showToast(editingId ? 'TR Setup updated successfully.' : 'TR Setup created successfully.');
+
+            if (editingId) {
+                await axios.put(`${API_BASE_URL}/api/tr-setups/${editingId}`, payload);
+            } else {
+                await axios.post(`${API_BASE_URL}/api/tr-setups`, payload);
+            }
+
+            queryClient.invalidateQueries({ queryKey: ['tr-setups'] });
+            fetchRecords();
         } catch (error) {
             console.error('Error saving TR setup:', error);
+            fetchRecords();
             setSubmitStatus({
                 type: 'error',
                 message: error.response?.data?.message || 'Failed to save TR Setup.'

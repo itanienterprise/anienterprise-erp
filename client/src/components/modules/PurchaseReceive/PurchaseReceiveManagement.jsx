@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import {
     SearchIcon, PlusIcon, EditIcon, TrashIcon, CheckIcon, XIcon,
     FileTextIcon, DollarSignIcon, ChevronDownIcon
@@ -111,8 +112,10 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
             const fullMap = {};
 
@@ -301,10 +304,17 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
     };
 
     const fetchPurchaseReceives = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(['purchase-receives']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setPurchaseReceives(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/purchase-receives`);
-            const data = res.data || [];
+            const data = await queryClient.fetchQuery({
+                queryKey: ['purchase-receives'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/purchase-receives`).then(r => r.data || [])
+            });
             setPurchaseReceives(data);
             if (data.length > 0) {
                 syncPurchaseReceiveStock(data);
@@ -320,34 +330,46 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         fetchPurchaseReceives();
         const fetchWH = async () => {
             try {
-                const res = await axios.get(`${API_BASE_URL}/api/warehouses`);
-                if (Array.isArray(res.data) && res.data.length > 0) {
-                    const list = Array.from(new Set(res.data.map(w => (w.whName || w.warehouse || w.name || '').trim()).filter(Boolean)));
+                const data = await queryClient.fetchQuery({
+                    queryKey: ['warehouses'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+                });
+                if (Array.isArray(data) && data.length > 0) {
+                    const list = Array.from(new Set(data.map(w => (w.whName || w.warehouse || w.name || '').trim()).filter(Boolean)));
                     if (list.length > 0) setWarehousesList(list);
                 }
             } catch (e) { }
         };
         const fetchCustomers = async () => {
             try {
-                const res = await axios.get(`${API_BASE_URL}/api/customers`);
-                if (Array.isArray(res.data)) {
-                    setCustomersList(res.data);
+                const data = await queryClient.fetchQuery({
+                    queryKey: ['customers'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/customers`).then(r => Array.isArray(r.data) ? r.data : [])
+                });
+                if (Array.isArray(data)) {
+                    setCustomersList(data);
                 }
             } catch (e) { }
         };
         const fetchProducts = async () => {
             try {
-                const res = await axios.get(`${API_BASE_URL}/api/products`);
-                if (Array.isArray(res.data)) {
-                    setProductsList(res.data);
+                const data = await queryClient.fetchQuery({
+                    queryKey: ['products'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : [])
+                });
+                if (Array.isArray(data)) {
+                    setProductsList(data);
                 }
             } catch (e) { }
         };
         const fetchPurchases = async () => {
             try {
-                const res = await axios.get(`${API_BASE_URL}/api/purchases`);
-                if (Array.isArray(res.data)) {
-                    setPurchasesList(res.data);
+                const data = await queryClient.fetchQuery({
+                    queryKey: ['purchases'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/purchases`).then(r => Array.isArray(r.data) ? r.data : [])
+                });
+                if (Array.isArray(data)) {
+                    setPurchasesList(data);
                 }
             } catch (e) { }
         };
@@ -1224,6 +1246,10 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
 
             setShowModal(false);
             if (!editingId && payload.status === 'Requested') setIsRequestedOnly(true);
+            queryClient.invalidateQueries({ queryKey: ['purchase-receives'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+            queryClient.invalidateQueries({ queryKey: ['purchases'] });
             fetchPurchaseReceives();
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
@@ -1265,6 +1291,10 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                     [purchase.createdBy, 'admin'].filter(Boolean)
                 );
             }
+            queryClient.invalidateQueries({ queryKey: ['purchase-receives'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+            queryClient.invalidateQueries({ queryKey: ['purchases'] });
             fetchPurchaseReceives();
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
@@ -1276,12 +1306,17 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
     const handleDelete = async (id) => {
         if (!window.confirm('Are you sure you want to delete this purchase receive entry?')) return;
         try {
+            queryClient.setQueryData(['purchase-receives'], (old = []) => old.filter(p => p._id !== id));
             const purchaseToDelete = purchaseReceives.find(p => p._id === id);
             await axios.delete(`${API_BASE_URL}/api/purchase-receives/${id}`);
             if (purchaseToDelete) {
                 await reverseWarehouseStockForPurchaseReceive(purchaseToDelete);
             }
             if (addNotification) addNotification('Purchase receive deleted and stock reversed successfully!', 'success');
+            queryClient.invalidateQueries({ queryKey: ['purchase-receives'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+            queryClient.invalidateQueries({ queryKey: ['purchases'] });
             fetchPurchaseReceives();
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
         } catch (error) {

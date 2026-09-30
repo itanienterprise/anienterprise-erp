@@ -9,6 +9,7 @@ import { generateBankApplicationPDF } from '../../../utils/islbankApplicationGen
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
+import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './PI.css';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -364,8 +365,10 @@ function PI({
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
             const fullMap = {};
             rawData.forEach(emp => {
@@ -767,25 +770,48 @@ function PI({
     };
 
     const fetchRecords = async (showFullLoading = true) => {
-        if (showFullLoading) setIsLoading(true);
+        const cachedPi = queryClient.getQueryData(['pi']);
+        if (cachedPi && Array.isArray(cachedPi) && cachedPi.length > 0) {
+            setRecords(cachedPi);
+        } else if (showFullLoading) {
+            setIsLoading(true);
+        }
         try {
             // 1. Fetch PI records first and render list table immediately!
-            const piRes = await axios.get(`${API_BASE_URL}/api/pi`);
-            setRecords(Array.isArray(piRes.data) ? piRes.data : []);
+            const piData = await queryClient.fetchQuery({
+                queryKey: ['pi'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/pi`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setRecords(Array.isArray(piData) ? piData : []);
             if (showFullLoading) setIsLoading(false);
 
             // 2. Fetch supporting data asynchronously in background
-            const [bankRes, ipRes, lcRes, stockRes, saleRes, notifRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/banks`),
-                axios.get(`${API_BASE_URL}/api/ip-records`),
-                axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`),
+            const [bankData, ipData, lcData, stockData, saleData, notifRes] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['banks'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['ip-records'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-management'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['sales'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
                 axios.get(`${API_BASE_URL}/api/notifications`).catch(() => ({ data: [] }))
             ]);
-            setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
-            setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
-            setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
+            setBanks(Array.isArray(bankData) ? bankData : []);
+            setIpRecords(Array.isArray(ipData) ? ipData : []);
+            setLcRecords(Array.isArray(lcData) ? lcData : []);
 
             const rawNotifs = Array.isArray(notifRes?.data) ? notifRes.data : [];
             const notifsMap = {};
@@ -2017,11 +2043,10 @@ function PI({
                 console.error('Error auto-generating PDF:', pdfErr);
             }
 
-            setTimeout(() => {
-                setShowForm(false);
-                resetForm();
-                fetchRecords();
-            }, 1500);
+            queryClient.invalidateQueries({ queryKey: ['pi'] });
+            setShowForm(false);
+            resetForm();
+            fetchRecords();
         } catch (error) {
             console.error('Error saving PI record:', error);
             setSubmitStatus('error');
@@ -2314,7 +2339,11 @@ function PI({
             onDeleteConfirm({ show: true, type: 'pi', id, isBulk: false });
         } else {
             if (window.confirm("Are you sure you want to delete this PI record?")) {
-                axios.delete(`${API_BASE_URL}/api/pi/${id}`).then(() => fetchRecords());
+                queryClient.setQueryData(['pi'], (old = []) => old.filter(p => p._id !== id));
+                axios.delete(`${API_BASE_URL}/api/pi/${id}`).then(() => {
+                    queryClient.invalidateQueries({ queryKey: ['pi'] });
+                    fetchRecords();
+                });
             }
         }
     };
@@ -7900,12 +7929,9 @@ function PI({
                                                                 ? await handleDeleteTenPercentRecord(viewHistoryRecord, activeRevision)
                                                                 : await handleDeleteRevision(viewHistoryRecord, activeRevision);
                                                             if (deleted) {
-                                                                setDeleteRevisionStatus('success');
-                                                                setTimeout(() => {
-                                                                    setShowDeleteRevisionConfirm(false);
-                                                                    setDeleteRevisionStatus(null);
-                                                                    setActiveHistoryIndex(0);
-                                                                }, 1200);
+                                                                setShowDeleteRevisionConfirm(false);
+                                                                setDeleteRevisionStatus(null);
+                                                                setActiveHistoryIndex(0);
                                                             } else {
                                                                 setDeleteRevisionStatus('error');
                                                                 setTimeout(() => setDeleteRevisionStatus(null), 3000);

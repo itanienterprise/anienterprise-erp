@@ -4,6 +4,8 @@ import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDo
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import axios from '../../../utils/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEmployees, useCustomRoles, QUERY_KEYS } from '../../../hooks/useQueries';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import '../Profile/Profile.css';
 import './EmployeeManagement.css';
@@ -25,6 +27,10 @@ const EmployeeManagement = ({
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [generatedPassword, setGeneratedPassword] = useState(null);
     const [generatedId, setGeneratedId] = useState(null);
+    const queryClient = useQueryClient();
+    const { data: queryEmployees, isLoading: isQueryLoading, refetch: refetchEmployees } = useEmployees();
+    const { data: queryCustomRoles, refetch: refetchCustomRoles } = useCustomRoles();
+
     const [filters, setFilters] = useState({ status: 'All Status' });
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
@@ -44,6 +50,13 @@ const EmployeeManagement = ({
     const [showConfirmReset, setShowConfirmReset] = useState(false);
     const employeePhotoInputRef = useRef(null);
     const [isUploadingEmployeePhoto, setIsUploadingEmployeePhoto] = useState(false);
+
+    // Sync React Query cache to local state
+    useEffect(() => {
+        if (queryEmployees) {
+            setEmployees(queryEmployees);
+        }
+    }, [queryEmployees]);
 
     const getNameFontSize = (name = '') => {
         if (!name) return '1.75rem';
@@ -71,15 +84,23 @@ const EmployeeManagement = ({
             const reader = new FileReader();
             reader.onload = async (ev) => {
                 const dataUrl = ev.target.result;
+                // Instant optimistic update
+                setViewData(prev => ({ ...prev, profilePhoto: dataUrl }));
+                setEmployees(prev => prev.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: dataUrl } : emp));
+                queryClient.setQueryData(QUERY_KEYS.employees, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: dataUrl } : emp);
+                });
+
                 try {
                     const response = await axios.post(`${API_BASE_URL}/api/employees/${viewData._id}/photo`, { photo: dataUrl });
                     if (response.data?.success) {
-                        setViewData(prev => ({ ...prev, profilePhoto: dataUrl }));
-                        setEmployees(prev => prev.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: dataUrl } : emp));
+                        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.employees });
                     }
                 } catch (err) {
                     console.error('Error uploading employee photo:', err);
                     alert('Failed to upload employee photo.');
+                    refetchEmployees();
                 } finally {
                     setIsUploadingEmployeePhoto(false);
                 }
@@ -93,15 +114,23 @@ const EmployeeManagement = ({
     const handleRemoveEmployeePhoto = async () => {
         if (!viewData || isUploadingEmployeePhoto) return;
         setIsUploadingEmployeePhoto(true);
+        // Instant optimistic update
+        setViewData(prev => ({ ...prev, profilePhoto: null }));
+        setEmployees(prev => prev.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: null } : emp));
+        queryClient.setQueryData(QUERY_KEYS.employees, (old) => {
+            if (!Array.isArray(old)) return old;
+            return old.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: null } : emp);
+        });
+
         try {
             const response = await axios.post(`${API_BASE_URL}/api/employees/${viewData._id}/photo`, { photo: null });
             if (response.data?.success) {
-                setViewData(prev => ({ ...prev, profilePhoto: null }));
-                setEmployees(prev => prev.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: null } : emp));
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.employees });
             }
         } catch (err) {
             console.error('Error removing employee photo:', err);
             alert('Failed to remove photo.');
+            refetchEmployees();
         } finally {
             setIsUploadingEmployeePhoto(false);
         }
@@ -143,12 +172,17 @@ const EmployeeManagement = ({
 
     const [customRoles, setCustomRoles] = useState([]);
 
+    useEffect(() => {
+        if (queryCustomRoles) {
+            setCustomRoles(queryCustomRoles);
+        }
+    }, [queryCustomRoles]);
 
     const fetchCustomRoles = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/metadata?category=roles`);
-            if (response.data) {
-                setCustomRoles(response.data);
+            const res = await refetchCustomRoles();
+            if (res.data) {
+                setCustomRoles(res.data);
             }
         } catch (error) {
             console.error('Error fetching custom roles:', error);
@@ -190,9 +224,9 @@ const EmployeeManagement = ({
     const fetchEmployees = async () => {
         setIsLoading(true);
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            if (response.data) {
-                setEmployees(response.data);
+            const res = await refetchEmployees();
+            if (res.data) {
+                setEmployees(res.data);
             }
         } catch (error) {
             console.error('Error fetching employees:', error);
@@ -201,20 +235,12 @@ const EmployeeManagement = ({
         }
     };
 
-    useEffect(() => {
-        fetchEmployees();
-        fetchCustomRoles();
-    }, []);
-
     const handleInputChange = (e) => {
         const { name, value } = e.target;
 
         if (name === 'phone') {
-            let val = e.target.value;
-            if (!val.startsWith('+880')) {
-                val = '+880' + val.replace(/^\+880?/, '');
-            }
-            if (val.length <= 14) {
+            const val = e.target.value.replace(/[^0-9+\s\-()]/g, '');
+            if (val.length <= 20) {
                 setFormData(prev => ({ ...prev, [name]: val }));
             }
             return;
@@ -235,8 +261,13 @@ const EmployeeManagement = ({
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (formData.phone.length !== 14) {
-            alert('Phone number must be exactly 14 characters long (e.g., +8801700000000)');
+        let phoneVal = (formData.phone || '').trim();
+        if (/^01[3-9]\d{8}$/.test(phoneVal)) {
+            phoneVal = '+880' + phoneVal.substring(1);
+        }
+
+        if (phoneVal && phoneVal !== '+880' && phoneVal.length !== 14) {
+            alert('Phone number must be a valid 11-digit or 14-digit number (e.g., 01700000000 or +8801700000000)');
             return;
         }
 
@@ -248,6 +279,21 @@ const EmployeeManagement = ({
                 ...formData,
                 name: fullName
             };
+
+            // OPTIMISTIC UPDATE: instant UI feedback (0ms delay)
+            if (editingId) {
+                const optimisticEmployee = {
+                    ...formData,
+                    name: fullName,
+                    _id: editingId
+                };
+                setEmployees(prev => prev.map(emp => emp._id === editingId ? { ...emp, ...optimisticEmployee } : emp));
+                queryClient.setQueryData(QUERY_KEYS.employees, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map(emp => emp._id === editingId ? { ...emp, ...optimisticEmployee } : emp);
+                });
+            }
+
             const url = editingId ? `${API_BASE_URL}/api/employees/${editingId}` : `${API_BASE_URL}/api/employees`;
             let response;
             if (editingId) {
@@ -265,15 +311,23 @@ const EmployeeManagement = ({
                     setGeneratedId(result.employeeId);
                 }
                 setSubmitStatus('success');
-                fetchEmployees();
-                // Removed the setTimeout that closes the form and resets status
-                // to allow the user to see the credentials card.
+
+                const savedEmployee = result.employee || result;
+                if (!editingId && savedEmployee && (savedEmployee._id || savedEmployee.employeeId)) {
+                    setEmployees(prev => [savedEmployee, ...prev]);
+                    queryClient.setQueryData(QUERY_KEYS.employees, (old) => [savedEmployee, ...(Array.isArray(old) ? old : [])]);
+                }
+
+                // Invalidate cache for background sync
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.employees });
             } else {
                 setSubmitStatus('error');
+                fetchEmployees();
             }
         } catch (error) {
             console.error('Error saving employee:', error);
             setSubmitStatus('error');
+            fetchEmployees();
         } finally {
             setIsSubmitting(false);
         }
@@ -315,7 +369,7 @@ const EmployeeManagement = ({
             name: employee.name || `${firstName} ${lastName}`.trim(),
             designation: employee.designation || '',
             department: employee.department || '',
-            phone: (employee.phone && employee.phone.startsWith('+880')) ? employee.phone : '+880',
+            phone: (employee.phone && !employee.phone.includes('X')) ? employee.phone : '',
             email: employee.email || '',
             joiningDate: employee.joiningDate || new Date().toISOString().split('T')[0],
             salary: employee.salary || '',

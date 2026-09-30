@@ -7,6 +7,8 @@ import { generateCnFHistoryExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
+import { QUERY_KEYS } from '../../../hooks/useQueries';
 import './CnF.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CnFReport from './CnFReport';
@@ -474,21 +476,41 @@ const CnF = ({
     };
 
     const fetchCnFs = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(QUERY_KEYS.cnfs);
+        if (cached && cached.length > 0) {
+            setCnfs(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
             const [cnfsRes, stockRes, salesRes, paymentsRes, expenseRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/cnfs`),
-                axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/cnf-payments`),
-                axios.get(`${API_BASE_URL}/api/lc-expenses`)
+                queryClient.fetchQuery({
+                    queryKey: QUERY_KEYS.cnfs,
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/cnfs`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: QUERY_KEYS.stock,
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: QUERY_KEYS.sales,
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['cnf-payments'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/cnf-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-expenses'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-expenses`).then(r => Array.isArray(r.data) ? r.data : [])
+                })
             ]);
 
-            const allCnfs = Array.isArray(cnfsRes.data) ? cnfsRes.data : [];
-            const allStock = Array.isArray(stockRes.data) ? stockRes.data : [];
-            const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
-            const allPayments = Array.isArray(paymentsRes.data) ? paymentsRes.data : [];
-            const allExpenses = Array.isArray(expenseRes.data) ? expenseRes.data : [];
+            const allCnfs = Array.isArray(cnfsRes) ? cnfsRes : [];
+            const allStock = Array.isArray(stockRes) ? stockRes : [];
+            const allSales = Array.isArray(salesRes) ? salesRes : [];
+            const allPayments = Array.isArray(paymentsRes) ? paymentsRes : [];
+            const allExpenses = Array.isArray(expenseRes) ? expenseRes : [];
 
             const cnfsWithBalance = allCnfs.map(cnf => {
                 const targetName = (cnf.name || '').toLowerCase().trim();
@@ -1189,12 +1211,30 @@ const CnF = ({
         try {
             const { cnf_location_full, ...rest } = formData;
             const submitData = { ...rest, address: cnf_location_full, type: moduleType };
+            // Optimistic update
+            if (editingId) {
+                setCnfs(prev => prev.map(c => c._id === editingId ? { ...c, ...submitData } : c));
+                queryClient.setQueryData(QUERY_KEYS.cnfs, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map(c => c._id === editingId ? { ...c, ...submitData } : c);
+                });
+            }
+
             const url = editingId ? `${API_BASE_URL}/api/cnfs/${editingId}` : `${API_BASE_URL}/api/cnfs`;
-            if (editingId) await axios.put(url, submitData);
-            else await axios.post(url, submitData);
-            setSubmitStatus('success');
-            fetchCnFs();
-            setTimeout(() => { setShowForm(false); setEditingId(null); resetForm(); setSubmitStatus(null); }, 2000);
+            if (editingId) {
+                await axios.put(url, submitData);
+            } else {
+                const res = await axios.post(url, submitData);
+                const newCnf = res?.data?.cnf || res?.data;
+                if (newCnf && newCnf._id) {
+                    setCnfs(prev => [newCnf, ...prev]);
+                    queryClient.setQueryData(QUERY_KEYS.cnfs, (old) => [newCnf, ...(Array.isArray(old) ? old : [])]);
+                }
+            }
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cnfs });
+            setShowForm(false);
+            setEditingId(null);
+            resetForm();
         } catch (error) {
             console.error('Error saving C&F:', error);
             setSubmitStatus('error');

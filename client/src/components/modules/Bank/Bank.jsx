@@ -4,6 +4,7 @@ import { SearchIcon, PlusIcon, EditIcon, TrashIcon, UserIcon, XIcon, ChevronDown
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import { generateLcBillHistoryReportPDF } from '../../../utils/pdfGenerator';
 import { generateLcBillHistoryReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
@@ -162,10 +163,18 @@ const Bank = ({ onDeleteConfirm }) => {
     }, [historyFilterDropdownOpen]);
 
     const fetchBanks = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(['banks']);
+        if (cached && cached.length > 0) {
+            setBanks(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/banks`);
-            setBanks(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['banks'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setBanks(data);
         } catch (error) {
             console.error('Error fetching banks:', error);
         } finally {
@@ -652,6 +661,28 @@ const Bank = ({ onDeleteConfirm }) => {
         setIsSubmitting(true);
         setSubmitStatus(null);
 
+        // Optimistic update
+        const tempId = editingId || `temp-${Date.now()}`;
+        const newBankData = { ...formData, _id: tempId };
+        
+        queryClient.setQueryData(['banks'], (old = []) => {
+            if (editingId) {
+                return old.map(b => (b._id === editingId ? { ...b, ...formData } : b));
+            }
+            return [newBankData, ...old];
+        });
+        setBanks(prev => {
+            if (editingId) {
+                return prev.map(b => (b._id === editingId ? { ...b, ...formData } : b));
+            }
+            return [newBankData, ...prev];
+        });
+
+        // Close form instantly
+        setShowForm(false);
+        setEditingId(null);
+        resetForm();
+
         try {
             const url = editingId
                 ? `${API_BASE_URL}/api/banks/${editingId}`
@@ -663,17 +694,12 @@ const Bank = ({ onDeleteConfirm }) => {
                 await axios.post(url, formData);
             }
 
-            setSubmitStatus('success');
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
             fetchBanks();
-            setTimeout(() => {
-                setShowForm(false);
-                setEditingId(null);
-                resetForm();
-                setSubmitStatus(null);
-            }, 2000);
         } catch (error) {
             console.error('Error saving bank:', error);
-            setSubmitStatus('error');
+            alert('Failed to save bank details.');
+            fetchBanks();
         } finally {
             setIsSubmitting(false);
         }

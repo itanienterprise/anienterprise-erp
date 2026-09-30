@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarSignIcon, FileTextIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, BarChartIcon } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -410,10 +411,18 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
     };
 
     const fetchExpenses = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(['lc-expenses']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setExpenses(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/lc-expenses`);
-            setExpenses(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['lc-expenses'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-expenses`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setExpenses(data);
         } catch (error) {
             console.error('Error fetching LC Expenses:', error);
             addNotification?.('Failed to load expenses', 'error');
@@ -424,8 +433,11 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
 
     const fetchLCs = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/lc-management`);
-            setLcs(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['lc-management'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setLcs(data);
         } catch (error) {
             console.error('Error fetching LCs:', error);
         }
@@ -433,8 +445,11 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
 
     const fetchCnfs = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/cnfs`);
-            const bdAgents = Array.isArray(response.data) ? response.data.filter(c => c.type !== 'Indian') : [];
+            const data = await queryClient.fetchQuery({
+                queryKey: ['cnfs'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/cnfs`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            const bdAgents = Array.isArray(data) ? data.filter(c => c.type !== 'Indian') : [];
             const agentNames = Array.from(new Set(bdAgents.map(a => a.name).filter(Boolean)));
             setBdCnfs(agentNames);
         } catch (error) {
@@ -444,8 +459,11 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
 
     const fetchStocks = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/stock`);
-            setStocks(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['stock'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setStocks(data);
         } catch (error) {
             console.error('Error fetching Stocks:', error);
         }
@@ -453,8 +471,11 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
 
     const fetchInsurancePayments = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/insurance-payments`);
-            setInsurancePayments(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['insurance-payments'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setInsurancePayments(data);
         } catch (error) {
             console.error('Error fetching Insurance Payments:', error);
         }
@@ -462,8 +483,10 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(response.data) ? response.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
             rawData.forEach(emp => {
                 let d = emp;
@@ -627,6 +650,8 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
                 }
                 addNotification?.('Expense added successfully', 'success');
             }
+            queryClient.invalidateQueries({ queryKey: ['lc-expenses'] });
+            queryClient.invalidateQueries({ queryKey: ['lcExpenses'] });
             fetchExpenses();
             closeModal();
         } catch (error) {

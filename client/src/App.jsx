@@ -19,6 +19,8 @@ import IPManagement from './components/modules/IPManagement/IPManagement';
 import PI from './components/modules/PI/PI';
 import PackingList from './components/modules/PackingList/PackingList';
 import TRSetup from './components/modules/TRSetup/TRSetup';
+import { queryClient } from './utils/queryClient';
+import { QUERY_KEYS } from './hooks/useQueries';
 
 const dbName = 'erp_backup_db';
 const storeName = 'settings';
@@ -1330,6 +1332,40 @@ function App() {
           }
         }
 
+        // Optimistic query cache update and invalidation for all ERP entities
+        const qKey = type === 'sales' ? QUERY_KEYS.sales :
+          type === 'importer' ? QUERY_KEYS.importers :
+          type === 'exporter' ? QUERY_KEYS.exporters :
+          type === 'supplier' ? QUERY_KEYS.suppliers :
+          type === 'port' ? QUERY_KEYS.ports :
+          type === 'product' ? QUERY_KEYS.products :
+          type === 'employees' ? QUERY_KEYS.employees :
+          type === 'stock' ? QUERY_KEYS.stock :
+          type === 'cnf' ? QUERY_KEYS.cnfs :
+          type === 'warehouse' ? QUERY_KEYS.warehouses :
+          type === 'customer' ? ['customers'] :
+          type === 'bank' ? ['banks'] :
+          type === 'indian-bank' ? ['indianBanks'] :
+          type === 'insurance' ? ['insurance'] :
+          type === 'damage' ? QUERY_KEYS.damages :
+          type === 'pi' ? ['pi'] :
+          type === 'lc-expense' ? ['lcExpenses'] :
+          type === 'packing-list' ? ['packing-lists'] :
+          type === 'tr-setup' ? ['tr-setups'] :
+          type === 'cost-of-goods' ? ['cost-of-goods'] : [type];
+
+        if (type === 'packing-list') queryClient.invalidateQueries({ queryKey: ['packingLists'] });
+        if (type === 'tr-setup') queryClient.invalidateQueries({ queryKey: ['trSetups'] });
+        if (type === 'cost-of-goods') queryClient.invalidateQueries({ queryKey: ['costOfGoods'] });
+
+        if (qKey) {
+          queryClient.setQueryData(qKey, (old) => {
+            if (!Array.isArray(old)) return old;
+            return isBulk ? old.filter(item => !selectedItems.has(item._id)) : old.filter(item => item._id !== id);
+          });
+          queryClient.invalidateQueries({ queryKey: qKey });
+        }
+
         if (type === 'importer') fetchImporters();
         else if (type === 'exporter') fetchExporters();
         else if (type === 'supplier') fetchSuppliers();
@@ -1463,10 +1499,21 @@ function App() {
 
 
   const fetchImporters = async () => {
-    setIsLoading(true);
+    const cached = queryClient.getQueryData(QUERY_KEYS.importers);
+    if (cached && cached.length > 0) {
+      setImporters(cached);
+    } else {
+      setIsLoading(true);
+    }
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/importers`);
-      setImporters(Array.isArray(response.data) ? response.data : []);
+      const data = await queryClient.fetchQuery({
+        queryKey: QUERY_KEYS.importers,
+        queryFn: async () => {
+          const res = await axios.get(`${API_BASE_URL}/api/importers`);
+          return Array.isArray(res.data) ? res.data : [];
+        }
+      });
+      setImporters(data);
     } catch (error) {
       console.error('Error fetching importers:', error);
     } finally {
@@ -1475,10 +1522,21 @@ function App() {
   };
 
   const fetchExporters = async () => {
-    setIsLoading(true);
+    const cached = queryClient.getQueryData(QUERY_KEYS.exporters);
+    if (cached && cached.length > 0) {
+      setExporters(cached);
+    } else {
+      setIsLoading(true);
+    }
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/exporters`);
-      setExporters(Array.isArray(response.data) ? response.data : []);
+      const data = await queryClient.fetchQuery({
+        queryKey: QUERY_KEYS.exporters,
+        queryFn: async () => {
+          const res = await axios.get(`${API_BASE_URL}/api/exporters`);
+          return Array.isArray(res.data) ? res.data : [];
+        }
+      });
+      setExporters(data);
     } catch (error) {
       console.error('Error fetching exporters:', error);
     } finally {
@@ -1487,10 +1545,21 @@ function App() {
   };
 
   const fetchSuppliers = async () => {
-    setIsLoading(true);
+    const cached = queryClient.getQueryData(QUERY_KEYS.suppliers);
+    if (cached && cached.length > 0) {
+      setSuppliers(cached);
+    } else {
+      setIsLoading(true);
+    }
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/suppliers`);
-      setSuppliers(Array.isArray(response.data) ? response.data : []);
+      const data = await queryClient.fetchQuery({
+        queryKey: QUERY_KEYS.suppliers,
+        queryFn: async () => {
+          const res = await axios.get(`${API_BASE_URL}/api/suppliers`);
+          return Array.isArray(res.data) ? res.data : [];
+        }
+      });
+      setSuppliers(data);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
     } finally {
@@ -1498,12 +1567,22 @@ function App() {
     }
   };
 
-
   const fetchPorts = async () => {
-    setIsLoading(true);
+    const cached = queryClient.getQueryData(QUERY_KEYS.ports);
+    if (cached && cached.length > 0) {
+      setPorts(cached);
+    } else {
+      setIsLoading(true);
+    }
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/ports`);
-      setPorts(Array.isArray(response.data) ? response.data : []);
+      const data = await queryClient.fetchQuery({
+        queryKey: QUERY_KEYS.ports,
+        queryFn: async () => {
+          const res = await axios.get(`${API_BASE_URL}/api/ports`);
+          return Array.isArray(res.data) ? res.data : [];
+        }
+      });
+      setPorts(data);
     } catch (error) {
       console.error('Error fetching ports:', error);
     } finally {
@@ -1511,24 +1590,43 @@ function App() {
     }
   };
 
-
   const fetchStockBaseline = async () => {
+    const cached = queryClient.getQueryData(QUERY_KEYS.stockBaseline);
+    if (cached) {
+      setActiveBaseline(cached);
+    }
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/stock-baseline/active`);
-      setActiveBaseline(res.data || null);
+      const data = await queryClient.fetchQuery({
+        queryKey: QUERY_KEYS.stockBaseline,
+        queryFn: async () => {
+          const res = await axios.get(`${API_BASE_URL}/api/stock-baseline/active`);
+          return res.data || null;
+        }
+      });
+      setActiveBaseline(data);
     } catch (error) {
       console.error('Error fetching stock baseline:', error);
     }
   };
 
   const fetchStockRecords = async () => {
-    setIsLoading(true);
+    const cached = queryClient.getQueryData(QUERY_KEYS.stock);
+    if (cached && cached.length > 0) {
+      setAllStockRecords(cached);
+    } else {
+      setIsLoading(true);
+    }
     try {
-      const [stockRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/stock`),
+      const [rawStock] = await Promise.all([
+        queryClient.fetchQuery({
+          queryKey: QUERY_KEYS.stock,
+          queryFn: async () => {
+            const stockRes = await axios.get(`${API_BASE_URL}/api/stock`);
+            return Array.isArray(stockRes.data) ? stockRes.data : [];
+          }
+        }),
         fetchStockBaseline()
       ]);
-      const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
       setAllStockRecords(rawStock);
     } catch (error) {
       console.error('Error fetching stock:', error);
@@ -1538,14 +1636,27 @@ function App() {
   };
 
   const fetchWarehouses = async () => {
+    const cached = queryClient.getQueryData(QUERY_KEYS.warehouses);
+    if (cached && cached.length > 0) {
+      setWarehouseData(cached);
+    }
     try {
-      const [whRes, stockRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/warehouses`),
-        axios.get(`${API_BASE_URL}/api/stock`)
+      const [rawWhData, rawStockData] = await Promise.all([
+        queryClient.fetchQuery({
+          queryKey: ['rawWarehouses'],
+          queryFn: async () => {
+            const whRes = await axios.get(`${API_BASE_URL}/api/warehouses`);
+            return Array.isArray(whRes.data) ? whRes.data : [];
+          }
+        }),
+        queryClient.fetchQuery({
+          queryKey: QUERY_KEYS.stock,
+          queryFn: async () => {
+            const stockRes = await axios.get(`${API_BASE_URL}/api/stock`);
+            return Array.isArray(stockRes.data) ? stockRes.data : [];
+          }
+        })
       ]);
-
-      const rawWhData = Array.isArray(whRes.data) ? whRes.data : [];
-      const rawStockData = Array.isArray(stockRes.data) ? stockRes.data : [];
 
       // 1. Warehouse records are now plain objects from server
       const allDecryptedWh = rawWhData.map(item => {
@@ -1570,7 +1681,6 @@ function App() {
           const itemStatus = (item.status || '').toLowerCase();
           if (itemStatus.includes('requested') || itemStatus.includes('rejected')) return null;
 
-          // item is already the decrypted object
           const rawWh = (item.whName || item.warehouse || '').trim();
           const whName = rawWh || 'General / In Stock';
 
@@ -1599,38 +1709,66 @@ function App() {
         } catch { return null; }
       }).filter(Boolean);
 
-      // Combine for comprehensive view
       const combinedData = [...allDecryptedWh, ...decryptedStock];
       setWarehouseData(combinedData);
+      queryClient.setQueryData(QUERY_KEYS.warehouses, combinedData);
     } catch (error) {
       console.error('Error fetching warehouse data:', error);
     }
   };
 
   const fetchSales = async () => {
+    const cached = queryClient.getQueryData(QUERY_KEYS.sales);
+    if (cached && cached.length > 0) {
+      setSalesRecords(cached);
+    }
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/sales`);
-      if (response.data) {
-        setSalesRecords(Array.isArray(response.data) ? response.data : []);
-      }
+      const data = await queryClient.fetchQuery({
+        queryKey: QUERY_KEYS.sales,
+        queryFn: async () => {
+          const response = await axios.get(`${API_BASE_URL}/api/sales`);
+          return Array.isArray(response.data) ? response.data : [];
+        }
+      });
+      setSalesRecords(data);
     } catch (error) {
       console.error('Error fetching sales:', error);
     }
   };
 
   const fetchDamages = async () => {
+    const cached = queryClient.getQueryData(QUERY_KEYS.damages);
+    if (cached && cached.length > 0) {
+      setDamages(cached);
+    }
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/damages`);
-      setDamages(Array.isArray(response.data) ? response.data : []);
+      const data = await queryClient.fetchQuery({
+        queryKey: QUERY_KEYS.damages,
+        queryFn: async () => {
+          const response = await axios.get(`${API_BASE_URL}/api/damages`);
+          return Array.isArray(response.data) ? response.data : [];
+        }
+      });
+      setDamages(data);
     } catch (error) {
       console.error('Error fetching damages:', error);
     }
   };
 
   const fetchReturns = async () => {
+    const cached = queryClient.getQueryData(QUERY_KEYS.returns);
+    if (cached && cached.length > 0) {
+      setReturnsList(cached);
+    }
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/returns`);
-      setReturnsList(Array.isArray(response.data) ? response.data : []);
+      const data = await queryClient.fetchQuery({
+        queryKey: QUERY_KEYS.returns,
+        queryFn: async () => {
+          const response = await axios.get(`${API_BASE_URL}/api/returns`);
+          return Array.isArray(response.data) ? response.data : [];
+        }
+      });
+      setReturnsList(data);
     } catch (error) {
       console.error('Error fetching returns:', error);
     }
@@ -1638,22 +1776,28 @@ function App() {
 
   // Products CRUD Functions
   const fetchProducts = async () => {
-    setIsLoading(true);
+    const cached = queryClient.getQueryData(QUERY_KEYS.products);
+    if (cached && cached.length > 0) {
+      setProducts(cached);
+    } else {
+      setIsLoading(true);
+    }
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/products`);
-      const rawData = Array.isArray(response.data) ? response.data : [];
-
-      // Sort brands within each product alphabetically
-      rawData.forEach(p => {
-        if (p.brands && Array.isArray(p.brands)) {
-          p.brands.sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
+      const data = await queryClient.fetchQuery({
+        queryKey: QUERY_KEYS.products,
+        queryFn: async () => {
+          const response = await axios.get(`${API_BASE_URL}/api/products`);
+          const rawData = Array.isArray(response.data) ? response.data : [];
+          rawData.forEach(p => {
+            if (p.brands && Array.isArray(p.brands)) {
+              p.brands.sort((a, b) => (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' }));
+            }
+          });
+          rawData.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+          return rawData;
         }
       });
-
-      // Sort products alphabetically by name
-      rawData.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
-
-      setProducts(rawData);
+      setProducts(data);
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
@@ -3380,6 +3524,13 @@ function App() {
         <Profile
           currentUser={currentUser}
           onClose={() => setShowProfile(false)}
+          onProfileUpdate={(updatedUser) => {
+            setCurrentUser(prev => {
+              const merged = { ...prev, ...updatedUser };
+              localStorage.setItem('currentUser', JSON.stringify(merged));
+              return merged;
+            });
+          }}
           onPhotoUpdate={(newPhoto, newAvatar) => {
             setCurrentUser(prev => {
               const updated = {

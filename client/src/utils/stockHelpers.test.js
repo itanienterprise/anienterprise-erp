@@ -179,9 +179,39 @@ export const reconcilePriceReportBrandList = (brandList) => {
     const result = [];
 
     Object.values(brandGroups).forEach(group => {
-        const trueInHouse = Math.max(0, group.totalClosing);
-        if (trueInHouse <= 0.001) {
+        const trueInHouse = group.totalClosing;
+        if (Math.abs(trueInHouse) <= 0.001) {
             // Brand is out of stock - no entries should appear in Price report
+            return;
+        }
+
+        if (trueInHouse < -0.001) {
+            // Pre-sale (negative stock) brand: preserve pre-sold entries in Price report
+            const preSoldEntries = group.entries.filter(e =>
+                (e.inHouseQuantity || 0) < -0.001 || (e.closingQuantity || 0) < -0.001
+            );
+            const entriesToUse = preSoldEntries.length > 0
+                ? preSoldEntries
+                : (group.entries.length > 0 ? group.entries : [{ brand: group.brand, quality: group.quality }]);
+
+            entriesToUse.forEach(entry => {
+                const remainingQty = (entry.closingQuantity !== undefined && entry.closingQuantity < -0.001)
+                    ? entry.closingQuantity
+                    : ((entry.inHouseQuantity !== undefined && entry.inHouseQuantity < -0.001) ? entry.inHouseQuantity : trueInHouse);
+                const pktSize = entry.packetSize || 30;
+                const { whole, remainder } = calculatePktRemainder(remainingQty, pktSize);
+                const inHousePacket = whole + (remainder / pktSize);
+
+                result.push({
+                    ...entry,
+                    inHouseQuantity: remainingQty,
+                    closingQuantity: remainingQty,
+                    inHousePacket: inHousePacket,
+                    closingPacket: inHousePacket,
+                    saleableQuantity: 0,
+                    saleablePacket: 0
+                });
+            });
             return;
         }
 
@@ -372,8 +402,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 return false;
             }
         }
-        const rRaw = recordDate || recordCreatedAt || ;
-        const rDate = (rRaw instanceof Date ? rRaw.toISOString() : String(rRaw)).trim();
+        const rDate = (recordDate || recordCreatedAt || '').trim();
         if (!rDate) return false;
         const rTime = new Date(rDate).getTime();
         const bTime = new Date(baselineCutoffIso).getTime();

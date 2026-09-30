@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import {
     PlusIcon, EditIcon, TrashIcon, SearchIcon, FunnelIcon, EyeIcon, XIcon,
     ShoppingCartIcon, ChevronDownIcon, ChevronUpIcon, RotateCcwIcon, DownloadIcon, CheckIcon, BarChartIcon, ReceiptIcon
@@ -343,8 +344,11 @@ const OrderManagement = ({
 
     const fetchCustomers = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/customers`);
-            setCustomers(Array.isArray(res.data) ? res.data : []);
+            const list = await queryClient.fetchQuery({
+                queryKey: ['customers'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/customers`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setCustomers(list);
         } catch (err) {
             console.error('Error fetching customers:', err);
         }
@@ -352,9 +356,11 @@ const OrderManagement = ({
 
     const fetchWarehouses = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/warehouses`);
-            const list = Array.isArray(res.data) ? res.data : [];
-            const decrypted = list.map(item => {
+            const list = await queryClient.fetchQuery({
+                queryKey: ['warehouses'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            const decrypted = (Array.isArray(list) ? list : []).map(item => {
                 let d = item.data ? decryptData(item.data) : item;
                 if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
                 if (d && typeof d === 'object' && d.data && typeof d.data === 'string') {
@@ -370,9 +376,11 @@ const OrderManagement = ({
 
     const fetchStockRecords = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/stock`);
-            const list = Array.isArray(res.data) ? res.data : [];
-            const decrypted = list.map(item => {
+            const list = await queryClient.fetchQuery({
+                queryKey: ['stock'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            const decrypted = (Array.isArray(list) ? list : []).map(item => {
                 let d = item.data ? decryptData(item.data) : item;
                 if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
                 if (d && typeof d === 'object' && d.data && typeof d.data === 'string') {
@@ -388,9 +396,11 @@ const OrderManagement = ({
 
     const fetchDamagesRecords = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/damages`);
-            const list = Array.isArray(res.data) ? res.data : [];
-            const decrypted = list.map(item => {
+            const list = await queryClient.fetchQuery({
+                queryKey: ['damages'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/damages`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            const decrypted = (Array.isArray(list) ? list : []).map(item => {
                 let d = item.data ? decryptData(item.data) : item;
                 if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
                 if (d && typeof d === 'object' && d.data && typeof d.data === 'string') {
@@ -406,8 +416,11 @@ const OrderManagement = ({
 
     const fetchProducts = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/products`);
-            setProducts(Array.isArray(res.data) ? res.data : []);
+            const list = await queryClient.fetchQuery({
+                queryKey: ['products'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setProducts(list);
         } catch (err) {
             console.error('Error fetching products:', err);
         }
@@ -415,8 +428,10 @@ const OrderManagement = ({
 
     const fetchReturns = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/returns`);
-            const data = Array.isArray(res.data) ? res.data : [];
+            const data = await queryClient.fetchQuery({
+                queryKey: ['returns'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/returns`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             setReturnsList(data);
         } catch (err) {
             console.error('Error fetching returns:', err);
@@ -425,8 +440,10 @@ const OrderManagement = ({
 
     const fetchEmployees = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/employees`);
-            const rawData = Array.isArray(res.data) ? res.data : [];
+            const rawData = await queryClient.fetchQuery({
+                queryKey: ['employees'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
             const map = {};
             const fullMap = {};
 
@@ -594,15 +611,32 @@ const OrderManagement = ({
     };
 
     const fetchOrders = async () => {
-        setIsLoading(true);
+        const cachedSales = queryClient.getQueryData(['sales']);
+        if (cachedSales && Array.isArray(cachedSales) && cachedSales.length > 0) {
+            setAllSalesRecords(cachedSales);
+            const filtered = cachedSales.filter(item => {
+                const sType = (item.saleType || '').toLowerCase();
+                const inv = (item.invoiceNo || item.orderNo || '').toUpperCase();
+                return sType === 'order' || inv.startsWith('ORD') || item.isOrderEntry === true;
+            });
+            setSales(filtered);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const [salesRes, returnsRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/returns`).catch(() => ({ data: [] }))
+            const [salesData, returnsData] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['sales'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['returns'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/returns`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                })
             ]);
-            const data = Array.isArray(salesRes.data) ? salesRes.data : [];
+            const data = Array.isArray(salesData) ? salesData : [];
             setAllSalesRecords(data);
-            setReturnsList(Array.isArray(returnsRes?.data) ? returnsRes.data : []);
+            setReturnsList(Array.isArray(returnsData) ? returnsData : []);
 
             const filtered = data.filter(item => {
                 const sType = (item.saleType || '').toLowerCase();
@@ -1047,6 +1081,10 @@ const OrderManagement = ({
             }
 
             setShowForm(false);
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             fetchOrders();
             if (typeof fetchCustomers === 'function') fetchCustomers();
             if (fetchSalesGlobal) fetchSalesGlobal();
@@ -1095,6 +1133,10 @@ const OrderManagement = ({
                     addNotification(`Order ${order.invoiceNo || order.orderNo} ${newStatus.toLowerCase()} successfully!`, 'success');
                 }
             }
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             fetchOrders();
             if (typeof fetchCustomers === 'function') fetchCustomers();
             if (fetchSalesGlobal) fetchSalesGlobal();

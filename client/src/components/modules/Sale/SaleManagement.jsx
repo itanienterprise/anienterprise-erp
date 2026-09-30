@@ -7,6 +7,8 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
+import { QUERY_KEYS } from '../../../hooks/useQueries';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { trackUserAction } from '../../../utils/activityTracker';
@@ -1365,15 +1367,8 @@ const SaleManagement = ({
     */
 
     async function fetchSales() {
-        setIsLoading(true);
-        try {
-            const response = await axios.get(`${API_BASE_URL}/api/sales`);
-            const decryptedSales = Array.isArray(response.data) ? response.data : [];
-
-            setAllSalesRecords(decryptedSales);
-
-            // Filter by saleType
-            const filteredSales = decryptedSales.filter(s => {
+        const filterSalesList = (records) => {
+            return (records || []).filter(s => {
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
                 const invUpper = (s.invoiceNo || s.orderNo || '').toUpperCase();
                 const isOrderRecord = sTypeLow === 'order' || invUpper.startsWith('ORD') || s.isOrderEntry === true;
@@ -1395,8 +1390,23 @@ const SaleManagement = ({
                 }
                 return sTypeLow === saleType.toLowerCase();
             });
+        };
 
-            setSales(filteredSales);
+        const cached = queryClient.getQueryData(QUERY_KEYS.sales);
+        if (cached && cached.length > 0) {
+            setAllSalesRecords(cached);
+            setSales(filterSalesList(cached));
+        } else {
+            setIsLoading(true);
+        }
+        try {
+            const data = await queryClient.fetchQuery({
+                queryKey: QUERY_KEYS.sales,
+                queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            const decryptedSales = Array.isArray(data) ? data : [];
+            setAllSalesRecords(decryptedSales);
+            setSales(filterSalesList(decryptedSales));
             if (fetchSalesGlobal) {
                 fetchSalesGlobal();
             }
@@ -1408,26 +1418,43 @@ const SaleManagement = ({
     };
 
     async function fetchCustomers() {
+        const cached = queryClient.getQueryData(['customers']);
+        if (cached && cached.length > 0) {
+            setCustomers(cached);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/customers`);
-            setCustomers(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['customers'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/customers`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setCustomers(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error fetching customers:', error);
         }
     };
 
     async function fetchProducts() {
+        const cached = queryClient.getQueryData(QUERY_KEYS.products);
+        if (cached && cached.length > 0) {
+            setProducts(cached);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/products`);
-            setProducts(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: QUERY_KEYS.products,
+                queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setProducts(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error fetching products:', error);
         }
     };
     async function fetchWarehouses() {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/warehouses`);
-            const list = Array.isArray(response.data) ? response.data : [];
+            const response = await queryClient.fetchQuery({
+                queryKey: ['rawWarehouses'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            const list = Array.isArray(response) ? response : [];
             const decrypted = list.map(item => {
                 let d = item.data ? decryptData(item.data) : item;
                 if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
@@ -2238,14 +2265,13 @@ const SaleManagement = ({
                     await processSaleEffects(formData, !!editingId);
                 }
 
-                setTimeout(() => {
-                    setShowForm(false);
-                    resetForm();
-                    fetchSales();
-                    fetchCustomers();
-                    fetchStockRecords();
-                    fetchWarehouses();
-                }, 1500);
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sales });
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
+                queryClient.invalidateQueries({ queryKey: ['customers'] });
+                setShowForm(false);
+                resetForm();
+                fetchSales();
             } else {
                 setSubmitStatus('error');
                 setSubmitError(response?.data?.message || 'Failed to save sale. Please try again.');

@@ -2,14 +2,17 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { UserIcon, MailIcon, PhoneIcon, BriefcaseIcon, CalendarIcon, ShieldIcon, XIcon, EditIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
+import { QUERY_KEYS } from '../../../hooks/useQueries';
 import './Profile.css';
 
-const Profile = ({ currentUser, onClose, onPhotoUpdate }) => {
+const Profile = ({ currentUser, onClose, onPhotoUpdate, onProfileUpdate }) => {
     const [employeeData, setEmployeeData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [showDrawer, setShowDrawer] = useState(false);
     const [drawerTab, setDrawerTab] = useState('info'); // 'info' | 'security'
     const [formData, setFormData] = useState({
+        name: '',
         phone: '',
         email: ''
     });
@@ -61,11 +64,12 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate }) => {
                     onPhotoUpdate?.(response.data.profilePhoto, response.data.avatarPhoto);
                 }
                 let phone = response.data.phone || '';
-                if (phone && !phone.startsWith('+880')) {
-                    phone = '+880' + phone.replace(/^\+?880/, '');
+                if (phone.includes('X')) {
+                    phone = '';
                 }
                 setFormData({
-                    phone: phone ? phone.substring(0, 14) : '+880',
+                    name: response.data.name || '',
+                    phone: phone,
                     email: response.data.email || ''
                 });
             }
@@ -80,21 +84,55 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate }) => {
         setSaveStatus({ type: '', message: '' });
         setIsSaving(true);
         try {
-            const response = await axios.put(`${API_BASE_URL}/api/profile`, {
-                phone: formData.phone,
-                email: formData.email
-            });
+            let phoneToSave = (formData.phone || '').trim();
+            // If phone starts with 01 and has 11 digits, auto format to +880
+            if (/^01[3-9]\d{8}$/.test(phoneToSave)) {
+                phoneToSave = '+880' + phoneToSave.substring(1);
+            }
+
+            const payload = {
+                name: (formData.name || '').trim(),
+                phone: phoneToSave,
+                email: (formData.email || '').trim()
+            };
+
+            const response = await axios.put(`${API_BASE_URL}/api/profile`, payload);
 
             if (response.data?.success || (response.status >= 200 && response.status < 300)) {
+                const updatedName = payload.name || employeeData?.name || 'Administrator';
+                const updatedPhone = payload.phone;
+                const updatedEmail = payload.email;
+
                 setEmployeeData(prev => ({
                     ...(prev || {}),
-                    phone: formData.phone,
-                    email: formData.email
+                    name: updatedName,
+                    phone: updatedPhone,
+                    email: updatedEmail
                 }));
+                setFormData(prev => ({
+                    ...prev,
+                    phone: updatedPhone
+                }));
+
+                try {
+                    const storedUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                    const updatedStoredUser = {
+                        ...storedUser,
+                        name: updatedName,
+                        phone: updatedPhone,
+                        email: updatedEmail
+                    };
+                    localStorage.setItem('currentUser', JSON.stringify(updatedStoredUser));
+                    onProfileUpdate?.(updatedStoredUser);
+                } catch (e) {}
+
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.employees });
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile });
+
                 setSaveStatus({ type: 'success', message: 'Profile updated successfully!' });
                 setTimeout(() => setSaveStatus({ type: '', message: '' }), 2500);
             } else {
-                setSaveStatus({ type: 'error', message: 'Failed to update profile. Please try again.' });
+                setSaveStatus({ type: 'error', message: response.data?.message || 'Failed to update profile. Please try again.' });
             }
         } catch (error) {
             console.error('Error updating profile:', error);
@@ -287,6 +325,8 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate }) => {
 
             const response = await axios.post(`${API_BASE_URL}/api/profile/photo`, payload);
             if (response.data?.success) {
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.employees });
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile });
                 setPhotoStatus({ type: 'success', message: 'Navbar avatar updated!' });
                 setTimeout(() => setPhotoStatus({ type: '', message: '' }), 2500);
             } else {
@@ -312,6 +352,8 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate }) => {
                 setPhotoPreview(null);
                 setEmployeeData(prev => ({ ...(prev || {}), profilePhoto: null, avatarPhoto: null }));
                 onPhotoUpdate?.(null, null);
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.employees });
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile });
                 setPhotoStatus({ type: 'success', message: 'Photo removed.' });
                 setTimeout(() => setPhotoStatus({ type: '', message: '' }), 2000);
             }
@@ -407,11 +449,11 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate }) => {
     }
 
     const userData = employeeData || {
-        name: currentUser?.username === 'admin' ? 'Administrator' : (currentUser?.username || 'User'),
+        name: currentUser?.name || (currentUser?.username === 'admin' ? 'Administrator' : (currentUser?.username || 'User')),
         role: currentUser?.role || 'Admin',
         department: currentUser?.department || 'Management',
-        email: currentUser?.email || 'admin@ani-enterprise.com',
-        phone: currentUser?.phone || '+880XXXXXXXXXX',
+        email: currentUser?.email || '',
+        phone: (currentUser?.phone && !currentUser.phone.includes('X')) ? currentUser.phone : '',
         designation: currentUser?.designation || 'System Administrator',
         employeeId: currentUser?.employeeId || 'ADMIN-001',
         joiningDate: currentUser?.joiningDate || '2024-01-01'
@@ -601,24 +643,34 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate }) => {
 
                                 {/* Editable Fields */}
                                 <div className="profile-edit-group">
+                                    <label className="profile-input-label">Full Name</label>
+                                    <div className="profile-input-wrapper">
+                                        <UserIcon className="profile-input-icon" />
+                                        <input
+                                            type="text"
+                                            className="profile-drawer-input"
+                                            value={formData.name}
+                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                            placeholder="Administrator"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="profile-edit-group">
                                     <label className="profile-input-label">Phone Number</label>
                                     <div className="profile-input-wrapper">
                                         <PhoneIcon className="profile-input-icon" />
                                         <input
-                                            type="text"
+                                            type="tel"
                                             className="profile-drawer-input"
                                             value={formData.phone}
                                             onChange={(e) => {
-                                                let val = e.target.value;
-                                                if (!val.startsWith('+880')) {
-                                                    val = '+880' + val.replace(/^\+880?/, '');
-                                                }
-                                                if (val.length <= 14) {
+                                                const val = e.target.value.replace(/[^0-9+\s\-()]/g, '');
+                                                if (val.length <= 20) {
                                                     setFormData({ ...formData, phone: val });
                                                 }
                                             }}
-                                            placeholder="+880XXXXXXXXXX"
-                                            maxLength={14}
+                                            placeholder="+8801XXXXXXXXX or 01XXXXXXXXX"
                                         />
                                     </div>
                                 </div>
@@ -632,7 +684,7 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate }) => {
                                             className="profile-drawer-input"
                                             value={formData.email}
                                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                            placeholder="name@example.com"
+                                            placeholder="admin@ani-enterprise.com"
                                         />
                                     </div>
                                 </div>

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon, FunnelIcon, ChevronDownIcon, PrinterIcon, CheckIcon, ArrowUpRightIcon, LCManagerIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import './CostOfGoods.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -202,10 +203,18 @@ const CostOfGoods = ({
     };
 
     const fetchRecords = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(['cost-of-goods']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setRecords(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/cost-of-goods`);
-            setRecords(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['cost-of-goods'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setRecords(data);
         } catch (error) {
             console.error('Error fetching cost of goods:', error);
         } finally {
@@ -214,27 +223,48 @@ const CostOfGoods = ({
     };
 
     const fetchLCs = async () => {
+        const cached = queryClient.getQueryData(['lc-management']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setLcs(cached);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/lc-management`);
-            setLcs(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['lc-management'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setLcs(data);
         } catch (error) {
             console.error('Error fetching LCs:', error);
         }
     };
 
     const fetchSuppliers = async () => {
+        const cached = queryClient.getQueryData(['suppliers']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setSuppliers(cached);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/suppliers`);
-            setSuppliers(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['suppliers'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/suppliers`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setSuppliers(data);
         } catch (error) {
             console.error('Error fetching suppliers:', error);
         }
     };
 
     const fetchProducts = async () => {
+        const cached = queryClient.getQueryData(['products']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setProducts(cached);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/products`);
-            setProducts(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: ['products'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            setProducts(data);
         } catch (error) {
             console.error('Error fetching products:', error);
         }
@@ -655,11 +685,33 @@ const CostOfGoods = ({
             const url = editingId
                 ? `${API_BASE_URL}/api/cost-of-goods/${editingId}`
                 : `${API_BASE_URL}/api/cost-of-goods`;
+            // Optimistic update
+            const tempId = editingId || `temp-${Date.now()}`;
+            const newRecord = { ...payload, _id: tempId };
+            queryClient.setQueryData(['cost-of-goods'], (old = []) => {
+                if (editingId) {
+                    return old.map(r => r._id === editingId ? { ...r, ...payload } : r);
+                }
+                return [newRecord, ...old];
+            });
+            setRecords(prev => {
+                if (editingId) {
+                    return prev.map(r => r._id === editingId ? { ...r, ...payload } : r);
+                }
+                return [newRecord, ...prev];
+            });
+
+            // Close form immediately
+            setShowForm(false);
+            setEditingId(null);
+            resetForm();
+            setSubmitStatus(null);
+
             if (editingId) await axios.put(url, payload);
             else await axios.post(url, payload);
-            setSubmitStatus('success');
+
+            queryClient.invalidateQueries({ queryKey: ['cost-of-goods'] });
             fetchRecords();
-            setTimeout(() => { setShowForm(false); setEditingId(null); resetForm(); setSubmitStatus(null); }, 2000);
         } catch (error) {
             console.error('Error saving cost of goods:', error);
             setSubmitStatus('error');

@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon, FunnelIcon, PrinterIcon, FileTextIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
+import { QUERY_KEYS } from '../../../hooks/useQueries';
 import { decryptData } from '../../../utils/encryption';
 import { generateSupplierProfileReportPDF } from '../../../utils/pdfGenerator';
 import { generateSupplierProfileReportExcel } from '../../../utils/excelGenerator';
@@ -458,10 +460,21 @@ const Supplier = ({
     }, [viewData]);
 
     const fetchSuppliers = async () => {
-        setIsLoading(true);
+        const cached = queryClient.getQueryData(QUERY_KEYS.suppliers);
+        if (cached && cached.length > 0) {
+            setSuppliers(cached);
+        } else {
+            setIsLoading(true);
+        }
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/suppliers`);
-            setSuppliers(Array.isArray(response.data) ? response.data : []);
+            const data = await queryClient.fetchQuery({
+                queryKey: QUERY_KEYS.suppliers,
+                queryFn: async () => {
+                    const res = await axios.get(`${API_BASE_URL}/api/suppliers`);
+                    return Array.isArray(res.data) ? res.data : [];
+                }
+            });
+            setSuppliers(data);
         } catch (error) {
             console.error('Error fetching suppliers:', error);
         } finally {
@@ -554,14 +567,32 @@ const Supplier = ({
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
+            // Optimistic update
+            if (editingId) {
+                setSuppliers(prev => prev.map(s => s._id === editingId ? { ...s, ...payload } : s));
+                queryClient.setQueryData(QUERY_KEYS.suppliers, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map(s => s._id === editingId ? { ...s, ...payload } : s);
+                });
+            }
+
             const url = editingId
                 ? `${API_BASE_URL}/api/suppliers/${editingId}`
                 : `${API_BASE_URL}/api/suppliers`;
-            if (editingId) await axios.put(url, payload);
-            else await axios.post(url, payload);
-            setSubmitStatus('success');
-            fetchSuppliers();
-            setTimeout(() => { setShowForm(false); setEditingId(null); resetForm(); setSubmitStatus(null); }, 2000);
+            if (editingId) {
+                await axios.put(url, payload);
+            } else {
+                const res = await axios.post(url, payload);
+                const newSupplier = res?.data?.supplier || res?.data;
+                if (newSupplier && newSupplier._id) {
+                    setSuppliers(prev => [newSupplier, ...prev]);
+                    queryClient.setQueryData(QUERY_KEYS.suppliers, (old) => [newSupplier, ...(Array.isArray(old) ? old : [])]);
+                }
+            }
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.suppliers });
+            setShowForm(false);
+            setEditingId(null);
+            resetForm();
         } catch (error) {
             console.error('Error saving supplier:', error);
             setSubmitStatus('error');
