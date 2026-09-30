@@ -91,11 +91,15 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
 
         // CASE B: 1st Approval Step for Data Entry / Account Manager entries (Status: Pending 1st Approval)
         if (!smApproved) {
+            // Only block if firstApprove is explicitly set to false
             if (userModulePerms && typeof userModulePerms.firstApprove === 'boolean') {
                 return userModulePerms.firstApprove === true;
             }
+            // firstApprove not explicitly set — fall through to role-based check
             if (currentUserRole === 'sales manager') return true;
-            return canApproveFirst;
+            if (canApproveFirst) return true;
+            // Also allow incharge / head of sales / accounts manager by default
+            return currentUserRole === 'incharge' || currentUserRole === 'head of sales';
         }
 
         // CASE C: 2nd Approval Step for Data Entry / Account Manager entries (Status: Pending 2nd Approval)
