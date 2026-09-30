@@ -42,8 +42,39 @@ try {
 
 dotenv.config();
 
+const http = require('http');
+const { Server } = require('socket.io');
+
 const app = express();
 app.set('trust proxy', 1);
+
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: (origin, callback) => callback(null, true),
+    credentials: true
+  }
+});
+app.set('io', io);
+
+io.on('connection', (socket) => {
+  // Real-time client connected
+});
+
+const broadcastUpdate = (moduleName, action = 'update', payload = {}) => {
+  try {
+    io.emit('data_updated', {
+      module: moduleName,
+      action,
+      payload,
+      timestamp: Date.now()
+    });
+  } catch (err) {
+    console.error('[Socket] Broadcast error:', err);
+  }
+};
+app.set('broadcastUpdate', broadcastUpdate);
+
 const apiRouter = express.Router();
 const PORT = process.env.PORT || 5000;
 
@@ -604,6 +635,27 @@ const requireAuth = (req, res, next) => {
 
 // Protect all internal API routes with authentication
 apiRouter.use(requireAuth);
+
+// Real-time synchronization middleware for database mutations
+apiRouter.use((req, res, next) => {
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+    res.on('finish', () => {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        const fullUrl = req.originalUrl || req.url || '';
+        const match = fullUrl.match(/\/api\/([a-zA-Z0-9_-]+)/);
+        if (match && match[1]) {
+          const mod = match[1].toLowerCase();
+          if (!['logs', 'auth', 'health'].includes(mod)) {
+            broadcastUpdate(mod, req.method.toLowerCase(), {
+              path: fullUrl
+            });
+          }
+        }
+      }
+    });
+  }
+  next();
+});
 
 // Mount apiRouter for direct API requests (e.g. backup & restore uploads/downloads)
 app.use(apiRouter);
@@ -6519,7 +6571,7 @@ apiRouter.get('/api/attendance/live', verifyPermission('employees', 'view'), asy
 
 // ═══════════════════════════════════════════════════════════════════════════════
 
-app.listen(PORT, '0.0.0.0', () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
 

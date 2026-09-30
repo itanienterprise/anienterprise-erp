@@ -66,6 +66,23 @@ export default defineConfig(({ mode }) => ({
     strictPort: true,
     host: true,
     proxy: {
+      '/socket.io': {
+        target: 'http://127.0.0.1:5000',
+        ws: true,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            if (err?.code === 'EPIPE' || err?.code === 'ECONNRESET') return;
+            console.warn('[Socket Proxy]', err?.message || err);
+          });
+          proxy.on('proxyReqWs', (_proxyReq, _req, socket) => {
+            socket.on('error', (err) => {
+              if (err?.code === 'EPIPE' || err?.code === 'ECONNRESET') return;
+              console.warn('[Socket WS Error]', err?.message || err);
+            });
+          });
+        }
+      },
       '/api': {
         target: 'http://127.0.0.1:5000',
         changeOrigin: true,

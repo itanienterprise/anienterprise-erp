@@ -21,6 +21,7 @@ import PackingList from './components/modules/PackingList/PackingList';
 import TRSetup from './components/modules/TRSetup/TRSetup';
 import { queryClient } from './utils/queryClient';
 import { QUERY_KEYS } from './hooks/useQueries';
+import { getSocket } from './utils/socket';
 
 const dbName = 'erp_backup_db';
 const storeName = 'settings';
@@ -1806,6 +1807,78 @@ function App() {
       setIsLoading(false);
     }
   };
+
+  // Real-time synchronization via WebSockets (Socket.io)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const socket = getSocket();
+
+    const handleDataUpdate = (event) => {
+      const { module } = event || {};
+      if (!module) return;
+
+      const moduleKeyMap = {
+        'sales': ['sales', 'stock', 'warehouses'],
+        'stock': ['stock', 'warehouses', 'stockBaseline'],
+        'stock-baseline': ['stock', 'warehouses', 'stockBaseline'],
+        'warehouses': ['warehouses', 'stock'],
+        'orders': ['orders'],
+        'purchases': ['purchases'],
+        'purchase-receives': ['purchase-receives', 'stock', 'warehouses'],
+        'customers': ['customers'],
+        'employees': ['employees'],
+        'products': ['products'],
+        'importers': ['importers'],
+        'exporters': ['exporters'],
+        'suppliers': ['suppliers'],
+        'ports': ['ports'],
+        'cnfs': ['cnfs'],
+        'cnf-payments': ['cnfs'],
+        'damages': ['damages', 'stock', 'warehouses'],
+        'returns': ['returns', 'stock', 'warehouses'],
+        'notifications': ['notifications'],
+      };
+
+      const keysToInvalidate = moduleKeyMap[module] || [module];
+      keysToInvalidate.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      });
+
+      // Synchronize App state
+      if (module === 'sales') {
+        fetchSales();
+      }
+      if (['stock', 'stock-baseline', 'warehouses', 'purchase-receives', 'sales'].includes(module)) {
+        fetchStockRecords();
+        fetchWarehouseData();
+      }
+      if (module === 'products') {
+        fetchProducts();
+      }
+      if (module === 'damages') {
+        fetchDamages();
+      }
+      if (module === 'returns') {
+        fetchReturns();
+      }
+      if (module === 'notifications') {
+        fetchNotifications();
+      }
+
+      // Real-time badge update
+      fetchPendingEntries();
+
+      // Dispatch event to window so child components can react if needed
+      window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: event }));
+    };
+
+    socket.on('data_updated', handleDataUpdate);
+
+    return () => {
+      socket.off('data_updated', handleDataUpdate);
+    };
+  }, [isAuthenticated]);
 
   const getFilteredProducts = (query) => {
     if (!query) return products;
