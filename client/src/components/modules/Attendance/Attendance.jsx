@@ -112,7 +112,7 @@ const Attendance = ({ currentUser }) => {
   const [editLogModal, setEditLogModal] = useState(null);
 
   const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
-  const canEdit = isAdmin || hasPermission(currentUser, 'employees', 'edit');
+  const canEdit = isAdmin || hasPermission(currentUser, 'attendance', 'edit') || hasPermission(currentUser, 'employees', 'edit');
 
   // ── API calls ──────────────────────────────────────────────────────────────
   const load = useCallback(async (key, fn) => {

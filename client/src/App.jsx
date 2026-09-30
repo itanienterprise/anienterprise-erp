@@ -2634,7 +2634,7 @@ function App() {
               </button>
 
               {/* HRMS */}
-              {(hasPermission(currentUser, 'employees', 'view') || hasPermission(currentUser, 'backupRestore', 'view')) && (
+              {(hasPermission(currentUser, 'employees', 'view') || hasPermission(currentUser, 'attendance', 'view') || hasPermission(currentUser, 'backupRestore', 'view')) && (
                 <div>
                   <button
                     onClick={() => {
@@ -2668,7 +2668,7 @@ function App() {
                           <span>Employee</span>
                         </button>
                       )}
-                      {hasPermission(currentUser, 'employees', 'view') && (
+                      {hasPermission(currentUser, 'attendance', 'view') && (
                         <button
                           onClick={() => { handleViewChange('attendance-section'); }}
                           className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'attendance-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}

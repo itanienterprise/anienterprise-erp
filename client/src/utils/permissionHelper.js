@@ -6,6 +6,14 @@
 // List of all primary modules in the ERP system
 export const MODULES_LIST = [
     { key: 'employees', label: 'HRMS / Employee', specialLabel: 'Reset Password' },
+    {
+        key: 'attendance',
+        label: 'Attendance',
+        specialLabels: [
+            { key: 'special', label: 'Process Attendance' },
+            { key: 'deviceSync', label: 'Device & IP Sync' }
+        ]
+    },
     { key: 'port', label: 'Port Management' },
     { key: 'importerExporter', label: 'Importer / Exporter / Supplier' },
     { key: 'cnf', label: 'C&F Management' },
@@ -419,6 +427,16 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
             if (defaults[moduleName].showRate !== undefined) return !!defaults[moduleName].showRate;
         }
         return false;
+    }
+
+    // Special fallback for attendance if not explicitly defined in custom permissions
+    if (moduleName === 'attendance') {
+        if (currentUser.permissions && currentUser.permissions.attendance && currentUser.permissions.attendance[checkAction] !== undefined) {
+            return !!currentUser.permissions.attendance[checkAction];
+        }
+        if (currentUser.permissions && currentUser.permissions.employees && currentUser.permissions.employees[checkAction] !== undefined) {
+            return !!currentUser.permissions.employees[checkAction];
+        }
     }
 
     // 2. Custom permission check

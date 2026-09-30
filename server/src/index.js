@@ -738,7 +738,7 @@ const getDefaultPermissionsForRole = (role) => {
   const defaults = {};
 
   const modules = [
-    'employees', 'port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup',
+    'employees', 'attendance', 'port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup',
     'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'borderSale', 'purchase', 'purchaseReceive', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank',
     'insurance', 'insurancePayment', 'lcManagement', 'lcGp', 'lcExpense', 'returnProduct', 'backupRestore', 'log'
   ];
@@ -888,6 +888,11 @@ const verifyPermission = (moduleName, action = 'view') => {
     const resolvedPerms = await resolveUserPermissions(user.role, user.permissions);
 
     if (resolvedPerms && resolvedPerms[moduleName] && resolvedPerms[moduleName][action]) {
+      return next();
+    }
+
+    // Fallback: If checking attendance, allow if user has employees permission for backwards compatibility
+    if (moduleName === 'attendance' && resolvedPerms && resolvedPerms['employees'] && resolvedPerms['employees'][action]) {
       return next();
     }
 
@@ -5987,7 +5992,7 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
 }
 
 // ─── Option 1: Direct LAN IP Sync (ZKTeco Protocol Port 4370) ────────────────
-apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('employees', 'edit'), async (req, res) => {
+apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('attendance', 'edit'), async (req, res) => {
   if (!ZKLib) {
     return res.status(500).json({ message: 'node-zklib is not installed or available on this server.' });
   }
@@ -6043,7 +6048,7 @@ apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('employees', '
 });
 
 // Test connection to Device IP on port 4370
-apiRouter.post('/api/attendance/device/test-ip', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.post('/api/attendance/device/test-ip', verifyPermission('attendance', 'view'), async (req, res) => {
   const { ip, port = 4370, timeout = 4000 } = req.body;
   if (!ip) return res.status(400).json({ message: 'Device IP is required' });
 
@@ -6103,7 +6108,7 @@ app.post('/api/attendance/device/push-bulk', async (req, res) => {
 });
 
 // Download / View Local Sync Agent script
-apiRouter.get('/api/attendance/device/agent-script', verifyPermission('employees', 'view'), (req, res) => {
+apiRouter.get('/api/attendance/device/agent-script', verifyPermission('attendance', 'view'), (req, res) => {
   const host = req.get('host') || 'localhost:5000';
   const proto = req.protocol || 'http';
   const scriptContent = `/**
@@ -6177,7 +6182,7 @@ setInterval(syncOnce, SYNC_INTERVAL * 1000);
 });
 
 // ─── Option 3: USB Attendance Log File Upload ─────────────────────────────────
-apiRouter.post('/api/attendance/device/upload-usb', verifyPermission('employees', 'edit'), attUpload.single('file'), async (req, res) => {
+apiRouter.post('/api/attendance/device/upload-usb', verifyPermission('attendance', 'edit'), attUpload.single('file'), async (req, res) => {
   try {
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ message: 'No file uploaded. Please select an attlog.dat, .csv, or .txt file.' });
@@ -6240,14 +6245,14 @@ apiRouter.post('/api/attendance/device/upload-usb', verifyPermission('employees'
 });
 
 // ─── 2. Device Mapping CRUD ───────────────────────────────────────────────────
-apiRouter.get('/api/attendance/mappings', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.get('/api/attendance/mappings', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const mappings = await DeviceMapping.find().sort({ enrollId: 1 });
     res.json(mappings);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-apiRouter.post('/api/attendance/mappings', verifyPermission('employees', 'edit'), async (req, res) => {
+apiRouter.post('/api/attendance/mappings', verifyPermission('attendance', 'add'), async (req, res) => {
   try {
     const { enrollId, employeeId, employeeName, employeeEmpId, deviceId, notes } = req.body;
     if (!enrollId || !employeeId) return res.status(400).json({ message: 'enrollId and employeeId are required' });
@@ -6266,7 +6271,7 @@ apiRouter.post('/api/attendance/mappings', verifyPermission('employees', 'edit')
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-apiRouter.delete('/api/attendance/mappings/:id', verifyPermission('employees', 'edit'), async (req, res) => {
+apiRouter.delete('/api/attendance/mappings/:id', verifyPermission('attendance', 'delete'), async (req, res) => {
   try {
     await DeviceMapping.findByIdAndDelete(req.params.id);
     res.json({ message: 'Mapping deleted' });
@@ -6274,7 +6279,7 @@ apiRouter.delete('/api/attendance/mappings/:id', verifyPermission('employees', '
 });
 
 // ─── 3. Raw Punches ───────────────────────────────────────────────────────────
-apiRouter.get('/api/attendance/punches', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.get('/api/attendance/punches', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const { date, employeeId, unmatched, limit = 200 } = req.query;
     const query = {};
@@ -6291,7 +6296,7 @@ apiRouter.get('/api/attendance/punches', verifyPermission('employees', 'view'), 
 });
 
 // ─── 4. Process daily logs (manual trigger or scheduled) ──────────────────────
-apiRouter.post('/api/attendance/process', verifyPermission('employees', 'edit'), async (req, res) => {
+apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit'), async (req, res) => {
   try {
     const { date } = req.body; // "YYYY-MM-DD", defaults to today
     const targetDate = date || new Date().toISOString().split('T')[0];
@@ -6371,7 +6376,7 @@ apiRouter.post('/api/attendance/process', verifyPermission('employees', 'edit'),
 });
 
 // ─── 5. Attendance Logs ───────────────────────────────────────────────────────
-apiRouter.get('/api/attendance/logs', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.get('/api/attendance/logs', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const { date, fromDate, toDate, employeeId, status, limit = 500 } = req.query;
     const query = {};
@@ -6392,7 +6397,7 @@ apiRouter.get('/api/attendance/logs', verifyPermission('employees', 'view'), asy
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-apiRouter.put('/api/attendance/logs/:id', verifyPermission('employees', 'edit'), async (req, res) => {
+apiRouter.put('/api/attendance/logs/:id', verifyPermission('attendance', 'edit'), async (req, res) => {
   try {
     const user = req.session.user;
     const update = {
@@ -6407,7 +6412,7 @@ apiRouter.put('/api/attendance/logs/:id', verifyPermission('employees', 'edit'),
 });
 
 // Today's summary counts
-apiRouter.get('/api/attendance/summary/today', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.get('/api/attendance/summary/today', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const [present, absent, late, halfDay, onLeave] = await Promise.all([
@@ -6425,7 +6430,7 @@ apiRouter.get('/api/attendance/summary/today', verifyPermission('employees', 'vi
 });
 
 // Monthly summary per employee
-apiRouter.get('/api/attendance/report/monthly', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.get('/api/attendance/report/monthly', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const { month, year, employeeId } = req.query; // month: "01"-"12", year: "2026"
     const y = year || new Date().getFullYear();
@@ -6468,14 +6473,14 @@ apiRouter.get('/api/attendance/report/monthly', verifyPermission('employees', 'v
 });
 
 // ─── 6. Shift Management ──────────────────────────────────────────────────────
-apiRouter.get('/api/attendance/shifts', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.get('/api/attendance/shifts', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const shifts = await ShiftConfig.find().sort({ createdAt: -1 });
     res.json(shifts);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-apiRouter.post('/api/attendance/shifts', verifyPermission('employees', 'edit'), async (req, res) => {
+apiRouter.post('/api/attendance/shifts', verifyPermission('attendance', 'add'), async (req, res) => {
   try {
     const shift = new ShiftConfig(req.body);
     const saved = await shift.save();
@@ -6483,7 +6488,7 @@ apiRouter.post('/api/attendance/shifts', verifyPermission('employees', 'edit'), 
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-apiRouter.put('/api/attendance/shifts/:id', verifyPermission('employees', 'edit'), async (req, res) => {
+apiRouter.put('/api/attendance/shifts/:id', verifyPermission('attendance', 'edit'), async (req, res) => {
   try {
     const shift = await ShiftConfig.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!shift) return res.status(404).json({ message: 'Shift not found' });
@@ -6499,7 +6504,7 @@ apiRouter.delete('/api/attendance/shifts/:id', adminOnly, async (req, res) => {
 });
 
 // ─── 7. Leave Management ──────────────────────────────────────────────────────
-apiRouter.get('/api/attendance/leaves', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.get('/api/attendance/leaves', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const { status, employeeId } = req.query;
     const query = {};
@@ -6510,7 +6515,7 @@ apiRouter.get('/api/attendance/leaves', verifyPermission('employees', 'view'), a
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-apiRouter.post('/api/attendance/leaves', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.post('/api/attendance/leaves', verifyPermission('attendance', 'add'), async (req, res) => {
   try {
     const total = dayDiff(req.body.fromDate, req.body.toDate);
     const leave = new LeaveRequest({ ...req.body, totalDays: total });
@@ -6519,7 +6524,7 @@ apiRouter.post('/api/attendance/leaves', verifyPermission('employees', 'view'), 
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-apiRouter.put('/api/attendance/leaves/:id', verifyPermission('employees', 'edit'), async (req, res) => {
+apiRouter.put('/api/attendance/leaves/:id', verifyPermission('attendance', 'edit'), async (req, res) => {
   try {
     const user = req.session.user;
     const { status, approveNote } = req.body;
@@ -6561,7 +6566,7 @@ apiRouter.put('/api/attendance/leaves/:id', verifyPermission('employees', 'edit'
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-apiRouter.delete('/api/attendance/leaves/:id', verifyPermission('employees', 'edit'), async (req, res) => {
+apiRouter.delete('/api/attendance/leaves/:id', verifyPermission('attendance', 'delete'), async (req, res) => {
   try {
     await LeaveRequest.findByIdAndDelete(req.params.id);
     res.json({ message: 'Leave request deleted' });
@@ -6569,7 +6574,7 @@ apiRouter.delete('/api/attendance/leaves/:id', verifyPermission('employees', 'ed
 });
 
 // ─── 8. Live punch feed (last N punches) ─────────────────────────────────────
-apiRouter.get('/api/attendance/live', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.get('/api/attendance/live', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const punches = await AttendancePunch.find({}).sort({ punchTime: -1 }).limit(30);
     res.json(punches);
