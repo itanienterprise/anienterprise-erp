@@ -541,35 +541,109 @@ select.att-form-input {
 .att-empty-title { font-size: 0.95rem; font-weight: 600; }
 .att-empty-sub { font-size: 0.8rem; }
 
-/* ── Device Config ─────────────────────────────────────── */
+/* ── Device Integration Hub ─────────────────────────────────── */
 .att-device-card {
-  background: linear-gradient(135deg, #0f172a, #1e293b);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 16px;
   padding: 24px;
-  color: #fff;
+  color: #1e293b;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+}
+.att-device-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 20px;
 }
-.att-device-card h3 {
-  font-size: 1rem;
-  font-weight: 700;
-  margin: 0 0 6px;
-  color: #f8fafc;
+.att-sync-tabs {
+  display: flex;
+  gap: 6px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 12px;
+  flex-wrap: wrap;
 }
-.att-device-card p {
-  font-size: 0.78rem;
-  color: #94a3b8;
-  margin: 0 0 18px;
+.att-sync-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.att-sync-tab-btn:hover {
+  color: #1e293b;
+  background: rgba(255,255,255,0.6);
+}
+.att-sync-tab-btn.active {
+  background: #ffffff;
+  color: #2563eb;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.att-sync-pane {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px;
+}
+.att-usb-dropzone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 14px;
+  padding: 32px 20px;
+  text-align: center;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.att-usb-dropzone:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+.att-alert-box {
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+.att-alert-box.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+.att-alert-box.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+.att-alert-box.info {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
 }
 .att-code {
   background: #0f172a;
   border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 10px 14px;
+  border-radius: 10px;
+  padding: 12px 16px;
   font-family: 'Courier New', monospace;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: #38bdf8;
   word-break: break-all;
-  margin-bottom: 12px;
+  margin: 8px 0 12px;
 }
 .att-connection-dot {
   width: 10px; height: 10px;

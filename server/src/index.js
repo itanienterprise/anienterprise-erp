@@ -26,6 +26,20 @@ const backupUpload = multer ? multer({
   single: () => (req, res, next) => next()
 };
 
+const attUpload = multer ? multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 } // 25 MB limit for USB attendance logs
+}) : {
+  single: () => (req, res, next) => next()
+};
+
+let ZKLib;
+try {
+  ZKLib = require('node-zklib');
+} catch (e) {
+  console.warn('[Attendance] node-zklib not loaded:', e.message);
+}
+
 dotenv.config();
 
 const app = express();
@@ -5859,6 +5873,310 @@ app.post('/api/attendance/device/push', async (req, res) => {
   } catch (err) {
     console.error('[Attendance] Device push error:', err.message);
     res.set('Content-Type', 'text/plain').send('ERR:' + err.message);
+  }
+});
+
+// ─── Multi-Method Ingestion Helper ──────────────────────────────────────────
+async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
+  if (!punches || punches.length === 0) return { newInserted: 0, skippedDuplicates: 0 };
+
+  const allMappings = await DeviceMapping.find().lean();
+  const mappingMap = new Map();
+  allMappings.forEach(m => mappingMap.set(Number(m.enrollId), m.employeeId));
+
+  let newInserted = 0;
+  let skippedDuplicates = 0;
+
+  for (const p of punches) {
+    const enrollId = Number(p.enrollId);
+    const punchTime = new Date(p.punchTime);
+    if (!enrollId || isNaN(punchTime.getTime())) continue;
+
+    // Deduplicate: same enrollId within +/- 60 seconds
+    const windowStart = new Date(punchTime.getTime() - 60000);
+    const windowEnd = new Date(punchTime.getTime() + 60000);
+
+    const exists = await AttendancePunch.findOne({
+      enrollId,
+      punchTime: { $gte: windowStart, $lte: windowEnd }
+    });
+
+    if (exists) {
+      skippedDuplicates++;
+      continue;
+    }
+
+    const employeeId = mappingMap.get(enrollId) || null;
+
+    const newPunch = new AttendancePunch({
+      deviceId: p.deviceId || defaultDeviceId,
+      enrollId,
+      employeeId,
+      punchTime,
+      punchType: p.punchType || 'UNKNOWN',
+      verifyMode: p.verifyMode || 'UNKNOWN',
+      rawPayload: p.rawPayload || '',
+      processed: false,
+      unmatched: !employeeId
+    });
+
+    await newPunch.save();
+    newInserted++;
+  }
+
+  return { newInserted, skippedDuplicates };
+}
+
+// ─── Option 1: Direct LAN IP Sync (ZKTeco Protocol Port 4370) ────────────────
+apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('employees', 'edit'), async (req, res) => {
+  if (!ZKLib) {
+    return res.status(500).json({ message: 'node-zklib is not installed or available on this server.' });
+  }
+  const { ip, port = 4370, timeout = 5000 } = req.body;
+  if (!ip) return res.status(400).json({ message: 'Device IP address is required (e.g. 192.168.1.201).' });
+
+  const zk = new ZKLib(ip, Number(port) || 4370, Number(timeout) || 5000, 4000);
+  try {
+    await zk.createSocket();
+    const attendanceData = await zk.getAttendances();
+    let records = [];
+    if (attendanceData && Array.isArray(attendanceData.data)) {
+      records = attendanceData.data;
+    } else if (Array.isArray(attendanceData)) {
+      records = attendanceData;
+    }
+
+    let users = [];
+    try {
+      const userData = await zk.getUsers();
+      users = Array.isArray(userData?.data) ? userData.data : (Array.isArray(userData) ? userData : []);
+    } catch (_) {}
+
+    await zk.disconnect();
+
+    const punchesToIngest = records.map(r => ({
+      enrollId: parseInt(r.deviceUserId || r.userSn || 0),
+      punchTime: new Date(r.recordTime),
+      punchType: 'UNKNOWN',
+      verifyMode: 'FINGERPRINT/CARD',
+      deviceId: `F8-${ip}`,
+      rawPayload: JSON.stringify(r)
+    })).filter(p => p.enrollId > 0 && !isNaN(p.punchTime.getTime()));
+
+    const result = await ingestPunchRecords(punchesToIngest, `F8-${ip}`);
+
+    res.json({
+      success: true,
+      message: `Connected to ${ip}:${port}. Fetched ${records.length} logs (${result.newInserted} new, ${result.skippedDuplicates} existing).`,
+      totalDeviceRecords: records.length,
+      newInserted: result.newInserted,
+      skippedDuplicates: result.skippedDuplicates,
+      usersFound: users.length
+    });
+  } catch (err) {
+    try { await zk.disconnect(); } catch (_) {}
+    console.error('[Attendance] ZK direct IP sync error:', err.message);
+    res.status(500).json({
+      success: false,
+      message: `Failed to connect to device at ${ip}:${port}. Error: ${err.message || 'Connection timeout. Check network cable and IP.'}`
+    });
+  }
+});
+
+// Test connection to Device IP on port 4370
+apiRouter.post('/api/attendance/device/test-ip', verifyPermission('employees', 'view'), async (req, res) => {
+  const { ip, port = 4370, timeout = 4000 } = req.body;
+  if (!ip) return res.status(400).json({ message: 'Device IP is required' });
+
+  const net = require('net');
+  const socket = new net.Socket();
+  let status = 'closed';
+
+  socket.setTimeout(Number(timeout) || 4000);
+  socket.on('connect', () => {
+    status = 'open';
+    socket.destroy();
+  });
+  socket.on('timeout', () => {
+    socket.destroy();
+  });
+  socket.on('error', () => {
+    socket.destroy();
+  });
+  socket.on('close', () => {
+    if (status === 'open') {
+      res.json({ success: true, message: `Device is online and reachable at ${ip}:${port} (TCP port open).` });
+    } else {
+      res.status(400).json({ success: false, message: `Could not reach ${ip}:${port}. Please verify the device is powered on, connected to LAN, and IP is correct.` });
+    }
+  });
+
+  socket.connect(Number(port) || 4370, ip);
+});
+
+// ─── Option 2: Local Sync Agent Bulk Push ─────────────────────────────────────
+app.post('/api/attendance/device/push-bulk', async (req, res) => {
+  try {
+    const { deviceId = 'F8-AGENT', punches = [] } = req.body;
+    if (!Array.isArray(punches) || punches.length === 0) {
+      return res.status(400).json({ success: false, message: 'No punches array provided' });
+    }
+
+    const formatted = punches.map(p => ({
+      enrollId: parseInt(p.enrollId || p.deviceUserId || p.userSn || p.PIN || 0),
+      punchTime: new Date(p.punchTime || p.recordTime || p.DateTime || p.Stamp),
+      punchType: p.punchType || 'UNKNOWN',
+      verifyMode: p.verifyMode || 'FINGERPRINT',
+      deviceId: deviceId,
+      rawPayload: JSON.stringify(p)
+    })).filter(p => p.enrollId > 0 && !isNaN(p.punchTime.getTime()));
+
+    const result = await ingestPunchRecords(formatted, deviceId);
+    res.json({
+      success: true,
+      message: `Processed ${formatted.length} punches from agent (${result.newInserted} new inserted, ${result.skippedDuplicates} skipped).`,
+      ...result
+    });
+  } catch (err) {
+    console.error('[Attendance] Push-bulk error:', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Download / View Local Sync Agent script
+apiRouter.get('/api/attendance/device/agent-script', verifyPermission('employees', 'view'), (req, res) => {
+  const host = req.get('host') || 'localhost:5000';
+  const proto = req.protocol || 'http';
+  const scriptContent = `/**
+ * ZKTeco F8 Local Office Sync Agent
+ * Runs on any computer connected to the same LAN / Wi-Fi as your ZKTeco device.
+ * Automatically synchronizes punch records to your ERP cloud server.
+ *
+ * Setup:
+ * 1. Ensure Node.js is installed (https://nodejs.org)
+ * 2. In a terminal:
+ *      npm install node-zklib axios
+ * 3. Run:
+ *      node zk-sync-agent.js
+ */
+
+const ZKLib = require('node-zklib');
+const axios = require('axios');
+
+// Configuration
+const DEVICE_IP     = process.env.DEVICE_IP || '192.168.1.201';
+const DEVICE_PORT   = parseInt(process.env.DEVICE_PORT || '4370');
+const ERP_SERVER_URL= process.env.ERP_SERVER_URL || '${proto}://${host}';
+const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL || '60'); // in seconds
+
+console.log('--------------------------------------------------');
+console.log(' ZKTeco F8 Sync Agent Started');
+console.log(' Device:  ' + DEVICE_IP + ':' + DEVICE_PORT);
+console.log(' ERP:     ' + ERP_SERVER_URL);
+console.log(' Sync:    Every ' + SYNC_INTERVAL + 's');
+console.log('--------------------------------------------------');
+
+async function syncOnce() {
+  const zk = new ZKLib(DEVICE_IP, DEVICE_PORT, 5000, 4000);
+  try {
+    process.stdout.write('[' + new Date().toLocaleTimeString() + '] Connecting to F8... ');
+    await zk.createSocket();
+    const res = await zk.getAttendances();
+    await zk.disconnect();
+
+    const records = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+    console.log('Fetched ' + records.length + ' punches.');
+
+    if (records.length === 0) return;
+
+    // Send bulk to ERP
+    const payload = {
+      deviceId: 'F8-' + DEVICE_IP,
+      punches: records.map(r => ({
+        enrollId: r.deviceUserId || r.userSn,
+        punchTime: r.recordTime,
+        verifyMode: 'FINGERPRINT'
+      }))
+    };
+
+    const erpRes = await axios.post(ERP_SERVER_URL + '/api/attendance/device/push-bulk', payload, { timeout: 10000 });
+    console.log('     -> ERP Response: ' + erpRes.data.message);
+  } catch (err) {
+    try { await zk.disconnect(); } catch (_) {}
+    console.error('     -> Sync Error: ' + err.message);
+  }
+}
+
+// Initial sync and recurring loop
+syncOnce();
+setInterval(syncOnce, SYNC_INTERVAL * 1000);
+`;
+
+  res.setHeader('Content-Type', 'text/javascript');
+  res.setHeader('Content-Disposition', 'attachment; filename="zk-sync-agent.js"');
+  res.send(scriptContent);
+});
+
+// ─── Option 3: USB Attendance Log File Upload ─────────────────────────────────
+apiRouter.post('/api/attendance/device/upload-usb', verifyPermission('employees', 'edit'), attUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ message: 'No file uploaded. Please select an attlog.dat, .csv, or .txt file.' });
+    }
+
+    const content = req.file.buffer.toString('utf-8');
+    const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+    const punchesToIngest = [];
+    const punchTypeMap = { 0: 'IN', 1: 'OUT', 2: 'BREAK_OUT', 3: 'BREAK_IN', 4: 'OT_IN', 5: 'OT_OUT' };
+
+    for (const line of lines) {
+      let parts = line.split('\t');
+      if (parts.length < 2) parts = line.split(',');
+      if (parts.length < 2) parts = line.split(/\s{2,}/);
+      if (parts.length < 2) continue;
+
+      if (isNaN(parseInt(parts[0]))) continue;
+
+      const enrollId = parseInt(parts[0]);
+      let stampStr = (parts[1] || '').trim();
+      if (parts.length >= 3 && /^\d{4}-\d{2}-\d{2}$/.test(parts[1]) && /^\d{2}:\d{2}(:\d{2})?$/.test(parts[2])) {
+        stampStr = `${parts[1]} ${parts[2]}`;
+      }
+
+      const punchTime = new Date(stampStr);
+      if (isNaN(punchTime.getTime()) || enrollId <= 0) continue;
+
+      const verify = parts[2] || 'FINGERPRINT';
+      const stateCode = parseInt(parts[3] || 0);
+      const punchType = punchTypeMap[stateCode] || 'UNKNOWN';
+
+      punchesToIngest.push({
+        enrollId,
+        punchTime,
+        punchType,
+        verifyMode: String(verify),
+        deviceId: 'USB-IMPORT',
+        rawPayload: line
+      });
+    }
+
+    if (punchesToIngest.length === 0) {
+      return res.status(400).json({ message: 'No valid attendance records found in file. Ensure file contains ZKTeco attlog format.' });
+    }
+
+    const result = await ingestPunchRecords(punchesToIngest, 'USB-IMPORT');
+
+    res.json({
+      success: true,
+      message: `Parsed ${punchesToIngest.length} records from USB file (${result.newInserted} new punches added, ${result.skippedDuplicates} duplicates skipped).`,
+      totalParsed: punchesToIngest.length,
+      newInserted: result.newInserted,
+      skippedDuplicates: result.skippedDuplicates
+    });
+  } catch (err) {
+    console.error('[Attendance] USB upload error:', err.message);
+    res.status(500).json({ message: 'Failed to process USB file: ' + err.message });
   }
 });
 

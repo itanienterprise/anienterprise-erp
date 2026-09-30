@@ -831,33 +831,346 @@ const PunchesTab = ({ punches, loading, punchDate, setPunchDate, onRefresh }) =>
 );
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Device / Mapping Tab
+// Device / Mapping Tab — Multi-Method Integration Hub
 // ═══════════════════════════════════════════════════════════════════════════════
 const DeviceTab = ({ mappings, loading, employees, summary, onRefresh, onAdd, onDelete }) => {
+  const [activeMethod, setActiveMethod] = useState('lan'); // 'lan' | 'usb' | 'agent' | 'cloud'
+  
+  // LAN IP Sync state
+  const [deviceIp, setDeviceIp] = useState(() => localStorage.getItem('zk_device_ip') || '192.168.1.201');
+  const [devicePort, setDevicePort] = useState('4370');
+  const [testingIp, setTestingIp] = useState(false);
+  const [syncingIp, setSyncingIp] = useState(false);
+  const [ipStatus, setIpStatus] = useState(null); // { type: 'success' | 'error' | 'info', message: '' }
+
+  // USB Import state
+  const [usbFile, setUsbFile] = useState(null);
+  const [uploadingUsb, setUploadingUsb] = useState(false);
+  const [usbStatus, setUsbStatus] = useState(null);
+  const fileInputRef = useRef(null);
+
+  // Cloud URL
   const serverHost = window.location.hostname;
-  const serverPort = '5000';
-  const pushUrl = `http://${serverHost}:${serverPort}/api/attendance/device/push`;
+  const serverPort = window.location.port ? window.location.port : '5000';
+  const pushUrl = `${window.location.protocol}//${serverHost}:${serverPort}/api/attendance/device/push`;
+  const [copied, setCopied] = useState(false);
+
+  const handleTestIp = async () => {
+    setTestingIp(true);
+    setIpStatus(null);
+    try {
+      localStorage.setItem('zk_device_ip', deviceIp);
+      const res = await axios.post(`${API_BASE_URL}/api/attendance/device/test-ip`, { ip: deviceIp, port: Number(devicePort) });
+      setIpStatus({ type: 'success', message: res.data.message });
+    } catch (err) {
+      setIpStatus({ type: 'error', message: err.response?.data?.message || err.message || 'Could not connect to device.' });
+    } finally {
+      setTestingIp(false);
+    }
+  };
+
+  const handleSyncIp = async () => {
+    setSyncingIp(true);
+    setIpStatus(null);
+    try {
+      localStorage.setItem('zk_device_ip', deviceIp);
+      const res = await axios.post(`${API_BASE_URL}/api/attendance/device/sync-ip`, { ip: deviceIp, port: Number(devicePort) });
+      setIpStatus({ type: 'success', message: res.data.message });
+      onRefresh();
+    } catch (err) {
+      setIpStatus({ type: 'error', message: err.response?.data?.message || err.message || 'Failed to sync from device.' });
+    } finally {
+      setSyncingIp(false);
+    }
+  };
+
+  const handleUsbUpload = async () => {
+    if (!usbFile) return;
+    setUploadingUsb(true);
+    setUsbStatus(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', usbFile);
+      const res = await axios.post(`${API_BASE_URL}/api/attendance/device/upload-usb`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setUsbStatus({ type: 'success', message: res.data.message });
+      setUsbFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      onRefresh();
+    } catch (err) {
+      setUsbStatus({ type: 'error', message: err.response?.data?.message || err.message || 'Failed to import USB file.' });
+    } finally {
+      setUploadingUsb(false);
+    }
+  };
+
+  const copyPushUrl = () => {
+    navigator.clipboard.writeText(pushUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const downloadAgentScript = () => {
+    window.open(`${API_BASE_URL}/api/attendance/device/agent-script`, '_blank');
+  };
 
   return (
     <>
-      {/* Setup Instructions */}
-      <div className="att-device-card" style={{ marginBottom: 20 }}>
-        <h3>🔧 ZKTech F8 — ADMS Configuration</h3>
-        <p>Configure your F8 device to push punches to this server:</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* 4-in-1 Device Integration Hub */}
+      <div className="att-device-card">
+        <div className="att-device-card-header">
           <div>
-            <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 4 }}>1. On the F8: Menu → Communication → Cloud Server</div>
-            <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 8 }}>2. Set the Push URL to:</div>
-            <div className="att-code">{pushUrl}</div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 4px', color: '#0f172a' }}>
+              🔌 ZKTeco F8 Connection Hub
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
+              Choose how your ERP synchronizes punch logs with your office access control device.
+            </p>
           </div>
-          <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-            3. Enable ADMS / HTTP Push · Protocol: HTTP · Method: POST
+          <div className="att-sync-tabs">
+            <button
+              className={`att-sync-tab-btn ${activeMethod === 'lan' ? 'active' : ''}`}
+              onClick={() => setActiveMethod('lan')}
+            >
+              🌐 Direct LAN IP
+            </button>
+            <button
+              className={`att-sync-tab-btn ${activeMethod === 'usb' ? 'active' : ''}`}
+              onClick={() => setActiveMethod('usb')}
+            >
+              💾 USB Import
+            </button>
+            <button
+              className={`att-sync-tab-btn ${activeMethod === 'agent' ? 'active' : ''}`}
+              onClick={() => setActiveMethod('agent')}
+            >
+              🖥️ Office Sync Agent
+            </button>
+            <button
+              className={`att-sync-tab-btn ${activeMethod === 'cloud' ? 'active' : ''}`}
+              onClick={() => setActiveMethod('cloud')}
+            >
+              ☁️ Cloud ADMS Push
+            </button>
           </div>
         </div>
+
+        {/* METHOD 1: Direct LAN IP */}
+        {activeMethod === 'lan' && (
+          <div className="att-sync-pane">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>Direct Network Sync (Port 4370)</strong>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
+                  Connect directly to the F8 on your office local network/Wi-Fi to fetch punches.
+                </p>
+              </div>
+              <span className="att-badge present">Offline & Local Friendly</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ flex: '1 1 200px' }}>
+                <label className="att-form-label">Device IP Address</label>
+                <input
+                  type="text"
+                  className="att-input"
+                  value={deviceIp}
+                  onChange={e => setDeviceIp(e.target.value)}
+                  placeholder="e.g. 192.168.1.201"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div style={{ width: 100 }}>
+                <label className="att-form-label">Port</label>
+                <input
+                  type="number"
+                  className="att-input"
+                  value={devicePort}
+                  onChange={e => setDevicePort(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+                <button
+                  type="button"
+                  className="att-btn att-btn-secondary"
+                  onClick={handleTestIp}
+                  disabled={testingIp || syncingIp}
+                >
+                  {testingIp ? 'Testing...' : 'Test Connection'}
+                </button>
+                <button
+                  type="button"
+                  className="att-btn att-btn-primary"
+                  onClick={handleSyncIp}
+                  disabled={syncingIp || testingIp}
+                >
+                  <IcoRefresh className={syncingIp ? "animate-spin" : ""} />
+                  <span>{syncingIp ? 'Fetching Punches...' : 'Sync Now'}</span>
+                </button>
+              </div>
+            </div>
+
+            {ipStatus && (
+              <div className={`att-alert-box ${ipStatus.type}`}>
+                {ipStatus.type === 'success' ? '✓' : '⚠'} {ipStatus.message}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* METHOD 2: USB Log File Import */}
+        {activeMethod === 'usb' && (
+          <div className="att-sync-pane">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>Import from USB Flash Drive</strong>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
+                  No network required. Export attendance log to USB on the F8, then upload the file here.
+                </p>
+              </div>
+              <span className="att-badge weekend">Zero Network Needed</span>
+            </div>
+
+            <div
+              className="att-usb-dropzone"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept=".dat,.csv,.txt"
+                onChange={e => {
+                  if (e.target.files?.[0]) setUsbFile(e.target.files[0]);
+                }}
+              />
+              <div style={{ fontSize: '2rem', marginBottom: 8 }}>📁</div>
+              {usbFile ? (
+                <div>
+                  <strong style={{ color: '#2563eb' }}>{usbFile.name}</strong>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                    {(usbFile.size / 1024).toFixed(1)} KB — Click to change file
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <strong style={{ color: '#1e293b' }}>Click to select `1_attlog.dat` or attendance file</strong>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.76rem', color: '#94a3b8' }}>
+                    Supports ZKTeco `.dat` (tab-delimited), `.csv`, and `.txt` files
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                💡 <strong>On Device:</strong> Menu → USB Disk (or Data Mgt) → Download Attendance Data
+              </div>
+              <button
+                type="button"
+                className="att-btn att-btn-primary"
+                onClick={handleUsbUpload}
+                disabled={!usbFile || uploadingUsb}
+              >
+                <IcoCheck />
+                <span>{uploadingUsb ? 'Importing Punches...' : 'Process & Import Punches'}</span>
+              </button>
+            </div>
+
+            {usbStatus && (
+              <div className={`att-alert-box ${usbStatus.type}`}>
+                {usbStatus.type === 'success' ? '✓' : '⚠'} {usbStatus.message}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* METHOD 3: Office Sync Agent */}
+        {activeMethod === 'agent' && (
+          <div className="att-sync-pane">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div>
+                <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>Office Sync Agent (For Cloud ERP)</strong>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
+                  If your ERP is hosted on the cloud, run this lightweight agent on any office PC on the same Wi-Fi as the F8.
+                </p>
+              </div>
+              <span className="att-badge leave">Auto Background Sync</span>
+            </div>
+
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginBottom: 14 }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#1e293b', marginBottom: 8 }}>
+                Quick 2-Step Setup:
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.6 }}>
+                1. <strong>Download the script:</strong> Click the button below to download <code>zk-sync-agent.js</code>.<br />
+                2. <strong>Run on office computer:</strong> Open a terminal in that folder and run:
+                <div className="att-code" style={{ margin: '8px 0' }}>
+                  npm install node-zklib axios<br />
+                  node zk-sync-agent.js
+                </div>
+                It automatically connects to your F8 device every 60 seconds and forwards all new punches to your cloud ERP!
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                className="att-btn att-btn-primary"
+                onClick={downloadAgentScript}
+              >
+                💾 Download `zk-sync-agent.js`
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* METHOD 4: Cloud Server ADMS Push */}
+        {activeMethod === 'cloud' && (
+          <div className="att-sync-pane">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div>
+                <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>Cloud ADMS / HTTP Push URL</strong>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
+                  For ZKTeco devices that have the "Cloud Server / ADMS" menu option.
+                </p>
+              </div>
+              <span className="att-badge approved">Direct Device Push</span>
+            </div>
+
+            <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: 6 }}>
+              On your F8: <strong>Menu → Communication → Cloud Server</strong>. Enter this Server Address:
+            </div>
+            <div className="att-code" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{pushUrl}</span>
+              <button
+                type="button"
+                onClick={copyPushUrl}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  border: 'none',
+                  color: '#fff',
+                  borderRadius: 6,
+                  padding: '4px 10px',
+                  fontSize: '0.72rem',
+                  cursor: 'pointer'
+                }}
+              >
+                {copied ? '✓ Copied' : 'Copy URL'}
+              </button>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+              Enable ADMS / Push: Yes · Protocol: HTTP · Port: {serverPort}
+            </div>
+          </div>
+        )}
+
         {summary.unmatchedPunches > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, background: 'rgba(239,68,68,0.15)', borderRadius: 8, padding: '10px 14px', fontSize: '0.8rem', color: '#fca5a5' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, background: 'rgba(239,68,68,0.1)', border: '1px solid #fca5a5', borderRadius: 12, padding: '12px 16px', fontSize: '0.82rem', color: '#b91c1c' }}>
             <IcoWarning />
-            <strong>{summary.unmatchedPunches} unmatched punches</strong> — Map the Enroll IDs below
+            <strong>{summary.unmatchedPunches} punches are from unmapped devices/IDs</strong> — Use the table below to link them to employee names.
           </div>
         )}
       </div>
