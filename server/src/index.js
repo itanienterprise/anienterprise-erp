@@ -910,6 +910,7 @@ apiRouter.use(async (req, res, next) => {
       const userRole = user?.role || reqBodySnapshot?.userRole || reqBodySnapshot?.createdRole || '';
       const displayName = user?.name || reqBodySnapshot?.entryByName || reqBodySnapshot?.updatedByName || username;
       const userId = user?.id || reqBodySnapshot?.userId || '';
+      const status = res.statusCode < 400 ? 'SUCCESS' : 'FAILED';
 
       if (username === 'anonymous' && !url.includes('/login')) {
         return;
@@ -949,7 +950,6 @@ apiRouter.use(async (req, res, next) => {
 
       const module = resolveModuleFromPath(url, reqBodySnapshot);
       const { action, category } = resolveActionDetails(method, url, reqBodySnapshot, previousDocSnapshot);
-      const status = res.statusCode < 400 ? 'SUCCESS' : 'FAILED';
 
       let cleanSnapshot = resolvePayloadObject(reqBodySnapshot);
       if (method === 'DELETE' && previousDocSnapshot) {
