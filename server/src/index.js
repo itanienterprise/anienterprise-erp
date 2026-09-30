@@ -48,10 +48,38 @@ const { Server } = require('socket.io');
 const app = express();
 app.set('trust proxy', 1);
 
+// Restricted CORS Whitelisting
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // allow non-browser / same-origin requests
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname;
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+    ) {
+      return true;
+    }
+    if (process.env.CLIENT_URL && (origin === process.env.CLIENT_URL || origin.startsWith(process.env.CLIENT_URL))) {
+      return true;
+    }
+  } catch (e) {}
+  return false;
+};
+
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: (origin, callback) => callback(null, true),
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS blocked: Unauthorized origin'));
+      }
+    },
     credentials: true
   }
 });
@@ -170,28 +198,7 @@ app.use(helmet({
   contentSecurityPolicy: false // Keep disabled for dev HMR / inline styles
 }));
 
-// 2. Restricted CORS Whitelisting
-const isAllowedOrigin = (origin) => {
-  if (!origin) return true; // allow non-browser / same-origin requests
-  try {
-    const url = new URL(origin);
-    const hostname = url.hostname;
-    if (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname.startsWith('192.168.') ||
-      hostname.startsWith('10.') ||
-      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
-    ) {
-      return true;
-    }
-    if (process.env.CLIENT_URL && (origin === process.env.CLIENT_URL || origin.startsWith(process.env.CLIENT_URL))) {
-      return true;
-    }
-  } catch (e) {}
-  return false;
-};
-
+// 2. Restricted CORS Whitelisting (already declared above)
 app.use(cors({
   origin: (origin, callback) => {
     if (isAllowedOrigin(origin)) {
@@ -647,7 +654,7 @@ apiRouter.use((req, res, next) => {
           const mod = match[1].toLowerCase();
           if (!['logs', 'auth', 'health'].includes(mod)) {
             broadcastUpdate(mod, req.method.toLowerCase(), {
-              path: fullUrl
+              path: fullUrl.split('?')[0]
             });
           }
         }
