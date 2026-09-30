@@ -5262,12 +5262,15 @@ apiRouter.post('/api/logs/client-action', async (req, res) => {
         if (cleanDetails.partyName) pruned.partyName = cleanDetails.partyName;
       }
 
+      const validCategories = ['MUTATION', 'APPROVAL', 'AUTH', 'UI_CLICK', 'UI_INTERACTION', 'SYSTEM'];
+      const actionCategory = validCategories.includes(act.actionCategory) ? act.actionCategory : 'UI_CLICK';
+
       const doc = {
         timestamp: act.timestamp ? new Date(act.timestamp) : new Date(),
         username: user?.username || 'System',
         module: act.module || 'System',
         action: act.action || 'CLICK',
-        actionCategory: act.actionCategory || 'UI_CLICK',
+        actionCategory,
         description: act.description || `User clicked "${act.actionName || 'Button'}" in ${act.module || 'System'}`
       };
 

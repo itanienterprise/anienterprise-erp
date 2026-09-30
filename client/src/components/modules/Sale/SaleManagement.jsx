@@ -12,6 +12,7 @@ import { QUERY_KEYS } from '../../../hooks/useQueries';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { trackUserAction } from '../../../utils/activityTracker';
+import { getSocket } from '../../../utils/socket';
 import './SaleManagement.css';
 
 const getSafeString = (val) => {
@@ -534,7 +535,7 @@ const SaleManagement = ({
                     }
                     return s;
                 });
-                if (statusFilter === 'Requested' || statusFilter === 'Pending Requests' || isRequestedListOnly) {
+                if (isRequestedOnly) {
                     return next.filter(s => (s.status || '').toLowerCase() === 'requested' || s.isEdited === true);
                 }
                 return next;
@@ -684,7 +685,7 @@ const SaleManagement = ({
             setAllSalesRecords(prev => (prev || []).map(s => rejectedIds.has(s._id) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s));
             setSales(prev => {
                 const next = (prev || []).map(s => rejectedIds.has(s._id) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s);
-                if (statusFilter === 'Requested' || statusFilter === 'Pending Requests' || isRequestedListOnly) {
+                if (isRequestedOnly) {
                     return next.filter(s => (s.status || '').toLowerCase() === 'requested' || s.isEdited === true);
                 }
                 return next;
@@ -1102,7 +1103,7 @@ const SaleManagement = ({
             setAllSalesRecords(prev => (prev || []).map(s => s._id === _id ? optimisticSale : s));
             setSales(prev => {
                 const next = (prev || []).map(s => s._id === _id ? optimisticSale : s);
-                if (statusFilter === 'Requested' || statusFilter === 'Pending Requests' || isRequestedListOnly) {
+                if (isRequestedOnly) {
                     return next.filter(s => (s.status || '').toLowerCase() === 'requested' || s.isEdited === true);
                 }
                 return next;
@@ -1370,6 +1371,37 @@ const SaleManagement = ({
         fetchEmployees();
     }, [saleType]); // Refetch if saleType changes
 
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
+    useEffect(() => {
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = data?.module;
+            if (!mod || mod === 'sales') {
+                fetchSales();
+            }
+            if (mod === 'customers') {
+                fetchCustomers();
+            }
+            if (mod === 'stock' || mod === 'warehouses' || mod === 'stock-baseline') {
+                fetchStockRecords();
+                fetchWarehouses();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+        };
+    }, [saleType]);
+
     async function fetchLCRecords() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/lc-management`);
@@ -1464,20 +1496,16 @@ const SaleManagement = ({
         };
 
         const cached = queryClient.getQueryData(QUERY_KEYS.sales);
-        if (cached && cached.length > 0) {
+        if (cached && cached.length > 0 && (!allSalesRecords || allSalesRecords.length === 0)) {
             setAllSalesRecords(cached);
             setSales(filterSalesList(cached));
-        } else {
-            setIsLoading(true);
         }
         try {
-            const data = await queryClient.fetchQuery({
-                queryKey: QUERY_KEYS.sales,
-                queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
-            });
-            const decryptedSales = Array.isArray(data) ? data : [];
+            const res = await axios.get(`${API_BASE_URL}/api/sales`);
+            const decryptedSales = Array.isArray(res.data) ? res.data : [];
             setAllSalesRecords(decryptedSales);
             setSales(filterSalesList(decryptedSales));
+            queryClient.setQueryData(QUERY_KEYS.sales, decryptedSales);
             if (fetchSalesGlobal) {
                 fetchSalesGlobal();
             }

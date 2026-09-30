@@ -11,6 +11,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { getSocket } from '../../../utils/socket';
 
 const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
     
@@ -318,17 +319,14 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
 
     const fetchPurchases = async () => {
         const cached = queryClient.getQueryData(['purchases']);
-        if (cached && Array.isArray(cached) && cached.length > 0) {
+        if (cached && Array.isArray(cached) && cached.length > 0 && (!purchases || purchases.length === 0)) {
             setPurchases(cached);
-        } else {
-            setIsLoading(true);
         }
         try {
-            const data = await queryClient.fetchQuery({
-                queryKey: ['purchases'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/purchases`).then(r => r.data || [])
-            });
+            const res = await axios.get(`${API_BASE_URL}/api/purchases`);
+            const data = Array.isArray(res.data) ? res.data : [];
             setPurchases(data);
+            queryClient.setQueryData(['purchases'], data);
             fetchPR();
             if (data.length > 0) {
                 syncPurchaseStock(data);
@@ -339,6 +337,30 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
             setIsLoading(false);
         }
     };
+
+    // Real-time synchronization
+    useEffect(() => {
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = data?.module;
+            if (!mod || mod === 'purchases' || mod === 'purchase-receives') {
+                fetchPurchases();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+        };
+    }, []);
 
     useEffect(() => {
         fetchPurchases();

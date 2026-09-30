@@ -36,7 +36,7 @@ const activityLogSchema = new mongoose.Schema({
     actionCategory: {
         type: String,
         default: 'MUTATION',
-        enum: ['MUTATION', 'APPROVAL', 'AUTH', 'UI_CLICK', 'SYSTEM'],
+        enum: ['MUTATION', 'APPROVAL', 'AUTH', 'UI_CLICK', 'UI_INTERACTION', 'SYSTEM'],
         index: true
     },
     description: {
