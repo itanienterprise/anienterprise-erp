@@ -1376,8 +1376,10 @@ const SaleManagement = ({
         const socket = getSocket();
         const handleRealtimeUpdate = (data) => {
             const mod = data?.module;
+            console.log('[SaleManagement] Real-time event received:', data);
             if (!mod || mod === 'sales') {
                 fetchSales();
+                if (refreshPendingIndicators) refreshPendingIndicators();
             }
             if (mod === 'customers') {
                 fetchCustomers();

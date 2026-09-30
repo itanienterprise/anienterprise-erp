@@ -74,23 +74,29 @@ const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
-      if (isAllowedOrigin(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('CORS blocked: Unauthorized origin'));
-      }
+      // In internal ERP, allow all origins so LAN devices, hostnames, and reverse proxies connect without CORS rejection
+      callback(null, true);
     },
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST']
   }
 });
 app.set('io', io);
 
 io.on('connection', (socket) => {
-  // Real-time client connected
+  const count = io.engine ? io.engine.clientsCount : (io.sockets?.sockets ? io.sockets.sockets.size : 1);
+  console.log(`[Socket] Client connected: id=${socket.id}, total clients=${count}`);
+
+  socket.on('disconnect', (reason) => {
+    const remaining = io.engine ? io.engine.clientsCount : 0;
+    console.log(`[Socket] Client disconnected: id=${socket.id} (${reason}), remaining clients=${remaining}`);
+  });
 });
 
 const broadcastUpdate = (moduleName, action = 'update', payload = {}) => {
   try {
+    const clientsCount = io.engine ? io.engine.clientsCount : (io.sockets?.sockets ? io.sockets.sockets.size : 0);
+    console.log(`[Socket] Broadcasting real-time update: module=${moduleName}, action=${action}, clientsCount=${clientsCount}`);
     io.emit('data_updated', {
       module: moduleName,
       action,
@@ -579,6 +585,7 @@ app.post('/v', (req, res, next) => {
 
   const executeDispatch = () => {
     // Internal dispatching
+    req.targetApiPath = p;
     req.url = p;
     req.originalUrl = p;
     req.method = m;
@@ -648,11 +655,12 @@ apiRouter.use((req, res, next) => {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     res.on('finish', () => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        const fullUrl = req.originalUrl || req.url || '';
+        const fullUrl = req.targetApiPath || req.originalUrl || req.url || '';
         const match = fullUrl.match(/\/api\/([a-zA-Z0-9_-]+)/);
         if (match && match[1]) {
           const mod = match[1].toLowerCase();
           if (!['logs', 'auth', 'health'].includes(mod)) {
+            console.log(`[Socket] Mutation completed: ${req.method} ${fullUrl} -> broadcasting module '${mod}'`);
             broadcastUpdate(mod, req.method.toLowerCase(), {
               path: fullUrl.split('?')[0]
             });

@@ -1721,19 +1721,12 @@ function App() {
   };
 
   const fetchSales = async () => {
-    const cached = queryClient.getQueryData(QUERY_KEYS.sales);
-    if (cached && cached.length > 0) {
-      setSalesRecords(cached);
-    }
     try {
-      const data = await queryClient.fetchQuery({
-        queryKey: QUERY_KEYS.sales,
-        queryFn: async () => {
-          const response = await axios.get(`${API_BASE_URL}/api/sales`);
-          return Array.isArray(response.data) ? response.data : [];
-        }
-      });
+      const response = await axios.get(`${API_BASE_URL}/api/sales`);
+      const data = Array.isArray(response.data) ? response.data : [];
       setSalesRecords(data);
+      queryClient.setQueryData(QUERY_KEYS.sales, data);
+      return data;
     } catch (error) {
       console.error('Error fetching sales:', error);
     }

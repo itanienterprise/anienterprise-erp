@@ -2,20 +2,9 @@ import { io } from 'socket.io-client';
 
 let socket = null;
 
-// When the app is accessed on port 3000 (Vite dev or Docker client mapped 3000:80),
-// connect directly to the backend exposed on port 5000.
-const getSocketTarget = () => {
-  if (typeof window === 'undefined') return undefined;
-  if (window.location.port === '3000') {
-    return `${window.location.protocol}//${window.location.hostname}:5000`;
-  }
-  return undefined;
-};
-
 export const getSocket = () => {
   if (!socket) {
-    const target = getSocketTarget();
-    socket = io(target || undefined, {
+    socket = io({
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       autoConnect: true,
