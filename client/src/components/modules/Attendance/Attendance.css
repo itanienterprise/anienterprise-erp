@@ -500,14 +500,15 @@ select.att-form-input {
 .att-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.45);
+  background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(4px);
-  z-index: 9998;
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  animation: att-fade-in 0.15s;
+  animation: att-fade-in 0.15s ease-out;
 }
 @keyframes att-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .att-modal {

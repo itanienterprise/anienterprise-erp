@@ -6261,7 +6261,7 @@ apiRouter.post('/api/attendance/mappings', verifyPermission('attendance', 'add')
     const mapping = await DeviceMapping.findOneAndUpdate(
       { enrollId: Number(enrollId) },
       { enrollId: Number(enrollId), employeeId, employeeName: employeeName || '', employeeEmpId: employeeEmpId || '', deviceId: deviceId || 'F8-DEFAULT', notes: notes || '' },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     // Retroactively link any unmatched punches for this enrollId
@@ -6345,7 +6345,7 @@ apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit')
               status: result.status,
               manualOverride: false
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
           );
           await AttendancePunch.updateMany(
             { employeeId: empObjId, punchTime: { $gte: dayStart, $lte: dayEnd } },
@@ -6405,7 +6405,7 @@ apiRouter.put('/api/attendance/logs/:id', verifyPermission('attendance', 'edit')
       manualOverride: true,
       overriddenBy: user?.username || 'admin'
     };
-    const log = await AttendanceLog.findByIdAndUpdate(req.params.id, update, { new: true });
+    const log = await AttendanceLog.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after' });
     if (!log) return res.status(404).json({ message: 'Log not found' });
     res.json(log);
   } catch (err) { res.status(400).json({ message: err.message }); }
@@ -6490,7 +6490,7 @@ apiRouter.post('/api/attendance/shifts', verifyPermission('attendance', 'add'), 
 
 apiRouter.put('/api/attendance/shifts/:id', verifyPermission('attendance', 'edit'), async (req, res) => {
   try {
-    const shift = await ShiftConfig.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const shift = await ShiftConfig.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
     if (!shift) return res.status(404).json({ message: 'Shift not found' });
     res.json(shift);
   } catch (err) { res.status(400).json({ message: err.message }); }
@@ -6534,7 +6534,7 @@ apiRouter.put('/api/attendance/leaves/:id', verifyPermission('attendance', 'edit
       update.approvedAt = new Date();
       update.approveNote = approveNote || '';
     }
-    const leave = await LeaveRequest.findByIdAndUpdate(req.params.id, update, { new: true });
+    const leave = await LeaveRequest.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after' });
     if (!leave) return res.status(404).json({ message: 'Leave request not found' });
 
     // If approved, update AttendanceLog for those dates

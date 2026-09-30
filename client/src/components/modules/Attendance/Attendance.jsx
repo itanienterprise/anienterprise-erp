@@ -1,33 +1,150 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import { ChevronDownIcon } from '../../Icons';
+import { ChevronDownIcon, SearchIcon, CheckIcon } from '../../Icons';
 import './Attendance.css';
 
-// ─── Custom ERP Dropdown Select ──────────────────────────────────────────────
-const ERPSelect = ({ value, onChange, options = [], placeholder, className = '', style, disabled = false }) => (
-  <div className={`relative inline-flex items-center ${className}`} style={style}>
-    <select
-      value={value}
-      onChange={onChange}
-      disabled={disabled}
-      className="att-select-field"
-    >
-      {placeholder && <option value="">{placeholder}</option>}
-      {options.map((opt) => {
-        if (typeof opt === 'string') {
-          return <option key={opt} value={opt}>{opt}</option>;
-        }
-        return <option key={opt.value} value={opt.value}>{opt.label}</option>;
-      })}
-    </select>
-    <div className="att-select-arrow">
-      <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+// ─── Custom ERP Dropdown Select (Styled like SystemAccess / Token / ERP Standard) ───
+const ERPSelect = ({ value, onChange, options = [], placeholder, className = '', style, disabled = false, searchable }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
+
+  // Normalize options to [{ value, label }]
+  const normalizedOptions = React.useMemo(() => {
+    return (options || []).map(opt => {
+      if (typeof opt === 'string') {
+        return { value: opt, label: opt };
+      }
+      return opt;
+    });
+  }, [options]);
+
+  // Determine if search should be enabled (auto-enable if >= 6 options, e.g. for employees list)
+  const isSearchable = searchable !== undefined ? searchable : normalizedOptions.length >= 6;
+
+  // Filter options based on search
+  const filteredOptions = React.useMemo(() => {
+    if (!searchTerm) return normalizedOptions;
+    const q = searchTerm.toLowerCase().trim();
+    return normalizedOptions.filter(opt =>
+      (opt.label && String(opt.label).toLowerCase().includes(q)) ||
+      (opt.value && String(opt.value).toLowerCase().includes(q))
+    );
+  }, [normalizedOptions, searchTerm]);
+
+  // Find currently selected option
+  const selectedOption = normalizedOptions.find(opt => String(opt.value) === String(value));
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const handleSelect = (val) => {
+    if (onChange) {
+      onChange({ target: { value: val } });
+    }
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  return (
+    <div className={`relative inline-block text-left ${className}`} style={style} ref={dropdownRef}>
+      {/* Trigger Button */}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setIsOpen(prev => !prev)}
+        className={`w-full h-10 px-3.5 pr-8 bg-white border rounded-xl text-left text-sm font-medium transition-all flex items-center justify-between shadow-sm outline-none cursor-pointer ${
+          isOpen
+            ? 'border-blue-500 ring-2 ring-blue-500/20 text-gray-900'
+            : 'border-slate-200 hover:border-slate-300 text-gray-800'
+        } ${disabled ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}`}
+      >
+        <span className="truncate block font-sans">
+          {selectedOption ? selectedOption.label : (placeholder || 'Select...')}
+        </span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center text-slate-400">
+          <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-600' : ''}`} />
+        </span>
+      </button>
+
+      {/* Dropdown Menu */}
+      {isOpen && !disabled && (
+        <div className="absolute left-0 top-full mt-1.5 w-full min-w-[200px] z-50 bg-white border border-slate-100 rounded-xl shadow-xl py-1 max-h-64 overflow-y-auto animate-in fade-in duration-150">
+          {/* Search Bar if searchable */}
+          {isSearchable && (
+            <div className="p-2 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <div className="relative flex items-center">
+                <SearchIcon className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search..."
+                  autoFocus
+                  className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition-colors font-sans"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Optional placeholder / "All" option */}
+          {placeholder && (
+            <button
+              type="button"
+              onClick={() => handleSelect('')}
+              className={`w-full px-3.5 py-2 text-left text-sm transition-colors flex items-center justify-between font-sans ${
+                !value ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <span>{placeholder}</span>
+              {!value && <CheckIcon className="w-4 h-4 text-blue-600" />}
+            </button>
+          )}
+
+          {/* Filtered Options List */}
+          {filteredOptions.length === 0 ? (
+            <div className="px-4 py-3 text-xs text-slate-400 text-center font-sans">
+              No matching options
+            </div>
+          ) : (
+            filteredOptions.map((opt) => {
+              const isSelected = String(opt.value) === String(value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleSelect(opt.value)}
+                  className={`w-full px-3.5 py-2 text-left text-sm transition-colors flex items-center justify-between font-sans ${
+                    isSelected
+                      ? 'bg-blue-50 text-blue-700 font-semibold'
+                      : 'text-slate-700 hover:bg-blue-50/70 hover:text-blue-900'
+                  }`}
+                >
+                  <span className="truncate mr-2">{opt.label}</span>
+                  {isSelected && <CheckIcon className="w-4 h-4 text-blue-600 flex-shrink-0" />}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 // ─── Tiny SVG Icons ──────────────────────────────────────────────────────────
 const Icon = ({ d, size = 16, stroke = 'currentColor', fill = 'none' }) => (
@@ -1257,7 +1374,9 @@ const ShiftModal = ({ mode, data, onSave, onClose }) => {
   });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  return (
+  if (typeof document === 'undefined' || !document.body) return null;
+
+  return createPortal(
     <div className="att-modal-overlay" onClick={onClose}>
       <div className="att-modal" onClick={e => e.stopPropagation()}>
         <h3 className="att-modal-title">{mode === 'edit' ? 'Edit Shift' : 'Add New Shift'}</h3>
@@ -1292,7 +1411,8 @@ const ShiftModal = ({ mode, data, onSave, onClose }) => {
           <button className="att-btn att-btn-primary" onClick={() => onSave(form)}><IcoCheck />Save Shift</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -1315,7 +1435,9 @@ const LeaveModal = ({ employees, onSave, onClose }) => {
     if (emp) { set('employeeName', emp.name || ''); set('employeeEmpId', emp.employeeId || ''); }
   };
 
-  return (
+  if (typeof document === 'undefined' || !document.body) return null;
+
+  return createPortal(
     <div className="att-modal-overlay" onClick={onClose}>
       <div className="att-modal" onClick={e => e.stopPropagation()}>
         <h3 className="att-modal-title">New Leave Request</h3>
@@ -1365,7 +1487,8 @@ const LeaveModal = ({ employees, onSave, onClose }) => {
           <button className="att-btn att-btn-primary" disabled={!form.employeeId} onClick={() => onSave(form)}><IcoCheck />Submit Leave</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -1380,7 +1503,9 @@ const MappingModal = ({ employees, onSave, onClose }) => {
     if (emp) { setForm(p => ({ ...p, employeeId: id, employeeName: emp.name || '', employeeEmpId: emp.employeeId || '' })); }
   };
 
-  return (
+  if (typeof document === 'undefined' || !document.body) return null;
+
+  return createPortal(
     <div className="att-modal-overlay" onClick={onClose}>
       <div className="att-modal" onClick={e => e.stopPropagation()}>
         <h3 className="att-modal-title">Link ZKTech Enroll ID → Employee</h3>
@@ -1416,7 +1541,8 @@ const MappingModal = ({ employees, onSave, onClose }) => {
           <button className="att-btn att-btn-primary" disabled={!form.enrollId || !form.employeeId} onClick={() => onSave(form)}><IcoCheck />Save Mapping</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -1430,7 +1556,9 @@ const EditLogModal = ({ log, onSave, onClose }) => {
   });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  return (
+  if (typeof document === 'undefined' || !document.body) return null;
+
+  return createPortal(
     <div className="att-modal-overlay" onClick={onClose}>
       <div className="att-modal" onClick={e => e.stopPropagation()}>
         <h3 className="att-modal-title">Manual Correction — {log.employeeName}</h3>
@@ -1463,7 +1591,8 @@ const EditLogModal = ({ log, onSave, onClose }) => {
           <button className="att-btn att-btn-primary" onClick={() => onSave(form)}><IcoCheck />Save Correction</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
