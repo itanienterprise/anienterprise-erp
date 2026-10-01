@@ -3569,29 +3569,23 @@ function App() {
             </h1>
           )}
 
-          {/* Right side — Live badge and bell icon */}
+          {/* Right side — Notification bell (Green = Connected / Live, Orange = Connecting) */}
           <div className="flex items-center gap-2.5 relative z-10">
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all ${
-                isSocketConnected
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                  : 'bg-amber-50 border-amber-200 text-amber-700'
-              }`}
-              title={isSocketConnected ? `Real-time synchronization connected (${socketId})` : 'Connecting to real-time server...'}
-            >
-              <span className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`}></span>
-              <span className="text-[11px] font-semibold">{isSocketConnected ? 'Live' : 'Connecting...'}</span>
-            </div>
-
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className={`relative p-2 rounded-full transition-all duration-300 ${showNotifications ? 'bg-blue-50 text-blue-600 shadow-inner' : 'text-gray-500 hover:bg-gray-100'}`}
+                className={`relative p-2 rounded-full transition-all duration-300 ${
+                  isSocketConnected
+                    ? 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50'
+                    : 'text-orange-500 hover:text-orange-600 hover:bg-orange-50'
+                } ${showNotifications ? 'bg-gray-100 shadow-inner' : ''}`}
+                title={isSocketConnected ? `Live real-time connected (${socketId || 'Active'})` : 'Connecting to real-time server...'}
+                aria-label="Notifications"
               >
-                <BellIcon className="w-6 h-6" />
+                <BellIcon className="w-6 h-6 transition-transform duration-150 active:scale-95" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center shadow-sm animate-in zoom-in duration-200">
-                    {unreadCount}
+                    {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </button>
