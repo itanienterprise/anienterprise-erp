@@ -757,7 +757,13 @@ function PackingList({
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'date') {
+            setFormData(prev => ({ ...prev, date: value, trDate: value }));
+        } else if (name === 'trDate') {
+            setFormData(prev => ({ ...prev, trDate: value, date: value }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
     const resolvePiPackingType = (p, selectedRev, rawPi) => {
@@ -1015,7 +1021,7 @@ function PackingList({
             })(),
             trNumber: isRevSource && prevTrNumber ? prevTrNumber : prev.trNumber,
             trName: isRevSource && prevTrName ? prevTrName : prev.trName,
-            trDate: isRevSource && prevTrDate ? prevTrDate : prev.trDate,
+            trDate: prev.date || (isRevSource && prevTrDate ? prevTrDate : prev.trDate),
             lcAmendment: (() => {
                 if (!isRevSource) return '';
                 const targetRevForAmnd = isTenPercent
@@ -1263,8 +1269,11 @@ function PackingList({
         setSubmitStatus({ type: 'loading', message: editingId ? 'Updating...' : 'Creating...' });
 
         try {
+            const commonDate = formData.date || formData.trDate || '';
             const submissionData = {
                 ...formData,
+                date: commonDate,
+                trDate: commonDate,
                 entryBy: editingId
                     ? (formData.entryBy || currentUser?.username || currentUser?.id || currentUser?.employeeId || '')
                     : (currentUser?.username || currentUser?.id || currentUser?.employeeId || ''),
@@ -1358,9 +1367,11 @@ function PackingList({
             }
         }
 
+        const commonDate = (record.date ? record.date.split('T')[0] : '') || (record.trDate ? record.trDate.split('T')[0] : '');
+
         setFormData({
             packingListNumber: record.packingListNumber || '',
-            date: record.date ? record.date.split('T')[0] : '',
+            date: commonDate,
             piNumber: record.piNumber || '',
             piDate: record.piDate ? record.piDate.split('T')[0] : '',
             partyName: record.partyName || '',
@@ -1402,7 +1413,7 @@ function PackingList({
             exporterSignature: record.exporterSignature || '',
             status: record.status || 'Active',
             trNumber: record.trNumber || '',
-            trDate: record.trDate ? record.trDate.split('T')[0] : '',
+            trDate: commonDate,
             trName: record.trName || '',
             demurrage: record.demurrage || '03',
             days: record.days || '05',
@@ -2710,7 +2721,9 @@ function PackingList({
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">TR Date</label>
+                                <label className="text-sm font-medium text-gray-700">
+                                    TR Date <span className="text-xs text-gray-400 font-normal">(Same as Invoice Date)</span>
+                                </label>
                                 <CustomDatePicker
                                     name="trDate"
                                     value={formData.trDate}
