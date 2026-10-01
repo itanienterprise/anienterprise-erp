@@ -13,14 +13,33 @@ export const isLcMatch = (targetLc, filterLc) => {
     if (!rawTarget || !rawFilter) return false;
     if (rawTarget === rawFilter) return true;
 
-    // Allow generic "purchase" or "pur" to match any purchase "pur-..."
-    if ((rawTarget === 'purchase' || rawTarget === 'pur') && (rawFilter.startsWith('pur-') || rawFilter.startsWith('purchase'))) return true;
-    if ((rawFilter === 'purchase' || rawFilter === 'pur') && (rawTarget.startsWith('pur-') || rawTarget.startsWith('purchase'))) return true;
+    const isTargetPur = rawTarget.startsWith('pur-') || rawTarget.startsWith('purchase');
+    const isFilterPur = rawFilter.startsWith('pur-') || rawFilter.startsWith('purchase');
 
-    const cleanTarget = rawTarget.replace(/^(lc|pur|purchase)[-_\s]*/i, '').replace(/^0+/, '');
-    const cleanFilter = rawFilter.replace(/^(lc|pur|purchase)[-_\s]*/i, '').replace(/^0+/, '');
+    // Allow generic "purchase" or "pur" search filter to match any purchase
+    if ((rawTarget === 'purchase' || rawTarget === 'pur') && isFilterPur) return true;
+    if ((rawFilter === 'purchase' || rawFilter === 'pur') && isTargetPur) return true;
 
-    if (cleanTarget && cleanFilter && (cleanTarget === cleanFilter || cleanTarget.endsWith(cleanFilter) || cleanFilter.endsWith(cleanTarget))) return true;
+    // A local purchase and an import LC must never match each other
+    if (isTargetPur !== isFilterPur) return false;
+
+    if (isTargetPur && isFilterPur) {
+        const cleanTarget = rawTarget.replace(/^(pur|purchase)[-_\s]*/i, '').replace(/^0+/, '');
+        const cleanFilter = rawFilter.replace(/^(pur|purchase)[-_\s]*/i, '').replace(/^0+/, '');
+        return cleanTarget === cleanFilter;
+    }
+
+    // Both are LCs: compare digits
+    const c1 = rawTarget.replace(/\D/g, '');
+    const c2 = rawFilter.replace(/\D/g, '');
+    if (!c1 || !c2) return rawTarget === rawFilter;
+    if (c1 === c2) return true;
+
+    // For partial LC suffix match, require at least 4 digits to prevent single digits (like 1, 2, 3) from matching arbitrary LCs
+    if (c1 !== '0000' && c2 !== '0000') {
+        if (c1.length >= 4 && c2.length >= 8 && c2.endsWith(c1)) return true;
+        if (c2.length >= 4 && c1.length >= 8 && c1.endsWith(c2)) return true;
+    }
     return false;
 };
 

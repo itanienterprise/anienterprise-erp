@@ -1334,7 +1334,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 customerMap[group.customerId].push(group);
             });
 
-            for (const [customerId, customerGroups] of Object.entries(customerMap)) {
+            await Promise.all(Object.entries(customerMap).map(async ([customerId, customerGroups]) => {
                 const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
                 const customer = custRes.data;
 
@@ -1379,7 +1379,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 });
 
                 await axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, payToCustomerHistory: updatedHistory });
-            }
+            }));
 
             if (addNotification) {
                 await addNotification(
@@ -1467,7 +1467,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 customerMap[group.customerId].push(group);
             });
 
-            for (const [customerId, customerGroups] of Object.entries(customerMap)) {
+            await Promise.all(Object.entries(customerMap).map(async ([customerId, customerGroups]) => {
                 const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
                 const customer = custRes.data;
 
@@ -1521,7 +1521,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                     });
 
                 await axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, payToCustomerHistory: updatedHistory });
-            }
+            }));
 
             if (addNotification) {
                 await addNotification(
@@ -1634,31 +1634,33 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
             setSubmitStatus('success');
 
-            try {
-                const now = new Date();
-                const dateStr = now.toLocaleDateString('en-GB');
-                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const employeeName = currentUser?.name || currentUser?.username || 'An employee';
-                const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
-                    rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
-                const totalAmt = newPayment.items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-                if (addNotification) await addNotification(
-                    'New Pay To Customer Requested',
-                    `${dateStr} | ${timeStr} | ${employeeName} requested a payout of ৳${totalAmt.toLocaleString('en-IN')} to ${partyName} (${nextReceiptNo})`,
-                    ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
-                    [],
-                    true,
-                    'pay-to-customer-section'
-                );
-            } catch (notifErr) { console.error('Notification error:', notifErr); }
-
-            queryClient.invalidateQueries({ queryKey: ['customers'] });
-            queryClient.invalidateQueries({ queryKey: ['sales'] });
-            queryClient.invalidateQueries({ queryKey: ['banks'] });
             setShowAddModal(false);
             setSubmitStatus(null);
             resetNewPayment();
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
             fetchPayments();
+
+            (async () => {
+                try {
+                    const now = new Date();
+                    const dateStr = now.toLocaleDateString('en-GB');
+                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+                    const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
+                        rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
+                    const totalAmt = newPayment.items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+                    if (addNotification) await addNotification(
+                        'New Pay To Customer Requested',
+                        `${dateStr} | ${timeStr} | ${employeeName} requested a payout of ৳${totalAmt.toLocaleString('en-IN')} to ${partyName} (${nextReceiptNo})`,
+                        ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
+                        [],
+                        true,
+                        'pay-to-customer-section'
+                    );
+                } catch (notifErr) { console.error('Notification error:', notifErr); }
+            })();
         } catch (error) {
             console.error('Error saving payout:', error);
             setSubmitStatus('error');
@@ -1760,35 +1762,37 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
             setSubmitStatus('success');
 
-            try {
-                const now = new Date();
-                const dateStr = now.toLocaleDateString('en-GB');
-                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const editorName = currentUser?.name || currentUser?.username || 'An employee';
-                const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
-                    rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
-                const totalAmt = activeItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-                const title = isEditReq ? 'Payout Edit Requested' : 'Payout Updated';
-                const msg = isEditReq
-                    ? `${dateStr} | ${timeStr} | ${editorName} requested an edit on payout (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} to ${partyName}`
-                    : `${dateStr} | ${timeStr} | ${editorName} updated payout (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} to ${partyName}`;
-                if (addNotification) await addNotification(
-                    title, 
-                    msg, 
-                    ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'], 
-                    [], 
-                    true, 
-                    'pay-to-customer-section'
-                );
-            } catch (notifErr) { console.error('Notification error:', notifErr); }
-
-            queryClient.invalidateQueries({ queryKey: ['customers'] });
-            queryClient.invalidateQueries({ queryKey: ['sales'] });
-            queryClient.invalidateQueries({ queryKey: ['banks'] });
             setShowAddModal(false);
             setSubmitStatus(null);
             resetNewPayment();
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
             fetchPayments();
+
+            (async () => {
+                try {
+                    const now = new Date();
+                    const dateStr = now.toLocaleDateString('en-GB');
+                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const editorName = currentUser?.name || currentUser?.username || 'An employee';
+                    const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
+                        rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
+                    const totalAmt = activeItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+                    const title = isEditReq ? 'Payout Edit Requested' : 'Payout Updated';
+                    const msg = isEditReq
+                        ? `${dateStr} | ${timeStr} | ${editorName} requested an edit on payout (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} to ${partyName}`
+                        : `${dateStr} | ${timeStr} | ${editorName} updated payout (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} to ${partyName}`;
+                    if (addNotification) await addNotification(
+                        title, 
+                        msg, 
+                        ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'], 
+                        [], 
+                        true, 
+                        'pay-to-customer-section'
+                    );
+                } catch (notifErr) { console.error('Notification error:', notifErr); }
+            })();
         } catch (error) {
             console.error('Error updating payout:', error);
             setSubmitStatus('error');

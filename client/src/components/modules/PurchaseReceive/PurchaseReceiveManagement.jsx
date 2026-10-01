@@ -1210,38 +1210,13 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
             const targetUsers = [payload.createdBy].filter(Boolean);
             if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
+            let savedPR = null;
             if (editingId) {
                 const res = await axios.put(`${API_BASE_URL}/api/purchase-receives/${editingId}`, payload);
-                const savedPR = res.data || { ...payload, _id: editingId };
-                if (savedPR.status === 'Accepted' || savedPR.status === 'Approved') {
-                    await updateWarehouseStockForPurchaseReceive(savedPR);
-                } else {
-                    await reverseWarehouseStockForPurchaseReceive(savedPR);
-                }
-                if (addNotification) {
-                    await addNotification(
-                        'Purchase Receive Updated',
-                        `${dateStr} | ${timeStr} | ${employeeName} has updated purchase receive entry (${generatedNo})`,
-                        targetRoles,
-                        targetUsers
-                    );
-                }
+                savedPR = res.data || { ...payload, _id: editingId };
             } else {
                 const res = await axios.post(`${API_BASE_URL}/api/purchase-receives`, payload);
-                const savedPR = res.data || payload;
-                if (savedPR.status === 'Accepted' || savedPR.status === 'Approved') {
-                    await updateWarehouseStockForPurchaseReceive(savedPR);
-                }
-                if (addNotification) {
-                    await addNotification(
-                        payload.status === 'Accepted'
-                            ? 'New Purchase Receive Entry Saved'
-                            : 'New Purchase Receive Requested',
-                        `${dateStr} | ${timeStr} | ${employeeName} has ${payload.status === 'Accepted' ? 'added' : 'requested'} purchase receive entry (${generatedNo})`,
-                        targetRoles,
-                        targetUsers
-                    );
-                }
+                savedPR = res.data || payload;
             }
 
             setShowModal(false);
@@ -1253,6 +1228,42 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
             fetchPurchaseReceives();
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+
+            (async () => {
+                try {
+                    if (editingId) {
+                        if (savedPR.status === 'Accepted' || savedPR.status === 'Approved') {
+                            await updateWarehouseStockForPurchaseReceive(savedPR);
+                        } else {
+                            await reverseWarehouseStockForPurchaseReceive(savedPR);
+                        }
+                        if (addNotification) {
+                            await addNotification(
+                                'Purchase Receive Updated',
+                                `${dateStr} | ${timeStr} | ${employeeName} has updated purchase receive entry (${generatedNo})`,
+                                targetRoles,
+                                targetUsers
+                            );
+                        }
+                    } else {
+                        if (savedPR.status === 'Accepted' || savedPR.status === 'Approved') {
+                            await updateWarehouseStockForPurchaseReceive(savedPR);
+                        }
+                        if (addNotification) {
+                            await addNotification(
+                                payload.status === 'Accepted'
+                                    ? 'New Purchase Receive Entry Saved'
+                                    : 'New Purchase Receive Requested',
+                                `${dateStr} | ${timeStr} | ${employeeName} has ${payload.status === 'Accepted' ? 'added' : 'requested'} purchase receive entry (${generatedNo})`,
+                                targetRoles,
+                                targetUsers
+                            );
+                        }
+                    }
+                } catch (bgErr) {
+                    console.error('Error running background effects for purchase receive:', bgErr);
+                }
+            })();
         } catch (error) {
             console.error('Error saving purchase receive:', error);
             if (addNotification) addNotification('Error', 'Failed to save purchase receive entry.', ['admin'], [currentUser?.username]);

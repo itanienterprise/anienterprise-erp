@@ -1076,9 +1076,9 @@ const CnF = ({
 
             if (selectedStockRecords.length > 0) {
                 const res = await axios.get(`${API_BASE_URL}/api/stock`);
-                for (const row of selectedStockRecords) {
+                const stockUpdates = selectedStockRecords.map(async (row) => {
                     const originalRecord = res.data.find(r => r._id === row._id);
-                    if (!originalRecord) continue;
+                    if (!originalRecord) return;
 
                     const updatedData = { ...originalRecord };
                     const recordIndCnF = (originalRecord.indianCnF || '').toLowerCase().trim();
@@ -1111,8 +1111,9 @@ const CnF = ({
                         updatedData.bdCnFUom = bulkEditData.uom;
                         updatedData.bdCnFBulkEdited = true;
                     }
-                    await axios.put(`${API_BASE_URL}/api/stock/${originalRecord._id}`, updatedData);
-                }
+                    return axios.put(`${API_BASE_URL}/api/stock/${originalRecord._id}`, updatedData);
+                }).filter(Boolean);
+                await Promise.all(stockUpdates);
             }
 
             if (selectedSaleRecords.length > 0) {
@@ -1120,13 +1121,13 @@ const CnF = ({
                 const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
                 const saleIds = [...new Set(selectedSaleRecords.map(r => r.originalId))];
 
-                for (const saleId of saleIds) {
+                const saleUpdates = saleIds.map(async (saleId) => {
                     const originalSale = allSales.find(s => s._id === saleId);
-                    if (!originalSale) continue;
+                    if (!originalSale) return;
 
                     const updatedSale = { ...originalSale };
                     const sampleRow = selectedSaleRecords.find(r => r.originalId === saleId);
-                    const isIndian = sampleRow.cnfType === 'Indian';
+                    const isIndian = sampleRow?.cnfType === 'Indian';
 
                     if (isIndian) {
                         updatedSale.indCommissionRate = bulkEditData.commission;
@@ -1158,8 +1159,9 @@ const CnF = ({
                     updatedSale.isCnfCommissionUpdate = true;
                     updatedSale.actionType = 'UPDATE';
                     updatedSale.cnfName = viewData?.name;
-                    await axios.put(`${API_BASE_URL}/api/sales/${saleId}`, updatedSale);
-                }
+                    return axios.put(`${API_BASE_URL}/api/sales/${saleId}`, updatedSale);
+                }).filter(Boolean);
+                await Promise.all(saleUpdates);
             }
 
             setIsBulkEditModalOpen(false);

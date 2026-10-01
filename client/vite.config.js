@@ -83,7 +83,12 @@ export default defineConfig(({ mode }) => ({
       '/socket.io': {
         target: 'http://127.0.0.1:5000',
         ws: true,
-        changeOrigin: true
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', () => {
+            // Silently absorb transient disconnects on proxy
+          });
+        }
       },
       '/api': {
         target: 'http://127.0.0.1:5000',

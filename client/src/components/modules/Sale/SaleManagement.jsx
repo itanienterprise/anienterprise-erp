@@ -83,7 +83,7 @@ const SaleManagement = ({
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const response = await axios.get(`${API_BASE_URL}/api/employees`).catch(() => ({ data: [] }));
             const rawData = Array.isArray(response.data) ? response.data : [];
             const map = {};
             const firstMap = {};
@@ -181,7 +181,9 @@ const SaleManagement = ({
             setEmployeesMap(map);
             setEmployeesFirstNameMap(firstMap);
         } catch (error) {
-            console.error('Error fetching employees map:', error);
+            if (error?.response?.status !== 403) {
+                console.error('Error fetching employees map:', error);
+            }
         }
     };
 
@@ -551,58 +553,52 @@ const SaleManagement = ({
             );
             if (refreshPendingIndicators) refreshPendingIndicators();
 
-            for (const sale of recordsToAccept) {
-                const { _id, createdAt: _createdAt, ...rest } = sale;
-                const finalStatus = (parseFloat(sale.paidAmount || 0) >= parseFloat(sale.totalAmount || 0) && parseFloat(sale.totalAmount || 0) > 0)
-                    ? 'Complete'
-                    : 'Pending';
+            await Promise.all(
+                recordsToAccept.map(async (sale) => {
+                    const { _id, createdAt: _createdAt, ...rest } = sale;
+                    const finalStatus = (parseFloat(sale.paidAmount || 0) >= parseFloat(sale.totalAmount || 0) && parseFloat(sale.totalAmount || 0) > 0)
+                        ? 'Complete'
+                        : 'Pending';
 
-                const isEditAcceptance = sale.isEdited === true || (sale.status || '').toLowerCase() === 'edit_requested';
-                const updatedData = {
-                    ...rest,
-                    status: finalStatus,
-                    isEdited: false,
-                    acceptedBy: sale.acceptedBy || actionBy,
-                    acceptedByUsername: sale.acceptedByUsername || (currentUser?.username || ''),
-                    approvedBy: sale.approvedBy || actionBy,
-                    approvedByName: sale.approvedByName || actionBy,
-                    ...(isEditAcceptance ? {
-                        editApprovedBy: actionBy,
-                        editApprovedByName: actionBy,
-                        editApprovedByUsername: (currentUser?.username || '')
-                    } : {})
-                };
+                    const isEditAcceptance = sale.isEdited === true || (sale.status || '').toLowerCase() === 'edit_requested';
+                    const updatedData = {
+                        ...rest,
+                        status: finalStatus,
+                        isEdited: false,
+                        acceptedBy: sale.acceptedBy || actionBy,
+                        acceptedByUsername: sale.acceptedByUsername || (currentUser?.username || ''),
+                        approvedBy: sale.approvedBy || actionBy,
+                        approvedByName: sale.approvedByName || actionBy,
+                        ...(isEditAcceptance ? {
+                            editApprovedBy: actionBy,
+                            editApprovedByName: actionBy,
+                            editApprovedByUsername: (currentUser?.username || '')
+                        } : {})
+                    };
 
-                await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
+                    await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
 
-                if (finalStatus === 'Complete' || finalStatus === 'Pending') {
-                    try {
-                        await processSaleEffects(updatedData, false);
-                    } catch (err) {
-                        console.error(`Error in processSaleEffects for bulk accept on sale ${_id}:`, err);
+                    if (addNotification) {
+                        try {
+                            const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
+                            const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
+
+                            const targetRoles = ['admin', 'incharge', 'sales manager'];
+                            const targetUsers = [sale.requestedByUsername].filter(Boolean);
+                            if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
+                            await addNotification(
+                                `${sType} Accepted`,
+                                `${dateStr} | ${timeStr} | ${adminName} has accepted the ${sType.toLowerCase()} entry (${sale.invoiceNo || 'No Invoice'}) requested by ${requesterName}`,
+                                targetRoles,
+                                targetUsers
+                            );
+                        } catch (err) {
+                            console.error('Error sending bulk accept notification:', err);
+                        }
                     }
-                }
-
-                if (addNotification) {
-                    try {
-                        const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
-                        const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
-
-                        const targetRoles = ['admin', 'incharge', 'sales manager'];
-                        const targetUsers = [sale.requestedByUsername].filter(Boolean);
-                        if (!targetUsers.includes('admin')) targetUsers.push('admin');
-
-                        await addNotification(
-                            `${sType} Accepted`,
-                            `${dateStr} | ${timeStr} | ${adminName} has accepted the ${sType.toLowerCase()} entry (${sale.invoiceNo || 'No Invoice'}) requested by ${requesterName}`,
-                            targetRoles,
-                            targetUsers
-                        );
-                    } catch (err) {
-                        console.error('Error sending bulk accept notification:', err);
-                    }
-                }
-            }
+                })
+            );
 
             setSelectedItems(new Set());
             if (setIsSelectionMode) setIsSelectionMode(false);
@@ -695,37 +691,39 @@ const SaleManagement = ({
             );
             if (refreshPendingIndicators) refreshPendingIndicators();
 
-            for (const sale of recordsToReject) {
-                const { _id, createdAt: _createdAt, ...rest } = sale;
-                const updatedData = {
-                    ...rest,
-                    status: 'Rejected',
-                    isEdited: false,
-                    rejectedBy: actionBy,
-                };
+            await Promise.all(
+                recordsToReject.map(async (sale) => {
+                    const { _id, createdAt: _createdAt, ...rest } = sale;
+                    const updatedData = {
+                        ...rest,
+                        status: 'Rejected',
+                        isEdited: false,
+                        rejectedBy: actionBy,
+                    };
 
-                await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
+                    await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
 
-                if (addNotification) {
-                    try {
-                        const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
-                        const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
+                    if (addNotification) {
+                        try {
+                            const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
+                            const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
 
-                        const targetRoles = ['admin', 'incharge', 'sales manager'];
-                        const targetUsers = [sale.requestedByUsername].filter(Boolean);
-                        if (!targetUsers.includes('admin')) targetUsers.push('admin');
+                            const targetRoles = ['admin', 'incharge', 'sales manager'];
+                            const targetUsers = [sale.requestedByUsername].filter(Boolean);
+                            if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
-                        await addNotification(
-                            `${sType} Rejected`,
-                            `${dateStr} | ${timeStr} | ${adminName} has rejected the ${sType.toLowerCase()} entry (${sale.invoiceNo || 'No Invoice'}) requested by ${requesterName}`,
-                            targetRoles,
-                            targetUsers
-                        );
-                    } catch (err) {
-                        console.error('Error sending bulk reject notification:', err);
+                            await addNotification(
+                                `${sType} Rejected`,
+                                `${dateStr} | ${timeStr} | ${adminName} has rejected the ${sType.toLowerCase()} entry (${sale.invoiceNo || 'No Invoice'}) requested by ${requesterName}`,
+                                targetRoles,
+                                targetUsers
+                            );
+                        } catch (err) {
+                            console.error('Error sending bulk reject notification:', err);
+                        }
                     }
-                }
-            }
+                })
+            );
 
             setSelectedItems(new Set());
             if (setIsSelectionMode) setIsSelectionMode(false);
@@ -1023,47 +1021,7 @@ const SaleManagement = ({
             }
         }
 
-        // Border Sale: Auto-deduct sold Qty from matching warehouse records
-        if (saleData.saleType === 'Border') {
-            try {
-                const whRes = await axios.get(`${API_BASE_URL}/api/warehouses`);
-                const liveWarehouses = Array.isArray(whRes.data) ? whRes.data : [];
 
-                const deductions = {};
-                (saleData.items || []).forEach(product => {
-                    const soldProductName = (product.productName || '').trim().toLowerCase();
-                    (product.brandEntries || []).forEach(entry => {
-                        const soldQty = parseFloat(entry.quantity) || 0;
-                        if (soldQty === 0) return;
-
-                        const matchingWh = liveWarehouses.find(wh => {
-                            const whProduct = (wh.productName || wh.product || '').trim().toLowerCase();
-                            return whProduct === soldProductName;
-                        });
-
-                        if (matchingWh) {
-                            if (!deductions[matchingWh._id]) {
-                                deductions[matchingWh._id] = { wh: matchingWh, totalDeduct: 0 };
-                            }
-                            deductions[matchingWh._id].totalDeduct += soldQty;
-                        }
-                    });
-                });
-
-                await Promise.all(
-                    Object.values(deductions).map(async ({ wh, totalDeduct }) => {
-                        const currentQty = parseFloat(wh.whQty) || 0;
-                        const updatedWh = {
-                            ...wh,
-                            whQty: Math.max(0, currentQty - totalDeduct).toString()
-                        };
-                        await axios.put(`${API_BASE_URL}/api/warehouses/${wh._id}`, updatedWh);
-                    })
-                );
-            } catch (err) {
-                console.error('Error auto-deducting warehouse stock:', err);
-            }
-        }
     };
 
     const handleStatusUpdate = async (sale, newStatus) => {
@@ -1121,11 +1079,9 @@ const SaleManagement = ({
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
 
                 if ((newStatus || '').toLowerCase() === 'accepted') {
-                    try {
-                        await processSaleEffects(updatedData, false);
-                    } catch (err) {
-                        alert(`Successfully updated status, but failed to process warehouse/customer effects: ${err.message}`);
-                    }
+                    processSaleEffects(updatedData, false).catch(err => {
+                        console.warn('processSaleEffects warning:', err);
+                    });
                 }
 
                 if (addNotification) {
@@ -1377,14 +1333,14 @@ const SaleManagement = ({
         const handleRealtimeUpdate = (data) => {
             const mod = data?.module;
             console.log('[SaleManagement] Real-time event received:', data);
-            if (!mod || mod === 'sales') {
+            if (!mod || mod === 'sales' || mod === 'orders' || mod === 'all' || mod === 'notifications') {
                 fetchSales();
                 if (refreshPendingIndicators) refreshPendingIndicators();
             }
-            if (mod === 'customers') {
+            if (mod === 'customers' || mod === 'all') {
                 fetchCustomers();
             }
-            if (mod === 'stock' || mod === 'warehouses' || mod === 'stock-baseline') {
+            if (mod === 'stock' || mod === 'warehouses' || mod === 'stock-baseline' || mod === 'all') {
                 fetchStockRecords();
                 fetchWarehouses();
             }
@@ -1396,11 +1352,17 @@ const SaleManagement = ({
         const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
         window.addEventListener('erp_data_updated', onCustomEvent);
 
+        // Fallback polling every 8s while viewing SaleManagement to ensure immediate consistency
+        const pollTimer = setInterval(() => {
+            fetchSales();
+        }, 8000);
+
         return () => {
             if (socket) {
                 socket.off('data_updated', handleRealtimeUpdate);
             }
             window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
         };
     }, [saleType]);
 
@@ -1503,7 +1465,7 @@ const SaleManagement = ({
             setSales(filterSalesList(cached));
         }
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/sales`);
+            const res = await axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`);
             const decryptedSales = Array.isArray(res.data) ? res.data : [];
             setAllSalesRecords(decryptedSales);
             setSales(filterSalesList(decryptedSales));
@@ -2362,17 +2324,20 @@ const SaleManagement = ({
                     }
                 }
 
+                setShowForm(false);
+                resetForm();
+                fetchSales();
+
                 if (!isRequested) {
-                    await processSaleEffects(formData, !!editingId);
+                    processSaleEffects(formData, !!editingId).catch(err => {
+                        console.error('Background processSaleEffects error:', err);
+                    });
                 }
 
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sales });
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
                 queryClient.invalidateQueries({ queryKey: ['customers'] });
-                setShowForm(false);
-                resetForm();
-                fetchSales();
             } else {
                 setSubmitStatus('error');
                 setSubmitError(response?.data?.message || 'Failed to save sale. Please try again.');
@@ -5051,9 +5016,6 @@ const SaleManagement = ({
                                                         <span className="text-[10px] text-gray-500">
                                                             {lc.importerName} | {
                                                                 (() => {
-                                                                    if (formData.items?.[0]?.productName) {
-                                                                        return formData.items[0].productName;
-                                                                    }
                                                                     const lcProds = getLcProductNames(lc);
                                                                     const dispNames = lcProds.map(pName => {
                                                                         const matched = products.find(p =>
@@ -5962,9 +5924,6 @@ const SaleManagement = ({
                                                                                 <span className="text-[9px] text-gray-500">
                                                                                     {lc.importerName} | {
                                                                                         (() => {
-                                                                                            if (activeItemIndex !== null && formData.items[activeItemIndex]?.productName) {
-                                                                                                return formData.items[activeItemIndex].productName;
-                                                                                            }
                                                                                             const lcProds = getLcProductNames(lc);
                                                                                             const dispNames = lcProds.map(pName => {
                                                                                                 const matched = products.find(p =>

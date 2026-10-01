@@ -79,7 +79,10 @@ const io = new Server(httpServer, {
     },
     credentials: true,
     methods: ['GET', 'POST']
-  }
+  },
+  pingInterval: 10000,
+  pingTimeout: 5000,
+  transports: ['websocket', 'polling']
 });
 app.set('io', io);
 
@@ -591,6 +594,29 @@ app.post('/v', (req, res, next) => {
     req.method = m;
     req.body = d;
 
+    const methodUpper = String(m || '').toUpperCase();
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(methodUpper)) {
+      const origSend = res.send;
+      let broadcastSent = false;
+      res.send = function (data) {
+        if (!broadcastSent && res.statusCode >= 200 && res.statusCode < 300) {
+          broadcastSent = true;
+          req._broadcastDone = true;
+          const match = String(p || '').match(/\/api\/([a-zA-Z0-9_-]+)/);
+          if (match && match[1]) {
+            const mod = match[1].toLowerCase();
+            if (!['logs', 'auth', 'health'].includes(mod)) {
+              console.log(`[Gateway Mutation] ${methodUpper} ${p} succeeded -> broadcasting module '${mod}'`);
+              broadcastUpdate(mod, methodUpper.toLowerCase(), {
+                path: p.split('?')[0]
+              });
+            }
+          }
+        }
+        return origSend.apply(this, arguments);
+      };
+    }
+
     // Extract and populate req.query from p so router handlers receive query parameters
     try {
       const qIndex = p.indexOf('?');
@@ -654,13 +680,13 @@ apiRouter.use(requireAuth);
 apiRouter.use((req, res, next) => {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     res.on('finish', () => {
-      if (res.statusCode >= 200 && res.statusCode < 300) {
+      if (!req._broadcastDone && res.statusCode >= 200 && res.statusCode < 300) {
         const fullUrl = req.targetApiPath || req.originalUrl || req.url || '';
         const match = fullUrl.match(/\/api\/([a-zA-Z0-9_-]+)/);
         if (match && match[1]) {
           const mod = match[1].toLowerCase();
           if (!['logs', 'auth', 'health'].includes(mod)) {
-            console.log(`[Socket] Mutation completed: ${req.method} ${fullUrl} -> broadcasting module '${mod}'`);
+            console.log(`[Router Socket] Mutation completed: ${req.method} ${fullUrl} -> broadcasting module '${mod}'`);
             broadcastUpdate(mod, req.method.toLowerCase(), {
               path: fullUrl.split('?')[0]
             });
@@ -3940,7 +3966,21 @@ apiRouter.post('/api/employees/:id/change-password', async (req, res) => {
   }
 });
 
-apiRouter.get('/api/employees', verifyPermission('employees', 'view'), async (req, res) => {
+apiRouter.get('/api/employees', async (req, res) => {
+  const user = req.session.user;
+  if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+  const isAdmin = user.username === 'admin' || (user.role || '').toLowerCase() === 'admin';
+  let hasFullEmployeePerm = isAdmin;
+  if (!hasFullEmployeePerm) {
+    try {
+      const resolvedPerms = await resolveUserPermissions(user.role, user.permissions);
+      hasFullEmployeePerm = !!(resolvedPerms && resolvedPerms['employees'] && resolvedPerms['employees']['view']);
+    } catch (e) {
+      hasFullEmployeePerm = false;
+    }
+  }
+
   try {
     const records = await Employee.find().sort({ createdAt: -1 });
 
@@ -3963,6 +4003,23 @@ apiRouter.get('/api/employees', verifyPermission('employees', 'view'), async (re
         d.role = await resolveRoleToDisplay(d.role);
       }
       const profilePhoto = (d && d.employeeId && userPhotoMap[d.employeeId]) || d?.profilePhoto || null;
+
+      if (!hasFullEmployeePerm) {
+        return {
+          _id: r._id,
+          employeeId: d?.employeeId || '',
+          name: d?.name || '',
+          nameEn: d?.nameEn || '',
+          firstName: d?.firstName || '',
+          fullName: d?.fullName || '',
+          username: d?.username || '',
+          role: d?.role || '',
+          designation: d?.designation || '',
+          department: d?.department || '',
+          profilePhoto
+        };
+      }
+
       return { ...d, _id: r._id, createdAt: r.createdAt, profilePhoto };
     }));
     res.json(decrypted);

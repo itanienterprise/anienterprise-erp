@@ -104,6 +104,8 @@ function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [allModuleNotifications, setAllModuleNotifications] = useState([]);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [socketId, setSocketId] = useState('');
 
   // Fetch notifications from backend
   const fetchNotifications = async () => {
@@ -341,8 +343,12 @@ function App() {
     cnf: false
   });
 
-  const fetchPendingEntries = async () => {
-    if (!isAuthenticated) return;
+  const isFetchingPendingRef = useRef(false);
+  const pendingDebounceTimerRef = useRef(null);
+
+  const fetchPendingEntriesImmediate = async () => {
+    if (!isAuthenticated || isFetchingPendingRef.current) return;
+    isFetchingPendingRef.current = true;
     try {
       const [stockRes, salesRes, purchasesRes, purchaseReceivesRes, customersRes, whRes, insPaymentsRes, cnfPaymentsRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/stock`),
@@ -458,16 +464,31 @@ function App() {
       });
     } catch (err) {
       console.error('Error checking pending entries:', err);
+    } finally {
+      isFetchingPendingRef.current = false;
     }
+  };
+
+  const fetchPendingEntries = () => {
+    if (!isAuthenticated) return;
+    if (pendingDebounceTimerRef.current) {
+      clearTimeout(pendingDebounceTimerRef.current);
+    }
+    pendingDebounceTimerRef.current = setTimeout(() => {
+      fetchPendingEntriesImmediate();
+    }, 1200);
   };
 
   useEffect(() => {
     let interval;
     if (isAuthenticated && currentUser) {
-      fetchPendingEntries();
-      interval = setInterval(fetchPendingEntries, 15000);
+      fetchPendingEntriesImmediate();
+      interval = setInterval(fetchPendingEntriesImmediate, 60000);
     }
-    return () => { if (interval) clearInterval(interval); };
+    return () => {
+      if (interval) clearInterval(interval);
+      if (pendingDebounceTimerRef.current) clearTimeout(pendingDebounceTimerRef.current);
+    };
   }, [isAuthenticated, currentUser?.username]);
 
   // Check session on mount + poll every 60s to pick up permission changes
@@ -1722,7 +1743,7 @@ function App() {
 
   const fetchSales = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/sales`);
+      const response = await axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`);
       const data = Array.isArray(response.data) ? response.data : [];
       setSalesRecords(data);
       queryClient.setQueryData(QUERY_KEYS.sales, data);
@@ -1807,16 +1828,38 @@ function App() {
 
     const socket = getSocket();
 
+    if (socket.connected) {
+      setIsSocketConnected(true);
+      setSocketId(socket.id || '');
+    }
+
+    const onConnect = () => {
+      setIsSocketConnected(true);
+      setSocketId(socket.id || '');
+    };
+    const onDisconnect = () => setIsSocketConnected(false);
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+
+    const onCustomStatus = (e) => {
+      if (e?.detail) {
+        setIsSocketConnected(Boolean(e.detail.connected));
+        if (e.detail.id) setSocketId(e.detail.id);
+      }
+    };
+    window.addEventListener('erp_socket_status', onCustomStatus);
+
     const handleDataUpdate = (event) => {
       const { module } = event || {};
       if (!module) return;
 
       const moduleKeyMap = {
         'sales': ['sales', 'stock', 'warehouses'],
+        'orders': ['sales', 'orders'],
         'stock': ['stock', 'warehouses', 'stockBaseline'],
         'stock-baseline': ['stock', 'warehouses', 'stockBaseline'],
         'warehouses': ['warehouses', 'stock'],
-        'orders': ['orders'],
         'purchases': ['purchases'],
         'purchase-receives': ['purchase-receives', 'stock', 'warehouses'],
         'customers': ['customers'],
@@ -1838,38 +1881,84 @@ function App() {
         queryClient.invalidateQueries({ queryKey: [key] });
       });
 
-      // Synchronize App state
-      if (module === 'sales') {
-        fetchSales();
+      // Synchronize App state with individual try/catch guards so one failure never halts others
+      try {
+        if (module === 'sales' || module === 'orders' || module === 'all' || module === 'notifications') {
+          if (typeof fetchSales === 'function') fetchSales();
+        }
+      } catch (err) {
+        console.warn('Error syncing sales in handleDataUpdate:', err);
       }
-      if (['stock', 'stock-baseline', 'warehouses', 'purchase-receives', 'sales'].includes(module)) {
-        fetchStockRecords();
-        fetchWarehouseData();
+
+      try {
+        if (['stock', 'stock-baseline', 'warehouses', 'purchase-receives', 'sales'].includes(module) || module === 'all') {
+          if (typeof fetchStockRecords === 'function') fetchStockRecords();
+          if (typeof fetchWarehouses === 'function') fetchWarehouses();
+        }
+      } catch (err) {
+        console.warn('Error syncing stock/warehouses in handleDataUpdate:', err);
       }
-      if (module === 'products') {
-        fetchProducts();
+
+      try {
+        if (module === 'products' || module === 'all') {
+          if (typeof fetchProducts === 'function') fetchProducts();
+        }
+      } catch (err) {
+        console.warn('Error syncing products in handleDataUpdate:', err);
       }
-      if (module === 'damages') {
-        fetchDamages();
+
+      try {
+        if (module === 'damages' || module === 'all') {
+          if (typeof fetchDamages === 'function') fetchDamages();
+        }
+      } catch (err) {
+        console.warn('Error syncing damages in handleDataUpdate:', err);
       }
-      if (module === 'returns') {
-        fetchReturns();
+
+      try {
+        if (module === 'returns' || module === 'all') {
+          if (typeof fetchReturns === 'function') fetchReturns();
+        }
+      } catch (err) {
+        console.warn('Error syncing returns in handleDataUpdate:', err);
       }
-      if (module === 'notifications') {
-        fetchNotifications();
+
+      try {
+        if (module === 'notifications' || module === 'all') {
+          if (typeof fetchNotifications === 'function') fetchNotifications();
+        }
+      } catch (err) {
+        console.warn('Error syncing notifications in handleDataUpdate:', err);
       }
 
       // Real-time badge update
-      fetchPendingEntries();
+      try {
+        if (typeof fetchPendingEntries === 'function') fetchPendingEntries();
+      } catch (err) {
+        console.warn('Error syncing pending entries in handleDataUpdate:', err);
+      }
 
       // Dispatch event to window so child components can react if needed
-      window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: event }));
+      window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { ...(event || {}), _fromApp: true } }));
     };
 
     socket.on('data_updated', handleDataUpdate);
 
+    // Also handle window-level resync triggers (e.g. socket reconnected, window focused, or page visible)
+    const onWindowDataUpdate = (e) => {
+      if (e?.detail?._fromApp) return; // Prevent re-triggering from App's own broadcast
+      if (e?.detail && (e.detail.action === 'reconnect' || e.detail.action === 'focus' || e.detail.action === 'visible')) {
+        handleDataUpdate(e.detail);
+      }
+    };
+    window.addEventListener('erp_data_updated', onWindowDataUpdate);
+
     return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
       socket.off('data_updated', handleDataUpdate);
+      window.removeEventListener('erp_socket_status', onCustomStatus);
+      window.removeEventListener('erp_data_updated', onWindowDataUpdate);
     };
   }, [isAuthenticated]);
 
@@ -3480,8 +3569,20 @@ function App() {
             </h1>
           )}
 
-          {/* Right side — bell icon */}
-          <div className="flex items-center gap-3 relative z-10">
+          {/* Right side — Live badge and bell icon */}
+          <div className="flex items-center gap-2.5 relative z-10">
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all ${
+                isSocketConnected
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-amber-50 border-amber-200 text-amber-700'
+              }`}
+              title={isSocketConnected ? `Real-time synchronization connected (${socketId})` : 'Connecting to real-time server...'}
+            >
+              <span className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`}></span>
+              <span className="text-[11px] font-semibold">{isSocketConnected ? 'Live' : 'Connecting...'}</span>
+            </div>
+
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}

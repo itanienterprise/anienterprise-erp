@@ -6,27 +6,7 @@ import { generateProductHistoryExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
-
-const isLcMatch = (targetLc, filterLc) => {
-    if (!filterLc) return true;
-    if (!targetLc) return false;
-    const rawTarget = targetLc.toString().trim().toLowerCase();
-    const rawFilter = filterLc.toString().trim().toLowerCase();
-    if (!rawTarget || !rawFilter) return false;
-    if (rawTarget === rawFilter) return true;
-
-    if (rawTarget.endsWith(rawFilter) || rawFilter.endsWith(rawTarget)) return true;
-    if (rawTarget.includes(rawFilter) || rawFilter.includes(rawTarget)) return true;
-
-    const normTarget = rawTarget.replace(/^0+/, '');
-    const normFilter = rawFilter.replace(/^0+/, '');
-    if (normTarget && normFilter) {
-        if (normTarget === normFilter) return true;
-        if (normTarget.endsWith(normFilter) || normFilter.endsWith(normTarget)) return true;
-        if (normTarget.includes(normFilter) || normFilter.includes(normTarget)) return true;
-    }
-    return false;
-};
+import { isLcMatch } from '../../../utils/stockHelpers';
 
 const parseDate = (dateVal) => {
     if (!dateVal) return new Date(0);

@@ -7,6 +7,7 @@ import {
     ShoppingCartIcon, ChevronDownIcon, ChevronUpIcon, RotateCcwIcon, DownloadIcon, CheckIcon, BarChartIcon, ReceiptIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
+import { getSocket } from '../../../utils/socket';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -339,7 +340,43 @@ const OrderManagement = ({
         fetchDamagesRecords();
         fetchEmployees();
         fetchStockBaseline();
-        fetchReturns();
+    }, []);
+
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
+    useEffect(() => {
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = data?.module;
+            if (!mod || mod === 'orders' || mod === 'sales' || mod === 'all' || mod === 'notifications') {
+                fetchOrders();
+                if (refreshPendingIndicators) refreshPendingIndicators();
+            }
+            if (mod === 'customers' || mod === 'all') {
+                fetchCustomers();
+            }
+            if (mod === 'stock' || mod === 'warehouses' || mod === 'stock-baseline' || mod === 'all') {
+                fetchStockRecords();
+                fetchWarehouses();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchOrders();
+        }, 8000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     const fetchCustomers = async () => {
@@ -442,7 +479,7 @@ const OrderManagement = ({
         try {
             const rawData = await queryClient.fetchQuery({
                 queryKey: ['employees'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
             });
             const map = {};
             const fullMap = {};
@@ -1203,20 +1240,22 @@ const OrderManagement = ({
         if (refreshPendingIndicators) refreshPendingIndicators();
 
         try {
-            for (const order of targetOrders) {
-                const payload = {
-                    ...order,
-                    status: 'Accepted',
-                    isEdited: false,
-                    acceptedBy: order.acceptedBy || actionBy,
-                    acceptedByName: order.acceptedByName || actionBy,
-                    acceptedByUsername: order.acceptedByUsername || actionUsername,
-                    approvedBy: order.approvedBy || actionBy,
-                    approvedByName: order.approvedByName || actionBy,
-                    approvedByUsername: order.approvedByUsername || actionUsername,
-                };
-                await axios.put(`${API_BASE_URL}/api/sales/${order._id}`, payload);
-            }
+            await Promise.all(
+                targetOrders.map(async (order) => {
+                    const payload = {
+                        ...order,
+                        status: 'Accepted',
+                        isEdited: false,
+                        acceptedBy: order.acceptedBy || actionBy,
+                        acceptedByName: order.acceptedByName || actionBy,
+                        acceptedByUsername: order.acceptedByUsername || actionUsername,
+                        approvedBy: order.approvedBy || actionBy,
+                        approvedByName: order.approvedByName || actionBy,
+                        approvedByUsername: order.approvedByUsername || actionUsername,
+                    };
+                    return axios.put(`${API_BASE_URL}/api/sales/${order._id}`, payload);
+                })
+            );
             if (setSelectedItems) setSelectedItems(new Set());
             if (setIsSelectionMode) setIsSelectionMode(false);
             queryClient.invalidateQueries({ queryKey: ['sales'] });
@@ -1243,13 +1282,15 @@ const OrderManagement = ({
         if (refreshPendingIndicators) refreshPendingIndicators();
 
         try {
-            for (const order of targetOrders) {
-                if (order.isEdited === true && (order.status || '').toLowerCase() !== 'requested') {
-                    await axios.put(`${API_BASE_URL}/api/sales/${order._id}`, { ...order, isEdited: false });
-                } else {
-                    await axios.delete(`${API_BASE_URL}/api/sales/${order._id}`);
-                }
-            }
+            await Promise.all(
+                targetOrders.map(async (order) => {
+                    if (order.isEdited === true && (order.status || '').toLowerCase() !== 'requested') {
+                        return axios.put(`${API_BASE_URL}/api/sales/${order._id}`, { ...order, isEdited: false });
+                    } else {
+                        return axios.delete(`${API_BASE_URL}/api/sales/${order._id}`);
+                    }
+                })
+            );
             if (setSelectedItems) setSelectedItems(new Set());
             if (setIsSelectionMode) setIsSelectionMode(false);
             queryClient.invalidateQueries({ queryKey: ['sales'] });

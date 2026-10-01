@@ -82,7 +82,11 @@ const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }
         acc[key].packet += (parseFloat(item.packet) || 0);
         return acc;
     }, {});
-    const uniqueEntries = Object.values(uniqueEntriesMap);
+    const uniqueEntries = Object.values(uniqueEntriesMap).sort((a, b) => {
+        const pComp = (a.productName || '').localeCompare(b.productName || '');
+        if (pComp !== 0) return pComp;
+        return (a.truckNo || '').localeCompare(b.truckNo || '');
+    });
 
     const uniqueInvoicesMap = {};
     uniqueEntries.forEach(item => {
@@ -1940,99 +1944,10 @@ function LCReceive({
                 await Promise.all(createPromises);
             }
 
-            if (addNotification && !editingId) {
-                const now = new Date();
-                const day = String(now.getDate()).padStart(2, '0');
-                const month = String(now.getMonth() + 1).padStart(2, '0');
-                const year = now.getFullYear();
-                const dateStr = `${day}/${month}/${year}`;
-                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const employeeName = currentUser?.name || currentUser?.username || 'An employee';
-
-                await addNotification(
-                    'New LC Received',
-                    `${dateStr} | ${timeStr} | ${employeeName} has requested new lc receive entry (${stockFormData.lcNo})`,
-                    ['admin', 'incharge', 'sales manager'],
-                    [],
-                    false,
-                    'lc-entry-section'
-                );
-            } else if (addNotification && editingId && (stockFormData.status || '').toLowerCase().includes('requested')) {
-                const now = new Date();
-                const day = String(now.getDate()).padStart(2, '0');
-                const month = String(now.getMonth() + 1).padStart(2, '0');
-                const year = now.getFullYear();
-                const dateStr = `${day}/${month}/${year}`;
-                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const employeeName = currentUser?.name || currentUser?.username || 'An employee';
-
-                // Identify what changed
-                const originalRecord = lcReceiveRecords.find(r => r._id === editingId || (r.allIds && r.allIds.includes(editingId)));
-                const changes = [];
-                if (originalRecord) {
-                    if (originalRecord.date !== stockFormData.date) changes.push('Date');
-                    if (originalRecord.lcNo !== stockFormData.lcNo) changes.push('LC No');
-                    if (originalRecord.port !== stockFormData.port) changes.push('Port');
-                    if (originalRecord.importer !== stockFormData.importer) changes.push('Importer');
-                    if (originalRecord.exporter !== stockFormData.exporter) changes.push('Exporter');
-                    if (originalRecord.warehouse !== stockFormData.warehouse) changes.push('Warehouse');
-                    if (originalRecord.status !== stockFormData.status) changes.push('Status');
-
-                    // Check for product/brand related changes (Price, Packet, Qty)
-                    const originalEntries = originalRecord.entries || [originalRecord];
-                    const currentEntries = [];
-                    stockFormData.productEntries.forEach(p => {
-                        p.brandEntries.forEach(b => {
-                            currentEntries.push({ ...p, ...b });
-                        });
-                    });
-
-                    let priceChanged = false;
-                    let packetChanged = false;
-                    let quantityChanged = false;
-                    let productStructureChanged = false;
-
-                    if (originalEntries.length !== currentEntries.length) {
-                        productStructureChanged = true;
-                    } else {
-                        for (let i = 0; i < currentEntries.length; i++) {
-                            const cur = currentEntries[i];
-                            const orig = originalEntries[i];
-                            if (parseFloat(cur.purchasedPrice) !== parseFloat(orig.purchasedPrice)) priceChanged = true;
-                            if (parseFloat(cur.packet) !== parseFloat(orig.packet)) packetChanged = true;
-                            if (parseFloat(cur.quantity) !== parseFloat(orig.quantity)) quantityChanged = true;
-                            if (cur.productName !== orig.productName || cur.brand !== orig.brand) productStructureChanged = true;
-                        }
-                    }
-
-                    if (priceChanged) changes.push('Price');
-                    if (packetChanged) changes.push('Packet');
-                    if (quantityChanged) changes.push('Quantity');
-                    if (productStructureChanged) changes.push('Products/Brands');
-                }
-
-                const changeText = changes.length > 0 ? ` (Changes: ${changes.join(', ')})` : '';
-
-                // Recipients: Admins, Managers, and the Original Requester
-                const targetRoles = ['admin', 'incharge', 'sales manager'];
-                const targetUsers = [];
-                if (stockFormData.requestedByUsername) targetUsers.push(stockFormData.requestedByUsername);
-                // Explicitly include 'admin' username to be sure
-                if (!targetUsers.includes('admin')) targetUsers.push('admin');
-
-                // Send to requester + admins/managers
-                await addNotification(
-                    'LC Receive Entry Updated',
-                    `${dateStr} | ${timeStr} | ${employeeName} has edited the requested LC receive entry (${stockFormData.lcNo})${changeText}`,
-                    targetRoles,
-                    targetUsers,
-                    false,
-                    'lc-entry-section'
-                );
-            }
-
             const savedLcNo = stockFormData.lcNo;
             const savedId = editingId;
+            const isEditing = !!editingId;
+            const currentStockFormData = { ...stockFormData };
 
             resetStockForm();
             setShowStockForm(false);
@@ -2044,6 +1959,101 @@ function LCReceive({
                 setLocalHighlightId(savedLcNo || savedId);
                 setTimeout(() => setLocalHighlightId(null), 6000);
             }
+
+            (async () => {
+                try {
+                    if (addNotification && !isEditing) {
+                        const now = new Date();
+                        const day = String(now.getDate()).padStart(2, '0');
+                        const month = String(now.getMonth() + 1).padStart(2, '0');
+                        const year = now.getFullYear();
+                        const dateStr = `${day}/${month}/${year}`;
+                        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+
+                        await addNotification(
+                            'New LC Received',
+                            `${dateStr} | ${timeStr} | ${employeeName} has requested new lc receive entry (${currentStockFormData.lcNo})`,
+                            ['admin', 'incharge', 'sales manager'],
+                            [],
+                            false,
+                            'lc-entry-section'
+                        );
+                    } else if (addNotification && isEditing && (currentStockFormData.status || '').toLowerCase().includes('requested')) {
+                        const now = new Date();
+                        const day = String(now.getDate()).padStart(2, '0');
+                        const month = String(now.getMonth() + 1).padStart(2, '0');
+                        const year = now.getFullYear();
+                        const dateStr = `${day}/${month}/${year}`;
+                        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+
+                        // Identify what changed
+                        const originalRecord = lcReceiveRecords.find(r => r._id === savedId || (r.allIds && r.allIds.includes(savedId)));
+                        const changes = [];
+                        if (originalRecord) {
+                            if (originalRecord.date !== currentStockFormData.date) changes.push('Date');
+                            if (originalRecord.lcNo !== currentStockFormData.lcNo) changes.push('LC No');
+                            if (originalRecord.port !== currentStockFormData.port) changes.push('Port');
+                            if (originalRecord.importer !== currentStockFormData.importer) changes.push('Importer');
+                            if (originalRecord.exporter !== currentStockFormData.exporter) changes.push('Exporter');
+                            if (originalRecord.warehouse !== currentStockFormData.warehouse) changes.push('Warehouse');
+                            if (originalRecord.status !== currentStockFormData.status) changes.push('Status');
+
+                            // Check for product/brand related changes (Price, Packet, Qty)
+                            const originalEntries = originalRecord.entries || [originalRecord];
+                            const currentEntries = [];
+                            currentStockFormData.productEntries.forEach(p => {
+                                p.brandEntries.forEach(b => {
+                                    currentEntries.push({ ...p, ...b });
+                                });
+                            });
+
+                            let priceChanged = false;
+                            let packetChanged = false;
+                            let quantityChanged = false;
+                            let productStructureChanged = false;
+
+                            if (originalEntries.length !== currentEntries.length) {
+                                productStructureChanged = true;
+                            } else {
+                                for (let i = 0; i < currentEntries.length; i++) {
+                                    const cur = currentEntries[i];
+                                    const orig = originalEntries[i];
+                                    if (parseFloat(cur.purchasedPrice) !== parseFloat(orig.purchasedPrice)) priceChanged = true;
+                                    if (parseFloat(cur.packet) !== parseFloat(orig.packet)) packetChanged = true;
+                                    if (parseFloat(cur.quantity) !== parseFloat(orig.quantity)) quantityChanged = true;
+                                    if (cur.productName !== orig.productName || cur.brand !== orig.brand) productStructureChanged = true;
+                                }
+                            }
+
+                            if (priceChanged) changes.push('Price');
+                            if (packetChanged) changes.push('Packet');
+                            if (quantityChanged) changes.push('Quantity');
+                            if (productStructureChanged) changes.push('Products/Brands');
+                        }
+
+                        const changeText = changes.length > 0 ? ` (Changes: ${changes.join(', ')})` : '';
+
+                        // Recipients: Admins, Managers, and the Original Requester
+                        const targetRoles = ['admin', 'incharge', 'sales manager'];
+                        const targetUsers = [];
+                        if (currentStockFormData.requestedByUsername) targetUsers.push(currentStockFormData.requestedByUsername);
+                        if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
+                        await addNotification(
+                            'LC Receive Entry Updated',
+                            `${dateStr} | ${timeStr} | ${employeeName} has edited the requested LC receive entry (${currentStockFormData.lcNo})${changeText}`,
+                            targetRoles,
+                            targetUsers,
+                            false,
+                            'lc-entry-section'
+                        );
+                    }
+                } catch (notifErr) {
+                    console.error('Error sending LC receive notification:', notifErr);
+                }
+            })();
 
         } catch (error) {
             console.error("Error submitting stock:", error);
@@ -2343,6 +2353,7 @@ function LCReceive({
             if (refreshPendingIndicators) refreshPendingIndicators();
 
             const promises = [];
+            const notifPromises = [];
             for (const record of recordsToAccept) {
                 const ids = record.allIds || record.ids || [];
                 for (const id of ids) {
@@ -2375,19 +2386,22 @@ function LCReceive({
                         const targetUsers = [requesterUsername];
                         if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
-                        await addNotification(
-                            `LC Receive Accepted`,
-                            `${dateStr} | ${timeStr} | ${adminName} has accepted the LC receive entry (${firstEntry.lcNo || ''}) requested by ${requesterName}`,
-                            targetRoles,
-                            targetUsers,
-                            false,
-                            'lc-entry-section'
+                        notifPromises.push(
+                            addNotification(
+                                `LC Receive Accepted`,
+                                `${dateStr} | ${timeStr} | ${adminName} has accepted the LC receive entry (${firstEntry.lcNo || ''}) requested by ${requesterName}`,
+                                targetRoles,
+                                targetUsers,
+                                false,
+                                'lc-entry-section'
+                            )
                         );
                     }
                 }
             }
 
             await Promise.all(promises);
+            Promise.all(notifPromises).catch(e => console.error('Bulk accept notification error:', e));
 
             setSelectedItems(new Set());
             if (setIsSelectionMode) setIsSelectionMode(false);
@@ -2498,6 +2512,7 @@ function LCReceive({
             if (refreshPendingIndicators) refreshPendingIndicators();
 
             const promises = [];
+            const notifPromises = [];
             for (const record of recordsToReject) {
                 const ids = record.allIds || record.ids || [];
                 for (const id of ids) {
@@ -2528,19 +2543,22 @@ function LCReceive({
                         const targetUsers = [requesterUsername];
                         if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
-                        await addNotification(
-                            `LC Receive Rejected`,
-                            `${dateStr} | ${timeStr} | ${adminName} has rejected the LC receive entry (${firstEntry.lcNo || ''}) requested by ${requesterName}`,
-                            targetRoles,
-                            targetUsers,
-                            false,
-                            'lc-entry-section'
+                        notifPromises.push(
+                            addNotification(
+                                `LC Receive Rejected`,
+                                `${dateStr} | ${timeStr} | ${adminName} has rejected the LC receive entry (${firstEntry.lcNo || ''}) requested by ${requesterName}`,
+                                targetRoles,
+                                targetUsers,
+                                false,
+                                'lc-entry-section'
+                            )
                         );
                     }
                 }
             }
 
             await Promise.all(promises);
+            Promise.all(notifPromises).catch(e => console.error('Bulk reject notification error:', e));
 
             setSelectedItems(new Set());
             if (setIsSelectionMode) setIsSelectionMode(false);

@@ -1351,52 +1351,54 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 customerMap[group.customerId].push(group);
             });
 
-            for (const [customerId, customerGroups] of Object.entries(customerMap)) {
-                const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
-                const customer = custRes.data;
+            await Promise.all(
+                Object.entries(customerMap).map(async ([customerId, customerGroups]) => {
+                    const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
+                    const customer = custRes.data;
 
-                const targetItemIds = new Set();
-                const targetReceiptNos = new Set();
-                customerGroups.forEach(g => {
-                    if (g.receiptNo) targetReceiptNos.add(g.receiptNo);
-                    (g.items || []).forEach(item => {
-                        if (item.id) targetItemIds.add(item.id);
-                        if (item.receiptNo) targetReceiptNos.add(item.receiptNo);
+                    const targetItemIds = new Set();
+                    const targetReceiptNos = new Set();
+                    customerGroups.forEach(g => {
+                        if (g.receiptNo) targetReceiptNos.add(g.receiptNo);
+                        (g.items || []).forEach(item => {
+                            if (item.id) targetItemIds.add(item.id);
+                            if (item.receiptNo) targetReceiptNos.add(item.receiptNo);
+                        });
                     });
-                });
 
-                const updatedHistory = (customer.paymentHistory || []).map(p => {
-                    const matchesId = p.id && targetItemIds.has(p.id);
-                    const matchesReceipt = p.receiptNo && targetReceiptNos.has(p.receiptNo);
-                    if (matchesId || matchesReceipt) {
-                        const { originalData, ...rest } = p;
-                        const entryRole = (p.entryByRole || '').toLowerCase();
-                        const smApproved = p.smApproved === true;
-                        const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                        const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+                    const updatedHistory = (customer.paymentHistory || []).map(p => {
+                        const matchesId = p.id && targetItemIds.has(p.id);
+                        const matchesReceipt = p.receiptNo && targetReceiptNos.has(p.receiptNo);
+                        if (matchesId || matchesReceipt) {
+                            const { originalData, ...rest } = p;
+                            const entryRole = (p.entryByRole || '').toLowerCase();
+                            const smApproved = p.smApproved === true;
+                            const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+                            const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
 
-                        if (isSMApprovalStep) {
-                            return {
-                                ...rest,
-                                smApproved: true,
-                                smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                                smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
-                            };
-                        } else {
-                            return {
-                                ...rest,
-                                status: 'Accepted',
-                                isEdited: false,
-                                approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                                approvedByName: currentUser?.name || currentUser?.username || 'Admin'
-                            };
+                            if (isSMApprovalStep) {
+                                return {
+                                    ...rest,
+                                    smApproved: true,
+                                    smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                                    smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                                };
+                            } else {
+                                return {
+                                    ...rest,
+                                    status: 'Accepted',
+                                    isEdited: false,
+                                    approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                                    approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                                };
+                            }
                         }
-                    }
-                    return p;
-                });
+                        return p;
+                    });
 
-                await axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, paymentHistory: updatedHistory });
-            }
+                    return axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, paymentHistory: updatedHistory });
+                })
+            );
 
             if (addNotification) {
                 await addNotification(
@@ -1484,31 +1486,32 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 customerMap[group.customerId].push(group);
             });
 
-            for (const [customerId, customerGroups] of Object.entries(customerMap)) {
-                const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
-                const customer = custRes.data;
+            await Promise.all(
+                Object.entries(customerMap).map(async ([customerId, customerGroups]) => {
+                    const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
+                    const customer = custRes.data;
 
-                const editRequestIds = new Set();
-                const editRequestReceipts = new Set();
-                const newRequestIds = new Set();
-                const newRequestReceipts = new Set();
+                    const editRequestIds = new Set();
+                    const editRequestReceipts = new Set();
+                    const newRequestIds = new Set();
+                    const newRequestReceipts = new Set();
 
-                customerGroups.forEach(g => {
-                    const isEditReq = g.isEdited === true && (g.status || '').toLowerCase() !== 'requested';
-                    (g.items || []).forEach(item => {
-                        if (isEditReq) {
-                            if (item.id) editRequestIds.add(item.id);
-                            if (item.receiptNo) editRequestReceipts.add(item.receiptNo);
-                        } else {
-                            if (item.id) newRequestIds.add(item.id);
-                            if (item.receiptNo) newRequestReceipts.add(item.receiptNo);
+                    customerGroups.forEach(g => {
+                        const isEditReq = g.isEdited === true && (g.status || '').toLowerCase() !== 'requested';
+                        (g.items || []).forEach(item => {
+                            if (isEditReq) {
+                                if (item.id) editRequestIds.add(item.id);
+                                if (item.receiptNo) editRequestReceipts.add(item.receiptNo);
+                            } else {
+                                if (item.id) newRequestIds.add(item.id);
+                                if (item.receiptNo) newRequestReceipts.add(item.receiptNo);
+                            }
+                        });
+                        if (g.receiptNo) {
+                            if (isEditReq) editRequestReceipts.add(g.receiptNo);
+                            else newRequestReceipts.add(g.receiptNo);
                         }
                     });
-                    if (g.receiptNo) {
-                        if (isEditReq) editRequestReceipts.add(g.receiptNo);
-                        else newRequestReceipts.add(g.receiptNo);
-                    }
-                });
 
                 const updatedHistory = (customer.paymentHistory || [])
                     .filter(p => !((p.id && newRequestIds.has(p.id)) || (p.receiptNo && newRequestReceipts.has(p.receiptNo))))
@@ -1537,8 +1540,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         return p;
                     });
 
-                await axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, paymentHistory: updatedHistory });
-            }
+                    return axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, paymentHistory: updatedHistory });
+                })
+            );
 
             if (addNotification) {
                 await addNotification(
@@ -1654,52 +1658,52 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
             await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
             setSubmitStatus('success');
-
-            // Notification
-            try {
-                const now = new Date();
-                const dateStr = now.toLocaleDateString('en-GB');
-                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const employeeName = currentUser?.name || currentUser?.username || 'An employee';
-                const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
-                    rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
-                const totalAmt = newPayment.items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-
-                // Log user activity for collection creation
-                try {
-                    trackUserAction(
-                        `Created new Payment Collection: ${nextReceiptNo} ("${partyName}") • Total: ৳${totalAmt.toLocaleString('en-IN')}`,
-                        'Payment Collection',
-                        {
-                            action: 'CREATE',
-                            actionCategory: 'MUTATION',
-                            customerName: partyName,
-                            receiptNo: nextReceiptNo,
-                            totalAmount: String(totalAmt),
-                            amount: String(totalAmt),
-                            date: newPayment.date,
-                            view: 'payment-collection-section'
-                        }
-                    );
-                } catch (actErr) {}
-
-                if (addNotification) await addNotification(
-                    'New Payment Collection Requested',
-                    `${dateStr} | ${timeStr} | ${employeeName} requested a new payment of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName} (${nextReceiptNo})`,
-                    ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
-                    [],
-                    true,
-                    'payment-collection-section'
-                );
-            } catch (notifErr) { console.error('Notification error:', notifErr); }
-
-            queryClient.invalidateQueries({ queryKey: ['customers'] });
-            queryClient.invalidateQueries({ queryKey: ['sales'] });
-            queryClient.invalidateQueries({ queryKey: ['banks'] });
             setShowAddModal(false);
             setSubmitStatus(null);
             resetNewPayment();
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
             fetchPayments();
+
+            (async () => {
+                try {
+                    const now = new Date();
+                    const dateStr = now.toLocaleDateString('en-GB');
+                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+                    const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
+                        rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
+                    const totalAmt = newPayment.items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+
+                    // Log user activity for collection creation
+                    try {
+                        trackUserAction(
+                            `Created new Payment Collection: ${nextReceiptNo} ("${partyName}") • Total: ৳${totalAmt.toLocaleString('en-IN')}`,
+                            'Payment Collection',
+                            {
+                                action: 'CREATE',
+                                actionCategory: 'MUTATION',
+                                customerName: partyName,
+                                receiptNo: nextReceiptNo,
+                                totalAmount: String(totalAmt),
+                                amount: String(totalAmt),
+                                date: newPayment.date,
+                                view: 'payment-collection-section'
+                            }
+                        );
+                    } catch (actErr) {}
+
+                    if (addNotification) await addNotification(
+                        'New Payment Collection Requested',
+                        `${dateStr} | ${timeStr} | ${employeeName} requested a new payment of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName} (${nextReceiptNo})`,
+                        ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
+                        [],
+                        true,
+                        'payment-collection-section'
+                    );
+                } catch (notifErr) { console.error('Notification error:', notifErr); }
+            })();
         } catch (error) {
             console.error('Error saving collection:', error);
             setSubmitStatus('error');
@@ -1824,55 +1828,57 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             setSubmitStatus('success');
 
             // Notification
-            try {
-                const now = new Date();
-                const dateStr = now.toLocaleDateString('en-GB');
-                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const editorName = currentUser?.name || currentUser?.username || 'An employee';
-                const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
-                    rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
-                const totalAmt = activeItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-                const isEditReq = (!isAdmin && !canApproveEditRequest);
-                const title = isEditReq ? 'Payment Collection Edit Requested' : 'Payment Collection Updated';
-
-                // Log user activity for collection update
-                try {
-                    trackUserAction(
-                        `Updated Payment Collection: ${editingPayment?.receiptNo} ("${partyName}") • Total: ৳${totalAmt.toLocaleString('en-IN')}`,
-                        'Payment Collection',
-                        {
-                            action: 'UPDATE',
-                            actionCategory: 'MUTATION',
-                            customerName: partyName,
-                            receiptNo: editingPayment?.receiptNo,
-                            totalAmount: String(totalAmt),
-                            amount: String(totalAmt),
-                            date: newPayment.date,
-                            view: 'payment-collection-section'
-                        }
-                    );
-                } catch (actErr) {}
-
-                const msg = isEditReq
-                    ? `${dateStr} | ${timeStr} | ${editorName} requested an edit on payment (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName}`
-                    : `${dateStr} | ${timeStr} | ${editorName} updated payment (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName}`;
-                if (addNotification) await addNotification(
-                    title, 
-                    msg, 
-                    ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'], 
-                    [], 
-                    true, 
-                    'payment-collection-section'
-                );
-            } catch (notifErr) { console.error('Notification error:', notifErr); }
-
-            queryClient.invalidateQueries({ queryKey: ['customers'] });
-            queryClient.invalidateQueries({ queryKey: ['sales'] });
-            queryClient.invalidateQueries({ queryKey: ['banks'] });
             setShowAddModal(false);
             setSubmitStatus(null);
             resetNewPayment();
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
             fetchPayments();
+
+            (async () => {
+                try {
+                    const now = new Date();
+                    const dateStr = now.toLocaleDateString('en-GB');
+                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const editorName = currentUser?.name || currentUser?.username || 'An employee';
+                    const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
+                        rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
+                    const totalAmt = activeItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+                    const isEditReq = (!isAdmin && !canApproveEditRequest);
+                    const title = isEditReq ? 'Payment Collection Edit Requested' : 'Payment Collection Updated';
+
+                    // Log user activity for collection update
+                    try {
+                        trackUserAction(
+                            `Updated Payment Collection: ${editingPayment?.receiptNo} ("${partyName}") • Total: ৳${totalAmt.toLocaleString('en-IN')}`,
+                            'Payment Collection',
+                            {
+                                action: 'UPDATE',
+                                actionCategory: 'MUTATION',
+                                customerName: partyName,
+                                receiptNo: editingPayment?.receiptNo,
+                                totalAmount: String(totalAmt),
+                                amount: String(totalAmt),
+                                date: newPayment.date,
+                                view: 'payment-collection-section'
+                            }
+                        );
+                    } catch (actErr) {}
+
+                    const msg = isEditReq
+                        ? `${dateStr} | ${timeStr} | ${editorName} requested an edit on payment (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName}`
+                        : `${dateStr} | ${timeStr} | ${editorName} updated payment (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName}`;
+                    if (addNotification) await addNotification(
+                        title, 
+                        msg, 
+                        ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'], 
+                        [], 
+                        true, 
+                        'payment-collection-section'
+                    );
+                } catch (notifErr) { console.error('Notification error:', notifErr); }
+            })();
         } catch (error) {
             console.error('Error updating collection:', error);
             setSubmitStatus('error');

@@ -877,26 +877,8 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
 
             if (editingId) {
                 await axios.put(`${API_BASE_URL}/api/purchases/${editingId}`, payload);
-                if (addNotification) {
-                    await addNotification(
-                        'Purchase Request Updated',
-                        `${dateStr} | ${timeStr} | ${employeeName} has updated purchase entry (${generatedNo})`,
-                        targetRoles,
-                        targetUsers
-                    );
-                }
             } else {
                 await axios.post(`${API_BASE_URL}/api/purchases`, payload);
-                if (addNotification) {
-                    await addNotification(
-                        payload.status === 'Accepted'
-                            ? 'New Purchase Entry Saved'
-                            : 'New Purchase Requested',
-                        `${dateStr} | ${timeStr} | ${employeeName} has ${payload.status === 'Accepted' ? 'added' : 'requested'} purchase entry (${generatedNo})`,
-                        targetRoles,
-                        targetUsers
-                    );
-                }
             }
 
             setShowModal(false);
@@ -906,6 +888,32 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
             fetchPurchases();
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+
+            (async () => {
+                try {
+                    if (addNotification) {
+                        if (editingId) {
+                            await addNotification(
+                                'Purchase Request Updated',
+                                `${dateStr} | ${timeStr} | ${employeeName} has updated purchase entry (${generatedNo})`,
+                                targetRoles,
+                                targetUsers
+                            );
+                        } else {
+                            await addNotification(
+                                payload.status === 'Accepted'
+                                    ? 'New Purchase Entry Saved'
+                                    : 'New Purchase Requested',
+                                `${dateStr} | ${timeStr} | ${employeeName} has ${payload.status === 'Accepted' ? 'added' : 'requested'} purchase entry (${generatedNo})`,
+                                targetRoles,
+                                targetUsers
+                            );
+                        }
+                    }
+                } catch (notifErr) {
+                    console.error('Error sending purchase notification:', notifErr);
+                }
+            })();
         } catch (error) {
             console.error('Error saving purchase:', error);
             if (addNotification) addNotification('Error', 'Failed to save purchase entry.', ['admin'], [currentUser?.username]);
