@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { API_BASE_URL } from '../../../utils/helpers';
@@ -229,7 +229,26 @@ const Attendance = ({ currentUser }) => {
   const [editLogModal, setEditLogModal] = useState(null);
 
   const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+  const canViewAll = isAdmin ||
+    (currentUser?.role || '').toLowerCase() === 'incharge' ||
+    hasPermission(currentUser, 'attendance', 'viewAll') ||
+    hasPermission(currentUser, 'attendance', 'edit') ||
+    hasPermission(currentUser, 'attendance', 'delete') ||
+    hasPermission(currentUser, 'attendance', 'special') ||
+    hasPermission(currentUser, 'employees', 'view') ||
+    hasPermission(currentUser, 'employees', 'edit');
+
   const canEdit = isAdmin || hasPermission(currentUser, 'attendance', 'edit') || hasPermission(currentUser, 'employees', 'edit');
+
+  const myEmployee = useMemo(() => {
+    const curEmpId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
+    const curName = (currentUser?.name || '').toLowerCase().trim();
+    return (employees || []).find(emp => {
+      const empId = (emp.employeeId || emp.empId || '').toLowerCase().trim();
+      const empName = (emp.name || emp.nameEn || '').toLowerCase().trim();
+      return (curEmpId && (empId === curEmpId || emp._id === curEmpId)) || (curName && empName === curName);
+    });
+  }, [employees, currentUser]);
 
   // ── API calls ──────────────────────────────────────────────────────────────
   const load = useCallback(async (key, fn) => {
@@ -251,7 +270,11 @@ const Attendance = ({ currentUser }) => {
   const fetchLogs = () => load('logs', async () => {
     const params = new URLSearchParams();
     if (logDate) params.set('date', logDate);
-    if (logEmpId) params.set('employeeId', logEmpId);
+    if (!canViewAll) {
+      if (myEmployee?._id) params.set('employeeId', myEmployee._id);
+    } else {
+      if (logEmpId) params.set('employeeId', logEmpId);
+    }
     if (logStatus) params.set('status', logStatus);
     const r = await axios.get(`${API_BASE_URL}/api/attendance/logs?${params}`);
     setLogs(r.data || []);
@@ -265,12 +288,21 @@ const Attendance = ({ currentUser }) => {
   const fetchLeaves = () => load('leaves', async () => {
     const params = new URLSearchParams();
     if (leaveStatus) params.set('status', leaveStatus);
+    if (!canViewAll && myEmployee?._id) {
+      params.set('employeeId', myEmployee._id);
+    }
     const r = await axios.get(`${API_BASE_URL}/api/attendance/leaves?${params}`);
     setLeaves(r.data || []);
   });
 
   const fetchPunches = () => load('punches', async () => {
-    const r = await axios.get(`${API_BASE_URL}/api/attendance/punches?date=${punchDate}&limit=100`);
+    const params = new URLSearchParams();
+    params.set('date', punchDate);
+    params.set('limit', '100');
+    if (!canViewAll && myEmployee?._id) {
+      params.set('employeeId', myEmployee._id);
+    }
+    const r = await axios.get(`${API_BASE_URL}/api/attendance/punches?${params}`);
     setPunches(r.data || []);
   });
 
@@ -293,11 +325,17 @@ const Attendance = ({ currentUser }) => {
     return () => clearInterval(iv);
   }, []);
 
-  useEffect(() => { if (activeTab === 'logs')    { fetchLogs();    } }, [activeTab, logDate, logStatus, logEmpId]);
-  useEffect(() => { if (activeTab === 'shifts')  { fetchShifts();  } }, [activeTab]);
-  useEffect(() => { if (activeTab === 'leaves')  { fetchLeaves();  } }, [activeTab, leaveStatus]);
-  useEffect(() => { if (activeTab === 'punches') { fetchPunches(); } }, [activeTab, punchDate]);
-  useEffect(() => { if (activeTab === 'device')  { fetchMappings(); fetchEmployees(); } }, [activeTab]);
+  useEffect(() => { if (activeTab === 'logs')    { fetchLogs();    } }, [activeTab, logDate, logStatus, logEmpId, canViewAll, myEmployee]);
+  useEffect(() => { if (activeTab === 'shifts' && canViewAll)  { fetchShifts();  } }, [activeTab, canViewAll]);
+  useEffect(() => { if (activeTab === 'leaves')  { fetchLeaves();  } }, [activeTab, leaveStatus, canViewAll, myEmployee]);
+  useEffect(() => { if (activeTab === 'punches' && canViewAll) { fetchPunches(); } }, [activeTab, punchDate, canViewAll, myEmployee]);
+  useEffect(() => { if (activeTab === 'device' && canViewAll)  { fetchMappings(); fetchEmployees(); } }, [activeTab, canViewAll]);
+
+  useEffect(() => {
+    if (!canViewAll && (activeTab === 'shifts' || activeTab === 'punches' || activeTab === 'device')) {
+      setActiveTab('dashboard');
+    }
+  }, [canViewAll, activeTab]);
 
   // ── Process attendance ─────────────────────────────────────────────────────
   const handleProcess = async (date) => {
@@ -377,11 +415,13 @@ const Attendance = ({ currentUser }) => {
   // ─────────────────────────────────────────────────────────────────────────
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: <IcoHome /> },
-    { id: 'logs',      label: 'Attendance Logs', icon: <IcoList /> },
-    { id: 'leaves',    label: 'Leaves', icon: <IcoLeave />, badge: leaves.filter(l => l.status === 'PENDING').length },
-    { id: 'shifts',    label: 'Shifts', icon: <IcoShift /> },
-    { id: 'punches',   label: 'Raw Punches', icon: <IcoClock /> },
-    { id: 'device',    label: 'Device / Mapping', icon: <IcoDevice />, badge: summary.unmatchedPunches || 0 },
+    { id: 'logs',      label: canViewAll ? 'Attendance Logs' : 'My Attendance Logs', icon: <IcoList /> },
+    { id: 'leaves',    label: canViewAll ? 'Leaves' : 'My Leaves', icon: <IcoLeave />, badge: leaves.filter(l => l.status === 'PENDING').length },
+    ...(canViewAll ? [
+      { id: 'shifts',    label: 'Shifts', icon: <IcoShift /> },
+      { id: 'punches',   label: 'Raw Punches', icon: <IcoClock /> },
+      { id: 'device',    label: 'Device / Mapping', icon: <IcoDevice />, badge: summary.unmatchedPunches || 0 },
+    ] : [])
   ];
 
   return (
@@ -419,6 +459,7 @@ const Attendance = ({ currentUser }) => {
           onProcess={() => handleProcess(todayStr())}
           processing={processing}
           canEdit={canEdit}
+          canViewAll={canViewAll}
         />
       )}
 
@@ -435,6 +476,7 @@ const Attendance = ({ currentUser }) => {
           onProcess={handleProcess}
           processing={processing}
           canEdit={canEdit}
+          canViewAll={canViewAll}
           onEdit={canEdit ? (log) => setEditLogModal(log) : null}
         />
       )}
@@ -447,8 +489,9 @@ const Attendance = ({ currentUser }) => {
           leaveStatus={leaveStatus} setLeaveStatus={setLeaveStatus}
           onRefresh={fetchLeaves}
           onAction={handleLeaveAction}
-          onAdd={canEdit ? () => setLeaveModal(true) : null}
+          onAdd={() => setLeaveModal(true)}
           canEdit={canEdit}
+          canViewAll={canViewAll}
           employees={employees}
         />
       )}
@@ -503,6 +546,9 @@ const Attendance = ({ currentUser }) => {
           employees={employees}
           onSave={handleLeaveCreate}
           onClose={() => setLeaveModal(null)}
+          canViewAll={canViewAll}
+          currentUser={currentUser}
+          myEmployee={myEmployee}
         />
       )}
       {mappingModal && (
@@ -526,10 +572,10 @@ const Attendance = ({ currentUser }) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Dashboard Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess, processing, canEdit }) => (
+const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess, processing, canEdit, canViewAll }) => (
   <>
     {/* Warning: unmatched punches */}
-    {summary.unmatchedPunches > 0 && (
+    {canViewAll && summary.unmatchedPunches > 0 && (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fef9c3', border: '1px solid #fde047', borderRadius: 12, padding: '12px 16px', marginBottom: 20, fontSize: '0.84rem', color: '#713f12' }}>
         <IcoWarning />
         <strong>{summary.unmatchedPunches} unmatched punch{summary.unmatchedPunches > 1 ? 'es' : ''}</strong> — Employee enrollment not mapped.
@@ -538,39 +584,68 @@ const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess,
     )}
 
     {/* Summary cards */}
-    <div className="att-cards">
-      <div className="att-card blue">
-        <div className="att-card-label">Total Employees</div>
-        <div className="att-card-value">{summary.totalEmployees}</div>
+    {canViewAll ? (
+      <div className="att-cards">
+        <div className="att-card blue">
+          <div className="att-card-label">Total Employees</div>
+          <div className="att-card-value">{summary.totalEmployees}</div>
+        </div>
+        <div className="att-card green">
+          <div className="att-card-label">Present Today</div>
+          <div className="att-card-value">{summary.present}</div>
+        </div>
+        <div className="att-card red">
+          <div className="att-card-label">Absent</div>
+          <div className="att-card-value">{summary.absent}</div>
+        </div>
+        <div className="att-card yellow">
+          <div className="att-card-label">Late</div>
+          <div className="att-card-value">{summary.late}</div>
+        </div>
+        <div className="att-card purple">
+          <div className="att-card-label">On Leave</div>
+          <div className="att-card-value">{summary.onLeave}</div>
+        </div>
+        <div className="att-card orange">
+          <div className="att-card-label">Half Day</div>
+          <div className="att-card-value">{summary.halfDay}</div>
+        </div>
       </div>
-      <div className="att-card green">
-        <div className="att-card-label">Present Today</div>
-        <div className="att-card-value">{summary.present}</div>
+    ) : (
+      <div className="att-cards">
+        <div className={`att-card ${summary.myStatus === 'PRESENT' ? 'green' : (summary.myStatus === 'LEAVE' ? 'purple' : (summary.myStatus === 'LATE' ? 'yellow' : 'red'))}`}>
+          <div className="att-card-label">My Status Today</div>
+          <div className="att-card-value" style={{ fontSize: '1.4rem' }}>{summary.myStatus || (summary.present ? 'PRESENT' : 'ABSENT')}</div>
+        </div>
+        <div className="att-card green">
+          <div className="att-card-label">First Punch In</div>
+          <div className="att-card-value" style={{ fontSize: '1.4rem' }}>{summary.firstPunchIn ? fmt12(summary.firstPunchIn) : '—'}</div>
+        </div>
+        <div className="att-card orange">
+          <div className="att-card-label">Last Punch Out</div>
+          <div className="att-card-value" style={{ fontSize: '1.4rem' }}>{summary.lastPunchOut ? fmt12(summary.lastPunchOut) : '—'}</div>
+        </div>
+        <div className="att-card blue">
+          <div className="att-card-label">Working Hours</div>
+          <div className="att-card-value" style={{ fontSize: '1.4rem' }}>{summary.totalHours ? `${summary.totalHours}h` : '0h'}</div>
+        </div>
+        <div className={`att-card ${summary.late ? 'yellow' : 'blue'}`}>
+          <div className="att-card-label">Late Today</div>
+          <div className="att-card-value" style={{ fontSize: '1.4rem' }}>{summary.late ? 'YES' : 'NO'}</div>
+        </div>
+        <div className={`att-card ${summary.onLeave ? 'purple' : 'blue'}`}>
+          <div className="att-card-label">On Leave</div>
+          <div className="att-card-value" style={{ fontSize: '1.4rem' }}>{summary.onLeave ? 'YES' : 'NO'}</div>
+        </div>
       </div>
-      <div className="att-card red">
-        <div className="att-card-label">Absent</div>
-        <div className="att-card-value">{summary.absent}</div>
-      </div>
-      <div className="att-card yellow">
-        <div className="att-card-label">Late</div>
-        <div className="att-card-value">{summary.late}</div>
-      </div>
-      <div className="att-card purple">
-        <div className="att-card-label">On Leave</div>
-        <div className="att-card-value">{summary.onLeave}</div>
-      </div>
-      <div className="att-card orange">
-        <div className="att-card-label">Half Day</div>
-        <div className="att-card-value">{summary.halfDay}</div>
-      </div>
-    </div>
+    )}
 
     {/* Live Punch Feed */}
     <div className="att-panel">
       <div className="att-panel-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div className="att-live-dot" />
-          <h2 className="att-panel-title">Live Punch Feed</h2>
+          <h2 className="att-panel-title">{canViewAll ? 'Live Punch Feed' : 'My Recent Punches'}</h2>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {canEdit && (
@@ -633,10 +708,10 @@ const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess,
 // ═══════════════════════════════════════════════════════════════════════════════
 // Logs Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, logEmpId, setLogEmpId, employees, onRefresh, onProcess, processing, canEdit, onEdit }) => (
+const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, logEmpId, setLogEmpId, employees, onRefresh, onProcess, processing, canEdit, canViewAll, onEdit }) => (
   <div className="att-panel">
     <div className="att-panel-header">
-      <h2 className="att-panel-title">Attendance Logs</h2>
+      <h2 className="att-panel-title">{canViewAll ? 'Attendance Logs' : 'My Attendance Logs'}</h2>
       <div className="att-controls">
         <div className="att-date-wrap">
           <CustomDatePicker
@@ -645,16 +720,18 @@ const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, 
             compact={true}
           />
         </div>
-        <ERPSelect
-          value={logEmpId}
-          onChange={e => setLogEmpId(e.target.value)}
-          placeholder="All Employees"
-          style={{ minWidth: 190 }}
-          options={(employees || []).map(emp => ({
-            value: emp._id,
-            label: `${emp.name || emp.firstName || emp.employeeId}${emp.employeeId ? ` (${emp.employeeId})` : ''}`
-          }))}
-        />
+        {canViewAll && (
+          <ERPSelect
+            value={logEmpId}
+            onChange={e => setLogEmpId(e.target.value)}
+            placeholder="All Employees"
+            style={{ minWidth: 190 }}
+            options={(employees || []).map(emp => ({
+              value: emp._id,
+              label: `${emp.name || emp.firstName || emp.employeeId}${emp.employeeId ? ` (${emp.employeeId})` : ''}`
+            }))}
+          />
+        )}
         <ERPSelect
           value={logStatus}
           onChange={e => setLogStatus(e.target.value)}
@@ -736,10 +813,10 @@ const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Leaves Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const LeavesTab = ({ leaves, loading, leaveStatus, setLeaveStatus, onRefresh, onAction, onAdd, canEdit, employees }) => (
+const LeavesTab = ({ leaves, loading, leaveStatus, setLeaveStatus, onRefresh, onAction, onAdd, canEdit, canViewAll, employees }) => (
   <div className="att-panel">
     <div className="att-panel-header">
-      <h2 className="att-panel-title">Leave Requests</h2>
+      <h2 className="att-panel-title">{canViewAll ? 'Leave Requests' : 'My Leaves'}</h2>
       <div className="att-controls">
         <ERPSelect
           value={leaveStatus}
@@ -1417,17 +1494,28 @@ const ShiftModal = ({ mode, data, onSave, onClose }) => {
 };
 
 // Leave Modal
-const LeaveModal = ({ employees, onSave, onClose }) => {
+const LeaveModal = ({ employees, onSave, onClose, canViewAll, currentUser, myEmployee }) => {
   const [form, setForm] = useState({
-    employeeId: '',
-    employeeName: '',
-    employeeEmpId: '',
+    employeeId: (!canViewAll && myEmployee?._id) ? myEmployee._id : '',
+    employeeName: (!canViewAll && (myEmployee?.name || currentUser?.name)) ? (myEmployee?.name || currentUser?.name) : '',
+    employeeEmpId: (!canViewAll && (myEmployee?.employeeId || currentUser?.employeeId || currentUser?.username)) ? (myEmployee?.employeeId || currentUser?.employeeId || currentUser?.username) : '',
     leaveType: 'ANNUAL',
     fromDate: todayStr(),
     toDate: todayStr(),
     reason: '',
   });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (!canViewAll && myEmployee) {
+      setForm(p => ({
+        ...p,
+        employeeId: myEmployee._id || '',
+        employeeName: myEmployee.name || currentUser?.name || '',
+        employeeEmpId: myEmployee.employeeId || currentUser?.employeeId || currentUser?.username || ''
+      }));
+    }
+  }, [canViewAll, myEmployee, currentUser]);
 
   const handleEmpChange = (id) => {
     const emp = employees.find(e => e._id === id);
@@ -1444,13 +1532,23 @@ const LeaveModal = ({ employees, onSave, onClose }) => {
         <div className="att-form-grid">
           <div className="att-form-field" style={{ gridColumn: '1 / -1' }}>
             <label className="att-form-label">Employee</label>
-            <ERPSelect
-              value={form.employeeId}
-              onChange={e => handleEmpChange(e.target.value)}
-              placeholder="— Select Employee —"
-              className="w-full"
-              options={employees.map(e => ({ value: e._id, label: `${e.name} (${e.employeeId})` }))}
-            />
+            {canViewAll ? (
+              <ERPSelect
+                value={form.employeeId}
+                onChange={e => handleEmpChange(e.target.value)}
+                placeholder="— Select Employee —"
+                className="w-full"
+                options={employees.map(e => ({ value: e._id, label: `${e.name} (${e.employeeId})` }))}
+              />
+            ) : (
+              <input
+                type="text"
+                readOnly
+                value={`${form.employeeName || currentUser?.name || 'Me'}${form.employeeEmpId ? ` (${form.employeeEmpId})` : ''}`}
+                className="att-form-input bg-gray-50 text-gray-700 cursor-not-allowed"
+                disabled
+              />
+            )}
           </div>
           <div className="att-form-field">
             <label className="att-form-label">Leave Type</label>

@@ -108,9 +108,10 @@
 /* ── Summary Cards ─────────────────────────────────────── */
 .att-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(6, 1fr);
   gap: 16px;
   margin-bottom: 24px;
+  justify-content: center;
 }
 .att-card {
   background: #fff;
@@ -121,6 +122,11 @@
   transition: transform 0.2s, box-shadow 0.2s;
   position: relative;
   overflow: hidden;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 .att-card::before {
   content: '';
@@ -142,12 +148,16 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 8px;
+  text-align: center;
+  width: 100%;
 }
 .att-card-value {
   font-size: 2rem;
   font-weight: 800;
   line-height: 1;
   color: #0f172a;
+  text-align: center;
+  width: 100%;
 }
 .att-card.green .att-card-value  { color: #16a34a; }
 .att-card.red .att-card-value    { color: #dc2626; }
@@ -689,6 +699,9 @@ select.att-form-input {
 }
 
 /* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .att-cards { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 640px) {
   .att-cards { grid-template-columns: repeat(2, 1fr); }
   .att-tabs { gap: 2px; }

@@ -6346,17 +6346,93 @@ apiRouter.delete('/api/attendance/mappings/:id', verifyPermission('attendance', 
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// ─── Attendance Permission & Scope Helpers ────────────────────────────────────
+const canUserViewAllAttendance = async (user) => {
+  if (!user) return false;
+  const username = (user.username || '').toLowerCase().trim();
+  const role = (user.role || '').toLowerCase().trim();
+  if (username === 'admin' || role === 'admin' || role === 'incharge') {
+    return true;
+  }
+  try {
+    const resolvedPerms = await resolveUserPermissions(user.role, user.permissions);
+    if (!resolvedPerms) return false;
+    const att = resolvedPerms.attendance || {};
+    const emp = resolvedPerms.employees || {};
+    if (att.viewAll || att.edit || att.delete || att.special || emp.view || emp.edit) {
+      return true;
+    }
+  } catch (e) {
+    console.error('canUserViewAllAttendance error:', e);
+  }
+  return false;
+};
+
+const getEmployeeForUser = async (user) => {
+  if (!user) return null;
+  const uId = (user.employeeId || user.username || '').toLowerCase().trim();
+  const uName = (user.name || '').toLowerCase().trim();
+  const uEmail = (user.email || '').toLowerCase().trim();
+
+  try {
+    const employees = await Employee.find();
+    for (const emp of employees) {
+      let d = decryptData(emp.data);
+      if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
+        try { d = decryptData(d.data); } catch (e) {}
+      }
+      if (!d) continue;
+      const empId = (d.employeeId || '').toLowerCase().trim();
+      const empName = (d.name || d.nameEn || '').toLowerCase().trim();
+      const empEmail = (d.email || '').toLowerCase().trim();
+
+      if ((uId && empId === uId) || (uEmail && empEmail === uEmail) || (uName && empName === uName)) {
+        return {
+          _id: emp._id,
+          employeeId: d.employeeId || user.username,
+          name: d.name || d.nameEn || user.name
+        };
+      }
+    }
+  } catch (err) {
+    console.error('getEmployeeForUser error:', err);
+  }
+  return null;
+};
+
+const buildOwnEmployeeFilter = async (user) => {
+  const username = user?.username || '';
+  const orConditions = [
+    { employeeEmpId: username },
+    { employeeName: user?.name || username }
+  ];
+  if (user?.employeeId) {
+    orConditions.push({ employeeEmpId: user.employeeId });
+  }
+  const myEmp = await getEmployeeForUser(user);
+  if (myEmp) {
+    orConditions.push({ employeeId: myEmp._id });
+    if (myEmp.employeeId) orConditions.push({ employeeEmpId: myEmp.employeeId });
+    if (myEmp.name) orConditions.push({ employeeName: myEmp.name });
+  }
+  return orConditions;
+};
+
 // ─── 3. Raw Punches ───────────────────────────────────────────────────────────
 apiRouter.get('/api/attendance/punches', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const { date, employeeId, unmatched, limit = 200 } = req.query;
     const query = {};
     if (date) {
-      const d = new Date(date);
       query.punchTime = { $gte: new Date(`${date}T00:00:00.000Z`), $lte: new Date(`${date}T23:59:59.999Z`) };
     }
-    if (employeeId) query.employeeId = employeeId;
-    if (unmatched === 'true') query.unmatched = true;
+    const canViewAll = await canUserViewAllAttendance(req.session.user);
+    if (!canViewAll) {
+      query.$or = await buildOwnEmployeeFilter(req.session.user);
+    } else {
+      if (employeeId) query.employeeId = employeeId;
+      if (unmatched === 'true') query.unmatched = true;
+    }
 
     const punches = await AttendancePunch.find(query).sort({ punchTime: -1 }).limit(Number(limit));
     res.json(punches);
@@ -6457,7 +6533,13 @@ apiRouter.get('/api/attendance/logs', verifyPermission('attendance', 'view'), as
       query.date = { $gte: fromDate };
     }
 
-    if (employeeId) query.employeeId = employeeId;
+    const canViewAll = await canUserViewAllAttendance(req.session.user);
+    if (!canViewAll) {
+      query.$or = await buildOwnEmployeeFilter(req.session.user);
+    } else if (employeeId) {
+      query.employeeId = employeeId;
+    }
+
     if (status) query.status = status;
 
     const logs = await AttendanceLog.find(query).sort({ date: -1, employeeName: 1 }).limit(Number(limit));
@@ -6483,6 +6565,30 @@ apiRouter.put('/api/attendance/logs/:id', verifyPermission('attendance', 'edit')
 apiRouter.get('/api/attendance/summary/today', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
+    const canViewAll = await canUserViewAllAttendance(req.session.user);
+
+    if (!canViewAll) {
+      const ownFilter = await buildOwnEmployeeFilter(req.session.user);
+      const myLog = await AttendanceLog.findOne({ date: today, $or: ownFilter });
+      const status = myLog?.status || 'ABSENT';
+
+      return res.json({
+        date: today,
+        present: (status === 'PRESENT' || status === 'LATE' || status === 'HALF_DAY') ? 1 : 0,
+        absent: status === 'ABSENT' ? 1 : 0,
+        late: status === 'LATE' ? 1 : 0,
+        halfDay: status === 'HALF_DAY' ? 1 : 0,
+        onLeave: status === 'LEAVE' ? 1 : 0,
+        totalEmployees: 1,
+        unmatchedPunches: 0,
+        isOwnOnly: true,
+        myStatus: status,
+        firstPunchIn: myLog?.firstPunchIn || null,
+        lastPunchOut: myLog?.lastPunchOut || null,
+        totalHours: myLog?.totalHours || 0
+      });
+    }
+
     const [present, absent, late, halfDay, onLeave] = await Promise.all([
       AttendanceLog.countDocuments({ date: today, status: 'PRESENT' }),
       AttendanceLog.countDocuments({ date: today, status: 'ABSENT' }),
@@ -6493,7 +6599,7 @@ apiRouter.get('/api/attendance/summary/today', verifyPermission('attendance', 'v
     const totalEmployees = await Employee.countDocuments({});
     const unmatchedPunches = await AttendancePunch.countDocuments({ unmatched: true });
 
-    res.json({ date: today, present, absent, late, halfDay, onLeave, totalEmployees, unmatchedPunches });
+    res.json({ date: today, present, absent, late, halfDay, onLeave, totalEmployees, unmatchedPunches, isOwnOnly: false });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
@@ -6508,7 +6614,12 @@ apiRouter.get('/api/attendance/report/monthly', verifyPermission('attendance', '
     const toDate = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
 
     const query = { date: { $gte: fromDate, $lte: toDate } };
-    if (employeeId) query.employeeId = employeeId;
+    const canViewAll = await canUserViewAllAttendance(req.session.user);
+    if (!canViewAll) {
+      query.$or = await buildOwnEmployeeFilter(req.session.user);
+    } else if (employeeId) {
+      query.employeeId = employeeId;
+    }
 
     const logs = await AttendanceLog.find(query).sort({ employeeName: 1, date: 1 });
 
@@ -6577,16 +6688,46 @@ apiRouter.get('/api/attendance/leaves', verifyPermission('attendance', 'view'), 
     const { status, employeeId } = req.query;
     const query = {};
     if (status) query.status = status;
-    if (employeeId) query.employeeId = employeeId;
+
+    const canViewAll = await canUserViewAllAttendance(req.session.user);
+    if (!canViewAll) {
+      query.$or = await buildOwnEmployeeFilter(req.session.user);
+    } else if (employeeId) {
+      query.employeeId = employeeId;
+    }
+
     const leaves = await LeaveRequest.find(query).sort({ createdAt: -1 });
     res.json(leaves);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-apiRouter.post('/api/attendance/leaves', verifyPermission('attendance', 'add'), async (req, res) => {
+apiRouter.post('/api/attendance/leaves', async (req, res) => {
   try {
-    const total = dayDiff(req.body.fromDate, req.body.toDate);
-    const leave = new LeaveRequest({ ...req.body, totalDays: total });
+    const user = req.session.user;
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+    const canViewAll = await canUserViewAllAttendance(user);
+    const resolvedPerms = await resolveUserPermissions(user.role, user.permissions);
+    const canAdd = user.username === 'admin' || (user.role || '').toLowerCase() === 'admin' || !!(resolvedPerms?.attendance?.add) || !!(resolvedPerms?.attendance?.view);
+    if (!canAdd) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to request leave' });
+    }
+
+    const myEmp = await getEmployeeForUser(user);
+    const leaveData = { ...req.body };
+    if (!canViewAll) {
+      if (myEmp) {
+        leaveData.employeeId = myEmp._id;
+        leaveData.employeeEmpId = myEmp.employeeId || user.username;
+        leaveData.employeeName = myEmp.name || user.name;
+      } else {
+        leaveData.employeeEmpId = user.username;
+        leaveData.employeeName = user.name || user.username;
+      }
+    }
+
+    const total = dayDiff(leaveData.fromDate, leaveData.toDate);
+    const leave = new LeaveRequest({ ...leaveData, totalDays: total });
     const saved = await leave.save();
     res.status(201).json(saved);
   } catch (err) { res.status(400).json({ message: err.message }); }
@@ -6644,7 +6785,12 @@ apiRouter.delete('/api/attendance/leaves/:id', verifyPermission('attendance', 'd
 // ─── 8. Live punch feed (last N punches) ─────────────────────────────────────
 apiRouter.get('/api/attendance/live', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
-    const punches = await AttendancePunch.find({}).sort({ punchTime: -1 }).limit(30);
+    const canViewAll = await canUserViewAllAttendance(req.session.user);
+    const filter = {};
+    if (!canViewAll) {
+      filter.$or = await buildOwnEmployeeFilter(req.session.user);
+    }
+    const punches = await AttendancePunch.find(filter).sort({ punchTime: -1 }).limit(30);
     res.json(punches);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });

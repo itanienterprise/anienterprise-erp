@@ -10,6 +10,7 @@ export const MODULES_LIST = [
         key: 'attendance',
         label: 'Attendance',
         specialLabels: [
+            { key: 'viewAll', label: 'View All Records' },
             { key: 'special', label: 'Process Attendance' },
             { key: 'deviceSync', label: 'Device & IP Sync' }
         ]

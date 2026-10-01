@@ -468,11 +468,11 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
 
                         {/* Summary Cards */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6 px-2 print:grid print:grid-cols-2">
-                            <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm">
+                            <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm text-center">
                                 <div className="text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-2">Total Collections</div>
                                 <div className="text-2xl sm:text-3xl font-black text-gray-900">{filteredPayments.length}</div>
                             </div>
-                            <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-white shadow-sm">
+                            <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-white shadow-sm text-center">
                                 <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">Grand Total Collected</div>
                                 <div className="text-xl sm:text-2xl font-black text-gray-900">
                                     ৳{Number(grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
