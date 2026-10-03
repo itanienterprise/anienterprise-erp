@@ -945,17 +945,17 @@ const getDefaultPermissionsForRole = (role) => {
   ];
 
   modules.forEach(m => {
-    defaults[m] = { view: false, add: false, edit: false, delete: false, special: false, showRate: false };
+    defaults[m] = { view: false, add: false, edit: false, delete: false, special: false, showRate: false, approveLeave: false, editLeave: false };
   });
 
   if (roleLower === 'admin') {
     modules.forEach(m => {
-      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: true };
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: true, approveLeave: true, editLeave: true };
     });
   } else if (roleLower === 'incharge') {
     modules.forEach(m => {
       if (m !== 'backupRestore' && m !== 'log') {
-        defaults[m] = { view: true, add: true, edit: true, delete: m !== 'employees', special: true, showRate: true };
+        defaults[m] = { view: true, add: true, edit: true, delete: m !== 'employees', special: true, showRate: true, approveLeave: false, editLeave: false };
       }
     });
   } else if (roleLower === 'lc manager') {
@@ -7184,17 +7184,76 @@ apiRouter.post('/api/attendance/leaves', async (req, res) => {
     }
 
     const total = dayDiff(leaveData.fromDate, leaveData.toDate);
-    const leave = new LeaveRequest({ ...leaveData, totalDays: total });
+    const leave = new LeaveRequest({ ...leaveData, createdBy: user.username, totalDays: total });
     const saved = await leave.save();
     res.status(201).json(saved);
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-apiRouter.put('/api/attendance/leaves/:id', verifyPermission('attendance', 'edit'), async (req, res) => {
+apiRouter.put('/api/attendance/leaves/:id', async (req, res) => {
   try {
     const user = req.session.user;
-    const { status, approveNote } = req.body;
-    const update = { status };
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+    const existing = await LeaveRequest.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Leave request not found' });
+
+    const isAdmin = user.username === 'admin' || (user.role || '').toLowerCase() === 'admin';
+    const resolvedPerms = await resolveUserPermissions(user.role, user.permissions);
+    const canApprove = isAdmin || !!(resolvedPerms?.attendance?.approveLeave);
+    const canEditLeave = isAdmin || !!(resolvedPerms?.attendance?.editLeave) || !!(resolvedPerms?.attendance?.edit);
+
+    const myEmp = await getEmployeeForUser(user);
+    const isOwner = (existing.createdBy && existing.createdBy.toLowerCase() === user.username.toLowerCase()) ||
+      (myEmp && existing.employeeId && existing.employeeId.toString() === myEmp._id.toString()) ||
+      (myEmp && existing.employeeEmpId && (
+        (myEmp.employeeId && existing.employeeEmpId.toLowerCase() === myEmp.employeeId.toLowerCase()) ||
+        existing.employeeEmpId.toLowerCase() === user.username.toLowerCase()
+      )) ||
+      (existing.employeeEmpId && existing.employeeEmpId.toLowerCase() === user.username.toLowerCase());
+
+    const isPending = existing.status === 'PENDING';
+    const canEditThis = canEditLeave || (isOwner && isPending);
+
+    const { status, approveNote, employeeId, employeeName, employeeEmpId, leaveType, fromDate, toDate, reason } = req.body;
+
+    if (status === 'APPROVED' || status === 'REJECTED') {
+      if (!canApprove) {
+        return res.status(403).json({ message: 'Forbidden: You do not have permission to accept or reject leave requests' });
+      }
+    }
+
+    const isEditingFields = employeeId !== undefined || employeeName !== undefined || employeeEmpId !== undefined ||
+      leaveType !== undefined || fromDate !== undefined || toDate !== undefined || reason !== undefined ||
+      (status !== undefined && status !== 'APPROVED' && status !== 'REJECTED');
+
+    if (isEditingFields && !canEditThis) {
+      if (isOwner && !isPending) {
+        return res.status(403).json({ message: 'Forbidden: Leave request is already accepted and cannot be edited by applicant. Only authorized users can edit after accept.' });
+      }
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to edit this leave request' });
+    }
+
+    const update = {};
+    if (status !== undefined && (canApprove || canEditLeave)) update.status = status;
+    if (canEditLeave) {
+      if (employeeId !== undefined) update.employeeId = employeeId;
+      if (employeeName !== undefined) update.employeeName = employeeName;
+      if (employeeEmpId !== undefined) update.employeeEmpId = employeeEmpId;
+    }
+    if (leaveType !== undefined) update.leaveType = leaveType;
+    if (fromDate !== undefined) update.fromDate = fromDate;
+    if (toDate !== undefined) update.toDate = toDate;
+    if (reason !== undefined) update.reason = reason;
+
+    if (fromDate || toDate) {
+      const fDate = fromDate || existing.fromDate;
+      const tDate = toDate || existing.toDate;
+      if (fDate && tDate) {
+        update.totalDays = dayDiff(fDate, tDate);
+      }
+    }
+
     if (status === 'APPROVED' || status === 'REJECTED') {
       update.approvedBy = user?.username || 'admin';
       update.approvedAt = new Date();
@@ -7204,7 +7263,17 @@ apiRouter.put('/api/attendance/leaves/:id', verifyPermission('attendance', 'edit
     if (!leave) return res.status(404).json({ message: 'Leave request not found' });
 
     // If approved, update AttendanceLog for those dates
-    if (status === 'APPROVED') {
+    if (leave.status === 'APPROVED') {
+      if (existing.status === 'APPROVED' && (existing.fromDate !== leave.fromDate || existing.toDate !== leave.toDate)) {
+        let oldD = new Date(existing.fromDate);
+        const oldEnd = new Date(existing.toDate);
+        while (oldD <= oldEnd) {
+          const dStr = oldD.toISOString().split('T')[0];
+          await AttendanceLog.deleteOne({ employeeId: existing.employeeId, date: dStr, status: 'LEAVE' });
+          oldD.setDate(oldD.getDate() + 1);
+        }
+      }
+
       let d = new Date(leave.fromDate);
       const end = new Date(leave.toDate);
       while (d <= end) {
@@ -7234,7 +7303,16 @@ apiRouter.put('/api/attendance/leaves/:id', verifyPermission('attendance', 'edit
 
 apiRouter.delete('/api/attendance/leaves/:id', verifyPermission('attendance', 'delete'), async (req, res) => {
   try {
-    await LeaveRequest.findByIdAndDelete(req.params.id);
+    const leave = await LeaveRequest.findByIdAndDelete(req.params.id);
+    if (leave && leave.status === 'APPROVED') {
+      let d = new Date(leave.fromDate);
+      const end = new Date(leave.toDate);
+      while (d <= end) {
+        const dateStr = d.toISOString().split('T')[0];
+        await AttendanceLog.deleteOne({ employeeId: leave.employeeId, date: dateStr, status: 'LEAVE' });
+        d.setDate(d.getDate() + 1);
+      }
+    }
     res.json({ message: 'Leave request deleted' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });

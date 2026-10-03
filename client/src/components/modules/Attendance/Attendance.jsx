@@ -4,7 +4,7 @@ import axios from '../../../utils/api';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import { ChevronDownIcon, SearchIcon, CheckIcon } from '../../Icons';
+import { ChevronDownIcon, SearchIcon, CheckIcon, EditIcon, TrashIcon, XIcon } from '../../Icons';
 import './Attendance.css';
 
 // ─── Custom ERP Dropdown Select (Styled like SystemAccess / Token / ERP Standard) ───
@@ -219,7 +219,7 @@ const Attendance = ({ currentUser }) => {
   const [logDate, setLogDate] = useState(todayStr());
   const [logEmpId, setLogEmpId] = useState('');
   const [logStatus, setLogStatus] = useState('');
-  const [leaveStatus, setLeaveStatus] = useState('PENDING');
+  const [leaveStatus, setLeaveStatus] = useState('');
   const [punchDate, setPunchDate] = useState(todayStr());
 
   // Modals
@@ -239,6 +239,9 @@ const Attendance = ({ currentUser }) => {
     hasPermission(currentUser, 'employees', 'edit');
 
   const canEdit = isAdmin || hasPermission(currentUser, 'attendance', 'edit') || hasPermission(currentUser, 'employees', 'edit');
+  const canDelete = isAdmin || hasPermission(currentUser, 'attendance', 'delete') || hasPermission(currentUser, 'employees', 'delete');
+  const canApproveLeave = isAdmin || hasPermission(currentUser, 'attendance', 'approveLeave');
+  const canEditLeave = isAdmin || hasPermission(currentUser, 'attendance', 'editLeave') || hasPermission(currentUser, 'attendance', 'edit');
 
   const myEmployee = useMemo(() => {
     const curEmpId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
@@ -378,11 +381,25 @@ const Attendance = ({ currentUser }) => {
     } catch (e) { alert(e.response?.data?.message || e.message); }
   };
 
-  const handleLeaveCreate = async (data) => {
+  const handleLeaveSave = async (data) => {
     try {
-      await axios.post(`${API_BASE_URL}/api/attendance/leaves`, data);
+      if (leaveModal?.mode === 'edit' && leaveModal?.data?._id) {
+        await axios.put(`${API_BASE_URL}/api/attendance/leaves/${leaveModal.data._id}`, data);
+      } else {
+        await axios.post(`${API_BASE_URL}/api/attendance/leaves`, data);
+      }
       setLeaveModal(null);
       fetchLeaves();
+      fetchSummary();
+    } catch (e) { alert(e.response?.data?.message || e.message); }
+  };
+
+  const handleLeaveDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this leave request?')) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/api/attendance/leaves/${id}`);
+      fetchLeaves();
+      fetchSummary();
     } catch (e) { alert(e.response?.data?.message || e.message); }
   };
 
@@ -489,10 +506,17 @@ const Attendance = ({ currentUser }) => {
           leaveStatus={leaveStatus} setLeaveStatus={setLeaveStatus}
           onRefresh={fetchLeaves}
           onAction={handleLeaveAction}
-          onAdd={() => setLeaveModal(true)}
+          onAdd={() => setLeaveModal({ mode: 'add' })}
+          onEdit={(l) => setLeaveModal({ mode: 'edit', data: l })}
+          onDelete={canDelete ? handleLeaveDelete : null}
           canEdit={canEdit}
+          canDelete={canDelete}
+          canApproveLeave={canApproveLeave}
+          canEditLeave={canEditLeave}
           canViewAll={canViewAll}
           employees={employees}
+          currentUser={currentUser}
+          myEmployee={myEmployee}
         />
       )}
 
@@ -543,10 +567,14 @@ const Attendance = ({ currentUser }) => {
       )}
       {leaveModal && (
         <LeaveModal
+          mode={leaveModal.mode || 'add'}
+          data={leaveModal.data || null}
           employees={employees}
-          onSave={handleLeaveCreate}
+          onSave={handleLeaveSave}
           onClose={() => setLeaveModal(null)}
           canViewAll={canViewAll}
+          canApproveLeave={canApproveLeave}
+          canEditLeave={canEditLeave}
           currentUser={currentUser}
           myEmployee={myEmployee}
         />
@@ -795,10 +823,17 @@ const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, 
                   {log.manualOverride && <span title={`Corrected by ${log.overriddenBy}`} style={{ marginLeft: 4, fontSize: '0.68rem', color: '#6366f1' }}>✎</span>}
                 </td>
                 {onEdit && (
-                  <td>
-                    <button className="att-btn att-btn-secondary att-btn-sm" onClick={() => onEdit(log)}>
-                      <IcoEdit />Edit
-                    </button>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        onClick={() => onEdit(log)}
+                        className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center"
+                        title="Edit Attendance Log"
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                      >
+                        <EditIcon className="w-5 h-5" />
+                      </button>
+                    </div>
                   </td>
                 )}
               </tr>
@@ -813,7 +848,51 @@ const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Leaves Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const LeavesTab = ({ leaves, loading, leaveStatus, setLeaveStatus, onRefresh, onAction, onAdd, canEdit, canViewAll, employees }) => (
+const LeavesTab = ({
+  leaves,
+  loading,
+  leaveStatus,
+  setLeaveStatus,
+  onRefresh,
+  onAction,
+  onAdd,
+  onEdit,
+  onDelete,
+  canEdit,
+  canDelete,
+  canApproveLeave,
+  canEditLeave,
+  canViewAll,
+  employees,
+  currentUser,
+  myEmployee
+}) => {
+  const isOwnerOf = (l) => {
+    const curEmpId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
+    const curUsername = (currentUser?.username || '').toLowerCase().trim();
+    const curName = (currentUser?.name || '').toLowerCase().trim();
+    const myEmpId = (myEmployee?.employeeId || myEmployee?.empId || '').toLowerCase().trim();
+    const myEmpObjectId = myEmployee?._id ? myEmployee._id.toString() : '';
+
+    const lEmpId = (l.employeeEmpId || '').toLowerCase().trim();
+    const lEmpObjectId = l.employeeId ? l.employeeId.toString() : '';
+    const lEmpName = (l.employeeName || '').toLowerCase().trim();
+    const lCreatedBy = (l.createdBy || '').toLowerCase().trim();
+
+    return (lCreatedBy && curUsername && lCreatedBy === curUsername) ||
+      (myEmpObjectId && lEmpObjectId && myEmpObjectId === lEmpObjectId) ||
+      (myEmpId && lEmpId && myEmpId === lEmpId) ||
+      (curEmpId && lEmpId && curEmpId === lEmpId) ||
+      (curUsername && lEmpId && curUsername === lEmpId) ||
+      (curName && lEmpName && curName === lEmpName);
+  };
+
+  const canEditItem = (l) => {
+    if (canEditLeave) return true;
+    return isOwnerOf(l) && l.status === 'PENDING';
+  };
+
+  return (
   <div className="att-panel">
     <div className="att-panel-header">
       <h2 className="att-panel-title">{canViewAll ? 'Leave Requests' : 'My Leaves'}</h2>
@@ -861,7 +940,7 @@ const LeavesTab = ({ leaves, loading, leaveStatus, setLeaveStatus, onRefresh, on
               <th>To</th>
               <th>Days</th>
               <th>Status</th>
-              {canEdit && <th>Action</th>}
+              {(canApproveLeave || canEditLeave || canDelete || leaves.some(l => canEditItem(l))) && <th style={{ textAlign: 'center' }}>Action</th>}
             </tr>
           </thead>
           <tbody>
@@ -873,17 +952,52 @@ const LeavesTab = ({ leaves, loading, leaveStatus, setLeaveStatus, onRefresh, on
                 <td>{fmtDate(l.toDate)}</td>
                 <td style={{ fontWeight: 700, textAlign: 'center' }}>{l.totalDays}</td>
                 <td><StatusBadge status={l.status} /></td>
-                {canEdit && l.status === 'PENDING' && (
-                  <td style={{ display: 'flex', gap: 6 }}>
-                    <button className="att-btn att-btn-success att-btn-sm" onClick={() => onAction(l._id, 'APPROVED')}>
-                      <IcoCheck />Approve
-                    </button>
-                    <button className="att-btn att-btn-danger att-btn-sm" onClick={() => onAction(l._id, 'REJECTED')}>
-                      <IcoX />Reject
-                    </button>
+                {(canApproveLeave || canEditLeave || canDelete || canEditItem(l)) && (
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <div className="flex items-center justify-center space-x-1.5">
+                      {canApproveLeave && l.status === 'PENDING' && (
+                        <>
+                          <button
+                            onClick={() => onAction(l._id, 'APPROVED')}
+                            className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors inline-flex items-center justify-center"
+                            title="Approve Leave"
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                          >
+                            <CheckIcon className="w-5 h-5 text-emerald-600" />
+                          </button>
+                          <button
+                            onClick={() => onAction(l._id, 'REJECTED')}
+                            className="p-1 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded transition-colors inline-flex items-center justify-center"
+                            title="Reject Leave"
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                          >
+                            <XIcon className="w-5 h-5 text-rose-500" />
+                          </button>
+                        </>
+                      )}
+                      {onEdit && canEditItem(l) && (
+                        <button
+                          onClick={() => onEdit(l)}
+                          className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center"
+                          title="Edit Leave"
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                        >
+                          <EditIcon className="w-5 h-5" />
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          onClick={() => onDelete(l._id)}
+                          className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center"
+                          title="Delete Leave"
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                        >
+                          <TrashIcon className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 )}
-                {canEdit && l.status !== 'PENDING' && <td />}
               </tr>
             ))}
           </tbody>
@@ -891,7 +1005,8 @@ const LeavesTab = ({ leaves, loading, leaveStatus, setLeaveStatus, onRefresh, on
       )}
     </div>
   </div>
-);
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Shifts Tab
@@ -947,9 +1062,29 @@ const ShiftsTab = ({ shifts, loading, onRefresh, onAdd, onEdit, onDelete }) => (
                 <td style={{ textAlign: 'center' }}>{s.breakMinutes}</td>
                 <td>{s.isDefault ? <span className="att-badge present">✓ Default</span> : '—'}</td>
                 {(onEdit || onDelete) && (
-                  <td style={{ display: 'flex', gap: 6 }}>
-                    {onEdit && <button className="att-btn att-btn-secondary att-btn-sm" onClick={() => onEdit(s)}><IcoEdit />Edit</button>}
-                    {onDelete && <button className="att-btn att-btn-danger att-btn-sm" onClick={() => onDelete(s._id)}><IcoTrash /></button>}
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <div className="flex items-center space-x-1.5">
+                      {onEdit && (
+                        <button
+                          className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center"
+                          onClick={() => onEdit(s)}
+                          title="Edit Shift"
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                        >
+                          <EditIcon className="w-5 h-5" />
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center"
+                          onClick={() => onDelete(s._id)}
+                          title="Delete Shift"
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                        >
+                          <TrashIcon className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>
@@ -1418,10 +1553,17 @@ const DeviceTab = ({ mappings, loading, employees, summary, onRefresh, onAdd, on
                     <td style={{ fontSize: '0.76rem', color: '#64748b' }}>{m.deviceId}</td>
                     <td style={{ fontSize: '0.76rem', color: '#94a3b8' }}>{m.notes || '—'}</td>
                     {onDelete && (
-                      <td>
-                        <button className="att-btn att-btn-danger att-btn-sm" onClick={() => onDelete(m._id)}>
-                          <IcoTrash />Remove
-                        </button>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div className="flex items-center space-x-1.5">
+                          <button
+                            className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center"
+                            onClick={() => onDelete(m._id)}
+                            title="Remove Mapping"
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                          >
+                            <TrashIcon className="w-5 h-5" />
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -1494,20 +1636,33 @@ const ShiftModal = ({ mode, data, onSave, onClose }) => {
 };
 
 // Leave Modal
-const LeaveModal = ({ employees, onSave, onClose, canViewAll, currentUser, myEmployee }) => {
+const LeaveModal = ({ mode = 'add', data = null, employees, onSave, onClose, canViewAll, canApproveLeave, canEditLeave, currentUser, myEmployee }) => {
+  const isEdit = mode === 'edit';
   const [form, setForm] = useState({
-    employeeId: (!canViewAll && myEmployee?._id) ? myEmployee._id : '',
-    employeeName: (!canViewAll && (myEmployee?.name || currentUser?.name)) ? (myEmployee?.name || currentUser?.name) : '',
-    employeeEmpId: (!canViewAll && (myEmployee?.employeeId || currentUser?.employeeId || currentUser?.username)) ? (myEmployee?.employeeId || currentUser?.employeeId || currentUser?.username) : '',
-    leaveType: 'ANNUAL',
-    fromDate: todayStr(),
-    toDate: todayStr(),
-    reason: '',
+    employeeId: data?.employeeId || ((!canViewAll && myEmployee?._id) ? myEmployee._id : ''),
+    employeeName: data?.employeeName || ((!canViewAll && (myEmployee?.name || currentUser?.name)) ? (myEmployee?.name || currentUser?.name) : ''),
+    employeeEmpId: data?.employeeEmpId || ((!canViewAll && (myEmployee?.employeeId || currentUser?.employeeId || currentUser?.username)) ? (myEmployee?.employeeId || currentUser?.employeeId || currentUser?.username) : ''),
+    leaveType: data?.leaveType || 'ANNUAL',
+    fromDate: data?.fromDate ? data.fromDate.split('T')[0] : todayStr(),
+    toDate: data?.toDate ? data.toDate.split('T')[0] : todayStr(),
+    status: data?.status || 'PENDING',
+    reason: data?.reason || '',
   });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
-    if (!canViewAll && myEmployee) {
+    if (isEdit && data) {
+      setForm({
+        employeeId: data.employeeId || '',
+        employeeName: data.employeeName || '',
+        employeeEmpId: data.employeeEmpId || '',
+        leaveType: data.leaveType || 'ANNUAL',
+        fromDate: data.fromDate ? data.fromDate.split('T')[0] : todayStr(),
+        toDate: data.toDate ? data.toDate.split('T')[0] : todayStr(),
+        status: data.status || 'PENDING',
+        reason: data.reason || '',
+      });
+    } else if (!canViewAll && myEmployee) {
       setForm(p => ({
         ...p,
         employeeId: myEmployee._id || '',
@@ -1515,7 +1670,7 @@ const LeaveModal = ({ employees, onSave, onClose, canViewAll, currentUser, myEmp
         employeeEmpId: myEmployee.employeeId || currentUser?.employeeId || currentUser?.username || ''
       }));
     }
-  }, [canViewAll, myEmployee, currentUser]);
+  }, [isEdit, data, canViewAll, myEmployee, currentUser]);
 
   const handleEmpChange = (id) => {
     const emp = employees.find(e => e._id === id);
@@ -1528,11 +1683,11 @@ const LeaveModal = ({ employees, onSave, onClose, canViewAll, currentUser, myEmp
   return createPortal(
     <div className="att-modal-overlay" onClick={onClose}>
       <div className="att-modal" onClick={e => e.stopPropagation()}>
-        <h3 className="att-modal-title">New Leave Request</h3>
+        <h3 className="att-modal-title">{isEdit ? 'Edit Leave Request' : 'New Leave Request'}</h3>
         <div className="att-form-grid">
           <div className="att-form-field" style={{ gridColumn: '1 / -1' }}>
             <label className="att-form-label">Employee</label>
-            {canViewAll ? (
+            {canViewAll && (!isEdit || canEditLeave) ? (
               <ERPSelect
                 value={form.employeeId}
                 onChange={e => handleEmpChange(e.target.value)}
@@ -1559,6 +1714,21 @@ const LeaveModal = ({ employees, onSave, onClose, canViewAll, currentUser, myEmp
               options={['ANNUAL','SICK','CASUAL','UNPAID','OTHER']}
             />
           </div>
+          {isEdit && canApproveLeave && (
+            <div className="att-form-field">
+              <label className="att-form-label">Status</label>
+              <ERPSelect
+                value={form.status}
+                onChange={e => set('status', e.target.value)}
+                className="w-full"
+                options={[
+                  { value: 'PENDING', label: 'Pending' },
+                  { value: 'APPROVED', label: 'Approved' },
+                  { value: 'REJECTED', label: 'Rejected' },
+                ]}
+              />
+            </div>
+          )}
           <div className="att-form-field">
             <label className="att-form-label">From Date</label>
             <CustomDatePicker
@@ -1582,7 +1752,9 @@ const LeaveModal = ({ employees, onSave, onClose, canViewAll, currentUser, myEmp
         </div>
         <div className="att-form-actions">
           <button className="att-btn att-btn-secondary" onClick={onClose}><IcoX />Cancel</button>
-          <button className="att-btn att-btn-primary" disabled={!form.employeeId} onClick={() => onSave(form)}><IcoCheck />Submit Leave</button>
+          <button className="att-btn att-btn-primary" disabled={!form.employeeId} onClick={() => onSave(form)}>
+            <IcoCheck />{isEdit ? 'Save Changes' : 'Submit Leave'}
+          </button>
         </div>
       </div>
     </div>,

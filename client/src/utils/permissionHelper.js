@@ -11,6 +11,8 @@ export const MODULES_LIST = [
         label: 'Attendance',
         specialLabels: [
             { key: 'viewAll', label: 'View All Records' },
+            { key: 'approveLeave', label: 'Accept / Reject Leave' },
+            { key: 'editLeave', label: 'Edit Leave' },
             { key: 'special', label: 'Process Attendance' },
             { key: 'deviceSync', label: 'Device & IP Sync' }
         ]
@@ -288,7 +290,7 @@ export const getDefaultPermissionsForRole = (role) => {
                 };
                 if (mod.specialLabels) {
                     mod.specialLabels.forEach(sItem => {
-                        permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
+                        permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
                     });
                 }
                 defaults[mod.key] = permsObj;
@@ -302,7 +304,7 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
+                    permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
                 });
             }
             defaults[key] = permsObj;
@@ -317,7 +319,7 @@ export const getDefaultPermissionsForRole = (role) => {
                 mod.specialLabels.forEach(sItem => {
                     if (sItem.key === 'firstApprove') permsObj[sItem.key] = true;
                     else if (sItem.key === 'secondApprove') permsObj[sItem.key] = false;
-                    else permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
+                    else permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
                 });
             }
             defaults[key] = permsObj;
@@ -329,7 +331,7 @@ export const getDefaultPermissionsForRole = (role) => {
                 const permsObj = { view: true, add: true, edit: true, delete: false, special: true };
                 if (mod.specialLabels) {
                     mod.specialLabels.forEach(sItem => {
-                        permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
+                        permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
                     });
                 }
                 defaults[mod.key] = permsObj;
