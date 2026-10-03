@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
@@ -1430,6 +1430,68 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
         setPage(1);
     }, [datePreset]);
 
+    // Helper to derive active users list directly from loaded logs if backend stats aggregation is empty in production
+    const deriveActiveUsersFromLogs = useCallback((logList, namesMap = {}) => {
+        if (!Array.isArray(logList) || logList.length === 0) return [];
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayMs = today.getTime();
+
+        const userGroups = {};
+        logList.forEach(log => {
+            if (!log || !log.username) return;
+            const logTime = log.timestamp ? new Date(log.timestamp).getTime() : 0;
+            // Prefer today's logs if any exist
+            if (logTime < todayMs && logList.some(l => l.timestamp && new Date(l.timestamp).getTime() >= todayMs)) {
+                return;
+            }
+
+            const uname = log.username;
+            if (!userGroups[uname]) {
+                userGroups[uname] = {
+                    username: uname,
+                    name: namesMap[uname] || log.displayName || (uname === 'admin' ? 'Administrator' : uname),
+                    role: log.userRole || (uname === 'admin' ? 'Administrator' : 'User'),
+                    firstActive: log.timestamp,
+                    lastActive: log.timestamp,
+                    actionCount: 0,
+                    lastAction: log.action || 'OPERATION',
+                    lastModule: log.module || 'System',
+                    lastIp: log.ip || '127.0.0.1',
+                    timestamps: []
+                };
+            }
+
+            userGroups[uname].actionCount += 1;
+            userGroups[uname].timestamps.push(log.timestamp);
+            
+            const currLast = new Date(userGroups[uname].lastActive).getTime();
+            const currFirst = new Date(userGroups[uname].firstActive).getTime();
+            if (logTime > currLast) {
+                userGroups[uname].lastActive = log.timestamp;
+                userGroups[uname].lastAction = log.action || userGroups[uname].lastAction;
+                userGroups[uname].lastModule = log.module || userGroups[uname].lastModule;
+                userGroups[uname].lastIp = log.ip || userGroups[uname].lastIp;
+            }
+            if (logTime < currFirst) {
+                userGroups[uname].firstActive = log.timestamp;
+            }
+        });
+
+        const now = Date.now();
+        return Object.values(userGroups).map(u => {
+            const lastMs = u.lastActive ? new Date(u.lastActive).getTime() : 0;
+            const isLive = (now - lastMs <= 15 * 60 * 1000);
+            const durationMs = Math.max(60000, lastMs - new Date(u.firstActive).getTime());
+            return {
+                ...u,
+                isLive,
+                activeMs: durationMs
+            };
+        }).sort((a, b) => new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime());
+    }, []);
+
     // Fetch logs from backend
     const fetchLogs = async (showLoading = true, isManual = false) => {
         if (showLoading) setIsLoading(true);
@@ -1492,11 +1554,17 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
             }
 
             if (statsRes.data?.success) {
+                let activeUsersList = Array.isArray(statsRes.data.todayActiveUsersList) ? statsRes.data.todayActiveUsersList : [];
+                const fetchedList = logsRes.data?.logs || [];
+                if (activeUsersList.length === 0 && (statsRes.data.todayActiveUsers > 0 || fetchedList.length > 0)) {
+                    activeUsersList = deriveActiveUsersFromLogs(fetchedList, statsRes.data.userNamesMap || userNamesMap);
+                }
+
                 setStats({
                     totalLogs: statsRes.data.totalLogs || 0,
                     todayLogs: statsRes.data.todayLogs || 0,
-                    todayActiveUsers: statsRes.data.todayActiveUsers || 0,
-                    todayActiveUsersList: statsRes.data.todayActiveUsersList || [],
+                    todayActiveUsers: statsRes.data.todayActiveUsers || activeUsersList.length || 0,
+                    todayActiveUsersList: activeUsersList,
                     storageSize: statsRes.data.storageSize || '0 B',
                     dataSize: statsRes.data.dataSize || '0 B',
                     categories: statsRes.data.categories || {},
@@ -1981,18 +2049,22 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             </span>
                         </div>
                         {(() => {
-                            const liveCount = (stats.todayActiveUsersList || []).filter(u => {
+                            const activeList = (stats.todayActiveUsersList && stats.todayActiveUsersList.length > 0)
+                                ? stats.todayActiveUsersList
+                                : deriveActiveUsersFromLogs(logs, userNamesMap);
+                            const liveCount = activeList.filter(u => {
                                 if (u.isLive || u.isCurrent) return true;
                                 if (!u.lastActive) return false;
                                 return (Date.now() - new Date(u.lastActive).getTime()) <= 15 * 60 * 1000;
                             }).length;
+                            const totalUsersCount = activeList.length || stats.todayActiveUsers || 0;
 
                             return (
                                 <>
                                     <div className="mt-2 flex items-baseline justify-between">
                                         <div className="flex items-baseline gap-2">
                                             <span className="text-2xl font-black text-indigo-600 tracking-tight">
-                                                {stats.todayActiveUsers}
+                                                {totalUsersCount}
                                             </span>
                                             {liveCount > 0 && (
                                                 <span className="text-3xs font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
@@ -2011,7 +2083,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                     </div>
                                     <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
                                         <span className={`w-1.5 h-1.5 rounded-full ${liveCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
-                                        {liveCount > 0 ? `${liveCount} currently online • ${stats.todayActiveUsers} active today` : `${stats.todayActiveUsers} active today`}
+                                        {liveCount > 0 ? `${liveCount} currently online • ${totalUsersCount} active today` : `${totalUsersCount} active today`}
                                     </p>
                                 </>
                             );
@@ -3089,12 +3161,16 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-slate-200/90 overflow-hidden ring-1 ring-black/5 animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
                         {/* Modal Header */}
                         {(() => {
-                            const liveCount = (stats.todayActiveUsersList || []).filter(u => {
+                            const activeList = (stats.todayActiveUsersList && stats.todayActiveUsersList.length > 0)
+                                ? stats.todayActiveUsersList
+                                : deriveActiveUsersFromLogs(logs, userNamesMap);
+
+                            const liveCount = activeList.filter(u => {
                                 if (u.isLive || u.isCurrent) return true;
                                 if (!u.lastActive) return false;
                                 return (Date.now() - new Date(u.lastActive).getTime()) <= 15 * 60 * 1000;
                             }).length;
-                            const totalCount = stats.todayActiveUsersList?.length || stats.todayActiveUsers || 0;
+                            const totalCount = activeList.length || stats.todayActiveUsers || 0;
 
                             return (
                                 <div className="px-6 py-4.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-blue-50/30 flex items-center justify-between">
@@ -3134,16 +3210,24 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                         {/* Modal Body: Active Users Cards */}
                         <div className="p-5 overflow-y-auto space-y-3.5 bg-slate-50/40">
-                            {(!stats.todayActiveUsersList || stats.todayActiveUsersList.length === 0) ? (
-                                <div className="py-16 text-center text-slate-400 bg-white rounded-xl border border-slate-200/60">
-                                    <UserIcon className="w-12 h-12 mx-auto mb-2 opacity-25 text-slate-400" />
-                                    <p className="font-bold text-sm text-slate-700">No active users recorded today yet</p>
-                                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                                        Activity will appear here automatically when staff log in and perform actions on the ERP
-                                    </p>
-                                </div>
-                            ) : (
-                                stats.todayActiveUsersList.map((user, idx) => {
+                            {(() => {
+                                const activeList = (stats.todayActiveUsersList && stats.todayActiveUsersList.length > 0)
+                                    ? stats.todayActiveUsersList
+                                    : deriveActiveUsersFromLogs(logs, userNamesMap);
+
+                                if (!activeList || activeList.length === 0) {
+                                    return (
+                                        <div className="py-16 text-center text-slate-400 bg-white rounded-xl border border-slate-200/60">
+                                            <UserIcon className="w-12 h-12 mx-auto mb-2 opacity-25 text-slate-400" />
+                                            <p className="font-bold text-sm text-slate-700">No active users recorded today yet</p>
+                                            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                                                Activity will appear here automatically when staff log in and perform actions on the ERP
+                                            </p>
+                                        </div>
+                                    );
+                                }
+
+                                return activeList.map((user, idx) => {
                                     const lastTime = user.lastActive ? new Date(user.lastActive) : null;
                                     const firstTime = user.firstActive ? new Date(user.firstActive) : null;
                                     const isUserLive = Boolean(
@@ -3329,8 +3413,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                             </div>
                                         </div>
                                     );
-                                })
-                            )}
+                                });
+                            })()}
                         </div>
 
                         {/* Modal Footer */}
