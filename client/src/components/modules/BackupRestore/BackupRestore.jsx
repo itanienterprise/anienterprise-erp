@@ -613,7 +613,7 @@ const BackupRestore = ({ addNotification }) => {
     }, [availableModules, selectedModuleKeys]);
 
     return (
-        <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300">
+        <div className="w-full space-y-8 animate-in fade-in duration-300">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-gray-200">
                 <div>
