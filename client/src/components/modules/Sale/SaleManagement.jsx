@@ -3343,6 +3343,21 @@ const SaleManagement = ({
             filtered = filtered.filter(lc => isLcMatchingTargetProduct(lc, targetProd, targetIpName));
         }
 
+        if (saleType !== 'Border' && activeItemIndex !== null && activeEntryIndex !== null) {
+            const currentItem = formData.items[activeItemIndex];
+            if (currentItem && currentItem.brandEntries) {
+                const alreadySelectedLcs = new Set(
+                    currentItem.brandEntries
+                        .filter((_, eIdx) => eIdx !== activeEntryIndex)
+                        .map(e => (e.lcNo || '').trim().toLowerCase())
+                        .filter(Boolean)
+                );
+                if (alreadySelectedLcs.size > 0) {
+                    filtered = filtered.filter(lc => !alreadySelectedLcs.has((lc.lcNo || '').trim().toLowerCase()));
+                }
+            }
+        }
+
         if (!query) {
             return filtered.slice(0, 50);
         }
@@ -6370,9 +6385,36 @@ const SaleManagement = ({
                                     if (!group) return null;
 
                                     const norm = str => (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                                    const brandEntries = item.brandEntries || [];
+
+                                    // LCs already selected in this product
+                                    const selectedLcs = new Set(
+                                        brandEntries
+                                            .map(e => (e.lcNo || '').trim().toLowerCase())
+                                            .filter(Boolean)
+                                    );
+
+                                    // Brands that still have at least one entry without an LC selected
+                                    const brandsNeedingLc = new Set(
+                                        brandEntries
+                                            .filter(e => !(e.lcNo && e.lcNo.trim()))
+                                            .map(e => norm(e.brandName || e.brand))
+                                            .filter(Boolean)
+                                    );
+
+                                    // If all brand rows already have an LC selected, hide table for this product
+                                    if (brandsNeedingLc.size === 0) return null;
+
                                     const effectiveBrandList = (group.brandList || []).filter(b => {
                                         const bName = norm(b.brand);
-                                        return selectedBrandNames.some(sb => norm(sb) === bName);
+                                        // Only show brands that still have rows needing an LC
+                                        if (!brandsNeedingLc.has(bName)) return false;
+
+                                        // Hide specific LCs that have already been selected in this product
+                                        const bLc = (b.lcNo || '').trim().toLowerCase();
+                                        if (bLc && bLc !== '—' && selectedLcs.has(bLc)) return false;
+
+                                        return true;
                                     });
                                     if (effectiveBrandList.length === 0) return null;
 
