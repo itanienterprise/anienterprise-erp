@@ -213,11 +213,20 @@ const getLogModule = (log) => {
     if (
         log.module === 'LC Receive' ||
         log.module === 'LC Entry' ||
-        (log.module === 'Stock' && !details.purchaseReceiveId && !details.isPurchase) ||
-        (log.path?.includes('/api/stock') && !log.path?.includes('/stock-baseline') && !details.purchaseReceiveId && !details.isPurchase) ||
-        (typeof details.view === 'string' && (details.view.includes('lc-entry') || details.view.includes('lc-receive')))
+        (typeof details.view === 'string' && (details.view.includes('lc-entry') || details.view.includes('lc-receive'))) ||
+        (typeof log.description === 'string' && (/in lc receive\b/i.test(log.description) || /in lc entry\b/i.test(log.description)))
     ) {
         return 'LC Receive';
+    }
+
+    // Stock module preservation
+    if (
+        log.module === 'Stock' ||
+        log.path?.includes('/api/stock') ||
+        (typeof details.view === 'string' && details.view.includes('stock')) ||
+        (typeof log.description === 'string' && /in stock\b/i.test(log.description))
+    ) {
+        return 'Stock';
     }
 
     return log.module || 'System';

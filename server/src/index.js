@@ -1214,22 +1214,75 @@ apiRouter.use(async (req, res, next) => {
         return;
       }
 
-      // Do not log full payload for large backup or restore operations to prevent MongoDB BSON size limits
-      if (url.includes('/backup') || url.includes('/restore')) {
+      // Skip read-only metadata/status/file listing queries for backup & restore so audit logs aren't spammed with fake backups
+      if (
+        method === 'GET' &&
+        (url.includes('/backup-modules') || url.includes('/backup-settings') || url.includes('/backup-files'))
+      ) {
+        return;
+      }
+
+      // Explicitly log actual backup, restore, and optimize operations
+      if (url.includes('/backup-database') || url.includes('/restore') || url.includes('/backup-files/optimize')) {
+        const isRestore = url.includes('/restore');
+        const isOptimize = url.includes('/optimize');
         logActivity({
           userId,
           username,
           userRole,
           displayName,
           module: 'Backup & Restore',
-          action: url.includes('/backup') ? 'BACKUP' : 'RESTORE',
+          action: isRestore ? 'RESTORE' : isOptimize ? 'OPTIMIZE' : 'BACKUP',
           actionCategory: 'SYSTEM',
-          description: url.includes('/backup') ? 'System database backup' : 'System database restore',
-          details: { message: 'Database backup/restore operation completed' },
+          description: isRestore ? 'System database restore' : isOptimize ? 'Optimized backup storage archives' : 'System database backup exported',
+          details: { message: isRestore ? 'Database restored from archive' : isOptimize ? 'Removed large base64 image bloat from backups' : 'Database backup generated and exported' },
           ip: clientIp,
           userAgent,
           method,
-          endpoint: url,
+          path: url,
+          status
+        });
+        return;
+      }
+
+      // Delete backup file
+      if (method === 'DELETE' && url.includes('/backup-files/')) {
+        const filename = decodeURIComponent(url.split('/backup-files/')[1] || '').split('?')[0];
+        logActivity({
+          userId,
+          username,
+          userRole,
+          displayName,
+          module: 'Backup & Restore',
+          action: 'DELETE',
+          actionCategory: 'SYSTEM',
+          description: `Deleted backup file ${filename || ''}`.trim(),
+          details: { filename },
+          ip: clientIp,
+          userAgent,
+          method,
+          path: url,
+          status
+        });
+        return;
+      }
+
+      // Update backup settings
+      if (method === 'POST' && url.includes('/backup-settings')) {
+        logActivity({
+          userId,
+          username,
+          userRole,
+          displayName,
+          module: 'Backup & Restore',
+          action: 'UPDATE',
+          actionCategory: 'SYSTEM',
+          description: 'Updated auto-backup settings',
+          details: req.body || {},
+          ip: clientIp,
+          userAgent,
+          method,
+          path: url,
           status
         });
         return;
