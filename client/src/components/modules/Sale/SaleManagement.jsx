@@ -3149,7 +3149,17 @@ const SaleManagement = ({
             if (matchedLc) {
                 let totalMt = 0;
                 if (Array.isArray(matchedLc.productsList) && matchedLc.productsList.length > 0) {
-                    totalMt = matchedLc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+                    const cleanP = (productName || '').trim().toLowerCase();
+                    const matchedProdInLc = cleanP ? matchedLc.productsList.find(p => {
+                        const pName = (p.productName || p.product || p.name || '').trim().toLowerCase();
+                        return pName === cleanP;
+                    }) : null;
+
+                    if (matchedProdInLc && parseFloat(matchedProdInLc.quantity) > 0) {
+                        totalMt = parseFloat(matchedProdInLc.quantity) || 0;
+                    } else {
+                        totalMt = matchedLc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+                    }
                 }
                 if (!totalMt) {
                     totalMt = parseFloat(matchedLc.quantity) || 0;
@@ -3164,13 +3174,28 @@ const SaleManagement = ({
                 }
             }
 
-            // Calculate total sold quantity for this LC across all previous sales
+            // Calculate total sold quantity for this LC across all previous actual sales
             let totalSoldKg = 0;
+            const targetProd = (productName || '').trim().toLowerCase();
+
             (allSalesRecords || []).forEach(s => {
-                if (editingId && s._id === editingId) return;
+                // Exclude current sale being edited or same invoice
+                if (editingId && (s._id?.toString() === editingId?.toString() || s.id?.toString() === editingId?.toString())) return;
+                if (formData.invoiceNo && s.invoiceNo && (s.invoiceNo.trim().toUpperCase() === formData.invoiceNo.trim().toUpperCase())) return;
+
+                // Exclude rejected and cancelled sales
+                const status = (s.status || '').toLowerCase();
+                if (status.includes('rejected') || status === 'cancelled') return;
+
+                // Exclude Order records (orders are reservations, not delivered sales consuming LC)
+                const sType = (s.saleType || '').toLowerCase();
+                if (sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry === true) return;
 
                 const items = s.items || [];
                 items.forEach(it => {
+                    const itProd = (it.productName || it.product || '').trim().toLowerCase();
+                    if (targetProd && itProd && itProd !== targetProd) return;
+
                     if (Array.isArray(it.brandEntries) && it.brandEntries.length > 0) {
                         it.brandEntries.forEach(be => {
                             if (isLcMatch(be.lcNo, lcNo)) {
@@ -3182,18 +3207,26 @@ const SaleManagement = ({
                     }
                 });
                 if (items.length === 0 && s.lcNo && isLcMatch(s.lcNo, lcNo)) {
-                    totalSoldKg += (parseFloat(s.totalQuantity) || parseFloat(s.quantity) || parseFloat(s.qty) || 0);
+                    const sProd = (s.productName || s.product || '').trim().toLowerCase();
+                    if (!targetProd || !sProd || sProd === targetProd) {
+                        totalSoldKg += (parseFloat(s.totalQuantity) || parseFloat(s.quantity) || parseFloat(s.qty) || 0);
+                    }
                 }
             });
 
+            const currentSaleMt = currentSaleQty / 1000;
             const newTotalSoldKg = totalSoldKg + currentSaleQty;
             const newTotalSoldMt = newTotalSoldKg / 1000;
             const totalSoldMt = totalSoldKg / 1000;
-            const remainingKg = lcTotalKg > 0 ? (lcTotalKg - newTotalSoldKg) : 0;
-            const remainingMt = remainingKg / 1000;
+            const availableBeforeSaleKg = lcTotalKg > 0 ? Math.max(0, lcTotalKg - totalSoldKg) : 0;
+            const availableBeforeSaleMt = availableBeforeSaleKg / 1000;
+            const balanceAfterSaleKg = lcTotalKg > 0 ? (lcTotalKg - newTotalSoldKg) : 0;
+            const balanceAfterSaleMt = Math.abs(balanceAfterSaleKg) / 1000;
             const exceedsLc = lcTotalKg > 0 && newTotalSoldKg > lcTotalKg;
             const excessKg = exceedsLc ? (newTotalSoldKg - lcTotalKg) : 0;
             const excessMt = excessKg / 1000;
+            const remainingKg = Math.max(0, balanceAfterSaleKg);
+            const remainingMt = remainingKg / 1000;
 
             summaries.push({
                 lcNo,
@@ -3204,8 +3237,13 @@ const SaleManagement = ({
                 totalSoldKg,
                 totalSoldMt,
                 currentSaleQty,
+                currentSaleMt,
                 afterThisSaleKg: newTotalSoldKg,
                 afterThisSaleMt: newTotalSoldMt,
+                availableBeforeSaleKg,
+                availableBeforeSaleMt,
+                balanceAfterSaleKg,
+                balanceAfterSaleMt,
                 remainingKg,
                 remainingMt,
                 exceedsLc,
@@ -3215,7 +3253,7 @@ const SaleManagement = ({
         });
 
         return summaries;
-    }, [formData.items, formData.lcNo, formData.totalQuantity, lcRecords, allAvailableLCs, allSalesRecords, editingId]);
+    }, [formData.items, formData.lcNo, formData.totalQuantity, formData.invoiceNo, formData.orderNo, lcRecords, allAvailableLCs, allSalesRecords, editingId]);
 
     const getLcProductNames = (lc) => {
         if (!lc) return [];
@@ -6679,52 +6717,78 @@ const SaleManagement = ({
 
                                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                             {/* LC QTY */}
-                                                            <div className="bg-gradient-to-br from-blue-50/80 to-indigo-50/50 rounded-xl p-3 border border-blue-100/90">
-                                                                <div className="text-[11px] font-bold uppercase tracking-wider text-blue-700 mb-1">
-                                                                    LC QTY
-                                                                </div>
-                                                                <div className="text-lg font-black text-gray-900">
-                                                                    {summary.lcTotalKg.toLocaleString('en-IN')} <span className="text-xs font-bold text-gray-500">KG</span>
-                                                                </div>
-                                                                <div className="text-[11px] font-medium text-gray-500 mt-0.5">
-                                                                    ≈ {summary.lcTotalMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Sales QTY */}
-                                                            <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/50 rounded-xl p-3 border border-amber-100/90">
-                                                                <div className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-1">
-                                                                    Sales QTY
-                                                                </div>
-                                                                <div className="text-lg font-black text-gray-900">
-                                                                    {summary.totalSoldKg.toLocaleString('en-IN')} <span className="text-xs font-bold text-gray-500">KG</span>
-                                                                </div>
-                                                                <div className="text-[11px] font-medium text-gray-500 mt-0.5">
-                                                                    ≈ {summary.totalSoldMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT
-                                                                </div>
-                                                            </div>
-
-                                                            {/* After this sales qty */}
-                                                            <div className={`bg-gradient-to-br ${isWarning ? 'from-rose-50 to-red-100/60 border-red-300' : 'from-indigo-50/80 to-blue-50/50 border-indigo-200/90'} rounded-xl p-3 border`}>
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className={`text-[11px] font-bold uppercase tracking-wider ${isWarning ? 'text-red-700' : 'text-indigo-700'} mb-1`}>
-                                                                        After this sales qty
+                                                            <div className="bg-gradient-to-br from-blue-50/80 to-indigo-50/50 rounded-xl p-3 border border-blue-100/90 flex flex-col justify-between">
+                                                                <div>
+                                                                    <div className="text-[11px] font-bold uppercase tracking-wider text-blue-700 mb-1">
+                                                                        LC QTY
                                                                     </div>
-                                                                    {summary.currentSaleQty > 0 && (
-                                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isWarning ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-white/90 text-indigo-700 border border-indigo-200'}`}>
-                                                                            +{summary.currentSaleQty.toLocaleString('en-IN')} KG
-                                                                        </span>
-                                                                    )}
+                                                                    <div className="text-lg font-black text-gray-900">
+                                                                        {summary.lcTotalKg.toLocaleString('en-IN')} <span className="text-xs font-bold text-gray-500">KG</span>
+                                                                    </div>
+                                                                    <div className="text-[11px] font-medium text-gray-500 mt-0.5">
+                                                                        ≈ {summary.lcTotalMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT
+                                                                    </div>
                                                                 </div>
-                                                                <div className={`text-lg font-black ${isWarning ? 'text-red-600' : 'text-indigo-900'}`}>
-                                                                    {summary.afterThisSaleKg.toLocaleString('en-IN')} <span className="text-xs font-bold text-gray-500">KG</span>
+                                                                <div className="text-[10px] text-gray-500 mt-2 pt-1.5 border-t border-blue-100/70 flex items-center justify-between">
+                                                                    <span>LC Quota</span>
+                                                                    <span className="font-semibold text-blue-700">Avail: {summary.availableBeforeSaleKg.toLocaleString('en-IN')} KG</span>
                                                                 </div>
-                                                                <div className={`text-[11px] font-medium ${isWarning ? 'text-red-500 font-bold' : 'text-gray-500'} mt-0.5`}>
-                                                                    ≈ {summary.afterThisSaleMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT
-                                                                    {summary.lcTotalKg > 0 && !isWarning && (
-                                                                        <span className="text-emerald-600 font-semibold ml-1">
-                                                                            (Bal: {summary.remainingKg.toLocaleString('en-IN')} KG)
+                                                            </div>
+
+                                                            {/* Sale. Qty */}
+                                                            <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/50 rounded-xl p-3 border border-amber-100/90 flex flex-col justify-between">
+                                                                <div>
+                                                                    <div className="flex items-center justify-between mb-1">
+                                                                        <div className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                                                                            Sale. Qty
+                                                                        </div>
+                                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                                                                            Using this LC
                                                                         </span>
+                                                                    </div>
+                                                                    <div className="text-lg font-black text-gray-900">
+                                                                        {summary.totalSoldKg.toLocaleString('en-IN')} <span className="text-xs font-bold text-gray-500">KG</span>
+                                                                    </div>
+                                                                    <div className="text-[11px] font-medium text-gray-500 mt-0.5">
+                                                                        ≈ {summary.totalSoldMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-[10px] text-gray-500 mt-2 pt-1.5 border-t border-amber-100/70 flex items-center justify-between">
+                                                                    <span>Total sale qty using this LC</span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* After Sale */}
+                                                            <div className={`bg-gradient-to-br ${isWarning ? 'from-rose-50 to-red-100/60 border-red-300' : 'from-indigo-50/80 to-blue-50/50 border-indigo-200/90'} rounded-xl p-3 border flex flex-col justify-between`}>
+                                                                <div>
+                                                                    <div className="flex items-center justify-between mb-1">
+                                                                        <div className={`text-[11px] font-bold uppercase tracking-wider ${isWarning ? 'text-red-700' : 'text-indigo-700'}`}>
+                                                                            After Sale
+                                                                        </div>
+                                                                        {summary.currentSaleQty > 0 && (
+                                                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isWarning ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-indigo-100 text-indigo-800 border border-indigo-200'}`}>
+                                                                                +{summary.currentSaleQty.toLocaleString('en-IN')} KG (This Entry)
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className={`text-lg font-black ${isWarning ? 'text-red-600' : 'text-indigo-950'}`}>
+                                                                        {summary.afterThisSaleKg.toLocaleString('en-IN')} <span className="text-xs font-bold text-gray-500">KG</span>
+                                                                    </div>
+                                                                    <div className={`text-[11px] font-medium ${isWarning ? 'text-red-500 font-bold' : 'text-gray-500'} mt-0.5`}>
+                                                                        ≈ {summary.afterThisSaleMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT
+                                                                    </div>
+                                                                </div>
+                                                                <div className={`text-[10px] font-semibold mt-2 pt-1.5 border-t ${isWarning ? 'text-red-600 border-red-200/70' : 'text-emerald-700 border-indigo-100/70'} flex items-center justify-between`}>
+                                                                    {isWarning ? (
+                                                                        <>
+                                                                            <span>Deficit:</span>
+                                                                            <span>-{summary.excessKg.toLocaleString('en-IN')} KG (Exceeds LC)</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span>Balance:</span>
+                                                                            <span className="font-bold text-emerald-700">{summary.remainingKg.toLocaleString('en-IN')} KG</span>
+                                                                        </>
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -6741,7 +6805,7 @@ const SaleManagement = ({
                                                                         Warning: Sales Exceeds LC Quantity!
                                                                     </div>
                                                                     <div className="text-xs font-semibold text-red-600 mt-0.5">
-                                                                        New Sales QTY ({summary.afterThisSaleKg.toLocaleString('en-IN')} KG) exceeds LC QTY ({summary.lcTotalKg.toLocaleString('en-IN')} KG) by <span className="underline font-black">{summary.excessKg.toLocaleString('en-IN')} KG</span> (≈ {summary.excessMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT).
+                                                                        Total sales after this entry ({summary.afterThisSaleKg.toLocaleString('en-IN')} KG) exceeds LC Quantity ({summary.lcTotalKg.toLocaleString('en-IN')} KG) by <span className="underline font-black">{summary.excessKg.toLocaleString('en-IN')} KG</span> (≈ {summary.excessMt.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT).
                                                                     </div>
                                                                 </div>
                                                             </div>
