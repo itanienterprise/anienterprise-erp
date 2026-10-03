@@ -123,6 +123,7 @@ const StockReport = ({
 
     // --- Stock Data for Report (uses unified calculated stockData) ---
     const activeStockData = React.useMemo(() => {
+        if (!isOpen) return { displayRecords: [], summary: {} };
         if (stockRecords) {
             return calculateStockData(
                 stockRecords,
@@ -136,11 +137,12 @@ const StockReport = ({
                 returnsList
             );
         }
-        return stockData;
-    }, [stockData, stockRecords, stockFilters, reportType, searchQuery, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
+        return stockData || { displayRecords: [], summary: {} };
+    }, [isOpen, stockData, stockRecords, stockFilters, reportType, searchQuery, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
 
     // --- Search & Filter Logic ---
     const filteredRecords = React.useMemo(() => {
+        if (!isOpen || !activeStockData?.displayRecords) return [];
         let records = activeStockData.displayRecords;
 
         // Apply brand filter from Advanced Filter panel

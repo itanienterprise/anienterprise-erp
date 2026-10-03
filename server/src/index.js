@@ -96,8 +96,40 @@ io.on('connection', (socket) => {
   });
 });
 
+// In-Memory Fast Cache for frequent heavy read endpoints
+const memoryCache = {
+  stock: null,
+  sales: null,
+  purchases: null,
+  purchaseReceives: null,
+  customers: null,
+  warehouses: null,
+  insurancePayments: null,
+  cnfPayments: null,
+  pendingIndicators: null,
+  pendingTimestamp: 0
+};
+
+const invalidateMemoryCache = (modName) => {
+  const mod = (modName || '').toLowerCase().trim();
+  memoryCache.pendingIndicators = null;
+  if (!mod || mod === 'all') {
+    Object.keys(memoryCache).forEach(k => { if (k !== 'pendingTimestamp') memoryCache[k] = null; });
+    return;
+  }
+  if (['stock', 'stock-baseline'].includes(mod)) memoryCache.stock = null;
+  if (['sale', 'sales'].includes(mod)) memoryCache.sales = null;
+  if (['purchase', 'purchases'].includes(mod)) memoryCache.purchases = null;
+  if (['purchase-receive', 'purchase-receives'].includes(mod)) memoryCache.purchaseReceives = null;
+  if (['customer', 'customers'].includes(mod)) memoryCache.customers = null;
+  if (['warehouse', 'warehouses'].includes(mod)) memoryCache.warehouses = null;
+  if (['insurance-payment', 'insurance-payments'].includes(mod)) memoryCache.insurancePayments = null;
+  if (['cnf-payment', 'cnf-payments'].includes(mod)) memoryCache.cnfPayments = null;
+};
+
 const broadcastUpdate = (moduleName, action = 'update', payload = {}) => {
   try {
+    invalidateMemoryCache(moduleName);
     const clientsCount = io.engine ? io.engine.clientsCount : (io.sockets?.sockets ? io.sockets.sockets.size : 0);
     console.log(`[Socket] Broadcasting real-time update: module=${moduleName}, action=${action}, clientsCount=${clientsCount}`);
     io.emit('data_updated', {
@@ -708,6 +740,141 @@ app.get('/', (req, res) => {
 
 apiRouter.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: Math.floor(process.uptime()), timestamp: Date.now() });
+});
+
+// Lightweight Pending Indicators Endpoint
+apiRouter.get('/api/pending-indicators', async (req, res) => {
+  try {
+    const now = Date.now();
+    if (memoryCache.pendingIndicators && (now - memoryCache.pendingTimestamp < 45000)) {
+      return res.json(memoryCache.pendingIndicators);
+    }
+
+    const getCachedOrFetch = async (cacheKey, Model, decryptFn) => {
+      if (memoryCache[cacheKey]) return memoryCache[cacheKey];
+      const records = await Model.find().sort({ createdAt: -1 });
+      const decrypted = records.map(r => {
+        let d = decryptData(r.data);
+        if (d && d.data && typeof d.data === 'string' && !d.invoiceNo && !d.productName) {
+          try { d = decryptData(d.data); } catch (e) {}
+        }
+        return { ...d, _id: r._id, createdAt: d?.createdAt || r.createdAt, ...(decryptFn ? decryptFn(r, d) : {}) };
+      });
+      memoryCache[cacheKey] = decrypted;
+      return decrypted;
+    };
+
+    const [stockData, salesData, purchasesData, purchaseReceivesData, customersData, whData, insPaymentsData, cnfPaymentsData] = await Promise.all([
+      getCachedOrFetch('stock', Stock),
+      getCachedOrFetch('sales', Sale, (r, d) => ({ saleType: d.saleType || r.saleType, invoiceNo: d.invoiceNo || r.invoiceNo })),
+      getCachedOrFetch('purchases', Purchase),
+      getCachedOrFetch('purchaseReceives', PurchaseReceive),
+      getCachedOrFetch('customers', Customer),
+      getCachedOrFetch('warehouses', Warehouse),
+      getCachedOrFetch('insurancePayments', InsurancePayment),
+      getCachedOrFetch('cnfPayments', CnFPayment)
+    ]);
+
+    const hasRequestedLC = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !!item.lcNo);
+    const hasRequestedStockMgmt = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !item.lcNo);
+    const hasRequestedTransfer = whData.some(item => {
+      let dec = item.data ? decryptData(item.data) : item;
+      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) {} }
+      return (dec?.status || '').toLowerCase() === 'requested';
+    });
+
+    const hasRequestedPurchase = purchasesData.some(item => {
+      const status = (item.status || '').toLowerCase();
+      const isReq = status === 'requested' || status === 'pending';
+      const isEditReq = item.isEdited === true && !isReq;
+      return isReq || isEditReq;
+    });
+
+    const hasRequestedPurchaseReceive = purchaseReceivesData.some(item => {
+      const status = (item.status || '').toLowerCase();
+      const isReq = status === 'requested' || status === 'pending';
+      const isEditReq = item.isEdited === true && !isReq;
+      return isReq || isEditReq;
+    });
+
+    const hasRequestedOrder = salesData.some(item => {
+      const status = (item.status || '').toLowerCase();
+      const type = (item.saleType || '').toLowerCase();
+      const isOrder = type === 'order' || (item.invoiceNo || item.orderNo || '').startsWith('ORD');
+      const isReq = status === 'requested';
+      const isEditReq = item.isEdited === true && !isReq;
+      return isOrder && (isReq || isEditReq);
+    });
+
+    const hasRequestedGeneralSale = salesData.some(item => {
+      const status = (item.status || '').toLowerCase();
+      const type = (item.saleType || '').toLowerCase();
+      const isGeneral = type === 'general' || (item.invoiceNo || '').startsWith('GS');
+      const isReq = status === 'requested';
+      const isEditReq = item.isEdited === true && !isReq;
+      return isGeneral && (isReq || isEditReq);
+    });
+
+    const hasRequestedBorderSale = salesData.some(item => {
+      const status = (item.status || '').toLowerCase();
+      const type = (item.saleType || '').toLowerCase();
+      const isBorder = type === 'border' || (item.invoiceNo || '').startsWith('BS');
+      const isReq = status === 'requested';
+      const isEditReq = item.isEdited === true && !isReq;
+      return isBorder && (isReq || isEditReq);
+    });
+
+    const hasRequestedPaymentCollection = customersData.some(item => {
+      const history = Array.isArray(item.paymentHistory) ? item.paymentHistory : [];
+      return history.some(p => {
+        const status = (p.status || '').toLowerCase();
+        const isReq = status === 'requested';
+        const isEditReq = (p.isEdited === true || p.isEdited === 'true') && !isReq;
+        return isReq || isEditReq;
+      });
+    });
+
+    const hasRequestedPayToCustomer = customersData.some(item => {
+      const history = Array.isArray(item.payToCustomerHistory) ? item.payToCustomerHistory : [];
+      return history.some(p => {
+        const status = (p.status || '').toLowerCase();
+        const isReq = status === 'requested';
+        const isEditReq = (p.isEdited === true || p.isEdited === 'true') && !isReq;
+        return isReq || isEditReq;
+      });
+    });
+
+    const hasRequestedInsurancePayment = insPaymentsData.some(p => (p.status || '').toLowerCase() === 'requested');
+    const hasRequestedCnfPayment = cnfPaymentsData.some(p => (p.status || '').toLowerCase() === 'requested');
+
+    const result = {
+      lc: hasRequestedLC,
+      stock: hasRequestedStockMgmt || hasRequestedTransfer,
+      transfer: hasRequestedTransfer,
+      sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder || hasRequestedPurchase || hasRequestedPurchaseReceive,
+      crm: false,
+      paymentCollection: hasRequestedPaymentCollection,
+      payToCustomer: hasRequestedPayToCustomer,
+      lcReceive: hasRequestedLC,
+      stockManagement: hasRequestedStockMgmt,
+      order: hasRequestedOrder,
+      generalSale: hasRequestedGeneralSale,
+      borderSale: hasRequestedBorderSale,
+      purchase: hasRequestedPurchase,
+      purchaseReceive: hasRequestedPurchaseReceive,
+      insurancePayment: hasRequestedInsurancePayment,
+      insurance: hasRequestedInsurancePayment,
+      cnfPayment: hasRequestedCnfPayment,
+      cnf: hasRequestedCnfPayment
+    };
+
+    memoryCache.pendingIndicators = result;
+    memoryCache.pendingTimestamp = Date.now();
+    res.json(result);
+  } catch (err) {
+    console.error('Error computing pending indicators:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Admin Authorization Helper & Middleware
@@ -1517,11 +1684,15 @@ apiRouter.put('/api/cnf-payments/:id', async (req, res) => {
 
 apiRouter.get('/api/cnf-payments', async (req, res) => {
   try {
+    if (memoryCache.cnfPayments) {
+      return res.json(memoryCache.cnfPayments);
+    }
     const records = await CnFPayment.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
+    memoryCache.cnfPayments = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1736,6 +1907,9 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
 
 apiRouter.get('/api/stock', async (req, res) => {
   try {
+    if (memoryCache.stock) {
+      return res.json(memoryCache.stock);
+    }
     const stock = await Stock.find().sort({ createdAt: -1 });
     const decrypted = stock.map(r => {
       let d = decryptData(r.data);
@@ -1745,6 +1919,7 @@ apiRouter.get('/api/stock', async (req, res) => {
       }
       return { ...d, _id: r._id, createdAt: d?.createdAt || r.createdAt };
     });
+    memoryCache.stock = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2308,11 +2483,15 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
 
 apiRouter.get('/api/customers', async (req, res) => {
   try {
+    if (memoryCache.customers) {
+      return res.json(memoryCache.customers);
+    }
     const records = await Customer.find().sort({ createdAt: -1 });
     const decryptedCustomers = records.map(record => {
       const decrypted = decryptData(record.data);
       return { ...decrypted, _id: record._id, createdAt: record.createdAt };
     });
+    memoryCache.customers = decryptedCustomers;
     res.json(decryptedCustomers);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2435,6 +2614,9 @@ apiRouter.put('/api/warehouses/:id', async (req, res) => {
 
 apiRouter.get('/api/warehouses', async (req, res) => {
   try {
+    if (memoryCache.warehouses) {
+      return res.json(memoryCache.warehouses);
+    }
     const records = await Warehouse.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       let d = decryptData(r.data);
@@ -2457,6 +2639,7 @@ apiRouter.get('/api/warehouses', async (req, res) => {
       }
       return { ...(typeof d === 'object' ? d : {}), _id: r._id, createdAt: r.createdAt };
     });
+    memoryCache.warehouses = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2712,6 +2895,9 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
 
 apiRouter.get('/api/sales', async (req, res) => {
   try {
+    if (memoryCache.sales) {
+      return res.json(memoryCache.sales);
+    }
     const records = await Sale.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       let d = decryptData(r.data);
@@ -2721,6 +2907,7 @@ apiRouter.get('/api/sales', async (req, res) => {
       }
       return { ...d, _id: r._id, createdAt: r.createdAt, saleType: d.saleType || r.saleType, invoiceNo: d.invoiceNo || r.invoiceNo };
     });
+    memoryCache.sales = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2767,6 +2954,9 @@ apiRouter.delete('/api/purchases/:id', async (req, res) => {
 
 apiRouter.get('/api/purchases', async (req, res) => {
   try {
+    if (memoryCache.purchases) {
+      return res.json(memoryCache.purchases);
+    }
     const records = await Purchase.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       let d = decryptData(r.data);
@@ -2775,6 +2965,7 @@ apiRouter.get('/api/purchases', async (req, res) => {
       }
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
+    memoryCache.purchases = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2823,6 +3014,9 @@ apiRouter.delete('/api/purchase-receives/:id', async (req, res) => {
 
 apiRouter.get('/api/purchase-receives', async (req, res) => {
   try {
+    if (memoryCache.purchaseReceives) {
+      return res.json(memoryCache.purchaseReceives);
+    }
     const records = await PurchaseReceive.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       let d = decryptData(r.data);
@@ -2831,6 +3025,7 @@ apiRouter.get('/api/purchase-receives', async (req, res) => {
       }
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
+    memoryCache.purchaseReceives = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3087,11 +3282,15 @@ apiRouter.put('/api/insurance-payments/:id', async (req, res) => {
 
 apiRouter.get('/api/insurance-payments', async (req, res) => {
   try {
+    if (memoryCache.insurancePayments) {
+      return res.json(memoryCache.insurancePayments);
+    }
     const records = await InsurancePayment.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
+    memoryCache.insurancePayments = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -4551,12 +4750,64 @@ apiRouter.get('/api/backup-modules', adminOnly, async (req, res) => {
   }
 });
 
-// Backup Database API (Supports full database or specific modules/models)
+// Clean and optimize backup data (strips heavy base64 images and attachments to keep backups lightweight)
+const cleanBackupDocuments = (modelName, docs, options = {}) => {
+  const { excludeEmployeeImages = true, excludeAttachments = false } = options;
+  if (!Array.isArray(docs) || docs.length === 0) return docs;
+
+  if (excludeEmployeeImages) {
+    if (modelName === 'User') {
+      docs.forEach(u => {
+        delete u.profilePhoto;
+        delete u.avatarPhoto;
+      });
+    } else if (modelName === 'Employee') {
+      docs.forEach(e => {
+        if (e.data) {
+          try {
+            const dec = decryptData(e.data);
+            if (dec && dec.profilePhoto) {
+              delete dec.profilePhoto;
+              e.data = encryptData(dec);
+            }
+          } catch (_err) {}
+        }
+      });
+    }
+  }
+
+  if (excludeAttachments && modelName === 'IpRecord') {
+    docs.forEach(ip => {
+      if (ip.data) {
+        try {
+          const dec = decryptData(ip.data);
+          if (dec && dec.ipAttachment) {
+            delete dec.ipAttachment;
+            ip.data = encryptData(dec);
+          }
+        } catch (_err) {}
+      }
+    });
+  }
+
+  // Cap old notifications in backups (> 45 days) if count exceeds 300 to prevent bloat
+  if (modelName === 'Notification' && docs.length > 300) {
+    const cutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    docs = docs.filter(n => new Date(n.createdAt || 0) >= cutoff);
+  }
+
+  return docs;
+};
+
+// Backup Database API (Supports full database or specific modules/models with optimization options)
 apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
   try {
     const models = mongoose.connection.models;
     const backupData = {};
-    const { modules: moduleQuery, models: modelsQuery } = req.query;
+    const { modules: moduleQuery, models: modelsQuery, excludeEmployeeImages, excludeAttachments } = req.query;
+
+    const shouldExcludePhotos = excludeEmployeeImages === undefined || excludeEmployeeImages === 'true' || excludeEmployeeImages === true;
+    const shouldExcludeAttachments = excludeAttachments === 'true' || excludeAttachments === true;
 
     let targetModelNames = null;
 
@@ -4577,7 +4828,11 @@ apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
         continue;
       }
       const Model = models[modelName];
-      const documents = await Model.find({}).lean();
+      let documents = await Model.find({}).lean();
+      documents = cleanBackupDocuments(modelName, documents, {
+        excludeEmployeeImages: shouldExcludePhotos,
+        excludeAttachments: shouldExcludeAttachments
+      });
       backupData[modelName] = documents;
     }
 
@@ -4585,6 +4840,8 @@ apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
       success: true,
       version: '1.0',
       backupType: targetModelNames ? 'module' : 'full',
+      excludeEmployeeImages: shouldExcludePhotos,
+      excludeAttachments: shouldExcludeAttachments,
       selectedModules: moduleQuery ? moduleQuery.split(',').map(s => s.trim()).filter(Boolean) : undefined,
       selectedModels: targetModelNames ? Array.from(targetModelNames) : undefined,
       timestamp: new Date().toISOString(),
@@ -4764,15 +5021,74 @@ apiRouter.get('/api/backup-settings', adminOnly, async (req, res) => {
 
 apiRouter.post('/api/backup-settings', adminOnly, async (req, res) => {
   try {
-    const { enabled, schedule, time, dayOfWeek, dayOfMonth, timezoneOffset } = req.body;
+    const { enabled, schedule, time, dayOfWeek, dayOfMonth, timezoneOffset, excludeEmployeeImages, excludeAttachments } = req.body;
     const setting = await BackupSetting.findOneAndUpdate(
       {},
-      { enabled, schedule, time, dayOfWeek, dayOfMonth, timezoneOffset },
+      { enabled, schedule, time, dayOfWeek, dayOfMonth, timezoneOffset, excludeEmployeeImages, excludeAttachments },
       { returnDocument: 'after', upsert: true }
     );
     res.json(setting);
   } catch (err) {
     res.status(400).json({ message: err.message });
+  }
+});
+
+// Run scheduled auto-backup immediately on-demand
+apiRouter.post('/api/run-auto-backup-now', adminOnly, async (req, res) => {
+  try {
+    await runAutoBackup();
+    res.json({ success: true, message: 'Automated backup completed successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to run backup: ' + err.message });
+  }
+});
+
+// Optimize existing backup files on server (strips heavy base64 employee photos and minifies JSON)
+apiRouter.post('/api/backup-files/optimize', adminOnly, async (req, res) => {
+  try {
+    const BACKUP_DIR = await getBackupDir();
+    if (!fs.existsSync(BACKUP_DIR)) {
+      return res.json({ success: true, message: 'No backup directory found', optimizedCount: 0 });
+    }
+    const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json'));
+    let optimizedCount = 0;
+    let totalBytesSaved = 0;
+
+    for (const f of files) {
+      const filePath = path.join(BACKUP_DIR, f);
+      const originalStat = fs.statSync(filePath);
+      try {
+        const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        if (parsed && parsed.data && typeof parsed.data === 'object') {
+          for (const mName in parsed.data) {
+            parsed.data[mName] = cleanBackupDocuments(mName, parsed.data[mName], {
+              excludeEmployeeImages: true,
+              excludeAttachments: req.body.excludeAttachments === true
+            });
+          }
+          parsed.isOptimized = true;
+          const minified = JSON.stringify(parsed);
+          fs.writeFileSync(filePath, minified, 'utf8');
+          const newStat = fs.statSync(filePath);
+          if (newStat.size < originalStat.size) {
+            totalBytesSaved += (originalStat.size - newStat.size);
+            optimizedCount++;
+          }
+        }
+      } catch (_e) {
+        // Skip any corrupted files
+      }
+    }
+
+    res.json({
+      success: true,
+      optimizedCount,
+      totalBytesSaved,
+      savedMB: (totalBytesSaved / (1024 * 1024)).toFixed(2),
+      message: `Successfully optimized ${optimizedCount} backup files, reclaiming ${(totalBytesSaved / (1024 * 1024)).toFixed(2)} MB of disk space.`
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Optimization failed: ' + err.message });
   }
 });
 
@@ -5467,7 +5783,7 @@ apiRouter.delete('/api/logs/clear', adminOnly, async (req, res) => {
   }
 });
 
-// Automated Activity Log Retention & Housekeeping
+// Automated Activity Log & Notification Retention Housekeeping
 const cleanupOldActivityLogs = async () => {
   try {
     const now = Date.now();
@@ -5484,11 +5800,18 @@ const cleanupOldActivityLogs = async () => {
       timestamp: { $lt: generalCutoff }
     });
 
-    const totalCleaned = (clickRes.deletedCount || 0) + (generalRes.deletedCount || 0);
+    // 3. Purge notifications older than 60 days to prevent ballooning database & backups
+    const notifCutoff = new Date(now - 60 * 24 * 60 * 60 * 1000);
+    const notifRes = await Notification.deleteMany({
+      createdAt: { $lt: notifCutoff }
+    });
+
+    const totalCleaned = (clickRes.deletedCount || 0) + (generalRes.deletedCount || 0) + (notifRes.deletedCount || 0);
     if (totalCleaned > 0) {
-      console.log(`[LogHousekeeping] Pruned ${totalCleaned} old logs (${clickRes.deletedCount || 0} UI clicks, ${generalRes.deletedCount || 0} audit logs). Reclaiming storage...`);
+      console.log(`[LogHousekeeping] Pruned ${totalCleaned} old records (${clickRes.deletedCount || 0} UI clicks, ${generalRes.deletedCount || 0} audit logs, ${notifRes.deletedCount || 0} notifications). Reclaiming storage...`);
       try {
         await mongoose.connection.db.command({ compact: 'activitylogs' });
+        await mongoose.connection.db.command({ compact: 'notifications' });
       } catch (ce) {}
     }
   } catch (e) {
@@ -5501,7 +5824,7 @@ setInterval(cleanupOldActivityLogs, 24 * 60 * 60 * 1000);
 setTimeout(cleanupOldActivityLogs, 15000);
 
 
-// Auto-Backup Scheduling Logic
+// Auto-Backup Scheduling Logic (Optimized without employee images & minified)
 const runAutoBackup = async () => {
   try {
     const BACKUP_DIR = await getBackupDir();
@@ -5509,11 +5832,19 @@ const runAutoBackup = async () => {
       fs.mkdirSync(BACKUP_DIR, { recursive: true });
     }
 
+    const setting = await BackupSetting.findOne({}).lean();
+    const excludeEmployeeImages = setting ? setting.excludeEmployeeImages !== false : true;
+    const excludeAttachments = setting ? setting.excludeAttachments === true : false;
+
     const models = mongoose.connection.models;
     const backupData = {};
     for (const modelName in models) {
       const Model = models[modelName];
-      const documents = await Model.find({}).lean();
+      let documents = await Model.find({}).lean();
+      documents = cleanBackupDocuments(modelName, documents, {
+        excludeEmployeeImages,
+        excludeAttachments
+      });
       backupData[modelName] = documents;
     }
 
@@ -5521,14 +5852,17 @@ const runAutoBackup = async () => {
       success: true,
       version: '1.0',
       timestamp: new Date().toISOString(),
+      excludeEmployeeImages,
+      excludeAttachments,
       data: backupData
     };
 
     const dateStr = new Date().toISOString().slice(0, 10);
     const timeStr = new Date().toTimeString().slice(0, 8).replace(/:/g, '-');
     const filename = `auto_backup_${dateStr}_${timeStr}.json`;
-    fs.writeFileSync(path.join(BACKUP_DIR, filename), JSON.stringify(backupObj, null, 2));
-    console.log(`[AutoBackup] Successfully backed up database to ${filename}`);
+    // Write minified JSON (without indentation) to eliminate megabytes of redundant whitespace
+    fs.writeFileSync(path.join(BACKUP_DIR, filename), JSON.stringify(backupObj));
+    console.log(`[AutoBackup] Successfully backed up database to ${filename} (excludeEmployeeImages: ${excludeEmployeeImages}, excludeAttachments: ${excludeAttachments})`);
 
     await BackupSetting.findOneAndUpdate({}, { lastRun: new Date() }, { upsert: true });
 

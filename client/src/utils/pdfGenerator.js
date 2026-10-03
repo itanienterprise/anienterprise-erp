@@ -4,7 +4,7 @@ import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
 import { computeCustomerBalance, compareTransactions, getIsoDateString } from './helpers';
 import { api } from './api';
-import { getAdjustedLcValues, getRecCostingKg, getLcMilestoneFinances } from './lcValueUtils';
+import { getAdjustedLcValues, getRecCostingKg, getLcMilestoneFinances, calculateLcConclusion } from './lcValueUtils';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -8169,6 +8169,7 @@ export const generateProfitLossPDF = async (params) => {
             totalLcCostOfGoodsQty = 0,
             totalLcReceiveAmount = 0,
             totalLcSalesAmount = 0,
+            totalLcSalesQty = 0,
             filterType,
             selectedMonth,
             selectedYear,
@@ -8178,7 +8179,8 @@ export const generateProfitLossPDF = async (params) => {
             selectedProduct,
             selectedLcNo,
             pieData,
-            adjustedLcValues
+            adjustedLcValues,
+            conclusionData
         } = params;
 
         const doc = new jsPDF({
@@ -8622,9 +8624,10 @@ export const generateProfitLossPDF = async (params) => {
                         ];
                     }),
                     [
-                        { content: 'Total Cost of Goods (COG)', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } },
-                        { content: `${Math.round(totalLcCostOfGoodsQty).toLocaleString()} KG`, styles: { fontStyle: 'bold' } },
-                        { content: `Tk ${Math.round(totalLcCostOfGoodsAmount).toLocaleString('en-IN')}`, styles: { fontStyle: 'bold' } }
+                        { content: 'Total Cost of Goods (COG)', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `Tk ${(totalLcCostOfGoodsQty > 0 ? (totalLcCostOfGoodsAmount / totalLcCostOfGoodsQty) : 0).toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `${Math.round(totalLcCostOfGoodsQty).toLocaleString()} KG`, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `Tk ${Math.round(totalLcCostOfGoodsAmount).toLocaleString('en-IN')}`, styles: { fontStyle: 'bold', halign: 'right' } }
                     ]
                 ],
                 theme: 'grid',
@@ -8710,6 +8713,176 @@ export const generateProfitLossPDF = async (params) => {
                 columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right', fontStyle: 'bold' } }
             });
             currentY = doc.lastAutoTable.finalY + 6;
+        }
+
+        // SECTION 8: LC CONCLUSION (On a New Page as requested)
+        if (selectedLc) {
+            doc.addPage();
+
+            // Brand Header on Conclusion Page
+            let concY = margin;
+            if (logoImg) {
+                doc.addImage(logoImg, 'PNG', margin, concY, 22, 22);
+            } else {
+                doc.setFillColor(249, 115, 22);
+                doc.roundedRect(margin, concY, 20, 20, 3, 3, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(18);
+                doc.setFont('helvetica', 'bold');
+                doc.text("A", margin + 10, concY + 13, { align: 'center' });
+            }
+
+            doc.setTextColor(20, 25, 35);
+            doc.setFontSize(26);
+            doc.setFont('helvetica', 'bold');
+            doc.text("ANI ENTERPRISE", margin + 24, concY + 13);
+
+            // Contact Info (Right Aligned)
+            doc.setFontSize(9.5);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(0, 0, 0);
+            doc.text([
+                "766, H.M Tower, Level-06",
+                "Borogola, Bogura, Bangladesh",
+                "Tel: +8802588813057",
+                "Email: anienterprise051@gmail.com"
+            ], pageWidth - margin, concY + 3, { align: 'right', lineHeightFactor: 1.15 });
+
+            // Title Badge
+            let badgeY = concY + 26;
+            doc.setFillColor(251, 146, 60);
+            doc.roundedRect((pageWidth / 2) - 45, badgeY - 6, 90, 8, 2, 2, 'F');
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.text("CONCLUSION STATEMENT", pageWidth / 2, badgeY - 0.5, { align: 'center' });
+
+            const conc = conclusionData || calculateLcConclusion({
+                selectedLc,
+                adjustedLcValues,
+                selectedLcCostOfGoods,
+                totalLcCostOfGoodsQty,
+                totalLcCostOfGoodsAmount,
+                selectedLcExpenses,
+                totalLcExpensesAmount,
+                selectedLcStocks,
+                selectedLcSales,
+                totalLcSalesAmount,
+                totalLcSalesQty,
+                productSummary,
+                profitLossData
+            });
+
+            if (conc) {
+                const tableWidth = 145;
+                const leftPos = (pageWidth - tableWidth) / 2;
+
+                const conclusionRows = [
+                    [
+                        { content: 'LC No', styles: { fillColor: [254, 220, 150], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: String(conc.lcNo), styles: { fillColor: [254, 220, 150], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Item', styles: { fontStyle: 'bold' } },
+                        { content: String(conc.item), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Supplier', styles: { fontStyle: 'bold' } },
+                        { content: String(conc.supplier), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'LC Bill Paid in USD', styles: { fontStyle: 'bold' } },
+                        { content: Math.round(conc.billValueUsd).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Calculation USD Rate', styles: { fontStyle: 'bold' } },
+                        { content: conc.dollarRate ? conc.dollarRate.toFixed(2) : '0.00', styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Total Value in BDT', styles: { fontStyle: 'bold' } },
+                        { content: Math.round(conc.totalRateKgBdt).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'LC Inv Qty in kg', styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: Math.round(conc.invQtyKg).toLocaleString('en-US'), styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Rcv Qty in kg', styles: { fontStyle: 'bold' } },
+                        { content: Math.round(conc.rcvQtyKg).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Rate/kg in BDT', styles: { fontStyle: 'bold' } },
+                        { content: conc.rateKgBdt.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'CnF & Others (BDT)', styles: { fontStyle: 'bold' } },
+                        { content: conc.cnfAndOthersPerKg.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Total Rate/kg in BDT', styles: { fillColor: [226, 239, 218], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: conc.totalRatePerKgBdt.toFixed(2), styles: { fillColor: [226, 239, 218], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Sales Qty in kg', styles: { fillColor: [252, 228, 214], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: Math.round(conc.salesQtyKg).toLocaleString('en-US'), styles: { fillColor: [252, 228, 214], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Unsold Stock in kg', styles: { fontStyle: 'bold' } },
+                        { content: Math.round(conc.unsoldStockKg).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Short Qty in kg', styles: { fillColor: [254, 185, 185], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: Math.round(conc.shortQtyKg).toLocaleString('en-US'), styles: { fillColor: [254, 185, 185], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'LC Invest', styles: { fontStyle: 'bold' } },
+                        { content: Math.round(conc.lcInvest).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Insurance', styles: { fontStyle: 'bold' } },
+                        { content: Math.round(conc.insuranceAmount).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Total Invest', styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: Math.round(conc.totalInvest).toLocaleString('en-US'), styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Sales Value', styles: { fillColor: [255, 242, 204], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: Math.round(conc.salesValue).toLocaleString('en-US'), styles: { fillColor: [255, 242, 204], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Sales Value/kg', styles: { fontStyle: 'bold' } },
+                        { content: conc.salesValuePerKg.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Unsold Stock Price (Appx)', styles: { fontStyle: 'bold' } },
+                        { content: conc.unsoldStockPriceAppx > 0 ? Math.round(conc.unsoldStockPriceAppx).toLocaleString('en-US') : '-', styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: conc.profitOrLoss >= 0 ? 'Profit' : 'Loss', styles: { fontStyle: 'bold' } },
+                        { content: Math.round(conc.profitOrLoss).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold', textColor: conc.profitOrLoss >= 0 ? [16, 120, 80] : [200, 20, 40] } }
+                    ]
+                ];
+
+                autoTable(doc, {
+                    startY: badgeY + 6,
+                    margin: { left: leftPos, right: leftPos },
+                    body: conclusionRows,
+                    theme: 'grid',
+                    styles: {
+                        lineWidth: 0.15,
+                        lineColor: [226, 232, 240],
+                        cellPadding: 2.2,
+                        fontSize: 9,
+                        textColor: [30, 41, 59],
+                        valign: 'middle'
+                    },
+                    columnStyles: {
+                        0: { cellWidth: 85, fontStyle: 'bold' },
+                        1: { cellWidth: 60, halign: 'right' }
+                    }
+                });
+            }
         }
 
         // Page Numbers Footer

@@ -7715,12 +7715,10 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null });
     };
 
+    const adjValuesLocalCacheRef = useRef(new Map());
+
     const getAdjustedLcValues = (record) => {
-        const totalQtyTons = record.productsList && record.productsList.length > 0
-            ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
-            : (parseFloat(record.quantity) || 0);
-        const openingQtyKg = totalQtyTons * 1000;
-        const openingValue = parseFloat(record.totalAmount) || 0;
+        if (!record) return { adjustedTotalAmount: 0, billValueUsd: 0, dollarRate: 0, openingValue: 0 };
 
         const parseNum = (val) => {
             if (val === null || val === undefined) return 0;
@@ -7729,42 +7727,53 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         const cleanLc = (val) => String(val || '').replace(/\D/g, '');
         const lcNoClean = cleanLc(record.lcNo);
 
-        const receiptsMapForBalance = {};
-        allStockRecords
-            .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
-            .forEach(s => {
-                const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                const key = `${dateStr}_${groupVal}`;
+        const cacheKey = `${record._id || record.id || record.lcNo || ''}_${record.updatedAt || ''}_${record.updatedLcReceive || ''}_${record.updatedDollarRate || record.dollarRate || ''}_${record.enableValueQtyAdjustment ? 1 : 0}_${(record.productsList || []).length}_${allStockRecords.length}_${allSalesRecords.length}_${(costOfGoodsRecords || []).length}`;
+        if (adjValuesLocalCacheRef.current.has(cacheKey)) {
+            return adjValuesLocalCacheRef.current.get(cacheKey);
+        }
 
-                if (!receiptsMapForBalance[key]) {
-                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                    receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                } else {
-                    if (!s.totalLcQuantity) {
-                        receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                    }
+        const totalQtyTons = record.productsList && record.productsList.length > 0
+            ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+            : (parseFloat(record.quantity) || 0);
+        const openingQtyKg = totalQtyTons * 1000;
+        const openingValue = parseFloat(record.totalAmount) || 0;
+
+        // Pre-filter stocks and border sales for this LC ONCE instead of inside each loop
+        const matchingStocks = allStockRecords.filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s));
+        const matchingBorderSales = allSalesRecords.filter(s => {
+            const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
+            const sTypeLow = (s.saleType || '').toLowerCase().trim();
+            const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
+            const status = (s.status || '').toLowerCase();
+            const isValidStatus = !status.includes('rejected') && status !== 'requested';
+            return matchesLc && isValidStatus && isBorder;
+        });
+
+        const receiptsMapForBalance = {};
+        matchingStocks.forEach(s => {
+            const rawDate = s.date || s.receiveDate || s.createdAt || '';
+            const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+            const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+            const key = `${dateStr}_${groupVal}`;
+
+            if (!receiptsMapForBalance[key]) {
+                const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+            } else {
+                if (!s.totalLcQuantity) {
+                    receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
                 }
-            });
+            }
+        });
         const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
 
-        const borderSaleQtyKg = allSalesRecords
-            .filter(s => {
-                const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
-                const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
-                const status = (s.status || '').toLowerCase();
-                const isValidStatus = !status.includes('rejected') && status !== 'requested';
-                return matchesLc && isValidStatus && isBorder;
-            })
-            .reduce((sum, s) => {
-                const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                    const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                    return iSum + (brandSubtotal || parseNum(item.quantity));
-                }, 0);
-                return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
+        const borderSaleQtyKg = matchingBorderSales.reduce((sum, s) => {
+            const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                return iSum + (brandSubtotal || parseNum(item.quantity));
             }, 0);
+            return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
+        }, 0);
 
         const hasCustomReceive = record?.updatedLcReceive !== undefined && record?.updatedLcReceive !== null && record?.updatedLcReceive !== '';
         const totalReceivedQtyKg = hasCustomReceive
@@ -7802,64 +7811,53 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         const getProductReceivedQtyKg = (pName) => {
             // Stock Receipts
             const receiptsMap = {};
-            allStockRecords
-                .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
-                .forEach(s => {
-                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                    const key = `${dateStr}_${groupVal}`;
+            matchingStocks.forEach(s => {
+                const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                const key = `${dateStr}_${groupVal}`;
 
-                    if (s.entries && s.entries.length > 0) {
-                        const matchingEntries = s.entries.filter(item => {
-                            const itemPName = item.productName || s.productName || s.product || '';
-                            return !pName || isProductMatch(pName, itemPName);
-                        });
-                        const itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                        receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
-                    } else {
-                        const rootPName = s.productName || s.product || '';
-                        if (!pName || isProductMatch(pName, rootPName)) {
-                            const itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                            if (!receiptsMap[key]) {
-                                receiptsMap[key] = itemQty;
-                            } else if (!s.totalLcQuantity) {
-                                receiptsMap[key] += itemQty;
-                            }
+                if (s.entries && s.entries.length > 0) {
+                    const matchingEntries = s.entries.filter(item => {
+                        const itemPName = item.productName || s.productName || s.product || '';
+                        return !pName || isProductMatch(pName, itemPName);
+                    });
+                    const itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
+                } else {
+                    const rootPName = s.productName || s.product || '';
+                    if (!pName || isProductMatch(pName, rootPName)) {
+                        const itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                        if (!receiptsMap[key]) {
+                            receiptsMap[key] = itemQty;
+                        } else if (!s.totalLcQuantity) {
+                            receiptsMap[key] += itemQty;
                         }
                     }
-                });
+                }
+            });
             const rQty = Object.values(receiptsMap).reduce((sum, qty) => sum + qty, 0);
 
             // Border Sales
-            const bQty = allSalesRecords
-                .filter(s => {
-                    const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
-                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                    const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
-                    const status = (s.status || '').toLowerCase();
-                    const isValidStatus = !status.includes('rejected') && status !== 'requested';
-                    return matchesLc && isValidStatus && isBorder;
-                })
-                .reduce((sum, s) => {
-                    if (s.items && s.items.length > 0) {
-                        const matchingItems = s.items.filter(item => {
-                            const itemPName = item.productName || s.productName || s.product || '';
-                            return !pName || isProductMatch(pName, itemPName);
-                        });
-                        const itemSubtotal = matchingItems.reduce((iSum, item) => {
-                            const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                            return iSum + (brandSubtotal || parseNum(item.quantity));
-                        }, 0);
-                        return sum + itemSubtotal;
-                    } else {
-                        const rootPName = s.productName || s.product || '';
-                        if (!pName || isProductMatch(pName, rootPName)) {
-                            return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
-                        }
-                        return sum;
+            const bQty = matchingBorderSales.reduce((sum, s) => {
+                if (s.items && s.items.length > 0) {
+                    const matchingItems = s.items.filter(item => {
+                        const itemPName = item.productName || s.productName || s.product || '';
+                        return !pName || isProductMatch(pName, itemPName);
+                    });
+                    const itemSubtotal = matchingItems.reduce((iSum, item) => {
+                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                        return iSum + (brandSubtotal || parseNum(item.quantity));
+                    }, 0);
+                    return sum + itemSubtotal;
+                } else {
+                    const rootPName = s.productName || s.product || '';
+                    if (!pName || isProductMatch(pName, rootPName)) {
+                        return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
                     }
-                }, 0);
+                    return sum;
+                }
+            }, 0);
 
             return rQty + bQty;
         };
@@ -7935,7 +7933,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         const combinedRemKg = adjustedQtyKg - totalReceivedQtyKg;
         const lessDollar = adjustedQtyKg > 0 ? (totalReceivedQtyKg / adjustedQtyKg) * billValueUsd : 0;
 
-        return {
+        const result = {
             openingQtyKg,
             openingValue,
             receivedQtyKg,
@@ -7954,6 +7952,13 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             lessDollar,
             dollarRate
         };
+
+        if (adjValuesLocalCacheRef.current.size > 500) {
+            adjValuesLocalCacheRef.current.clear();
+        }
+        adjValuesLocalCacheRef.current.set(cacheKey, result);
+
+        return result;
     };
 
     const handleToggleValueQtyAdjustment = async (record, isEnabled) => {
@@ -8517,13 +8522,24 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             };
         });
 
-        const totalQty = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedQtyKg || 0), 0);
-        const totalReceived = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).totalReceivedQtyKg || 0), 0);
-        const totalVal = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedTotalAmount || 0), 0);
-        const totalBal = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).combinedRemKg || 0), 0);
-        const totalExp = recordsToUse.reduce((sum, r) => sum + (getLcTotalPaidExpense(r) || 0), 0);
-        const totalBillValueUsd = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).billValueUsd || 0), 0);
-        const totalLessDollar = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).lessDollar || 0), 0);
+        let totalQty = 0;
+        let totalReceived = 0;
+        let totalVal = 0;
+        let totalBal = 0;
+        let totalExp = 0;
+        let totalBillValueUsd = 0;
+        let totalLessDollar = 0;
+
+        for (let i = 0; i < reportData.length; i++) {
+            const item = reportData[i];
+            totalQty += item.qty || 0;
+            totalReceived += item.received || 0;
+            totalVal += item.val || 0;
+            totalBal += item.bal || 0;
+            totalExp += item.exp || 0;
+            totalBillValueUsd += item.billValueUsd || 0;
+            totalLessDollar += item.lessDollar || 0;
+        }
 
         if (isExcel) {
             generateLCManagementReportExcel(
@@ -8709,14 +8725,24 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         });
 
         const totals = {
-            totalBankCharges: reportData.reduce((s, r) => s + r.bankCharges, 0),
-            totalMarginBill: reportData.reduce((s, r) => s + r.marginBill, 0),
-            totalCnfBill: reportData.reduce((s, r) => s + r.cnfBill, 0),
-            totalInsuranceBill: reportData.reduce((s, r) => s + r.insuranceBill, 0),
-            totalOther: reportData.reduce((s, r) => s + r.other, 0),
-            totalBill: reportData.reduce((s, r) => s + r.totalBill, 0),
-            totalPaidBill: reportData.reduce((s, r) => s + r.paidBill, 0)
+            totalBankCharges: 0,
+            totalMarginBill: 0,
+            totalCnfBill: 0,
+            totalInsuranceBill: 0,
+            totalOther: 0,
+            totalBill: 0,
+            totalPaidBill: 0
         };
+        for (let i = 0; i < reportData.length; i++) {
+            const r = reportData[i];
+            totals.totalBankCharges += r.bankCharges || 0;
+            totals.totalMarginBill += r.marginBill || 0;
+            totals.totalCnfBill += r.cnfBill || 0;
+            totals.totalInsuranceBill += r.insuranceBill || 0;
+            totals.totalOther += r.other || 0;
+            totals.totalBill += r.totalBill || 0;
+            totals.totalPaidBill += r.paidBill || 0;
+        }
 
         if (isExcel) {
             generateLCBillReportExcel(reportData, totals, searchQuery, lcFilters);

@@ -33,6 +33,14 @@ const backupSettingSchema = new mongoose.Schema({
     timezoneOffset: {
         type: Number,
         default: 0 // offset in minutes
+    },
+    excludeEmployeeImages: {
+        type: Boolean,
+        default: true
+    },
+    excludeAttachments: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 

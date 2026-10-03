@@ -5,7 +5,7 @@ import {
 } from '../../Icons';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
-import { getAdjustedLcValues, getCogNetBillBdt, getRecCostingKg } from '../../../utils/lcValueUtils';
+import { getAdjustedLcValues, getCogNetBillBdt, getRecCostingKg, calculateLcConclusion } from '../../../utils/lcValueUtils';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { generateProfitLossPDF } from '../../../utils/pdfGenerator';
 
@@ -358,6 +358,16 @@ export default function ProfitLoss({ salesRecords, products }) {
     return selectedLcCostOfGoods.reduce((sum, rec) => sum + (parseFloat(rec.quantity) || 0), 0);
   }, [selectedLcCostOfGoods]);
 
+  // Insurance premium for selected LC
+  const selectedLcInsuranceAmount = useMemo(() => {
+    if (!selectedLc) return 0;
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '').toLowerCase();
+    const lcNoClean = cleanLc(selectedLc.lcNo);
+    const insPayments = (insurancePayments || []).filter(p => cleanLc(p.lcNo) === lcNoClean && p.type !== 'Return Collection');
+    const paymentSum = insPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0), 0);
+    return paymentSum || parseFloat(selectedLc.insurance || selectedLc.netPremium || selectedLc.grossPremium || 0);
+  }, [selectedLc, insurancePayments]);
+
   // Helper to check if a sale date matches the selected range
   const isDateInRange = (saleDateStr) => {
     if (!saleDateStr) return false;
@@ -541,7 +551,8 @@ export default function ProfitLoss({ salesRecords, products }) {
     });
 
     const finalRevenue = salesRevenue + currentStockValue;
-    const finalCost = (useActualCog && selectedLc) ? totalLcCostOfGoodsAmount : totalCost;
+    const actualCogWithInsurance = totalLcCostOfGoodsAmount + (selectedLcInsuranceAmount || 0);
+    const finalCost = (useActualCog && selectedLc) ? actualCogWithInsurance : totalCost;
     const totalProfit = finalRevenue - finalCost;
     const margin = finalRevenue > 0 ? (totalProfit / finalRevenue) * 100 : 0;
 
@@ -555,7 +566,7 @@ export default function ProfitLoss({ salesRecords, products }) {
         margin
       }
     };
-  }, [salesRecords, stockRecords, damages, products, filterType, selectedMonth, selectedYear, startDate, endDate, saleTypeFilter, selectedProduct, selectedLcNo, useActualCog, selectedLc, totalLcCostOfGoodsAmount]);
+  }, [salesRecords, stockRecords, damages, products, filterType, selectedMonth, selectedYear, startDate, endDate, saleTypeFilter, selectedProduct, selectedLcNo, useActualCog, selectedLc, totalLcCostOfGoodsAmount, selectedLcInsuranceAmount]);
 
   // Unique product names for filter dropdown
   const uniqueProducts = useMemo(() => {
@@ -749,8 +760,8 @@ export default function ProfitLoss({ salesRecords, products }) {
   const pieData = useMemo(() => {
     if (!selectedLc) return { total: 0, items: [] };
 
-    const cog = totalLcCostOfGoodsAmount || 0;
-    const exp = totalLcExpensesAmount || 0;
+    const cog = (useActualCog && selectedLc) ? (totalLcCostOfGoodsAmount + selectedLcInsuranceAmount) : (totalLcCostOfGoodsAmount || 0);
+    const exp = Math.max(0, (totalLcExpensesAmount || 0) - (useActualCog ? selectedLcInsuranceAmount : 0));
     const profit = Math.max(0, profitLossData.summary.totalProfit || 0);
 
     const rawItems = [
@@ -777,7 +788,7 @@ export default function ProfitLoss({ salesRecords, products }) {
     });
 
     return { total, items: slices };
-  }, [selectedLc, totalLcCostOfGoodsAmount, totalLcExpensesAmount, profitLossData.summary.totalProfit]);
+  }, [selectedLc, totalLcCostOfGoodsAmount, totalLcExpensesAmount, profitLossData.summary.totalProfit, useActualCog, selectedLcInsuranceAmount]);
 
   // Product arrival, inhouse, short, and damage summary
   const productSummary = useMemo(() => {
@@ -896,7 +907,39 @@ export default function ProfitLoss({ salesRecords, products }) {
     return Object.values(summaryMap);
   }, [selectedLc, selectedLcStocks, selectedLcDamages, salesRecords]);
 
-
+  // LC Conclusion summary statement data matching the conclusion sheet
+  const conclusionData = useMemo(() => {
+    if (!selectedLc) return null;
+    return calculateLcConclusion({
+      selectedLc,
+      adjustedLcValues,
+      selectedLcCostOfGoods,
+      totalLcCostOfGoodsQty,
+      totalLcCostOfGoodsAmount,
+      selectedLcExpenses,
+      totalLcExpensesAmount,
+      selectedLcStocks,
+      selectedLcSales,
+      totalLcSalesAmount,
+      totalLcSalesQty,
+      productSummary,
+      profitLossData
+    });
+  }, [
+    selectedLc,
+    adjustedLcValues,
+    selectedLcCostOfGoods,
+    totalLcCostOfGoodsQty,
+    totalLcCostOfGoodsAmount,
+    selectedLcExpenses,
+    totalLcExpensesAmount,
+    selectedLcStocks,
+    selectedLcSales,
+    totalLcSalesAmount,
+    totalLcSalesQty,
+    productSummary,
+    profitLossData
+  ]);
 
   const handlePrint = () => {
     generateProfitLossPDF({
@@ -922,7 +965,8 @@ export default function ProfitLoss({ salesRecords, products }) {
       selectedProduct,
       selectedLcNo,
       pieData,
-      adjustedLcValues
+      adjustedLcValues,
+      conclusionData
     });
   };
 
@@ -1256,7 +1300,11 @@ export default function ProfitLoss({ salesRecords, products }) {
             </div>
             <div className="text-xs print:text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2 print:mb-1">Cost of Goods Sold (COGS)</div>
             <div className="text-xl sm:text-2xl print:text-base font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalCost).toLocaleString('en-IN')}</div>
-            <div className="text-[11px] print:text-[9px] text-gray-400 mt-2 print:mt-1 font-medium">Calculated based on product costs</div>
+            <div className="text-[11px] print:text-[9px] text-gray-400 mt-2 print:mt-1 font-medium">
+              {useActualCog && selectedLc && selectedLcInsuranceAmount > 0
+                ? `Includes Insurance: ৳ ${Math.round(selectedLcInsuranceAmount).toLocaleString('en-IN')}`
+                : 'Calculated based on product costs'}
+            </div>
           </div>
 
           {/* Metric 3: Gross Profit */}
@@ -1628,11 +1676,14 @@ export default function ProfitLoss({ salesRecords, products }) {
                     {selectedLcCostOfGoods.length > 0 && (
                       <tfoot className="bg-slate-50 border-t-2 border-gray-200">
                         <tr className="text-xs">
-                          <td colSpan="4" className="py-3.5 px-6 font-black text-gray-500 uppercase tracking-wider text-[11px]">Total COG</td>
-                          <td className="py-3.5 px-4 text-right font-black text-gray-900 whitespace-nowrap">
+                          <td colSpan="3" className="py-3 px-6 font-black text-gray-500 uppercase tracking-wider text-[11px]">Total COG</td>
+                          <td className="py-3 px-4 text-right font-black text-gray-900 whitespace-nowrap">
+                            ৳ {totalLcCostOfGoodsQty > 0 ? (totalLcCostOfGoodsAmount / totalLcCostOfGoodsQty).toFixed(2) : '0.00'}
+                          </td>
+                          <td className="py-3 px-4 text-right font-black text-gray-900 whitespace-nowrap">
                             {Math.round(totalLcCostOfGoodsQty).toLocaleString('en-US')} KG
                           </td>
-                          <td className="py-3.5 px-6 text-right font-black text-blue-600 whitespace-nowrap">
+                          <td className="py-3 px-6 text-right font-black text-blue-600 whitespace-nowrap">
                             ৳ {Math.round(totalLcCostOfGoodsAmount).toLocaleString('en-IN')}
                           </td>
                         </tr>
@@ -1900,6 +1951,210 @@ export default function ProfitLoss({ salesRecords, products }) {
             )}
           </div>
         </div>
+
+        {/* Row 3: LC Conclusion Statement */}
+        {selectedLc && conclusionData && (
+          <div className="flex justify-center mt-6 print:mt-6 print:break-before-page">
+            <div className="w-full max-w-2xl bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
+              <div className="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50/50">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-5 bg-blue-600 rounded-full" />
+                    <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Conclusion Statement</h2>
+                  </div>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">Comprehensive cost, inventory, investment & profit/loss summary for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
+                </div>
+                <span className="px-3 py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/60 self-start sm:self-center">
+                  Financial Conclusion
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/50 border-b border-gray-200 text-[11px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      <th className="py-2.5 px-6 w-1/2">Particular / Metric</th>
+                      <th className="py-2.5 px-6 text-right w-1/2">Details & Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-xs sm:text-sm text-gray-700 font-medium">
+                    {/* 1. LC No */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-bold text-gray-900">LC No</td>
+                      <td className="py-2 px-6 text-right font-black text-gray-900">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200/80">
+                          {conclusionData.lcNo}
+                        </span>
+                      </td>
+                    </tr>
+
+                    {/* 2. Item */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Item</td>
+                      <td className="py-2 px-6 text-right font-black text-gray-900">{conclusionData.item}</td>
+                    </tr>
+
+                    {/* 3. Supplier */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Supplier</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">{conclusionData.supplier}</td>
+                    </tr>
+
+                    {/* 4. LC Bill Paid in USD */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">LC Bill Paid in USD</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        $ {Math.round(conclusionData.billValueUsd).toLocaleString('en-US')}
+                      </td>
+                    </tr>
+
+                    {/* 5. Calculation USD Rate */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Calculation USD Rate</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        ৳ {conclusionData.dollarRate ? conclusionData.dollarRate.toFixed(2) : '0.00'}
+                      </td>
+                    </tr>
+
+                    {/* 6. Total Value in BDT */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Total Value in BDT</td>
+                      <td className="py-2 px-6 text-right font-black text-blue-600">
+                        ৳ {Math.round(conclusionData.totalRateKgBdt).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+
+                    {/* 7. LC Inv Qty in kg */}
+                    <tr className="bg-blue-50/30 hover:bg-blue-50/50 transition-colors">
+                      <td className="py-2.5 px-6 font-bold text-blue-950">LC Inv Qty in kg</td>
+                      <td className="py-2.5 px-6 text-right font-black text-blue-900">
+                        {Math.round(conclusionData.invQtyKg).toLocaleString('en-US')} KG
+                      </td>
+                    </tr>
+
+                    {/* 8. Rcv Qty in kg */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Rcv Qty in kg</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        {Math.round(conclusionData.rcvQtyKg).toLocaleString('en-US')} KG
+                      </td>
+                    </tr>
+
+                    {/* 9. Rate/kg in BDT */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Rate/kg in BDT</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        ৳ {conclusionData.rateKgBdt.toFixed(2)}
+                      </td>
+                    </tr>
+
+                    {/* 10. CnF & Others (BDT) */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">CnF & Others (BDT)</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        ৳ {conclusionData.cnfAndOthersPerKg.toFixed(2)}
+                      </td>
+                    </tr>
+
+                    {/* 11. Total Rate/kg in BDT */}
+                    <tr className="bg-emerald-50/40 hover:bg-emerald-50/60 transition-colors">
+                      <td className="py-2.5 px-6 font-bold text-emerald-950">Total Rate/kg in BDT</td>
+                      <td className="py-2.5 px-6 text-right font-black text-emerald-700">
+                        ৳ {conclusionData.totalRatePerKgBdt.toFixed(2)}
+                      </td>
+                    </tr>
+
+                    {/* 12. Sales Qty in kg */}
+                    <tr className="bg-orange-50/30 hover:bg-orange-50/50 transition-colors">
+                      <td className="py-2.5 px-6 font-bold text-orange-950">Sales Qty in kg</td>
+                      <td className="py-2.5 px-6 text-right font-black text-orange-800">
+                        {Math.round(conclusionData.salesQtyKg).toLocaleString('en-US')} KG
+                      </td>
+                    </tr>
+
+                    {/* 13. Unsold Stock in kg */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Unsold Stock in kg</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        {Math.round(conclusionData.unsoldStockKg).toLocaleString('en-US')} KG
+                      </td>
+                    </tr>
+
+                    {/* 14. Short Qty in kg */}
+                    <tr className="bg-rose-50/40 hover:bg-rose-50/60 transition-colors">
+                      <td className="py-2.5 px-6 font-bold text-rose-950">Short Qty in kg</td>
+                      <td className="py-2.5 px-6 text-right">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-200">
+                          {Math.round(conclusionData.shortQtyKg).toLocaleString('en-US')} KG
+                        </span>
+                      </td>
+                    </tr>
+
+                    {/* 15. LC Invest */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">LC Invest</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        ৳ {Math.round(conclusionData.lcInvest).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+
+                    {/* 16. Insurance */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Insurance</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        ৳ {Math.round(conclusionData.insuranceAmount).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+
+                    {/* 17. Total Invest */}
+                    <tr className="bg-blue-50/40 hover:bg-blue-50/60 transition-colors border-t border-b border-blue-100">
+                      <td className="py-2.5 px-6 font-black text-blue-950 text-sm sm:text-base">Total Invest</td>
+                      <td className="py-2.5 px-6 text-right font-black text-blue-700 text-sm sm:text-base">
+                        ৳ {Math.round(conclusionData.totalInvest).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+
+                    {/* 18. Sales Value */}
+                    <tr className="bg-amber-50/30 hover:bg-amber-50/50 transition-colors">
+                      <td className="py-2.5 px-6 font-black text-amber-950 text-sm sm:text-base">Sales Value</td>
+                      <td className="py-2.5 px-6 text-right font-black text-gray-900 text-sm sm:text-base">
+                        ৳ {Math.round(conclusionData.salesValue).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+
+                    {/* 19. Sales Value/kg */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Sales Value/kg</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        ৳ {conclusionData.salesValuePerKg.toFixed(2)}
+                      </td>
+                    </tr>
+
+                    {/* 20. Unsold Stock Price (Appx) */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Unsold Stock Price (Appx)</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        {conclusionData.unsoldStockPriceAppx > 0 ? `৳ ${Math.round(conclusionData.unsoldStockPriceAppx).toLocaleString('en-IN')}` : '-'}
+                      </td>
+                    </tr>
+
+                    {/* 21. Profit/Loss */}
+                    <tr className="bg-slate-50 hover:bg-slate-100/80 transition-colors border-t-2 border-gray-200">
+                      <td className="py-3 px-6 font-black text-gray-900 text-sm sm:text-base uppercase tracking-wider">
+                        {conclusionData.profitOrLoss >= 0 ? 'Profit' : 'Loss'}
+                      </td>
+                      <td className="py-3 px-6 text-right">
+                        <span className={`text-base sm:text-lg font-black ${conclusionData.profitOrLoss >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {conclusionData.profitOrLoss < 0 ? `- ৳ ${Math.abs(Math.round(conclusionData.profitOrLoss)).toLocaleString('en-IN')}` : `৳ ${Math.round(conclusionData.profitOrLoss).toLocaleString('en-IN')}`}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

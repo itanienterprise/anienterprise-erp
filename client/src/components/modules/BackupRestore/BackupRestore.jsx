@@ -79,9 +79,14 @@ const BackupRestore = ({ addNotification }) => {
         time: '02:00',
         dayOfWeek: 0,
         dayOfMonth: 1,
-        lastRun: null
+        lastRun: null,
+        excludeEmployeeImages: true,
+        excludeAttachments: false
     });
     const [isSavingSettings, setIsSavingSettings] = useState(false);
+    const [excludeEmployeePhotos, setExcludeEmployeePhotos] = useState(true);
+    const [excludeAttachments, setExcludeAttachments] = useState(false);
+    const [isOptimizingBackups, setIsOptimizingBackups] = useState(false);
 
     // Local files state
     const [savedFiles, setSavedFiles] = useState([]);
@@ -205,14 +210,20 @@ const BackupRestore = ({ addNotification }) => {
         setErrorMessage('');
         setSuccessMessage('');
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/backup-database`);
+            const queryParams = new URLSearchParams({
+                excludeEmployeeImages: excludeEmployeePhotos ? 'true' : 'false',
+                excludeAttachments: excludeAttachments ? 'true' : 'false'
+            });
+            const response = await axios.get(`${API_BASE_URL}/api/backup-database?${queryParams.toString()}`);
             const backupObj = response.data;
             
             const dateStr = new Date().toISOString().slice(0, 10);
             const timeStr = new Date().toTimeString().slice(0, 8).replace(/:/g, '-');
-            const filename = `ani_erp_backup_full_${dateStr}_${timeStr}.json`;
+            const suffix = excludeEmployeePhotos ? '_compact' : '';
+            const filename = `ani_erp_backup_full_${dateStr}_${timeStr}${suffix}.json`;
 
-            const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
+            // Minified JSON output: eliminates megabytes of redundant whitespace indentation
+            const blob = new Blob([JSON.stringify(backupObj)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             
             const link = document.createElement('a');
@@ -223,9 +234,10 @@ const BackupRestore = ({ addNotification }) => {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            setSuccessMessage(`Full system backup completed successfully! Saved as ${filename}`);
+            const sizeKB = (blob.size / 1024).toFixed(1);
+            setSuccessMessage(`Full system backup completed successfully! (${sizeKB} KB) Saved as ${filename}`);
             if (addNotification) {
-                addNotification('System Backup', 'Full database backup downloaded successfully.', ['admin'], [], true);
+                addNotification('System Backup', `Full database backup downloaded (${sizeKB} KB).`, ['admin'], [], true);
             }
             fetchSettingsAndFiles();
         } catch (error) {
@@ -249,7 +261,12 @@ const BackupRestore = ({ addNotification }) => {
         try {
             const keysArray = Array.from(selectedModuleKeys);
             const modulesParam = keysArray.join(',');
-            const response = await axios.get(`${API_BASE_URL}/api/backup-database?modules=${encodeURIComponent(modulesParam)}`);
+            const queryParams = new URLSearchParams({
+                modules: modulesParam,
+                excludeEmployeeImages: excludeEmployeePhotos ? 'true' : 'false',
+                excludeAttachments: excludeAttachments ? 'true' : 'false'
+            });
+            const response = await axios.get(`${API_BASE_URL}/api/backup-database?${queryParams.toString()}`);
             const backupObj = response.data;
             
             const dateStr = new Date().toISOString().slice(0, 10);
@@ -257,7 +274,7 @@ const BackupRestore = ({ addNotification }) => {
             const moduleNameSuffix = keysArray.length === 1 ? keysArray[0] : `${keysArray.length}_modules`;
             const filename = `ani_erp_backup_${moduleNameSuffix}_${dateStr}_${timeStr}.json`;
 
-            const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
+            const blob = new Blob([JSON.stringify(backupObj)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             
             const link = document.createElement('a');
@@ -268,15 +285,54 @@ const BackupRestore = ({ addNotification }) => {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            setShowModuleModal(false);
-            setSuccessMessage(`Module backup completed successfully! Saved as ${filename}`);
+            const sizeKB = (blob.size / 1024).toFixed(1);
+            setSuccessMessage(`Module backup completed! (${sizeKB} KB) Saved as ${filename}`);
             if (addNotification) {
-                addNotification('System Backup', `Module backup (${keysArray.length} modules) downloaded successfully.`, ['admin'], [], true);
+                addNotification('Module Backup', `Module backup downloaded (${sizeKB} KB).`, ['admin'], [], true);
             }
+            setShowModuleModal(false);
             fetchSettingsAndFiles();
         } catch (error) {
             console.error('Module backup error:', error);
             setErrorMessage(error.response?.data?.message || 'Error occurred while taking module backup.');
+        } finally {
+            setIsBackingUp(false);
+        }
+    };
+
+    // Optimize existing server backup files
+    const handleOptimizeBackups = async () => {
+        setIsOptimizingBackups(true);
+        setErrorMessage('');
+        setSuccessMessage('');
+        try {
+            const res = await axios.post(`${API_BASE_URL}/api/backup-files/optimize`, {
+                excludeAttachments
+            });
+            if (res.data?.success) {
+                setSuccessMessage(res.data.message || `Optimized ${res.data.optimizedCount} backup files! Saved ${res.data.savedMB} MB.`);
+                fetchSettingsAndFiles();
+            }
+        } catch (err) {
+            setErrorMessage(err.response?.data?.message || 'Failed to optimize server backup files.');
+        } finally {
+            setIsOptimizingBackups(false);
+        }
+    };
+
+    // Trigger scheduled auto-backup immediately
+    const handleRunBackupNow = async () => {
+        setIsBackingUp(true);
+        setErrorMessage('');
+        setSuccessMessage('');
+        try {
+            const res = await axios.post(`${API_BASE_URL}/api/run-auto-backup-now`);
+            if (res.data?.success) {
+                setSuccessMessage('New optimized server backup created successfully!');
+                fetchSettingsAndFiles();
+            }
+        } catch (err) {
+            setErrorMessage(err.response?.data?.message || 'Failed to trigger scheduled backup.');
         } finally {
             setIsBackingUp(false);
         }
@@ -598,7 +654,38 @@ const BackupRestore = ({ addNotification }) => {
                         </p>
                     </div>
 
-                    <div className="mt-8 space-y-3">
+                    <div className="mt-6 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-800 select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={excludeEmployeePhotos}
+                                    onChange={(e) => setExcludeEmployeePhotos(e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                />
+                                <span>Exclude Employee & User Photos</span>
+                            </label>
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                Saves ~10 MB
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-800 select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={excludeAttachments}
+                                    onChange={(e) => setExcludeAttachments(e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                />
+                                <span>Exclude IP Document Attachments</span>
+                            </label>
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                Saves ~15 MB
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
                         <button
                             onClick={handleTakeBackup}
                             disabled={isBackingUp || isRestoring}
@@ -846,6 +933,24 @@ const BackupRestore = ({ addNotification }) => {
                                             Last run: {new Date(settings.lastRun).toLocaleString()}
                                         </p>
                                     )}
+                                     {settings.enabled && (
+                                        <div className="pt-3 border-t border-gray-100 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-800 select-none">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={settings.excludeEmployeeImages !== false}
+                                                        onChange={(e) => setSettings(prev => ({ ...prev, excludeEmployeeImages: e.target.checked }))}
+                                                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                                    />
+                                                    <span>Exclude Employee Photos</span>
+                                                </label>
+                                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                    Saves ~10 MB
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -865,10 +970,35 @@ const BackupRestore = ({ addNotification }) => {
 
             {/* Saved Backups on Server */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">Saved Auto Backups on Server</h2>
                         <p className="text-xs text-gray-500 mt-0.5">List of automatically or locally scheduled backup files saved on the server container. The system keeps the 10 most recent backups.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handleOptimizeBackups}
+                            disabled={isOptimizingBackups || isLoadingFiles}
+                            title="Strip heavy employee photos and minify all existing backup files on server to reclaim storage"
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                            <svg className={`w-3.5 h-3.5 ${isOptimizingBackups ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            {isOptimizingBackups ? 'Optimizing...' : 'Optimize Saved Backups'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleRunBackupNow}
+                            disabled={isBackingUp || isLoadingFiles}
+                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Run Backup Now
+                        </button>
                     </div>
                 </div>
 

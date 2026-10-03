@@ -106,20 +106,31 @@ function App() {
   const [allModuleNotifications, setAllModuleNotifications] = useState([]);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [socketId, setSocketId] = useState('');
+  const lastNotifsFingerprintRef = useRef('');
+  const notifDecryptionCacheRef = useRef(new Map());
 
   // Fetch notifications from backend
   const fetchNotifications = async () => {
     if (!isAuthenticated) return;
     try {
       const response = await axios.get(`${API_BASE_URL}/api/notifications`);
+      const cache = notifDecryptionCacheRef.current;
       const decrypted = response.data.map(n => {
-        try {
-          const d = decryptData(n.data);
-          return { ...d, _id: n._id, createdAt: n.createdAt };
-        } catch (e) {
-          console.error('Error decrypting notification:', e);
-          return null;
+        const cacheKey = `${n._id}:${n.updatedAt || ''}:${(n.data || '').length}`;
+        let d = cache.get(cacheKey);
+        if (!d) {
+          try {
+            d = decryptData(n.data);
+            if (d) {
+              if (cache.size > 200) cache.clear();
+              cache.set(cacheKey, d);
+            }
+          } catch (e) {
+            console.error('Error decrypting notification:', e);
+            return null;
+          }
         }
+        return d ? { ...d, _id: n._id, createdAt: n.createdAt } : null;
       }).filter(Boolean);
 
       // Filter based on user role
@@ -144,15 +155,19 @@ function App() {
         isUnread: n.readByUsers ? !n.readByUsers.includes(currentUser?.username) : true
       }));
 
-      // All notifications for sidebar module dots (includes self-created)
-      setAllModuleNotifications(roleFiltered);
-
       // Bell icon notifications (excludes self-created unless systemic)
       const filtered = roleFiltered.filter(n => {
         const isSelfCreated = n.createdBy === currentUser?.username;
         return !isSelfCreated || n.isSystemic;
       });
-      setNotifications(filtered);
+
+      // Avoid re-rendering root App unless notification items or read statuses actually changed
+      const newFingerprint = roleFiltered.map(n => `${n._id}_${n.isUnread ? 1 : 0}`).join('|');
+      if (lastNotifsFingerprintRef.current !== newFingerprint) {
+        lastNotifsFingerprintRef.current = newFingerprint;
+        setAllModuleNotifications(roleFiltered);
+        setNotifications(filtered);
+      }
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }
@@ -162,7 +177,8 @@ function App() {
     let interval;
     if (isAuthenticated && currentUser) {
       fetchNotifications();
-      interval = setInterval(fetchNotifications, 3000); // Poll every 3 seconds for real-time experience
+      // Socket.IO receives real-time 'data_updated' for 'notifications'. Polling at 30s is a fallback.
+      interval = setInterval(fetchNotifications, 30000);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -350,6 +366,16 @@ function App() {
     if (!isAuthenticated || isFetchingPendingRef.current) return;
     isFetchingPendingRef.current = true;
     try {
+      try {
+        const pRes = await axios.get(`${API_BASE_URL}/api/pending-indicators`);
+        if (pRes.data && typeof pRes.data === 'object' && !Array.isArray(pRes.data)) {
+          setPendingModules(pRes.data);
+          return;
+        }
+      } catch (_e) {
+        // Fallback to legacy check if server doesn't support lightweight endpoint
+      }
+
       const [stockRes, salesRes, purchasesRes, purchaseReceivesRes, customersRes, whRes, insPaymentsRes, cnfPaymentsRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/stock`),
         axios.get(`${API_BASE_URL}/api/sales`),
@@ -911,6 +937,7 @@ function App() {
   }, [allStockRecords]);
 
   const lcReceiveRecords = useMemo(() => {
+    if (!showLcReport && currentView !== 'lc-entry-section') return [];
     const searchLower = lcSearchQuery.toLowerCase().trim();
 
     const resolveProductName = (name) => {
@@ -1000,9 +1027,10 @@ function App() {
         productName: resolveProductName(item.productName)
       };
     });
-  }, [stockRecords, lcSearchQuery, lcFilters, products]);
+  }, [showLcReport, currentView, lcStockRecords, lcSearchQuery, lcFilters, products]);
 
   const lcReceiveSummary = useMemo(() => {
+    if (!showLcReport && currentView !== 'lc-entry-section') return { totalPackets: 0, totalQuantity: 0, totalTrucks: 0, unit: 'kg' };
     const totalPackets = lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.packet) || 0), 0);
     const totalQuantity = lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
 
@@ -1019,7 +1047,7 @@ function App() {
     const unit = lcReceiveRecords[0]?.unit || 'kg';
 
     return { totalPackets, totalQuantity, totalTrucks, unit };
-  }, [lcReceiveRecords]);
+  }, [showLcReport, currentView, lcReceiveRecords]);
 
 
   const requestSort = (type, key) => {
@@ -2620,8 +2648,9 @@ function App() {
   };
 
   const stockData = useMemo(() => {
+    if (!showStockReport) return null;
     return getGlobalStockData();
-  }, [stockRecords, stockFilters, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
+  }, [showStockReport, stockRecords, stockFilters, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
 
   if (isCheckingSession) {
     return (
@@ -3645,58 +3674,66 @@ function App() {
       )}
 
       {/* LC Receive Report Modal */}
-      <LCReport
-        isOpen={showLcReport}
-        onClose={() => setShowLcReport(false)}
-        stockRecords={lcStockRecords}
-        lcFilters={lcFilters}
-        setLcFilters={setLcFilters}
-        lcReceiveRecords={lcReceiveRecords}
-        lcReceiveSummary={lcReceiveSummary}
-        fetchSales={fetchSales}
-      />
+      {showLcReport && (
+        <LCReport
+          isOpen={showLcReport}
+          onClose={() => setShowLcReport(false)}
+          stockRecords={lcStockRecords}
+          lcFilters={lcFilters}
+          setLcFilters={setLcFilters}
+          lcReceiveRecords={lcReceiveRecords}
+          lcReceiveSummary={lcReceiveSummary}
+          fetchSales={fetchSales}
+        />
+      )}
 
       {/* Stock Report Modal */}
-      <StockReport
-        isOpen={showStockReport}
-        onClose={() => setShowStockReport(false)}
-        stockRecords={stockRecords}
-        warehouseData={warehouseData}
-        stockFilters={stockFilters}
-        setStockFilters={setStockFilters}
-        stockData={stockData}
-        salesRecords={salesRecords}
-        products={products}
-        damages={damages}
-        showRate={showRate}
-        activeBaseline={activeBaseline}
-        returnsList={returnsList}
-      />
+      {showStockReport && (
+        <StockReport
+          isOpen={showStockReport}
+          onClose={() => setShowStockReport(false)}
+          stockRecords={stockRecords}
+          warehouseData={warehouseData}
+          stockFilters={stockFilters}
+          setStockFilters={setStockFilters}
+          stockData={stockData}
+          salesRecords={salesRecords}
+          products={products}
+          damages={damages}
+          showRate={showRate}
+          activeBaseline={activeBaseline}
+          returnsList={returnsList}
+        />
+      )}
 
       {/* Product History Report Modal */}
-      <ProductHistoryReport
-        isOpen={showProductHistoryReport}
-        onClose={() => setShowProductHistoryReport(false)}
-        reportData={productHistoryReportData}
-        currentUser={currentUser}
-      />
+      {showProductHistoryReport && (
+        <ProductHistoryReport
+          isOpen={showProductHistoryReport}
+          onClose={() => setShowProductHistoryReport(false)}
+          reportData={productHistoryReportData}
+          currentUser={currentUser}
+        />
+      )}
 
       {/* Sales Report Modal */}
-      <SalesReport
-        isOpen={showSalesReport}
-        onClose={() => setShowSalesReport(false)}
-        salesRecords={filteredSalesForReport}
-        allSalesRecords={salesRecords}
-        saleFilters={saleFilters}
-        setSaleFilters={setSaleFilters}
-        searchQuery={salesReportSearchQuery}
-        saleType={currentView === 'order-sale-section' ? 'Order' : currentView === 'border-sale-section' ? 'Border' : 'General'}
-        products={products}
-        stockRecords={allStockRecords && allStockRecords.length > 0 ? allStockRecords : stockRecords}
-        warehouseData={warehouseData}
-        damages={damages}
-        activeBaseline={activeBaseline}
-      />
+      {showSalesReport && (
+        <SalesReport
+          isOpen={showSalesReport}
+          onClose={() => setShowSalesReport(false)}
+          salesRecords={filteredSalesForReport}
+          allSalesRecords={salesRecords}
+          saleFilters={saleFilters}
+          setSaleFilters={setSaleFilters}
+          searchQuery={salesReportSearchQuery}
+          saleType={currentView === 'order-sale-section' ? 'Order' : currentView === 'border-sale-section' ? 'Border' : 'General'}
+          products={products}
+          stockRecords={allStockRecords && allStockRecords.length > 0 ? allStockRecords : stockRecords}
+          warehouseData={warehouseData}
+          damages={damages}
+          activeBaseline={activeBaseline}
+        />
+      )}
 
       {showProfile && (
         <Profile

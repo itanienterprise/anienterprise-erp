@@ -7,6 +7,7 @@ import axios from '../../../utils/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEmployees, useCustomRoles, QUERY_KEYS } from '../../../hooks/useQueries';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { compressImage } from '../../../utils/imageCompressor';
 import '../Profile/Profile.css';
 import './EmployeeManagement.css';
 
@@ -81,31 +82,32 @@ const EmployeeManagement = ({
 
         setIsUploadingEmployeePhoto(true);
         try {
-            const reader = new FileReader();
-            reader.onload = async (ev) => {
-                const dataUrl = ev.target.result;
-                // Instant optimistic update
-                setViewData(prev => ({ ...prev, profilePhoto: dataUrl }));
-                setEmployees(prev => prev.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: dataUrl } : emp));
-                queryClient.setQueryData(QUERY_KEYS.employees, (old) => {
-                    if (!Array.isArray(old)) return old;
-                    return old.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: dataUrl } : emp);
-                });
+            const compressedDataUrl = await compressImage(file, 400, 0.8);
+            if (!compressedDataUrl) {
+                setIsUploadingEmployeePhoto(false);
+                return;
+            }
 
-                try {
-                    const response = await axios.post(`${API_BASE_URL}/api/employees/${viewData._id}/photo`, { photo: dataUrl });
-                    if (response.data?.success) {
-                        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.employees });
-                    }
-                } catch (err) {
-                    console.error('Error uploading employee photo:', err);
-                    alert('Failed to upload employee photo.');
-                    refetchEmployees();
-                } finally {
-                    setIsUploadingEmployeePhoto(false);
+            // Instant optimistic update
+            setViewData(prev => ({ ...prev, profilePhoto: compressedDataUrl }));
+            setEmployees(prev => prev.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: compressedDataUrl } : emp));
+            queryClient.setQueryData(QUERY_KEYS.employees, (old) => {
+                if (!Array.isArray(old)) return old;
+                return old.map(emp => emp._id === viewData._id ? { ...emp, profilePhoto: compressedDataUrl } : emp);
+            });
+
+            try {
+                const response = await axios.post(`${API_BASE_URL}/api/employees/${viewData._id}/photo`, { photo: compressedDataUrl });
+                if (response.data?.success) {
+                    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.employees });
                 }
-            };
-            reader.readAsDataURL(file);
+            } catch (err) {
+                console.error('Error uploading employee photo:', err);
+                alert('Failed to upload employee photo.');
+                refetchEmployees();
+            } finally {
+                setIsUploadingEmployeePhoto(false);
+            }
         } catch (err) {
             setIsUploadingEmployeePhoto(false);
         }

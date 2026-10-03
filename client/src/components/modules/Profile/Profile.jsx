@@ -4,6 +4,7 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
+import { compressImage } from '../../../utils/imageCompressor';
 import './Profile.css';
 
 const Profile = ({ currentUser, onClose, onPhotoUpdate, onProfileUpdate }) => {
@@ -270,9 +271,9 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate, onProfileUpdate }) => {
 
         setPhotoStatus({ type: '', message: '' });
         try {
-            const dataUrl = await readFile(file);
+            const dataUrl = await compressImage(file, 480, 0.82) || await readFile(file);
 
-            // 1. Immediately set full uncropped photo on card & server
+            // 1. Immediately set full compressed photo on card & server
             rawUploadedPhotoRef.current = dataUrl;
             setPhotoPreview(dataUrl);
             setEmployeeData(prev => ({ ...(prev || {}), profilePhoto: dataUrl }));
@@ -281,7 +282,7 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate, onProfileUpdate }) => {
             try {
                 await axios.post(`${API_BASE_URL}/api/profile/photo`, { photo: dataUrl });
             } catch (err) {
-                console.error('Failed to pre-save full photo:', err);
+                console.error('Failed to pre-save photo:', err);
             }
 
             // 2. Open avatar positioning modal so user can zoom their face for the navbar circle

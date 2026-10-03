@@ -1352,10 +1352,10 @@ const SaleManagement = ({
         const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
         window.addEventListener('erp_data_updated', onCustomEvent);
 
-        // Fallback polling every 8s while viewing SaleManagement to ensure immediate consistency
+        // Fallback polling every 60s while viewing SaleManagement to ensure consistency without excessive CPU/network load
         const pollTimer = setInterval(() => {
             fetchSales();
-        }, 8000);
+        }, 60000);
 
         return () => {
             if (socket) {

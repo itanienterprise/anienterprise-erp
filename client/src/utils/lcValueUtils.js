@@ -159,18 +159,18 @@ export const isProductMatch = (p1, p2) => {
     return w1.some(w => w2.includes(w));
 };
 
+const adjustedLcValuesCache = new Map();
+
+export const clearAdjustedLcValuesCache = () => {
+    adjustedLcValuesCache.clear();
+};
+
 /**
  * Calculate adjusted LC values (received qty, bill value USD, total value BDT).
  * Matches the TOTAL VALUE column in the LC Management table.
  */
 export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecords = [], allCostOfGoodsRecords = []) => {
     if (!record) return { adjustedTotalAmount: 0, billValueUsd: 0, dollarRate: 0, openingValue: 0 };
-
-    const totalQtyTons = record.productsList && record.productsList.length > 0
-        ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
-        : (parseFloat(record.quantity) || 0);
-    const openingQtyKg = totalQtyTons * 1000;
-    const openingValue = parseFloat(record.totalAmount) || 0;
 
     const parseNum = (val) => {
         if (val === null || val === undefined) return 0;
@@ -179,32 +179,28 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
     const cleanLc = (val) => String(val || '').replace(/\D/g, '');
     const lcNoClean = cleanLc(record.lcNo);
 
-    const receiptsMapForBalance = {};
-    allStockRecords
-        .filter(s => {
-            const recordLcNoClean = cleanLc(s.lcNo);
-            const status = (s.status || '').toLowerCase();
-            return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-        })
-        .forEach(s => {
-            const rawDate = s.date || s.receiveDate || s.createdAt || '';
-            const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-            const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-            const key = `${dateStr}_${groupVal}`;
-            if (!receiptsMapForBalance[key]) {
-                const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-            } else {
-                if (!s.totalLcQuantity) {
-                    receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                }
-            }
-        });
-    const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
+    // Fast Cache Check
+    const lcId = record._id || record.id || record.lcNo || '';
+    const cacheKey = `${lcId}_${record.updatedAt || ''}_${record.updatedLcReceive || ''}_${record.updatedDollarRate || record.dollarRate || ''}_${record.enableValueQtyAdjustment ? 1 : 0}_${(record.productsList || []).length}_${allStockRecords.length}_${allSalesRecords.length}_${allCostOfGoodsRecords.length}`;
+    if (adjustedLcValuesCache.has(cacheKey)) {
+        return adjustedLcValuesCache.get(cacheKey);
+    }
 
-    const borderSaleQtyKg = allSalesRecords
-        .filter(s => {
-            const matchesLc = !!lcNoClean && (
+    const totalQtyTons = record.productsList && record.productsList.length > 0
+        ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+        : (parseFloat(record.quantity) || 0);
+    const openingQtyKg = totalQtyTons * 1000;
+    const openingValue = parseFloat(record.totalAmount) || 0;
+
+    // Pre-filter stocks and border sales for this LC ONCE instead of in every loop
+    const matchingStocks = allStockRecords.filter(s => {
+        const recordLcNoClean = cleanLc(s.lcNo);
+        const status = (s.status || '').toLowerCase();
+        return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+    });
+
+    const matchingBorderSales = allSalesRecords.filter(s => {
+        const matchesLc = !!lcNoClean && (
             (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
             (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
             (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
@@ -215,14 +211,32 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
         const status = (s.status || '').toLowerCase();
         const isValidStatus = !status.includes('rejected') && status !== 'requested';
         return matchesLc && isValidStatus && isBorder;
-        })
-        .reduce((sum, s) => {
-            const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                return iSum + (brandSubtotal || parseNum(item.quantity));
-            }, 0);
-            return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
+    });
+
+    const receiptsMapForBalance = {};
+    matchingStocks.forEach(s => {
+        const rawDate = s.date || s.receiveDate || s.createdAt || '';
+        const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+        const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+        const key = `${dateStr}_${groupVal}`;
+        if (!receiptsMapForBalance[key]) {
+            const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+            receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+        } else {
+            if (!s.totalLcQuantity) {
+                receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+            }
+        }
+    });
+    const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
+
+    const borderSaleQtyKg = matchingBorderSales.reduce((sum, s) => {
+        const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+            const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+            return iSum + (brandSubtotal || parseNum(item.quantity));
         }, 0);
+        return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
+    }, 0);
 
     const hasCustomReceive = record?.updatedLcReceive !== undefined && record?.updatedLcReceive !== null && record?.updatedLcReceive !== '';
     const totalReceivedQtyKg = hasCustomReceive
@@ -257,73 +271,54 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
         const f = parseFloat(fVal) || 0;
         return f > 0 && f < 0.1 ? f * 1000 : f;
     };
+
     const getProductReceivedQtyKg = (pName) => {
         const receiptsMap = {};
-        allStockRecords
-            .filter(s => {
-                const recordLcNoClean = cleanLc(s.lcNo);
-                const status = (s.status || '').toLowerCase();
-                return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-            })
-            .forEach(s => {
-                const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                const key = `${dateStr}_${groupVal}`;
-                if (s.entries && s.entries.length > 0) {
-                    const matchingEntries = s.entries.filter(item => {
-                        const itemPName = item.productName || s.productName || s.product || '';
-                        return !pName || isProductMatch(pName, itemPName);
-                    });
-                    const itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                    receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
-                } else {
-                    const rootPName = s.productName || s.product || '';
-                    if (!pName || isProductMatch(pName, rootPName)) {
-                        const itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                        if (!receiptsMap[key]) {
-                            receiptsMap[key] = itemQty;
-                        } else if (!s.totalLcQuantity) {
-                            receiptsMap[key] += itemQty;
-                        }
+        matchingStocks.forEach(s => {
+            const rawDate = s.date || s.receiveDate || s.createdAt || '';
+            const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+            const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+            const key = `${dateStr}_${groupVal}`;
+            if (s.entries && s.entries.length > 0) {
+                const matchingEntries = s.entries.filter(item => {
+                    const itemPName = item.productName || s.productName || s.product || '';
+                    return !pName || isProductMatch(pName, itemPName);
+                });
+                const itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
+            } else {
+                const rootPName = s.productName || s.product || '';
+                if (!pName || isProductMatch(pName, rootPName)) {
+                    const itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    if (!receiptsMap[key]) {
+                        receiptsMap[key] = itemQty;
+                    } else if (!s.totalLcQuantity) {
+                        receiptsMap[key] += itemQty;
                     }
                 }
-            });
+            }
+        });
         const rQty = Object.values(receiptsMap).reduce((sum, qty) => sum + qty, 0);
 
-        const bQty = allSalesRecords
-            .filter(s => {
-                const matchesLc = !!lcNoClean && (
-                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
-                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
-                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
-                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
-                );
-                const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
-                const status = (s.status || '').toLowerCase();
-                const isValidStatus = !status.includes('rejected') && status !== 'requested';
-                return matchesLc && isValidStatus && isBorder;
-            })
-            .reduce((sum, s) => {
-                if (s.items && s.items.length > 0) {
-                    const matchingItems = s.items.filter(item => {
-                        const itemPName = item.productName || s.productName || s.product || '';
-                        return !pName || isProductMatch(pName, itemPName);
-                    });
-                    const itemSubtotal = matchingItems.reduce((iSum, item) => {
-                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                        return iSum + (brandSubtotal || parseNum(item.quantity));
-                    }, 0);
-                    return sum + itemSubtotal;
-                } else {
-                    const rootPName = s.productName || s.product || '';
-                    if (!pName || isProductMatch(pName, rootPName)) {
-                        return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
-                    }
-                    return sum;
+        const bQty = matchingBorderSales.reduce((sum, s) => {
+            if (s.items && s.items.length > 0) {
+                const matchingItems = s.items.filter(item => {
+                    const itemPName = item.productName || s.productName || s.product || '';
+                    return !pName || isProductMatch(pName, itemPName);
+                });
+                const itemSubtotal = matchingItems.reduce((iSum, item) => {
+                    const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                    return iSum + (brandSubtotal || parseNum(item.quantity));
+                }, 0);
+                return sum + itemSubtotal;
+            } else {
+                const rootPName = s.productName || s.product || '';
+                if (!pName || isProductMatch(pName, rootPName)) {
+                    return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
                 }
-            }, 0);
+                return sum;
+            }
+        }, 0);
 
         return rQty + bQty;
     };
@@ -396,7 +391,7 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
     const combinedRemKg = adjustedQtyKg - totalReceivedQtyKg;
     const lessDollar = adjustedQtyKg > 0 ? (totalReceivedQtyKg / adjustedQtyKg) * billValueUsd : 0;
 
-    return {
+    const result = {
         openingQtyKg,
         openingValue,
         receivedQtyKg,
@@ -415,6 +410,13 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
         lessDollar,
         dollarRate
     };
+
+    if (adjustedLcValuesCache.size > 500) {
+        adjustedLcValuesCache.clear();
+    }
+    adjustedLcValuesCache.set(cacheKey, result);
+
+    return result;
 };
 
 export const getLcMilestoneFinances = (lc, amendmentNo) => {
@@ -571,5 +573,198 @@ export const getLcMilestonesBreakdown = (lc, payments = []) => {
     });
 
     return milestones;
+};
+
+/**
+ * Calculates LC conclusion metrics matching the report conclusion summary statement.
+ */
+export const calculateLcConclusion = ({
+    selectedLc,
+    adjustedLcValues,
+    selectedLcCostOfGoods = [],
+    totalLcCostOfGoodsQty = 0,
+    totalLcCostOfGoodsAmount = 0,
+    selectedLcExpenses = [],
+    totalLcExpensesAmount = 0,
+    selectedLcStocks = [],
+    selectedLcSales = [],
+    totalLcSalesAmount = 0,
+    totalLcSalesQty = 0,
+    productSummary = [],
+    profitLossData = null
+}) => {
+    if (!selectedLc) return null;
+
+    const adjValues = adjustedLcValues || (typeof getAdjustedLcValues === 'function' ? getAdjustedLcValues(selectedLc, selectedLcStocks, selectedLcSales) : null);
+
+    const lcNo = selectedLc.lcNo || '-';
+
+    const item = (productSummary && productSummary.length > 0)
+        ? productSummary.map(p => p.productName).filter(Boolean).join(', ')
+        : (selectedLc.productsList && selectedLc.productsList.length > 0
+            ? selectedLc.productsList.map(p => p.productName || p.product || p.name).filter(Boolean).join(', ')
+            : (selectedLc.productName || selectedLc.item || selectedLc.product || '-'));
+
+    const supplier = selectedLc.exporterName || selectedLc.supplier || selectedLc.supplierName || '-';
+
+    const rawBillUsd = parseFloat(adjValues?.billValueUsd || 0)
+        || parseFloat(selectedLc.totalDollar || selectedLc.lcValueUsd || selectedLc.lcValue || selectedLc.amountUsd || 0);
+    const billValueUsd = Math.abs(rawBillUsd - Math.round(rawBillUsd)) < 0.1
+        ? Math.round(rawBillUsd)
+        : Math.round(rawBillUsd * 100) / 100;
+
+    const dollarRate = parseFloat(adjValues?.dollarRate || selectedLc.dollarRate || selectedLc.openingDollarRate || selectedLc.exchangeRate || 0);
+
+    const totalRateKgBdt = (billValueUsd > 0 && dollarRate > 0)
+        ? Math.round(billValueUsd * dollarRate)
+        : (parseFloat(adjValues?.adjustedTotalAmount || 0) || parseFloat(selectedLc.totalAmount || 0));
+
+    // 1. LC Inv Qty in kg = Total COG qty
+    const cogQtySum = (parseFloat(totalLcCostOfGoodsQty) || 0)
+        || (selectedLcCostOfGoods && selectedLcCostOfGoods.length > 0
+            ? selectedLcCostOfGoods.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0)
+            : 0);
+
+    const invQtyKg = cogQtySum > 0
+        ? cogQtySum
+        : (parseFloat(adjValues?.openingQtyKg || 0)
+            || (selectedLc.productsList && selectedLc.productsList.length > 0
+                ? selectedLc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0) * 1000
+                : (parseFloat(selectedLc.quantity || 0) * 1000))
+            || (productSummary.length > 0
+                ? productSummary.reduce((sum, p) => sum + (parseFloat(p.purchaseQty) || 0), 0)
+                : 0));
+
+    // 2. Rcv Qty in kg = Total Received inhouse qty
+    const inhouseFromSummary = (productSummary && productSummary.length > 0)
+        ? productSummary.reduce((sum, p) => sum + (parseFloat(p.inhouseQty) || 0), 0)
+        : 0;
+
+    const inhouseFromStocks = (selectedLcStocks && selectedLcStocks.length > 0)
+        ? selectedLcStocks.reduce((sum, item) => {
+            const qty = parseFloat(item.quantity) || 0;
+            const shortQty = parseFloat(item.sweepedQuantity) || 0;
+            const inhouseQty = (item.inHouseQuantity !== undefined && item.inHouseQuantity !== null && item.inHouseQuantity !== '')
+                ? (parseFloat(item.inHouseQuantity) || 0)
+                : Math.max(0, qty - shortQty);
+            return sum + inhouseQty;
+        }, 0)
+        : 0;
+
+    const rcvQtyKg = inhouseFromSummary > 0
+        ? inhouseFromSummary
+        : (inhouseFromStocks > 0
+            ? inhouseFromStocks
+            : (parseFloat(adjValues?.totalReceivedQtyKg || 0) || invQtyKg));
+
+    // 3. Overall rate per kg in BDT: use the Average Cost/KG from Cost of Goods (COG) (Net Bill / Quantity) if available
+    const cogNetBillTotal = (parseFloat(totalLcCostOfGoodsAmount) || 0)
+        || (selectedLcCostOfGoods && selectedLcCostOfGoods.length > 0
+            ? selectedLcCostOfGoods.reduce((sum, rec) => {
+                const costingKg = typeof getRecCostingKg === 'function'
+                    ? getRecCostingKg(rec)
+                    : (Math.round(parseFloat(rec.costingKg || 0) * 100) / 100);
+                const qty = parseFloat(rec.quantity || 0);
+                return sum + Math.round(costingKg * qty);
+            }, 0)
+            : 0);
+
+    const cogAvgCostKg = (cogQtySum > 0 && cogNetBillTotal > 0)
+        ? (cogNetBillTotal / cogQtySum)
+        : 0;
+
+    const totalRatePerKgBdt = cogAvgCostKg > 0
+        ? cogAvgCostKg
+        : (rcvQtyKg > 0 ? (totalRateKgBdt / rcvQtyKg) : (invQtyKg > 0 ? (totalRateKgBdt / invQtyKg) : 0));
+
+    // 4. Insurance
+    const insuranceExpenses = (selectedLcExpenses || []).filter(e => (e.expenseHead || '').toLowerCase().includes('insurance'));
+    const insuranceAmount = insuranceExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
+        || parseFloat(selectedLc.insurance || selectedLc.netPremium || selectedLc.grossPremium || 0);
+
+    // 5. CnF & Others (BDT)
+    let cnfAndOthersPerKg = 0;
+    let cnfAndOthersBdt = 0;
+
+    // Check if Cost of Goods records have cfOtherExpense specified
+    const totalCnfFromCog = (selectedLcCostOfGoods || []).reduce((sum, rec) => {
+        const expensePerKg = parseFloat(rec.cfOtherExpense !== undefined && rec.cfOtherExpense !== null ? rec.cfOtherExpense : 0) || 0;
+        const qty = parseFloat(rec.quantity) || 0;
+        return sum + (expensePerKg * qty);
+    }, 0);
+
+    if (totalCnfFromCog > 0 && cogQtySum > 0) {
+        cnfAndOthersPerKg = totalCnfFromCog / cogQtySum;
+        cnfAndOthersBdt = rcvQtyKg > 0 ? (cnfAndOthersPerKg * rcvQtyKg) : totalCnfFromCog;
+    } else {
+        const expensesTotal = totalLcExpensesAmount || (selectedLcExpenses || []).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+        const expensesExcludingInsurance = Math.max(0, expensesTotal - insuranceAmount);
+        cnfAndOthersBdt = expensesExcludingInsurance;
+        cnfAndOthersPerKg = rcvQtyKg > 0 ? (cnfAndOthersBdt / rcvQtyKg) : (invQtyKg > 0 ? (cnfAndOthersBdt / invQtyKg) : 0);
+    }
+
+    // 6. Base Rate/kg in BDT: Since C&F (1.50) is included in rate/kg, Base Rate = Total Rate - CnF
+    const rateKgBdt = Math.max(0, totalRatePerKgBdt - cnfAndOthersPerKg);
+
+    // 7. Sales Qty in kg
+    const salesQtyKg = parseFloat(totalLcSalesQty || 0)
+        || (selectedLcSales.length > 0
+            ? selectedLcSales.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0)
+            : (productSummary.length > 0
+                ? productSummary.reduce((sum, p) => sum + (parseFloat(p.saleQty) || 0), 0)
+                : 0));
+
+    // 8. Unsold Stock in kg = Rcv Qty in kg - Sales Qty in kg
+    const unsoldStockKg = Math.max(0, rcvQtyKg - salesQtyKg);
+
+    // 9. Short Qty in kg = LC Inv Qty in kg - Rcv Qty in kg
+    const shortQtyKg = Math.max(0, invQtyKg - rcvQtyKg);
+
+    // 10. LC Invest = LC Inv Qty in kg * Total Rate/kg in BDT
+    const lcInvest = (invQtyKg > 0 && totalRatePerKgBdt > 0)
+        ? Math.round(invQtyKg * totalRatePerKgBdt)
+        : totalRateKgBdt;
+
+    // 11. Total Invest = LC Invest + Insurance
+    const totalInvest = lcInvest + insuranceAmount;
+
+    // 12. Sales Value
+    const salesValue = parseFloat(totalLcSalesAmount || 0) || parseFloat(profitLossData?.summary?.salesRevenue || 0);
+
+    // 13. Sales Value/kg
+    const salesValuePerKg = salesQtyKg > 0 ? (salesValue / salesQtyKg) : 0;
+
+    // 14. Unsold Stock Price (Appx)
+    const unsoldStockPriceAppx = unsoldStockKg > 0
+        ? (parseFloat(profitLossData?.summary?.currentStockValue || 0) || Math.round(unsoldStockKg * totalRatePerKgBdt))
+        : 0;
+
+    // 15. Profit/Loss
+    const profitOrLoss = (salesValue + unsoldStockPriceAppx) - totalInvest;
+
+    return {
+        lcNo,
+        item,
+        supplier,
+        billValueUsd,
+        dollarRate,
+        totalRateKgBdt,
+        invQtyKg,
+        rcvQtyKg,
+        rateKgBdt,
+        cnfAndOthersPerKg,
+        cnfAndOthersBdt,
+        totalRatePerKgBdt,
+        salesQtyKg,
+        unsoldStockKg,
+        shortQtyKg,
+        lcInvest,
+        insuranceAmount,
+        totalInvest,
+        salesValue,
+        salesValuePerKg,
+        unsoldStockPriceAppx,
+        profitOrLoss
+    };
 };
 

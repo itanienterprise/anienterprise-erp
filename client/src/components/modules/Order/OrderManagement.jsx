@@ -368,7 +368,7 @@ const OrderManagement = ({
 
         const pollTimer = setInterval(() => {
             fetchOrders();
-        }, 8000);
+        }, 60000);
 
         return () => {
             if (socket) {
