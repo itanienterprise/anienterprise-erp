@@ -9,7 +9,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
-import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
+import { calculateStockData, isLcMatch, safeParse, calculatePktRemainder } from '../../../utils/stockHelpers';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { trackUserAction } from '../../../utils/activityTracker';
 import { getSocket } from '../../../utils/socket';
@@ -838,6 +838,13 @@ const SaleManagement = ({
         const isBorderManagerRole = (currentUser?.role || '').toLowerCase() === 'border manager';
         return isAdmin || isIncharge || isBorderManagerRole || hasPermission(currentUser, moduleKey, 'showEntryBy') || hasPermission(currentUser, 'sales', 'showEntryBy') || hasPermission(currentUser, 'borderSale', 'showEntryBy');
     }, [currentUser, moduleKey]);
+
+    const canShowStockRate = useMemo(() => {
+        if (!currentUser) return true;
+        const isAdmin = currentUser.username === 'admin' || (currentUser.role || '').toLowerCase() === 'admin' || (currentUser.role || '').toLowerCase() === 'superadmin' || isFullAdmin;
+        const isIncharge = (currentUser.role || '').toLowerCase() === 'incharge';
+        return isAdmin || isIncharge || hasPermission(currentUser, 'stock', 'showRate') || hasPermission(currentUser, 'stock', 'showPrice') || hasPermission(currentUser, 'purchase', 'showRate') || hasPermission(currentUser, 'sales', 'showRate');
+    }, [currentUser, isFullAdmin]);
 
     // Fine-grained permission flags from System Access
     const canAdd = hasPermission(currentUser, moduleKey, 'add');
@@ -1691,6 +1698,165 @@ const SaleManagement = ({
             inhouseQty: Number(Math.max(0, inhouseSaleable).toFixed(2)).toString(),
             warehouseQty: cleanWhName ? Number(Math.max(0, whSaleable).toFixed(2)).toString() : ''
         };
+    };
+
+    // Helper to calculate product-level total stock and stock management rates
+    const productStockSummaries = useMemo(() => {
+        if (!formData.items || formData.items.length === 0) return {};
+        const map = {};
+        const salesForCalc = editingId
+            ? allSalesRecords.filter(s => s._id !== editingId && s.invoiceNo !== formData.invoiceNo && s.orderNo !== formData.orderNo)
+            : allSalesRecords;
+
+        formData.items.forEach(item => {
+            const cleanPName = (item.productName || '').trim();
+            if (!cleanPName || map[cleanPName.toLowerCase()]) return;
+
+            try {
+                const stockFilters = {
+                    productName: cleanPName,
+                    reportType: 'price'
+                };
+                const stockRes = calculateStockData(
+                    stockRecords,
+                    stockFilters,
+                    '',
+                    warehouses,
+                    salesForCalc,
+                    products,
+                    damagesRecords,
+                    activeBaseline
+                );
+                const calculatedStock = stockRes?.displayRecords || [];
+                const matchedGroup = calculatedStock.find(g => (g.productName || '').trim().toLowerCase() === cleanPName.toLowerCase());
+
+                if (matchedGroup) {
+                    const inHouseQty = matchedGroup.inHouseQuantity || 0;
+                    const inHousePkt = matchedGroup.inHousePacket || 0;
+                    const saleableQty = matchedGroup.saleableQuantity !== undefined ? matchedGroup.saleableQuantity : inHouseQty;
+                    const saleablePkt = matchedGroup.saleablePacket !== undefined ? matchedGroup.saleablePacket : inHousePkt;
+
+                    const ratesSet = new Set();
+                    (matchedGroup.brandList || []).forEach(b => {
+                        const price = safeParse(b.purchasedPrice ?? b.rate);
+                        if (price > 0) ratesSet.add(price);
+                    });
+
+                    // Fallback to stockRecords directly if no rates in brandList
+                    if (ratesSet.size === 0 && Array.isArray(stockRecords)) {
+                        stockRecords.forEach(r => {
+                            const rProd = (r.productName || r.product || '').trim().toLowerCase();
+                            if (rProd === cleanPName.toLowerCase()) {
+                                const entries = r.brandEntries || r.entries || [];
+                                entries.forEach(e => {
+                                    const price = safeParse(e.purchasedPrice ?? e.rate);
+                                    if (price > 0) ratesSet.add(price);
+                                });
+                            }
+                        });
+                    }
+
+                    const rates = Array.from(ratesSet).sort((a, b) => a - b);
+                    let rateString = '—';
+                    if (rates.length === 1) {
+                        rateString = `৳${rates[0].toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    } else if (rates.length > 1) {
+                        rateString = `৳${rates[0].toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} - ৳${rates[rates.length - 1].toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    }
+
+                    map[cleanPName.toLowerCase()] = {
+                        group: matchedGroup,
+                        inHouseQty,
+                        inHousePkt,
+                        saleableQty,
+                        saleablePkt,
+                        rates,
+                        rateString,
+                        brandList: matchedGroup.brandList || []
+                    };
+                } else {
+                    map[cleanPName.toLowerCase()] = {
+                        group: null,
+                        inHouseQty: 0,
+                        inHousePkt: 0,
+                        saleableQty: 0,
+                        saleablePkt: 0,
+                        rates: [],
+                        rateString: '—',
+                        brandList: []
+                    };
+                }
+            } catch (err) {
+                console.error('Error calculating product stock summary:', err);
+                map[cleanPName.toLowerCase()] = {
+                    group: null,
+                    inHouseQty: 0,
+                    inHousePkt: 0,
+                    saleableQty: 0,
+                    saleablePkt: 0,
+                    rates: [],
+                    rateString: '—',
+                    brandList: []
+                };
+            }
+        });
+
+        return map;
+    }, [stockRecords, warehouses, allSalesRecords, damagesRecords, activeBaseline, editingId, formData.invoiceNo, formData.orderNo, formData.items]);
+
+    const getProductStockSummary = (productName) => {
+        if (!productName) return null;
+        return productStockSummaries[(productName || '').trim().toLowerCase()] || null;
+    };
+
+    const getBrandStockRate = (productName, brandName, lcNo) => {
+        if (!productName || !brandName) return null;
+        const stockInfo = getProductStockSummary(productName);
+        const cleanB = (brandName || '').trim().toLowerCase();
+        const cleanLc = (lcNo || '').trim();
+
+        if (stockInfo && stockInfo.brandList && stockInfo.brandList.length > 0) {
+            let matched = stockInfo.brandList.find(b => {
+                const bBrand = (b.brand || '').trim().toLowerCase();
+                const bMatches = bBrand === cleanB || bBrand.replace(/\s+/g, ' ') === cleanB.replace(/\s+/g, ' ');
+                if (!bMatches) return false;
+                if (cleanLc) return isLcMatch(b.lcNo, cleanLc);
+                return true;
+            });
+
+            if (!matched && cleanLc) {
+                matched = stockInfo.brandList.find(b => {
+                    const bBrand = (b.brand || '').trim().toLowerCase();
+                    return bBrand === cleanB || bBrand.replace(/\s+/g, ' ') === cleanB.replace(/\s+/g, ' ');
+                });
+            }
+
+            if (matched) {
+                const price = safeParse(matched.purchasedPrice ?? matched.rate);
+                if (price > 0) return price;
+            }
+        }
+
+        // Fallback: check stockRecords directly
+        if (stockRecords && Array.isArray(stockRecords)) {
+            const cleanP = (productName || '').trim().toLowerCase();
+            for (const r of stockRecords) {
+                const rProd = (r.productName || r.product || '').trim().toLowerCase();
+                if (rProd === cleanP) {
+                    const entries = r.brandEntries || r.entries || [];
+                    for (const e of entries) {
+                        const eBrand = (e.brand || '').trim().toLowerCase();
+                        if (eBrand === cleanB || eBrand.replace(/\s+/g, ' ') === cleanB.replace(/\s+/g, ' ')) {
+                            if (!cleanLc || isLcMatch(e.lcNo, cleanLc)) {
+                                const price = safeParse(e.purchasedPrice ?? e.rate);
+                                if (price > 0) return price;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     };
 
     // Refetch latest stock and warehouse data whenever the modal opens
@@ -5656,9 +5822,9 @@ const SaleManagement = ({
                                             </button>
                                         )}
 
-                                        <div className="flex flex-row items-center gap-4 mb-6 px-4">
+                                        <div className="flex flex-wrap md:flex-nowrap items-center gap-4 mb-6 px-4">
                                             {/* Product Selection */}
-                                            <div className="space-y-1.5 relative product-dropdown-container flex-1">
+                                            <div className="space-y-1.5 relative product-dropdown-container flex-1 min-w-[200px]">
                                                 <label className="sale-mgmt-item-label">Product</label>
                                                 <div className="relative">
                                                     <input
@@ -6188,6 +6354,183 @@ const SaleManagement = ({
                                     </div>
                                 ))}
                             </div>
+
+                            {/* Stock Management Details Table - After Product Details Section */}
+                            {(() => {
+                                const activeProductsWithBrands = (formData.items || []).map((item) => {
+                                    if (!item.productName) return null;
+                                    const selectedBrandNames = Array.from(new Set([
+                                        ...(item.brandEntries || []).map(e => (e.brandName || e.brand || '').trim()),
+                                        (item.brand || item.brandName || '').trim()
+                                    ].filter(Boolean)));
+                                    if (selectedBrandNames.length === 0) return null;
+
+                                    const pSummary = getProductStockSummary(item.productName);
+                                    const group = pSummary?.group;
+                                    if (!group) return null;
+
+                                    const norm = str => (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                                    const effectiveBrandList = (group.brandList || []).filter(b => {
+                                        const bName = norm(b.brand);
+                                        return selectedBrandNames.some(sb => norm(sb) === bName);
+                                    });
+                                    if (effectiveBrandList.length === 0) return null;
+
+                                    return { item, group, effectiveBrandList };
+                                }).filter(Boolean);
+
+                                if (activeProductsWithBrands.length === 0) return null;
+
+                                return (
+                                    <div className="space-y-4 pt-1">
+                                        {activeProductsWithBrands.map(({ item, group, effectiveBrandList }, pIdx) => {
+                                            const brandSpans = [];
+                                            effectiveBrandList.forEach((ent, i) => {
+                                                const bName = (ent.brand || 'No Brand').trim().toLowerCase();
+                                                const prevB = i > 0 ? (effectiveBrandList[i - 1].brand || 'No Brand').trim().toLowerCase() : null;
+                                                if (bName === prevB) {
+                                                    brandSpans.push({ name: bName, span: 0 });
+                                                    let parentIdx = i - 1;
+                                                    while (parentIdx >= 0 && brandSpans[parentIdx].span === 0) {
+                                                        parentIdx--;
+                                                    }
+                                                    if (parentIdx >= 0) brandSpans[parentIdx].span++;
+                                                } else {
+                                                    brandSpans.push({ name: bName, span: 1 });
+                                                }
+                                            });
+
+                                            return (
+                                                <div key={pIdx} className="bg-white border border-gray-200/80 rounded-2xl shadow-sm overflow-hidden">
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-left border-collapse">
+                                                            <thead>
+                                                                <tr className="bg-gray-50/80 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                                    <th className="px-5 py-3.5 whitespace-nowrap">Product Name</th>
+                                                                    <th className="px-5 py-3.5 whitespace-nowrap text-gray-900">Brand</th>
+                                                                    <th className="px-5 py-3.5 text-center whitespace-nowrap text-purple-800">LC No</th>
+                                                                    <th className="px-5 py-3.5 text-center whitespace-nowrap text-green-800">Closing Bag</th>
+                                                                    <th className="px-5 py-3.5 text-center whitespace-nowrap text-green-800">Closing QTY (KG)</th>
+                                                                    <th className="px-5 py-3.5 text-center whitespace-nowrap">Status</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-gray-100 text-sm">
+                                                                {effectiveBrandList.map((brand, bIdx) => {
+                                                                    let startIdx = bIdx;
+                                                                    while (startIdx > 0 && brandSpans[startIdx]?.span === 0) {
+                                                                        startIdx--;
+                                                                    }
+                                                                    const spanInfo = brandSpans[startIdx] || { span: 1 };
+                                                                    const isLastOfBrandGroup = bIdx === startIdx + spanInfo.span - 1;
+                                                                    const hasMultipleLcs = spanInfo.span > 1;
+                                                                    const showBrandName = brandSpans[bIdx]?.span > 0;
+
+                                                                    return (
+                                                                        <React.Fragment key={bIdx}>
+                                                                            <tr className="hover:bg-gray-50/40 transition-colors">
+                                                                                <td className="px-5 py-3 font-bold text-gray-900 whitespace-nowrap align-middle">
+                                                                                    {bIdx === 0 ? group.productName : ''}
+                                                                                </td>
+                                                                                <td className="px-5 py-3 font-semibold text-gray-700 whitespace-nowrap align-middle">
+                                                                                    {showBrandName ? (brand.brand || '-').trim() : ''}
+                                                                                </td>
+                                                                                <td className="px-5 py-3 text-center whitespace-nowrap align-middle">
+                                                                                    <span className="text-sm text-purple-800 bg-purple-50/60 px-3 py-1 rounded-xl font-bold inline-block">
+                                                                                        {brand.lcNo || '—'}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td className="px-5 py-3 text-center whitespace-nowrap align-middle">
+                                                                                    <span className={`text-sm px-3 py-1 rounded-xl font-bold border inline-block ${brand.inHouseQuantity < 0 ? 'text-blue-800 bg-blue-50/60 border-blue-100/60' : 'text-green-800 bg-green-50/70 border-green-200/60'}`}>
+                                                                                        {(() => {
+                                                                                            const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize || 30);
+                                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                        })()}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td className="px-5 py-3 text-center whitespace-nowrap align-middle">
+                                                                                    <span className={`text-sm px-3.5 py-1 rounded-xl font-black border inline-block ${brand.inHouseQuantity < 0 ? 'text-blue-900 bg-blue-50/60 border-blue-100/60' : 'text-green-900 bg-green-50/70 border-green-200/60'}`}>
+                                                                                        {Math.round(brand.inHouseQuantity).toLocaleString('en-US')}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td className="px-5 py-3 text-center whitespace-nowrap align-middle">
+                                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${Math.round(brand.inHouseQuantity) > 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : Math.round(brand.inHouseQuantity) < 0 ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+                                                                                        {Math.round(brand.inHouseQuantity) > 0 ? 'In Stock' : Math.round(brand.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                                    </span>
+                                                                                </td>
+                                                                            </tr>
+                                                                            {hasMultipleLcs && isLastOfBrandGroup && (
+                                                                                <tr className="bg-purple-50/20 border-t border-dashed border-purple-200">
+                                                                                    <td></td>
+                                                                                    <td className="px-5 py-2 text-xs text-purple-950 font-black uppercase tracking-wider whitespace-nowrap">
+                                                                                        {(brand.brand || '-').trim()} TOTAL
+                                                                                    </td>
+                                                                                    <td></td>
+                                                                                    <td className="px-5 py-2 text-center whitespace-nowrap">
+                                                                                        <span className="text-xs text-purple-900 font-extrabold bg-purple-100/60 px-3 py-1 rounded-lg inline-block">
+                                                                                            {(() => {
+                                                                                                const brandGroup = effectiveBrandList.slice(startIdx, startIdx + spanInfo.span);
+                                                                                                const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                                                                                                const pktSize = brand.packetSize || 30;
+                                                                                                const { whole, remainder = 0 } = calculatePktRemainder(totalQty, pktSize);
+                                                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                            })()}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td className="px-5 py-2 text-center whitespace-nowrap">
+                                                                                        <span className="text-xs text-purple-900 font-extrabold bg-purple-100/60 px-3 py-1 rounded-lg inline-block">
+                                                                                            {(() => {
+                                                                                                const brandGroup = effectiveBrandList.slice(startIdx, startIdx + spanInfo.span);
+                                                                                                const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                                                                                                return Math.round(totalQty).toLocaleString('en-US');
+                                                                                            })()}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td></td>
+                                                                                </tr>
+                                                                            )}
+                                                                        </React.Fragment>
+                                                                    );
+                                                                })}
+                                                                <tr className="bg-blue-50/20 border-t border-dashed border-blue-200">
+                                                                    <td></td>
+                                                                    <td className="px-5 py-2.5 text-xs font-black text-blue-950 uppercase tracking-wider whitespace-nowrap">
+                                                                        Total:
+                                                                    </td>
+                                                                    <td></td>
+                                                                    <td className="px-5 py-2.5 text-center whitespace-nowrap">
+                                                                        <span className="text-xs text-blue-900 font-extrabold bg-blue-100/60 px-3 py-1 rounded-lg inline-block">
+                                                                            {(() => {
+                                                                                let totalWhole = effectiveBrandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize || 30).whole, 0);
+                                                                                let totalRem = effectiveBrandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize || 30).remainder, 0);
+                                                                                const pktSize = group.packetSize || effectiveBrandList.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                                                if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
+                                                                                    const extra = Math.floor(Math.abs(totalRem) / pktSize);
+                                                                                    totalWhole += totalRem >= 0 ? extra : -extra;
+                                                                                    totalRem = totalRem % pktSize;
+                                                                                }
+                                                                                return `${totalWhole.toLocaleString('en-US')}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem)).toLocaleString('en-US')} kg` : ''}`;
+                                                                            })()}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-5 py-2.5 text-center whitespace-nowrap">
+                                                                        <span className="text-xs text-blue-900 font-extrabold bg-blue-100/60 px-3 py-1 rounded-lg inline-block">
+                                                                            {(() => {
+                                                                                const totalQty = effectiveBrandList.reduce((sum, ent) => sum + Math.max(0, ent.inHouseQuantity || 0), 0);
+                                                                                return Math.round(totalQty).toLocaleString('en-US');
+                                                                            })()}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td></td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
 
                             {/* Invoice Summary */}
                             <div className="grid grid-cols-2 md:grid-cols-5 gap-6 col-span-2 pt-4 bg-blue-50/50 p-6 rounded-2xl border border-blue-100/50 mt-4 overflow-hidden">
