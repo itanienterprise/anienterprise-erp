@@ -157,12 +157,18 @@ function findCustomerForSale(customers, saleData) {
   const cComp = (saleData.companyName || '').trim().toLowerCase();
   const cCust = (saleData.customerName || '').trim().toLowerCase();
 
-  // 1. Direct ID match
+  // 1. Direct ID match (verify companyName doesn't contradict if both are present)
   if (cId) {
     const found = customers.find(c => {
-      if (c._id.toString() === cId) return true;
-      let cd = c.decryptedData;
-      return cd && (cd.customerId === cId || cd._id === cId);
+      const isId = c._id.toString() === cId || (c.decryptedData && (c.decryptedData.customerId === cId || c.decryptedData._id === cId));
+      if (!isId) return false;
+      if (cComp && c.decryptedData && c.decryptedData.companyName) {
+        const custComp = c.decryptedData.companyName.trim().toLowerCase();
+        if (custComp && cComp !== custComp && !custComp.includes(cComp) && !cComp.includes(custComp)) {
+          return false;
+        }
+      }
+      return true;
     });
     if (found) return found;
   }
@@ -529,9 +535,114 @@ async function syncSaleOnDelete(saleInv, saleOrd) {
 }
 
 /**
+ * Ensures Chondon entities (Bogura, Dinajpur, Gobindogonj) have their sales and orders
+ * correctly attributed and never cross-contaminated.
+ */
+async function repairChondonEntities() {
+  const BOGURA_ID = '69d753c5ea95142dc0a88473';
+  const DINAJPUR_ID = '6a0167d218e71d3fbe53b1bc';
+  const GOBINDOGONJ_ID = '6a563c673950cc376c180d9e';
+
+  // 1. Fix GS0516 and ORD0189 in Sale collection
+  const allSales = await Sale.find({});
+  for (const s of allSales) {
+    let d = decryptDocData(s.data);
+    const inv = (d.invoiceNo || '').trim().toUpperCase();
+    const ord = (d.orderNo || '').trim().toUpperCase();
+
+    if (inv === 'GS0516' || ord === 'ORD0189' || inv === 'ORD0189') {
+      const curCustId = (d.customerId || '').toString().trim();
+      const curComp = (d.companyName || '').trim();
+      if (curCustId !== GOBINDOGONJ_ID || curComp !== 'CHONDON TRADERS (GOBINDOGONJ)') {
+        d.customerId = GOBINDOGONJ_ID;
+        d.companyName = 'CHONDON TRADERS (GOBINDOGONJ)';
+        d.customerName = 'CHONDON';
+        d.address = 'GOBINDOGONJ';
+        d.customerAddress = 'GOBINDOGONJ';
+        d.location = 'GOBINDOGONJ';
+        d.phone = '+8800000000000';
+        d.customerPhone = '+8800000000000';
+        if (d.customer && typeof d.customer === 'object') {
+          d.customer._id = GOBINDOGONJ_ID;
+          d.customer.customerId = 'G0063';
+          d.customer.companyName = 'CHONDON TRADERS (GOBINDOGONJ)';
+          d.customer.customerName = 'CHONDON';
+          d.customer.address = 'GOBINDOGONJ';
+          d.customer.location = 'GOBINDOGONJ';
+          d.customer.phone = '+8800000000000';
+        }
+        await Sale.findByIdAndUpdate(s._id, { data: encryptData(d) });
+        console.log(`[Auto-Repair] Corrected ${inv || ord} assignment to CHONDON TRADERS (GOBINDOGONJ)`);
+      }
+    }
+  }
+
+  // 2. Ensure customer documents' salesHistory arrays are clean
+  const boguraDoc = await Customer.findById(BOGURA_ID);
+  if (boguraDoc) {
+    let bd = decryptDocData(boguraDoc.data);
+    if (Array.isArray(bd.salesHistory)) {
+      const has516 = bd.salesHistory.some(h => (h.invoiceNo || '').trim().toUpperCase() === 'GS0516' || (h.orderNo || '').trim().toUpperCase() === 'ORD0189');
+      if (has516) {
+        bd.salesHistory = bd.salesHistory.filter(h => {
+          const inv = (h.invoiceNo || '').trim().toUpperCase();
+          const ord = (h.orderNo || '').trim().toUpperCase();
+          return inv !== 'GS0516' && ord !== 'ORD0189';
+        });
+        await Customer.findByIdAndUpdate(BOGURA_ID, { data: encryptData(bd) });
+        console.log('[Auto-Repair] Removed GS0516/ORD0189 from BOGURA salesHistory');
+      }
+    }
+  }
+
+  const gobindDoc = await Customer.findById(GOBINDOGONJ_ID);
+  if (gobindDoc) {
+    let gd = decryptDocData(gobindDoc.data);
+    if (!Array.isArray(gd.salesHistory)) gd.salesHistory = [];
+    const has516 = gd.salesHistory.some(h => (h.invoiceNo || '').trim().toUpperCase() === 'GS0516');
+    if (!has516) {
+      gd.salesHistory.unshift({
+        id: `${Date.now()}-gs0516`,
+        date: '2026-09-30',
+        invoiceNo: 'GS0516',
+        orderNo: 'ORD0189',
+        lcNo: '087326010751',
+        product: 'CHICK PEAS',
+        brand: 'D M',
+        quantity: 1500,
+        rate: 98,
+        unitPrice: 98,
+        truck: 'VAN',
+        amount: 147000,
+        totalAmount: 147000,
+        paid: 0,
+        due: 147000,
+        discount: 0,
+        warehouse: 'BOGURA',
+        requestedBy: 'NAZMUL HAQUE',
+        requestedByUsername: 'E-1003',
+        acceptedBy: 'Md Nasir Uddin Sarker Dinar',
+        status: 'Pending',
+        companyName: 'CHONDON TRADERS (GOBINDOGONJ)',
+        customerName: 'CHONDON',
+        phone: '+8800000000000',
+        customerPhone: '+8800000000000',
+        address: 'GOBINDOGONJ',
+        location: 'GOBINDOGONJ',
+        customerType: 'General Customer'
+      });
+      await Customer.findByIdAndUpdate(GOBINDOGONJ_ID, { data: encryptData(gd) });
+      console.log('[Auto-Repair] Added GS0516 to GOBINDOGONJ salesHistory');
+    }
+  }
+}
+
+/**
  * Scan all sales and customers in database, repair misallocated sales
  */
 async function repairAllCustomerSalesHistory() {
+  await repairChondonEntities();
+
   const salesDocs = await Sale.find();
   const customerDocs = await Customer.find();
 
@@ -596,5 +707,6 @@ module.exports = {
   findCustomerForSale,
   syncSaleOnSave,
   syncSaleOnDelete,
+  repairChondonEntities,
   repairAllCustomerSalesHistory
 };

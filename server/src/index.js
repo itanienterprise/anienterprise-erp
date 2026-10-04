@@ -299,7 +299,6 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db')
   .then(() => {
     console.log('MongoDB connected successfully');
     seedAdminUser();
-    cleanupZeroStockBaselineItems();
   })
   .catch(err => console.log('MongoDB connection error:', err));
 
@@ -338,7 +337,7 @@ const InsurancePayment = require('./models/InsurancePayment');
 const StockBaseline = require('./models/StockBaseline');
 const { encryptData, decryptData } = require('./utils/encryption');
 const { updateBrandAcrossAllCollections } = require('./services/brandCascadeService');
-const { syncSaleOnSave, syncSaleOnDelete, repairAllCustomerSalesHistory } = require('./services/customerSyncService');
+const { syncSaleOnSave, syncSaleOnDelete, repairChondonEntities, repairAllCustomerSalesHistory } = require('./services/customerSyncService');
 const CryptoJS = require('crypto-js');
 const ActivityLog = require('./models/ActivityLog');
 const UserDailyActivity = require('./models/UserDailyActivity');
@@ -690,6 +689,50 @@ const migratePurchaseReceiveCustomerIds = async () => {
     console.error('[Post-Restore Migration] migratePurchaseReceiveCustomerIds error:', err);
   }
 };
+
+// System Self-Healing Migrations:
+// Runs automatically after every backup restore AND on server startup.
+// 1. Cleans up obsolete zero-stock baseline records.
+// 2. Re-populates customerId on PurchaseReceive documents.
+// 3. Normalizes and fixes Chondon entities (Bogura, Dinajpur, Gobindogonj) so sales/orders are never cross-contaminated.
+// 4. Scans and repairs all customer sales history across the database.
+// 5. Clears all memory caches so frontend receives clean, exact balances.
+const runSystemSelfHealingMigrations = async () => {
+  try {
+    console.log('[Self-Healing] Running database normalization & migrations...');
+    if (typeof cleanupZeroStockBaselineItems === 'function') {
+      await cleanupZeroStockBaselineItems();
+    }
+    if (typeof migratePurchaseReceiveCustomerIds === 'function') {
+      await migratePurchaseReceiveCustomerIds();
+    }
+    if (typeof repairChondonEntities === 'function') {
+      await repairChondonEntities();
+    }
+    if (typeof repairAllCustomerSalesHistory === 'function') {
+      await repairAllCustomerSalesHistory();
+    }
+    if (typeof memoryCache !== 'undefined' && memoryCache) {
+      memoryCache.customers = null;
+      memoryCache.sales = null;
+      memoryCache.purchaseReceives = null;
+      memoryCache.purchases = null;
+      memoryCache.stock = null;
+    }
+    console.log('[Self-Healing] All migrations completed successfully.');
+  } catch (err) {
+    console.error('[Self-Healing] Error during migrations:', err);
+  }
+};
+
+// Run self-healing migrations on server startup once DB is connected
+if (mongoose.connection.readyState === 1) {
+  runSystemSelfHealingMigrations();
+} else {
+  mongoose.connection.once('open', () => {
+    runSystemSelfHealingMigrations();
+  });
+}
 
 // Secure Gateway
 app.post('/v', (req, res, next) => {
@@ -5120,21 +5163,13 @@ const performDatabaseRestore = async (backupData, selectedModels = null) => {
     }
   }
 
-  // Ensure obsolete zero-stock baseline records are cleaned up if baselines were restored
+  // Run all self-healing migrations and database normalization after restore
   try {
-    if (typeof cleanupZeroStockBaselineItems === 'function') {
-      await cleanupZeroStockBaselineItems();
+    if (typeof runSystemSelfHealingMigrations === 'function') {
+      await runSystemSelfHealingMigrations();
     }
   } catch (e) {
-    console.error('Error cleaning up baseline items after restore:', e);
-  }
-
-  // Re-populate customerId on PurchaseReceive documents after restore
-  // (Old backups don't have this field, causing customer purchase history mismatches)
-  try {
-    await migratePurchaseReceiveCustomerIds();
-  } catch (e) {
-    console.error('Error migrating PR customerIds after restore:', e);
+    console.error('Error running self-healing migrations after restore:', e);
   }
 
   return {
