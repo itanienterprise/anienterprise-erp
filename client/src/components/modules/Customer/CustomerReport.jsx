@@ -49,10 +49,9 @@ const CustomerReport = ({
         };
     }, [showFilterCard, isOpen]);
 
-    if (!isOpen) return null;
-
     // --- Calculate running balance per customer from all history (sales, payments, payouts, purchases, returns) ---
     const reportBalanceMap = useMemo(() => {
+        if (!isOpen) return new Map();
         return computeAllCustomerBalances(customers, {
             salesRecords,
             purchasesList,
@@ -61,7 +60,10 @@ const CustomerReport = ({
             asOfDate: reportDate,
             returnsList
         });
-    }, [customers, salesRecords, purchasesList, purchaseReceivesList, stockList, reportDate, returnsList]);
+    }, [isOpen, customers, salesRecords, purchasesList, purchaseReceivesList, stockList, reportDate, returnsList]);
+
+    if (!isOpen) return null;
+
 
     const computeDue = (customer) => {
         if (!customer) return 0;
