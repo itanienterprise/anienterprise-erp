@@ -13,6 +13,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { generateIPManagementReportPDF } from '../../../utils/pdfGenerator';
 import { generateIPManagementReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
+import { getSocket } from '../../../utils/socket';
 
 import IPDetailsModal, { PDFViewerModal } from './IPDetailsModal';
 const ViewIPLCsModal = IPDetailsModal;
@@ -368,9 +369,37 @@ function IPManagement({
     const filterButtonRef = useRef(null);
     const ipStatusRef = useRef(null);
 
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
     useEffect(() => {
         fetchIpRecords();
         fetchEmployees();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[IPManagement] Real-time event received:', data);
+            if (!mod || mod === 'ip-records' || mod === 'ip' || mod === 'lc-management' || mod === 'stock' || mod === 'sales' || mod === 'pi' || mod === 'all') {
+                fetchIpRecords(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchIpRecords(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     useEffect(() => {
@@ -399,20 +428,21 @@ function IPManagement({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [showFilters]);
 
-    const fetchIpRecords = async () => {
-        const cachedIp = queryClient.getQueryData(['ip-records']);
-        if (cachedIp && Array.isArray(cachedIp) && cachedIp.length > 0) {
-            setIpRecords(cachedIp);
-        } else {
-            setIsLoading(true);
+    const fetchIpRecords = async (silent = false) => {
+        if (!silent) {
+            const cachedIp = queryClient.getQueryData(['ip-records']);
+            if (cachedIp && Array.isArray(cachedIp) && cachedIp.length > 0 && ipRecords.length === 0) {
+                setIpRecords(cachedIp);
+            } else if (ipRecords.length === 0) {
+                setIsLoading(true);
+            }
         }
         try {
             // 1. Fetch IP records first and render table instantly!
-            const ipData = await queryClient.fetchQuery({
-                queryKey: ['ip-records'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records`).then(r => Array.isArray(r.data) ? r.data : [])
-            });
-            setIpRecords(Array.isArray(ipData) ? ipData : []);
+            const res = await axios.get(`${API_BASE_URL}/api/ip-records?_t=${Date.now()}`);
+            const ipData = Array.isArray(res.data) ? res.data : [];
+            setIpRecords(ipData);
+            queryClient.setQueryData(['ip-records'], ipData);
             setIsLoading(false);
 
             // 2. Fetch secondary metadata in background
@@ -446,7 +476,7 @@ function IPManagement({
             });
             setPiRecords(decryptedPi);
 
-            const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
+            const rawStock = Array.isArray(stockData) ? stockData : (Array.isArray(stockData?.data) ? stockData.data : []);
             const decryptedStock = rawStock.map(item => {
                 try {
                     let d = item.data ? decryptData(item.data) : item;
@@ -457,7 +487,7 @@ function IPManagement({
             });
             setAllStockRecords(decryptedStock);
 
-            const rawSales = Array.isArray(saleRes.data) ? saleRes.data : [];
+            const rawSales = Array.isArray(saleData) ? saleData : (Array.isArray(saleData?.data) ? saleData.data : []);
             const decryptedSales = rawSales.map(item => {
                 try {
                     let d = item.data ? decryptData(item.data) : item;
@@ -1036,10 +1066,11 @@ function IPManagement({
             queryClient.invalidateQueries({ queryKey: ['ip-records'] });
             setShowIpForm(false);
             resetIpForm();
-            fetchIpRecords();
+            fetchIpRecords(true);
         } catch (error) {
             console.error('Error saving IP record:', error);
             setSubmitStatus('error');
+            fetchIpRecords(true);
         } finally {
             setIsSubmitting(false);
         }

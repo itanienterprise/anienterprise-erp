@@ -1404,7 +1404,8 @@ function App() {
           type === 'lc-expense' ? ['lcExpenses'] :
           type === 'packing-list' ? ['packing-lists'] :
           type === 'tr-setup' ? ['tr-setups'] :
-          type === 'cost-of-goods' ? ['cost-of-goods'] : [type];
+          type === 'cost-of-goods' ? ['cost-of-goods'] :
+          type === 'ip' ? ['ip-records'] : [type];
 
         if (type === 'packing-list') queryClient.invalidateQueries({ queryKey: ['packingLists'] });
         if (type === 'tr-setup') queryClient.invalidateQueries({ queryKey: ['trSetups'] });
@@ -1888,6 +1889,8 @@ function App() {
         'port': ['ports'],
         'banks': ['banks'],
         'bank': ['banks'],
+        'ip-records': ['ip-records'],
+        'ip': ['ip-records'],
         'cnfs': ['cnfs'],
         'cnf': ['cnfs'],
         'cnf-payments': ['cnfs', 'cnf-payments'],
@@ -1992,6 +1995,14 @@ function App() {
         }
       } catch (err) {
         console.warn('Error syncing cnfs in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'ip-records' || module === 'ip' || module === 'all') {
+          queryClient.invalidateQueries({ queryKey: ['ip-records'] });
+        }
+      } catch (err) {
+        console.warn('Error syncing ip-records in handleDataUpdate:', err);
       }
 
       try {

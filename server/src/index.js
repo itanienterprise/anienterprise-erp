@@ -1381,7 +1381,10 @@ apiRouter.post('/api/ip-records', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newRecord = new IpRecord({ data: encryptedData });
     const savedRecord = await newRecord.save();
-    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('ip-records', 'create', { id: savedRecord._id, ipRecord: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1392,6 +1395,8 @@ apiRouter.delete('/api/ip-records/:id', async (req, res) => {
   try {
     const deletedRecord = await IpRecord.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Record not found' });
+    broadcastUpdate('ip-records', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1422,7 +1427,10 @@ apiRouter.put('/api/ip-records/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedRecord = await IpRecord.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Record not found' });
-    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('ip-records', 'update', { id: req.params.id, ipRecord: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
