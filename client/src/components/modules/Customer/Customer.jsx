@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
-import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, compareTransactions, getItemTimestamp, getLocalDateString, getCustomerReturns } from '../../../utils/helpers';
+import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, computeAllCustomerBalances, buildCustomerBalanceIndex, compareTransactions, getItemTimestamp, getLocalDateString, getCustomerReturns } from '../../../utils/helpers';
+
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF, generateMoneyReceiptPDF, generatePayToCustomerVoucherPDF } from '../../../utils/pdfGenerator';
 import { generateCustomerHistoryExcel } from '../../../utils/excelGenerator';
 import { api } from '../../../utils/api';
@@ -51,11 +52,18 @@ const Customer = ({
     const [purchaseReceivesList, setPurchaseReceivesList] = useState([]);
     const [returnsList, setReturnsList] = useState(propReturnsList);
 
+    const effectiveSalesRecords = useMemo(() => {
+        if (salesRecords && salesRecords.length > 0) return salesRecords;
+        const cached = queryClient.getQueryData(['sales']);
+        return Array.isArray(cached) ? cached : [];
+    }, [salesRecords]);
+
     useEffect(() => {
         if (propReturnsList && propReturnsList.length > 0) {
             setReturnsList(propReturnsList);
         }
     }, [propReturnsList]);
+
 
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -298,6 +306,13 @@ const Customer = ({
             setIsLoading(true);
         }
         try {
+            const fetchSalesPromise = typeof fetchSalesGlobal === 'function'
+                ? fetchSalesGlobal()
+                : queryClient.fetchQuery({
+                    queryKey: ['sales'],
+                    queryFn: () => api.get('/api/sales').then(r => Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : [])).catch(() => [])
+                });
+
             const [decryptedCustomers, gpRecords, lcData, purchasesData, stockData, prData, returnsData] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['customers'],
@@ -326,8 +341,10 @@ const Customer = ({
                 queryClient.fetchQuery({
                     queryKey: ['returns'],
                     queryFn: () => api.get('/api/returns').catch(() => [])
-                })
+                }),
+                fetchSalesPromise
             ]);
+
             setCustomers(decryptedCustomers);
             setGatePasses(gpRecords);
             setLcRecords(Array.isArray(lcData) ? lcData : []);
@@ -555,10 +572,37 @@ const Customer = ({
         }
     };
 
-    const getCustomerFinalBalance = (c, customDate = null) => {
+    // Pre-calculate all customer balances in a single high-performance pass
+    const customerBalanceMap = useMemo(() => {
+        return computeAllCustomerBalances(customers, {
+            salesRecords: effectiveSalesRecords,
+            purchasesList,
+            purchaseReceivesList,
+            stockList,
+            asOfDate: filters.asOfDate,
+            returnsList
+        });
+    }, [customers, effectiveSalesRecords, purchasesList, purchaseReceivesList, stockList, filters.asOfDate, returnsList]);
+
+    const getCustomerFinalBalance = useCallback((c, customDate = null) => {
+        if (!c) return 0;
         const targetDate = customDate !== null ? customDate : filters.asOfDate;
-        return computeCustomerBalance(c, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate: targetDate, returnsList });
-    };
+        if (targetDate === filters.asOfDate) {
+            const id = (c._id || c.customerId || '').toString();
+            if (id && customerBalanceMap.has(id)) {
+                return customerBalanceMap.get(id);
+            }
+        }
+        return computeCustomerBalance(c, {
+            salesRecords: effectiveSalesRecords,
+            purchasesList,
+            purchaseReceivesList,
+            stockList,
+            asOfDate: targetDate,
+            returnsList
+        });
+    }, [customerBalanceMap, filters.asOfDate, effectiveSalesRecords, purchasesList, purchaseReceivesList, stockList, returnsList]);
+
 
     const handleDownloadMoneyReceipt = (payment) => {
         const customer = viewData;
@@ -704,15 +748,16 @@ const Customer = ({
         const vCust = (viewData?.customerName || '').trim().toLowerCase();
 
         const history = (viewData?.salesHistory || []).map(item => {
-            if (salesRecords && salesRecords.length > 0) {
+            if (effectiveSalesRecords && effectiveSalesRecords.length > 0) {
                 const itemInv = (item.invoiceNo || '').trim().toUpperCase();
                 const itemOrd = (item.orderNo || '').trim().toUpperCase();
-                const matchingSale = salesRecords.find(s => {
+                const matchingSale = effectiveSalesRecords.find(s => {
                     const sInv = (s.invoiceNo || '').trim().toUpperCase();
                     const sOrd = (s.orderNo || '').trim().toUpperCase();
                     return (itemInv && (sInv === itemInv || sOrd === itemInv)) ||
                            (itemOrd && (sInv === itemOrd || sOrd === itemOrd));
                 });
+
 
                 if (matchingSale) {
                     // Check if this sale actually belongs to this customer
@@ -788,11 +833,12 @@ const Customer = ({
             return item;
         }).filter(Boolean);
 
-        // Include any sales from salesRecords that belong to this customer but are not in viewData.salesHistory
-        if (salesRecords && salesRecords.length > 0 && viewData) {
+        // Include any sales from effectiveSalesRecords that belong to this customer but are not in viewData.salesHistory
+        if (effectiveSalesRecords && effectiveSalesRecords.length > 0 && viewData) {
             const existingInvoices = new Set(history.map(h => (h.invoiceNo || '').trim().toUpperCase()).filter(Boolean));
 
-            salesRecords.forEach(s => {
+            effectiveSalesRecords.forEach(s => {
+
                 const sType = (s.saleType || '').toLowerCase();
                 const sInv = (s.invoiceNo || '').trim().toUpperCase();
                 if (sType === 'order' || sInv.startsWith('ORD') || s.isOrderEntry === true) return;
@@ -879,7 +925,8 @@ const Customer = ({
         }
 
         return history;
-    }, [viewData, salesRecords]);
+    }, [viewData, effectiveSalesRecords]);
+
 
     // Calculate Filtered History Data
     const filteredSalesHistory = useMemo(() => {
@@ -1347,8 +1394,9 @@ const Customer = ({
     }, [viewData, historySearchQuery, historyFilters, historySortConfig]);
 
     const matchedReturns = useMemo(() => {
-        return getCustomerReturns(viewData, returnsList, salesRecords);
-    }, [viewData, returnsList, salesRecords]);
+        return getCustomerReturns(viewData, returnsList, effectiveSalesRecords);
+    }, [viewData, returnsList, effectiveSalesRecords]);
+
 
     const combinedHistory = useMemo(() => {
         if (!viewData) return [];
@@ -4295,7 +4343,7 @@ const Customer = ({
                 onClose={() => setShowReport(false)}
                 customers={customers}
                 purchasesList={purchasesList}
-                salesRecords={salesRecords}
+                salesRecords={effectiveSalesRecords}
                 purchaseReceivesList={purchaseReceivesList}
                 stockList={stockList}
                 asOfDate={filters.asOfDate}

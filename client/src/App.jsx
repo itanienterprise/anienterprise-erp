@@ -866,8 +866,15 @@ function App() {
   }, [allStockRecords]);
 
   const [warehouseData, setWarehouseData] = useState([]);
-  const [salesRecords, setSalesRecords] = useState([]);
-  const [returnsList, setReturnsList] = useState([]);
+  const [salesRecords, setSalesRecords] = useState(() => {
+    const cached = queryClient.getQueryData(QUERY_KEYS.sales);
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [returnsList, setReturnsList] = useState(() => {
+    const cached = queryClient.getQueryData(QUERY_KEYS.returns);
+    return Array.isArray(cached) ? cached : [];
+  });
+
   const [stockFilters, setStockFilters] = useState({
     startDate: new Date(Date.now() - 86400000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
@@ -1138,9 +1145,13 @@ function App() {
       fetchWarehouses();
       fetchSales();
       fetchDamages();
+    } else if (currentView === 'customer-section') {
+      fetchSales();
+      fetchReturns();
     }
 
   }, [currentView]);
+
 
   useEffect(() => {
     const handleSyncData = () => {
@@ -2439,7 +2450,9 @@ function App() {
             key={refreshKey}
             currentUser={currentUser}
             salesRecords={salesRecords}
+            returnsList={returnsList}
             fetchSalesGlobal={fetchSales}
+
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}

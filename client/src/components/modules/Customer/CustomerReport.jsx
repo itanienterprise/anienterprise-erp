@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { XIcon, BarChartIcon, PrinterIcon, SearchIcon, FunnelIcon } from '../../Icons';
-import { formatDate, computeCustomerBalance, getLocalDateString, getIsoDateString } from '../../../utils/helpers';
+import { formatDate, computeCustomerBalance, computeAllCustomerBalances, getLocalDateString, getIsoDateString } from '../../../utils/helpers';
+
 import { generateCustomerReportPDF } from '../../../utils/pdfGenerator';
 import { generateCustomerReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
@@ -51,9 +52,26 @@ const CustomerReport = ({
     if (!isOpen) return null;
 
     // --- Calculate running balance per customer from all history (sales, payments, payouts, purchases, returns) ---
+    const reportBalanceMap = useMemo(() => {
+        return computeAllCustomerBalances(customers, {
+            salesRecords,
+            purchasesList,
+            purchaseReceivesList,
+            stockList,
+            asOfDate: reportDate,
+            returnsList
+        });
+    }, [customers, salesRecords, purchasesList, purchaseReceivesList, stockList, reportDate, returnsList]);
+
     const computeDue = (customer) => {
+        if (!customer) return 0;
+        const id = (customer._id || customer.customerId || '').toString();
+        if (id && reportBalanceMap.has(id)) {
+            return reportBalanceMap.get(id);
+        }
         return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate: reportDate, returnsList });
     };
+
 
     const getLastTransDay = (customer) => {
         const targetCutoff = reportDate ? getIsoDateString(reportDate) : null;
