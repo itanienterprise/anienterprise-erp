@@ -4025,8 +4025,8 @@ export const generateSalesReportPDF = async (reportData, filters, summary, saleT
 
                 return entries.map((entry, subIdx) => {
                     const qty = parseFloat(entry.quantity || item.quantity || 0);
-                    const prc = entry.rate !== undefined && entry.rate !== '' && entry.rate !== null ? parseFloat(entry.rate) : parseFloat(entry.unitPrice || entry.price || item.rate || item.unitPrice || item.price || 0);
-                    const tot = entry.amount !== undefined && entry.amount !== '' && entry.amount !== null ? parseFloat(entry.amount) : (entry.totalAmount !== undefined ? parseFloat(entry.totalAmount) : (entry.total !== undefined ? parseFloat(entry.total) : (item.amount || item.totalAmount || item.total || (qty * prc))));
+                    const prc = entry.unitPrice !== undefined && entry.unitPrice !== '' && entry.unitPrice !== null ? parseFloat(entry.unitPrice) : parseFloat(entry.rate || entry.price || item.unitPrice || item.rate || item.price || 0);
+                    const tot = entry.totalAmount !== undefined && entry.totalAmount !== '' && entry.totalAmount !== null ? parseFloat(entry.totalAmount) : (entry.amount !== undefined ? parseFloat(entry.amount) : (entry.total !== undefined ? parseFloat(entry.total) : (item.totalAmount || item.amount || item.total || (qty * prc))));
 
                     return {
                         productName: item.productName || item.product || '-',

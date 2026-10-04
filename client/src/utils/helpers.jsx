@@ -268,8 +268,10 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
 
                 const pName = (s.product || s.productName || '').trim().toLowerCase();
                 const bName = (s.brand || s.brandName || '').trim().toLowerCase();
-                let latestRate = null;
+                const sQty = parseFloat(s.quantity || s.qty) || 0;
+                const sRate = parseFloat(s.rate || 0);
 
+                const candidateEntries = [];
                 (matchingSale.items || []).forEach(si => {
                     const siProd = (si.productName || si.product || '').trim().toLowerCase();
                     if (!pName || siProd === pName) {
@@ -277,16 +279,34 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
                             si.brandEntries.forEach(be => {
                                 const beBrand = (be.brand || be.brandName || '').trim().toLowerCase();
                                 if (!bName || beBrand === bName) {
-                                    const r = parseFloat(be.rate !== undefined && be.rate !== null && be.rate !== '' ? be.rate : be.unitPrice) || 0;
-                                    if (r > 0) latestRate = r;
+                                    candidateEntries.push(be);
                                 }
                             });
                         } else {
-                            const r = parseFloat(si.rate !== undefined && si.rate !== null && si.rate !== '' ? si.rate : si.unitPrice) || 0;
-                            if (r > 0) latestRate = r;
+                            candidateEntries.push(si);
                         }
                     }
                 });
+
+                let matchedEntry = candidateEntries.find(entry => {
+                    const eQty = parseFloat(entry.quantity || entry.qty) || 0;
+                    return Math.abs(eQty - sQty) < 0.001;
+                });
+                if (!matchedEntry) {
+                    matchedEntry = candidateEntries.find(entry => {
+                        const r = parseFloat(entry.unitPrice !== undefined && entry.unitPrice !== null && entry.unitPrice !== '' ? entry.unitPrice : entry.rate) || 0;
+                        return Math.abs(r - sRate) < 0.001;
+                    });
+                }
+                if (!matchedEntry && candidateEntries.length === 1) {
+                    matchedEntry = candidateEntries[0];
+                }
+
+                let latestRate = null;
+                if (matchedEntry) {
+                    const r = parseFloat(matchedEntry.unitPrice !== undefined && matchedEntry.unitPrice !== null && matchedEntry.unitPrice !== '' ? matchedEntry.unitPrice : matchedEntry.rate) || 0;
+                    if (r > 0) latestRate = r;
+                }
 
                 if (latestRate && Math.abs((parseFloat(s.rate) || 0) - latestRate) > 0.001) {
                     const qty = parseFloat(s.quantity || s.qty) || 0;
@@ -337,7 +357,7 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
                             brandEntries.forEach((entry, eIdx) => {
                                 const isFirstEntry = pIdx === 0 && eIdx === 0;
                                 const qty = parseFloat(entry.quantity) || 0;
-                                const rate = parseFloat(entry.rate !== undefined && entry.rate !== null && entry.rate !== '' ? entry.rate : (entry.unitPrice || 0)) || 0;
+                                const rate = parseFloat(entry.unitPrice !== undefined && entry.unitPrice !== null && entry.unitPrice !== '' ? entry.unitPrice : (entry.rate || 0)) || 0;
                                 const amt = parseFloat(entry.totalAmount || entry.amount) || (qty * rate);
                                 const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
                                 const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;

@@ -690,13 +690,57 @@ const migratePurchaseReceiveCustomerIds = async () => {
   }
 };
 
+// Aligns sale item rates when unitPrice is the true price matching totalAmount
+const repairSaleItemRates = async () => {
+  try {
+    const sales = await Sale.find();
+    let fixedCount = 0;
+    for (const doc of sales) {
+      let saleData = doc.data ? decryptData(doc.data) : doc;
+      if (saleData && saleData.data && typeof saleData.data === 'string') {
+        try { saleData = decryptData(saleData.data); } catch (e) {}
+      }
+      if (!saleData || !Array.isArray(saleData.items)) continue;
+      let modified = false;
+
+      saleData.items.forEach(item => {
+        (item.brandEntries || []).forEach(be => {
+          const up = parseFloat(be.unitPrice);
+          const r = parseFloat(be.rate);
+          const tot = parseFloat(be.totalAmount);
+          const qty = parseFloat(be.quantity);
+          if (up > 0 && r > 0 && Math.abs(up - r) > 0.001) {
+            if (tot > 0 && qty > 0 && Math.abs(qty * up - tot) < 1) {
+              be.rate = up;
+              be.amount = tot;
+              modified = true;
+            }
+          }
+        });
+      });
+
+      if (modified) {
+        doc.data = encryptData(saleData);
+        await doc.save();
+        fixedCount++;
+      }
+    }
+    if (fixedCount > 0) {
+      console.log(`[Self-Healing] Repaired item rates on ${fixedCount} sale document(s).`);
+    }
+  } catch (e) {
+    console.error('[Self-Healing] Error repairing sale item rates:', e);
+  }
+};
+
 // System Self-Healing Migrations:
 // Runs automatically after every backup restore AND on server startup.
 // 1. Cleans up obsolete zero-stock baseline records.
 // 2. Re-populates customerId on PurchaseReceive documents.
 // 3. Normalizes and fixes Chondon entities (Bogura, Dinajpur, Gobindogonj) so sales/orders are never cross-contaminated.
-// 4. Scans and repairs all customer sales history across the database.
-// 5. Clears all memory caches so frontend receives clean, exact balances.
+// 4. Synchronizes sale item rates where unitPrice is the agreed price.
+// 5. Scans and repairs all customer sales history across the database.
+// 6. Clears all memory caches so frontend receives clean, exact balances.
 const runSystemSelfHealingMigrations = async () => {
   try {
     console.log('[Self-Healing] Running database normalization & migrations...');
@@ -708,6 +752,9 @@ const runSystemSelfHealingMigrations = async () => {
     }
     if (typeof repairChondonEntities === 'function') {
       await repairChondonEntities();
+    }
+    if (typeof repairSaleItemRates === 'function') {
+      await repairSaleItemRates();
     }
     if (typeof repairAllCustomerSalesHistory === 'function') {
       await repairAllCustomerSalesHistory();

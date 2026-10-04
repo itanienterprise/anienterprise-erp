@@ -32,7 +32,7 @@ function buildSaleHistoryEntries(saleData, customerData = {}) {
         brandEntries.forEach((entry, eIdx) => {
           const isFirstEntry = pIdx === 0 && eIdx === 0;
           const qty = parseFloat(entry.quantity) || 0;
-          const rate = parseFloat(entry.rate !== undefined && entry.rate !== null && entry.rate !== '' ? entry.rate : (entry.unitPrice || 0)) || 0;
+          const rate = parseFloat(entry.unitPrice !== undefined && entry.unitPrice !== null && entry.unitPrice !== '' ? entry.unitPrice : (entry.rate || 0)) || 0;
           const amt = parseFloat(entry.totalAmount || entry.amount) || (qty * rate);
           const paid = isFirstEntry ? (parseFloat(saleData.paidAmount || saleData.paid) || 0) : 0;
           const discount = isFirstEntry ? (parseFloat(saleData.discount) || 0) : 0;
