@@ -708,15 +708,22 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
 
         const matchedPRs = (purchaseReceivesList || []).filter(pr => {
             if ((pr.status || '').toLowerCase() === 'requested') return false;
-            const sName = (pr.supplierName || pr.companyName || '').trim().toLowerCase();
+            const prCustId = (pr.customerId || '').toString().trim();
+            const vId = (viewData?._id || '').toString().trim();
+            const vCode = (viewData?.customerId || '').toString().trim().toLowerCase();
+            if (prCustId && (prCustId === vId || (vCode && prCustId.toLowerCase() === vCode))) return true;
+
             const cComp = (viewData?.companyName || '').trim().toLowerCase();
             const cCust = (viewData?.customerName || '').trim().toLowerCase();
-            return (
-                pr.customerId === viewData?._id ||
-                pr.customerId === viewData?.customerId ||
-                (cComp && (sName === cComp || sName.includes(cComp) || cComp.includes(sName))) ||
-                (cCust && (sName === cCust || sName.includes(cCust) || cCust.includes(sName)))
-            );
+            const prComp = (pr.companyName || '').trim().toLowerCase();
+            const prSupp = (pr.supplierName || '').trim().toLowerCase();
+
+            if (cComp && prComp && (prComp === cComp || prComp.includes(cComp) || cComp.includes(prComp))) return true;
+            if (cComp && prSupp && (prSupp === cComp || prSupp.includes(cComp) || cComp.includes(prSupp))) return true;
+            if (cCust && prSupp && (prSupp === cCust || prSupp.includes(cCust) || cCust.includes(prSupp))) {
+                if (!prComp || !cComp || prComp === cComp || prComp.includes(cComp) || cComp.includes(prComp)) return true;
+            }
+            return false;
         });
 
         const prEntries = matchedPRs.flatMap(pr => {
@@ -944,7 +951,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             }];
         });
 
-        const purchases = prEntries.length > 0 ? prEntries : matchedPurchases;
+        const purchases = [...prEntries, ...matchedPurchases];
         const all = [...sales, ...paymentsHistoryList, ...payouts, ...purchases].sort(compareTransactions);
 
         let currentBalance = 0;

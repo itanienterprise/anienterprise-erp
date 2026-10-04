@@ -179,7 +179,7 @@ function findCustomerForSale(customers, saleData) {
     if (found) return found;
   }
 
-  // 3. Company match
+  // 3. Company match (only when companyName is present)
   if (cComp) {
     const found = customers.find(c => {
       let cd = c.decryptedData;
@@ -188,14 +188,8 @@ function findCustomerForSale(customers, saleData) {
     if (found) return found;
   }
 
-  // 4. Customer match
-  if (cCust) {
-    const found = customers.find(c => {
-      let cd = c.decryptedData;
-      return cd && (cd.customerName || '').trim().toLowerCase() === cCust;
-    });
-    if (found) return found;
-  }
+  // NOTE: Never match by customerName (contact person name) alone,
+  // as different companies frequently share contact names (e.g. Chondon, Sumon, etc.)
 
   return null;
 }

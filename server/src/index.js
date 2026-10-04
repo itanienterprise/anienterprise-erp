@@ -300,6 +300,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db')
     console.log('MongoDB connected successfully');
     seedAdminUser();
     cleanupZeroStockBaselineItems();
+    autoLinkPurchaseReceivesToCustomers();
   })
   .catch(err => console.log('MongoDB connection error:', err));
 
@@ -608,6 +609,97 @@ const cleanupZeroStockBaselineItems = async () => {
   } catch (error) {
     console.error('Error cleaning up baseline items on startup:', error);
   }
+};
+
+const autoLinkPurchaseReceivesToCustomers = async () => {
+  try {
+    const prDocs = await PurchaseReceive.find({});
+    if (!prDocs || prDocs.length === 0) return;
+
+    let pDocs = null;
+    let cDocs = null;
+    let updatedCount = 0;
+
+    for (const prDoc of prDocs) {
+      if (!prDoc.data) continue;
+      let prData;
+      try {
+        prData = decryptData(prDoc.data);
+      } catch (e) {
+        continue;
+      }
+      if (!prData) continue;
+
+      if (!prData.customerId) {
+        if (!pDocs) pDocs = await Purchase.find({});
+        if (!cDocs) cDocs = await Customer.find({});
+
+        const pNo = (prData.purchaseNo || prData.purchaseReceiveNo || '').trim().toUpperCase();
+        let targetCustId = null;
+
+        if (pNo) {
+          for (const pDoc of pDocs) {
+            const pData = pDoc.data ? decryptData(pDoc.data) : pDoc;
+            if (pData && (pData.purchaseNo || pData.invoiceNo || '').trim().toUpperCase() === pNo && pData.customerId) {
+              targetCustId = pData.customerId;
+              break;
+            }
+          }
+        }
+
+        if (!targetCustId) {
+          const comp = (prData.companyName || '').trim().toLowerCase();
+          if (comp) {
+            for (const cDoc of cDocs) {
+              const cData = cDoc.data ? decryptData(cDoc.data) : cDoc;
+              if (cData && (cData.companyName || '').trim().toLowerCase() === comp) {
+                targetCustId = cDoc._id.toString();
+                break;
+              }
+            }
+          }
+        }
+
+        if (targetCustId) {
+          prData.customerId = targetCustId;
+          await PurchaseReceive.findByIdAndUpdate(prDoc._id, { data: encryptData(prData) });
+          updatedCount++;
+        }
+      }
+    }
+
+    if (updatedCount > 0) {
+      memoryCache.purchaseReceives = null;
+      console.log(`[Startup Migration] Auto-linked ${updatedCount} Purchase Receive(s) to matching customers.`);
+    }
+  } catch (err) {
+    console.error('Error auto-linking Purchase Receives to customers on startup:', err);
+  }
+};
+
+const resolvePRCustomerId = async (body) => {
+  if (body.customerId) return body.customerId;
+  const pNo = (body.purchaseNo || body.purchaseReceiveNo || '').trim().toUpperCase();
+  if (pNo) {
+    const pDocs = await Purchase.find({});
+    for (const pDoc of pDocs) {
+      const pData = pDoc.data ? decryptData(pDoc.data) : pDoc;
+      if (pData && (pData.purchaseNo || pData.invoiceNo || '').trim().toUpperCase() === pNo && pData.customerId) {
+        return pData.customerId;
+      }
+    }
+  }
+  const comp = (body.companyName || body.supplierName || '').trim().toLowerCase();
+  if (comp) {
+    const cDocs = await Customer.find({});
+    for (const cDoc of cDocs) {
+      const cData = cDoc.data ? decryptData(cDoc.data) : cDoc;
+      if (cData && (cData.companyName || '').trim().toLowerCase() === comp) {
+        return cDoc._id.toString();
+      }
+    }
+  }
+  return null;
 };
 
 
@@ -2452,17 +2544,24 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
       }
       if (!d) continue;
 
-      const isMatch =
-        d.customerId === req.params.id ||
-        (oldData && oldData.customerId && d.customerId === oldData.customerId) ||
-        (newCustomerId && d.customerId === newCustomerId) ||
+      const saleCustId = (d.customerId || (d.customer && d.customer._id) || '').toString().trim();
+      const isIdMatch =
+        saleCustId === req.params.id ||
+        (oldData && oldData.customerId && saleCustId === oldData.customerId) ||
+        (newCustomerId && saleCustId === newCustomerId) ||
         (d.customer && (
           d.customer._id === req.params.id ||
           (oldData && oldData.customerId && d.customer.customerId === oldData.customerId) ||
           (newCustomerId && d.customer.customerId === newCustomerId)
-        )) ||
-        (oldData && oldData.companyName && d.companyName && d.companyName.trim().toLowerCase() === oldData.companyName.trim().toLowerCase()) ||
-        (oldData && oldData.customerName && d.customerName && d.customerName.trim().toLowerCase() === oldData.customerName.trim().toLowerCase());
+        ));
+
+      // Only match by company name if the sale has no explicit customerId or if its customerId already matches this customer.
+      // NEVER match by customerName (contact person name) alone, as different companies often share contact names!
+      const isCompanyMatch =
+        (!saleCustId || saleCustId === req.params.id) &&
+        Boolean(oldData && oldData.companyName && d.companyName && d.companyName.trim().toLowerCase() === oldData.companyName.trim().toLowerCase());
+
+      const isMatch = isIdMatch || isCompanyMatch;
 
       if (isMatch) {
         let changed = false;
@@ -2528,12 +2627,17 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
       }
       if (!d) continue;
 
-      const isMatch =
-        d.customerId === req.params.id ||
-        (oldData && oldData.customerId && d.customerId === oldData.customerId) ||
-        (newCustomerId && d.customerId === newCustomerId) ||
-        (oldData && oldData.companyName && d.companyName && d.companyName.trim().toLowerCase() === oldData.companyName.trim().toLowerCase()) ||
-        (oldData && oldData.customerName && d.customerName && d.customerName.trim().toLowerCase() === oldData.customerName.trim().toLowerCase());
+      const returnCustId = (d.customerId || '').toString().trim();
+      const isIdMatch =
+        returnCustId === req.params.id ||
+        (oldData && oldData.customerId && returnCustId === oldData.customerId) ||
+        (newCustomerId && returnCustId === newCustomerId);
+
+      const isCompanyMatch =
+        (!returnCustId || returnCustId === req.params.id) &&
+        Boolean(oldData && oldData.companyName && d.companyName && d.companyName.trim().toLowerCase() === oldData.companyName.trim().toLowerCase());
+
+      const isMatch = isIdMatch || isCompanyMatch;
 
       if (isMatch) {
         let changed = false;
@@ -3090,6 +3194,10 @@ apiRouter.post('/api/purchase-receives', async (req, res) => {
     } else if (req.body.purchaseNo && !req.body.purchaseReceiveNo) {
       req.body.purchaseReceiveNo = req.body.purchaseNo;
     }
+    if (!req.body.customerId) {
+      const resolvedCustId = await resolvePRCustomerId(req.body);
+      if (resolvedCustId) req.body.customerId = resolvedCustId;
+    }
     const encryptedData = encryptData(req.body);
     const newPurchaseReceive = new PurchaseReceive({ data: encryptedData });
     await newPurchaseReceive.save();
@@ -3101,6 +3209,10 @@ apiRouter.post('/api/purchase-receives', async (req, res) => {
 
 apiRouter.put('/api/purchase-receives/:id', async (req, res) => {
   try {
+    if (!req.body.customerId) {
+      const resolvedCustId = await resolvePRCustomerId(req.body);
+      if (resolvedCustId) req.body.customerId = resolvedCustId;
+    }
     const encryptedData = encryptData(req.body);
     const updatedPurchaseReceive = await PurchaseReceive.findByIdAndUpdate(req.params.id, {
       data: encryptedData

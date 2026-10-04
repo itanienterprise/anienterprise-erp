@@ -2013,12 +2013,17 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
             // 1. Matched Purchase Receives
             const matchedPRs = prList.filter(pr => {
                 if ((pr.status || '').toLowerCase() === 'requested') return false;
-                const sName = (pr.supplierName || pr.companyName || '').trim().toLowerCase();
-                return (
-                    (cIdStr && pr.customerId === cIdStr) ||
-                    (cComp && (sName === cComp || sName.includes(cComp) || cComp.includes(sName))) ||
-                    (cCust && (sName === cCust || sName.includes(cCust) || cCust.includes(sName)))
-                );
+                const prCustId = (pr.customerId || '').toString().trim();
+                if (prCustId && (prCustId === cIdStr || prCustId.toLowerCase() === (customer?.customerId || '').toLowerCase())) return true;
+                const prComp = (pr.companyName || '').trim().toLowerCase();
+                const prSupp = (pr.supplierName || '').trim().toLowerCase();
+
+                if (cComp && prComp && (prComp === cComp || prComp.includes(cComp) || cComp.includes(prComp))) return true;
+                if (cComp && prSupp && (prSupp === cComp || prSupp.includes(cComp) || cComp.includes(prSupp))) return true;
+                if (cCust && prSupp && (prSupp === cCust || prSupp.includes(cCust) || cCust.includes(prSupp))) {
+                    if (!prComp || !cComp || prComp === cComp || prComp.includes(cComp) || cComp.includes(prComp)) return true;
+                }
+                return false;
             });
 
             const prEntries = matchedPRs.flatMap(pr => {
@@ -2102,7 +2107,8 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
             const sHistory = (customer.salesHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested').map(s => ({ ...s, type: 'sale' }));
             const pHistory = (customer.paymentHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested').map(p => ({ ...p, type: 'payment' }));
             const ptcHistory = (customer.payToCustomerHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested').map(pc => ({ ...pc, type: 'payToCustomer' }));
-            const puHistory = prEntries.length > 0 ? prEntries : (matchedPurchases.length > 0 ? matchedPurchases : (customer.purchaseHistory || []).map(pu => ({ ...pu, type: 'purchase' })));
+            const combinedPu = [...prEntries, ...matchedPurchases];
+            const puHistory = combinedPu.length > 0 ? combinedPu : (customer.purchaseHistory || []).map(pu => ({ ...pu, type: 'purchase' }));
 
             const currentInv = (sale.invoiceNo || '').trim().toUpperCase();
             const currentOrd = (sale.orderNo || '').trim().toUpperCase();

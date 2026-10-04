@@ -1059,18 +1059,17 @@ const OrderManagement = ({
 
             let resolvedCustomerId = formData.customerId;
             const compTrim = (formData.companyName || '').trim().toLowerCase();
-            const custTrim = (formData.customerName || '').trim().toLowerCase();
-            const matchedCust = (customers || []).find(c => 
-                (compTrim && (c.companyName || '').trim().toLowerCase() === compTrim) ||
-                (custTrim && (c.customerName || '').trim().toLowerCase() === custTrim)
-            );
-            if (matchedCust) {
-                resolvedCustomerId = matchedCust._id;
-            } else if (originalData?.customerId) {
-                const origComp = (originalData.companyName || '').trim().toLowerCase();
-                const origCust = (originalData.customerName || '').trim().toLowerCase();
-                if ((compTrim && compTrim !== origComp) || (custTrim && custTrim !== origCust)) {
-                    resolvedCustomerId = '';
+            if (compTrim) {
+                const matchedCust = (customers || []).find(c => 
+                    (c.companyName || '').trim().toLowerCase() === compTrim
+                );
+                if (matchedCust) {
+                    resolvedCustomerId = matchedCust._id;
+                } else if (originalData?.customerId) {
+                    const origComp = (originalData.companyName || '').trim().toLowerCase();
+                    if (compTrim !== origComp) {
+                        resolvedCustomerId = '';
+                    }
                 }
             }
 

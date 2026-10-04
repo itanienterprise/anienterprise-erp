@@ -132,7 +132,8 @@ export const getCustomerReturns = (c, returnsList = [], salesRecords = []) => {
         if (cComp && rComp && (rComp === cComp || rComp.includes(cComp) || cComp.includes(rComp))) return true;
 
         const rCust = (r.customerName || '').trim().toLowerCase();
-        if (cCust && rCust && (rCust === cCust || rCust.includes(cCust) || cCust.includes(rCust))) return true;
+        if (cComp && rComp && (rComp === cComp || rComp.includes(cComp) || cComp.includes(rComp)) &&
+            cCust && rCust && (rCust === cCust || rCust.includes(cCust) || cCust.includes(rCust))) return true;
 
         const rPhone = (r.phone || '').trim();
         if (cPhone && rPhone && cPhone === rPhone && cPhone !== '+8800000000000') return true;
@@ -257,12 +258,11 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
                 // Check if matchingSale belongs to this customer
                 const sCustId = (matchingSale.customerId || matchingSale.customer?._id || '').toString().trim();
                 const sComp = (matchingSale.companyName || '').trim().toLowerCase();
-                const sCust = (matchingSale.customerName || '').trim().toLowerCase();
 
                 const idMatch = Boolean(targetId && sCustId && (targetId === sCustId));
-                const nameMatch = Boolean((vComp && sComp && vComp === sComp) || (vCust && sCust && vCust === sCust));
+                const compMatch = Boolean(vComp && sComp && vComp === sComp);
 
-                if ((sCustId || sComp || sCust) && !idMatch && !nameMatch) {
+                if ((sCustId || sComp) && !idMatch && !compMatch) {
                     return null; // Belongs to a different customer, exclude from balance!
                 }
 
@@ -324,12 +324,11 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
 
             const sCustId = (s.customerId || s.customer?._id || '').toString().trim();
             const sComp = (s.companyName || '').trim().toLowerCase();
-            const sCust = (s.customerName || '').trim().toLowerCase();
 
             const idMatch = Boolean(targetId && sCustId && (targetId === sCustId));
-            const nameMatch = Boolean((vComp && sComp && vComp === sComp) || (vCust && sCust && vCust === sCust));
+            const compMatch = Boolean((!sCustId || sCustId === targetId) && vComp && sComp && vComp === sComp);
 
-            if (idMatch || nameMatch) {
+            if (idMatch || compMatch) {
                 const items = s.items && Array.isArray(s.items) ? s.items : [];
                 if (items.length > 0) {
                     items.forEach((product, pIdx) => {
@@ -421,15 +420,22 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
                 const prDate = getIsoDateString(pr.date);
                 if (prDate && prDate >= targetCutoff) return false;
             }
-            const sName = (pr.supplierName || pr.companyName || '').trim().toLowerCase();
+            const prCustId = (pr.customerId || '').toString().trim();
+            const cId = (c?._id || '').toString().trim();
+            const cCode = (c?.customerId || '').toString().trim().toLowerCase();
+            if (prCustId && (prCustId === cId || (cCode && prCustId.toLowerCase() === cCode))) return true;
+
             const cComp = (c?.companyName || '').trim().toLowerCase();
             const cCust = (c?.customerName || '').trim().toLowerCase();
-            return (
-                pr.customerId === c?._id ||
-                pr.customerId === c?.customerId ||
-                (cComp && (sName === cComp || sName.includes(cComp) || cComp.includes(sName))) ||
-                (cCust && (sName === cCust || sName.includes(cCust) || cCust.includes(sName)))
-            );
+            const prComp = (pr.companyName || '').trim().toLowerCase();
+            const prSupp = (pr.supplierName || '').trim().toLowerCase();
+
+            if (cComp && prComp && (prComp === cComp || prComp.includes(cComp) || cComp.includes(prComp))) return true;
+            if (cComp && prSupp && (prSupp === cComp || prSupp.includes(cComp) || cComp.includes(prSupp))) return true;
+            if (cCust && prSupp && (prSupp === cCust || prSupp.includes(cCust) || cCust.includes(prSupp))) {
+                if (!prComp || !cComp || prComp === cComp || prComp.includes(cComp) || cComp.includes(prComp)) return true;
+            }
+            return false;
         });
 
         prEntries = matchedPRs.flatMap(pr => {
@@ -497,16 +503,26 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
         const pNo = (p.purchaseNo || p.invoiceNo || '').trim().toUpperCase();
         if (pNo && coveredPurchaseNos.has(pNo)) return false;
 
-        return (
-            p.customerId === c?._id ||
-            p.customerId === c?.customerId ||
-            (p.companyName && p.companyName.toLowerCase() === (c?.companyName || '').toLowerCase()) ||
-            (p.customerName && p.customerName.toLowerCase() === (c?.customerName || '').toLowerCase()) ||
-            (p.supplierName && (
-                p.supplierName.toLowerCase() === (c?.companyName || '').toLowerCase() ||
-                p.supplierName.toLowerCase() === (c?.customerName || '').toLowerCase()
-            ))
-        );
+        const pCustId = (p.customerId || '').toString().trim();
+        const cId = (c?._id || '').toString().trim();
+        const cCode = (c?.customerId || '').toString().trim().toLowerCase();
+        if (pCustId && (pCustId === cId || (cCode && pCustId.toLowerCase() === cCode))) return true;
+
+        const cComp = (c?.companyName || '').trim().toLowerCase();
+        const cCust = (c?.customerName || '').trim().toLowerCase();
+        const pComp = (p.companyName || '').trim().toLowerCase();
+        const pSupp = (p.supplierName || '').trim().toLowerCase();
+        const pCust = (p.customerName || '').trim().toLowerCase();
+
+        if (cComp && pComp && (pComp === cComp || pComp.includes(cComp) || cComp.includes(pComp))) return true;
+        if (cComp && pSupp && (pSupp === cComp || pSupp.includes(cComp) || cComp.includes(pSupp))) return true;
+        if (cCust && pSupp && (pSupp === cCust || pSupp.includes(cCust) || cCust.includes(pSupp))) {
+            if (!pComp || !cComp || pComp === cComp || pComp.includes(cComp) || cComp.includes(pComp)) return true;
+        }
+        if (cCust && pCust && (pCust === cCust || pCust.includes(cCust) || cCust.includes(pCust))) {
+            if (!pComp || !cComp || pComp === cComp || pComp.includes(cComp) || cComp.includes(pComp)) return true;
+        }
+        return false;
     }).flatMap(p => {
         if (p.items && Array.isArray(p.items)) {
             return p.items.flatMap(item => {
@@ -542,7 +558,7 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
         }];
     });
 
-    const purchases = prEntries.length > 0 ? prEntries : matchedPurchases;
+    const purchases = [...prEntries, ...matchedPurchases];
 
     const rawReturns = getCustomerReturns(c, returnsList, salesRecords);
     const returns = rawReturns.filter(r => {

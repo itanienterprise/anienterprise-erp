@@ -941,8 +941,6 @@ const SaleManagement = ({
                 return compMatch && custMatch;
             }) || customers.find(c =>
                 cleanComp && (c.companyName || '').trim().toLowerCase() === cleanComp
-            ) || customers.find(c =>
-                cleanCust && (c.customerName || '').trim().toLowerCase() === cleanCust
             );
         }
 
@@ -2348,19 +2346,18 @@ const SaleManagement = ({
 
                 let resolvedCustomerId = formData.customerId;
                 const compTrim = (formData.companyName || '').trim().toLowerCase();
-                const custTrim = (formData.customerName || '').trim().toLowerCase();
-                const matchedCust = (customers || []).find(c => {
-                    if (saleType === 'Border' && !(c.customerType || '').trim().toLowerCase().includes('party')) return false;
-                    return (compTrim && (c.companyName || '').trim().toLowerCase() === compTrim) ||
-                           (custTrim && (c.customerName || '').trim().toLowerCase() === custTrim);
-                });
-                if (matchedCust) {
-                    resolvedCustomerId = matchedCust._id;
-                } else if (originalData?.customerId) {
-                    const origComp = (originalData.companyName || '').trim().toLowerCase();
-                    const origCust = (originalData.customerName || '').trim().toLowerCase();
-                    if ((compTrim && compTrim !== origComp) || (custTrim && custTrim !== origCust)) {
-                        resolvedCustomerId = '';
+                if (compTrim) {
+                    const matchedCust = (customers || []).find(c => {
+                        if (saleType === 'Border' && !(c.customerType || '').trim().toLowerCase().includes('party')) return false;
+                        return (c.companyName || '').trim().toLowerCase() === compTrim;
+                    });
+                    if (matchedCust) {
+                        resolvedCustomerId = matchedCust._id;
+                    } else if (originalData?.customerId) {
+                        const origComp = (originalData.companyName || '').trim().toLowerCase();
+                        if (compTrim !== origComp) {
+                            resolvedCustomerId = '';
+                        }
                     }
                 }
 
@@ -2381,14 +2378,14 @@ const SaleManagement = ({
             } else {
                 let resolvedCustomerId = formData.customerId;
                 const compTrim = (formData.companyName || '').trim().toLowerCase();
-                const custTrim = (formData.customerName || '').trim().toLowerCase();
-                const matchedCust = (customers || []).find(c => {
-                    if (saleType === 'Border' && !(c.customerType || '').trim().toLowerCase().includes('party')) return false;
-                    return (compTrim && (c.companyName || '').trim().toLowerCase() === compTrim) ||
-                           (custTrim && (c.customerName || '').trim().toLowerCase() === custTrim);
-                });
-                if (matchedCust) {
-                    resolvedCustomerId = matchedCust._id;
+                if (compTrim) {
+                    const matchedCust = (customers || []).find(c => {
+                        if (saleType === 'Border' && !(c.customerType || '').trim().toLowerCase().includes('party')) return false;
+                        return (c.companyName || '').trim().toLowerCase() === compTrim;
+                    });
+                    if (matchedCust) {
+                        resolvedCustomerId = matchedCust._id;
+                    }
                 }
                 response = await axios.post(url, { ...formData, customerId: resolvedCustomerId || formData.customerId || '' });
             }
