@@ -1447,7 +1447,10 @@ apiRouter.post('/api/importers', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newImporter = new Importer({ data: encryptedData });
     const savedImporter = await newImporter.save();
-    res.status(201).json({ ...req.body, _id: savedImporter._id, createdAt: savedImporter.createdAt });
+    const result = { ...req.body, _id: savedImporter._id, createdAt: savedImporter.createdAt };
+    broadcastUpdate('importers', 'create', { id: savedImporter._id, importer: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1458,6 +1461,8 @@ apiRouter.delete('/api/importers/:id', adminOnly, async (req, res) => {
   try {
     const deletedImporter = await Importer.findByIdAndDelete(req.params.id);
     if (!deletedImporter) return res.status(404).json({ message: 'Importer not found' });
+    broadcastUpdate('importers', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Importer deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1470,7 +1475,10 @@ apiRouter.put('/api/importers/:id', verifyPermission('importerExporter', 'edit')
     const encryptedData = encryptData(req.body);
     const updatedImporter = await Importer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedImporter) return res.status(404).json({ message: 'Importer not found' });
-    res.json({ ...req.body, _id: updatedImporter._id, createdAt: updatedImporter.createdAt });
+    const result = { ...req.body, _id: updatedImporter._id, createdAt: updatedImporter.createdAt };
+    broadcastUpdate('importers', 'update', { id: req.params.id, importer: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1495,7 +1503,10 @@ apiRouter.post('/api/exporters', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newExporter = new Exporter({ data: encryptedData });
     const savedExporter = await newExporter.save();
-    res.status(201).json({ ...req.body, _id: savedExporter._id, createdAt: savedExporter.createdAt });
+    const result = { ...req.body, _id: savedExporter._id, createdAt: savedExporter.createdAt };
+    broadcastUpdate('exporters', 'create', { id: savedExporter._id, exporter: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1506,6 +1517,8 @@ apiRouter.delete('/api/exporters/:id', adminOnly, async (req, res) => {
   try {
     const deletedExporter = await Exporter.findByIdAndDelete(req.params.id);
     if (!deletedExporter) return res.status(404).json({ message: 'Exporter not found' });
+    broadcastUpdate('exporters', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Exporter deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1518,7 +1531,10 @@ apiRouter.put('/api/exporters/:id', verifyPermission('importerExporter', 'edit')
     const encryptedData = encryptData(req.body);
     const updatedExporter = await Exporter.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedExporter) return res.status(404).json({ message: 'Exporter not found' });
-    res.json({ ...req.body, _id: updatedExporter._id, createdAt: updatedExporter.createdAt });
+    const result = { ...req.body, _id: updatedExporter._id, createdAt: updatedExporter.createdAt };
+    broadcastUpdate('exporters', 'update', { id: req.params.id, exporter: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1543,7 +1559,10 @@ apiRouter.post('/api/suppliers', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newSupplier = new Supplier({ data: encryptedData });
     const savedSupplier = await newSupplier.save();
-    res.status(201).json({ ...req.body, _id: savedSupplier._id, createdAt: savedSupplier.createdAt });
+    const result = { ...req.body, _id: savedSupplier._id, createdAt: savedSupplier.createdAt };
+    broadcastUpdate('suppliers', 'create', { id: savedSupplier._id, supplier: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1554,6 +1573,8 @@ apiRouter.delete('/api/suppliers/:id', adminOnly, async (req, res) => {
   try {
     const deletedSupplier = await Supplier.findByIdAndDelete(req.params.id);
     if (!deletedSupplier) return res.status(404).json({ message: 'Supplier not found' });
+    broadcastUpdate('suppliers', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Supplier deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1566,7 +1587,10 @@ apiRouter.put('/api/suppliers/:id', verifyPermission('importerExporter', 'edit')
     const encryptedData = encryptData(req.body);
     const updatedSupplier = await Supplier.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedSupplier) return res.status(404).json({ message: 'Supplier not found' });
-    res.json({ ...req.body, _id: updatedSupplier._id, createdAt: updatedSupplier.createdAt });
+    const result = { ...req.body, _id: updatedSupplier._id, createdAt: updatedSupplier.createdAt };
+    broadcastUpdate('suppliers', 'update', { id: req.params.id, supplier: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1758,7 +1782,10 @@ apiRouter.post('/api/ports', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newPort = new Port({ data: encryptedData });
     const savedPort = await newPort.save();
-    res.status(201).json({ ...req.body, _id: savedPort._id, createdAt: savedPort.createdAt });
+    const result = { ...req.body, _id: savedPort._id, createdAt: savedPort.createdAt };
+    broadcastUpdate('ports', 'create', { id: savedPort._id, port: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1768,6 +1795,8 @@ apiRouter.delete('/api/ports/:id', async (req, res) => {
   try {
     const deletedPort = await Port.findByIdAndDelete(req.params.id);
     if (!deletedPort) return res.status(404).json({ message: 'Port not found' });
+    broadcastUpdate('ports', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Port deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1779,7 +1808,10 @@ apiRouter.put('/api/ports/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedPort = await Port.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedPort) return res.status(404).json({ message: 'Port not found' });
-    res.json({ ...req.body, _id: updatedPort._id, createdAt: updatedPort.createdAt });
+    const result = { ...req.body, _id: updatedPort._id, createdAt: updatedPort.createdAt };
+    broadcastUpdate('ports', 'update', { id: req.params.id, port: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

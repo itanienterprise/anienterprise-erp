@@ -4,6 +4,7 @@ import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
+import { getSocket } from '../../../utils/socket';
 import './Port.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 
@@ -19,7 +20,8 @@ const Port = ({
     onDeleteConfirm,
     startLongPress,
     endLongPress,
-    isLongPressTriggered
+    isLongPressTriggered,
+    fetchPortsGlobal
 }) => {
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,32 +45,62 @@ const Port = ({
         status: 'Active'
     });
 
-    useEffect(() => {
-        fetchPorts();
-    }, []);
-
-    const fetchPorts = async () => {
-        const cached = queryClient.getQueryData(QUERY_KEYS.ports);
-        if (cached && cached.length > 0) {
-            setPorts(cached);
-        } else {
-            setIsLoading(true);
+    const fetchPorts = async (silent = false) => {
+        if (!silent) {
+            const cached = queryClient.getQueryData(QUERY_KEYS.ports);
+            if (cached && cached.length > 0 && ports.length === 0) {
+                setPorts(cached);
+            } else if (ports.length === 0) {
+                setIsLoading(true);
+            }
         }
         try {
-            const data = await queryClient.fetchQuery({
-                queryKey: QUERY_KEYS.ports,
-                queryFn: async () => {
-                    const response = await axios.get(`${API_BASE_URL}/api/ports`);
-                    return Array.isArray(response.data) ? response.data : [];
-                }
-            });
+            const response = await axios.get(`${API_BASE_URL}/api/ports?_t=${Date.now()}`);
+            const data = Array.isArray(response.data) ? response.data : [];
             setPorts(data);
+            queryClient.setQueryData(QUERY_KEYS.ports, data);
+            if (typeof fetchPortsGlobal === 'function') {
+                fetchPortsGlobal();
+            }
         } catch (error) {
             console.error('Error fetching ports:', error);
         } finally {
             setIsLoading(false);
         }
     };
+
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
+    useEffect(() => {
+        fetchPorts();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[Port] Real-time event received:', data);
+            if (!mod || mod === 'ports' || mod === 'port' || mod === 'all') {
+                fetchPorts(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        // Fallback polling every 30s while viewing Port module
+        const pollTimer = setInterval(() => {
+            fetchPorts(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
+    }, []);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -105,6 +137,7 @@ const Port = ({
             setShowForm(false);
             setEditingId(null);
             resetForm();
+            fetchPorts(true);
         } catch (error) {
             console.error('Error saving port:', error);
             setSubmitStatus('error');

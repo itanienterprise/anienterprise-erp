@@ -5,6 +5,7 @@ import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
+import { getSocket } from '../../../utils/socket';
 import { decryptData } from '../../../utils/encryption';
 import { generateSupplierProfileReportPDF } from '../../../utils/pdfGenerator';
 import { generateSupplierProfileReportExcel } from '../../../utils/excelGenerator';
@@ -162,7 +163,8 @@ const Supplier = ({
     startLongPress,
     endLongPress,
     isLongPressTriggered,
-    currentUser
+    currentUser,
+    fetchSuppliersGlobal
 }) => {
     // Dynamic permissions check
     const canAdd = hasPermission(currentUser, 'importerExporter', 'add');
@@ -209,7 +211,62 @@ const Supplier = ({
         status: 'Active'
     });
 
-    useEffect(() => { fetchSuppliers(); }, []);
+    const fetchSuppliers = async (silent = false) => {
+        if (!silent) {
+            const cached = queryClient.getQueryData(QUERY_KEYS.suppliers);
+            if (cached && cached.length > 0 && suppliers.length === 0) {
+                setSuppliers(cached);
+            } else if (suppliers.length === 0) {
+                setIsLoading(true);
+            }
+        }
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/suppliers?_t=${Date.now()}`);
+            const data = Array.isArray(res.data) ? res.data : [];
+            setSuppliers(data);
+            queryClient.setQueryData(QUERY_KEYS.suppliers, data);
+            if (typeof fetchSuppliersGlobal === 'function') {
+                fetchSuppliersGlobal();
+            }
+        } catch (error) {
+            console.error('Error fetching suppliers:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
+    useEffect(() => {
+        fetchSuppliers();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[Supplier] Real-time event received:', data);
+            if (!mod || mod === 'suppliers' || mod === 'supplier' || mod === 'all') {
+                fetchSuppliers(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        // Fallback polling every 30s while viewing Supplier module
+        const pollTimer = setInterval(() => {
+            fetchSuppliers(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
+    }, []);
 
     useEffect(() => {
         if (viewData && viewData.name) {
@@ -459,29 +516,6 @@ const Supplier = ({
         };
     }, [viewData]);
 
-    const fetchSuppliers = async () => {
-        const cached = queryClient.getQueryData(QUERY_KEYS.suppliers);
-        if (cached && cached.length > 0) {
-            setSuppliers(cached);
-        } else {
-            setIsLoading(true);
-        }
-        try {
-            const data = await queryClient.fetchQuery({
-                queryKey: QUERY_KEYS.suppliers,
-                queryFn: async () => {
-                    const res = await axios.get(`${API_BASE_URL}/api/suppliers`);
-                    return Array.isArray(res.data) ? res.data : [];
-                }
-            });
-            setSuppliers(data);
-        } catch (error) {
-            console.error('Error fetching suppliers:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -593,6 +627,7 @@ const Supplier = ({
             setShowForm(false);
             setEditingId(null);
             resetForm();
+            fetchSuppliers(true);
         } catch (error) {
             console.error('Error saving supplier:', error);
             setSubmitStatus('error');

@@ -1337,7 +1337,7 @@ function App() {
           }
 
           await Promise.all(Array.from(selectedItems).map(itemId =>
-            fetch(`${API_BASE_URL}/api/${endpoint}/${itemId}`, { method: 'DELETE' })
+            axios.delete(`${API_BASE_URL}/api/${endpoint}/${itemId}`)
           ));
           setSelectedItems(new Set());
         } else {
@@ -1552,20 +1552,16 @@ function App() {
 
   const fetchImporters = async () => {
     const cached = queryClient.getQueryData(QUERY_KEYS.importers);
-    if (cached && cached.length > 0) {
+    if (cached && cached.length > 0 && importers.length === 0) {
       setImporters(cached);
-    } else {
+    } else if (importers.length === 0) {
       setIsLoading(true);
     }
     try {
-      const data = await queryClient.fetchQuery({
-        queryKey: QUERY_KEYS.importers,
-        queryFn: async () => {
-          const res = await axios.get(`${API_BASE_URL}/api/importers`);
-          return Array.isArray(res.data) ? res.data : [];
-        }
-      });
+      const res = await axios.get(`${API_BASE_URL}/api/importers?_t=${Date.now()}`);
+      const data = Array.isArray(res.data) ? res.data : [];
       setImporters(data);
+      queryClient.setQueryData(QUERY_KEYS.importers, data);
     } catch (error) {
       console.error('Error fetching importers:', error);
     } finally {
@@ -1575,20 +1571,16 @@ function App() {
 
   const fetchExporters = async () => {
     const cached = queryClient.getQueryData(QUERY_KEYS.exporters);
-    if (cached && cached.length > 0) {
+    if (cached && cached.length > 0 && exporters.length === 0) {
       setExporters(cached);
-    } else {
+    } else if (exporters.length === 0) {
       setIsLoading(true);
     }
     try {
-      const data = await queryClient.fetchQuery({
-        queryKey: QUERY_KEYS.exporters,
-        queryFn: async () => {
-          const res = await axios.get(`${API_BASE_URL}/api/exporters`);
-          return Array.isArray(res.data) ? res.data : [];
-        }
-      });
+      const res = await axios.get(`${API_BASE_URL}/api/exporters?_t=${Date.now()}`);
+      const data = Array.isArray(res.data) ? res.data : [];
       setExporters(data);
+      queryClient.setQueryData(QUERY_KEYS.exporters, data);
     } catch (error) {
       console.error('Error fetching exporters:', error);
     } finally {
@@ -1598,20 +1590,16 @@ function App() {
 
   const fetchSuppliers = async () => {
     const cached = queryClient.getQueryData(QUERY_KEYS.suppliers);
-    if (cached && cached.length > 0) {
+    if (cached && cached.length > 0 && suppliers.length === 0) {
       setSuppliers(cached);
-    } else {
+    } else if (suppliers.length === 0) {
       setIsLoading(true);
     }
     try {
-      const data = await queryClient.fetchQuery({
-        queryKey: QUERY_KEYS.suppliers,
-        queryFn: async () => {
-          const res = await axios.get(`${API_BASE_URL}/api/suppliers`);
-          return Array.isArray(res.data) ? res.data : [];
-        }
-      });
+      const res = await axios.get(`${API_BASE_URL}/api/suppliers?_t=${Date.now()}`);
+      const data = Array.isArray(res.data) ? res.data : [];
       setSuppliers(data);
+      queryClient.setQueryData(QUERY_KEYS.suppliers, data);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
     } finally {
@@ -1621,20 +1609,16 @@ function App() {
 
   const fetchPorts = async () => {
     const cached = queryClient.getQueryData(QUERY_KEYS.ports);
-    if (cached && cached.length > 0) {
+    if (cached && cached.length > 0 && ports.length === 0) {
       setPorts(cached);
-    } else {
+    } else if (ports.length === 0) {
       setIsLoading(true);
     }
     try {
-      const data = await queryClient.fetchQuery({
-        queryKey: QUERY_KEYS.ports,
-        queryFn: async () => {
-          const res = await axios.get(`${API_BASE_URL}/api/ports`);
-          return Array.isArray(res.data) ? res.data : [];
-        }
-      });
+      const res = await axios.get(`${API_BASE_URL}/api/ports?_t=${Date.now()}`);
+      const data = Array.isArray(res.data) ? res.data : [];
       setPorts(data);
+      queryClient.setQueryData(QUERY_KEYS.ports, data);
     } catch (error) {
       console.error('Error fetching ports:', error);
     } finally {
@@ -1894,9 +1878,13 @@ function App() {
         'employees': ['employees'],
         'products': ['products'],
         'importers': ['importers'],
+        'importer': ['importers'],
         'exporters': ['exporters'],
+        'exporter': ['exporters'],
         'suppliers': ['suppliers'],
+        'supplier': ['suppliers'],
         'ports': ['ports'],
+        'port': ['ports'],
         'cnfs': ['cnfs'],
         'cnf-payments': ['cnfs'],
         'damages': ['damages', 'stock', 'warehouses'],
@@ -1949,6 +1937,38 @@ function App() {
         }
       } catch (err) {
         console.warn('Error syncing returns in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'ports' || module === 'port' || module === 'all') {
+          if (typeof fetchPorts === 'function') fetchPorts();
+        }
+      } catch (err) {
+        console.warn('Error syncing ports in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'importers' || module === 'importer' || module === 'all') {
+          if (typeof fetchImporters === 'function') fetchImporters();
+        }
+      } catch (err) {
+        console.warn('Error syncing importers in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'exporters' || module === 'exporter' || module === 'all') {
+          if (typeof fetchExporters === 'function') fetchExporters();
+        }
+      } catch (err) {
+        console.warn('Error syncing exporters in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'suppliers' || module === 'supplier' || module === 'all') {
+          if (typeof fetchSuppliers === 'function') fetchSuppliers();
+        }
+      } catch (err) {
+        console.warn('Error syncing suppliers in handleDataUpdate:', err);
       }
 
       try {
@@ -2194,6 +2214,7 @@ function App() {
             startLongPress={startLongPress}
             endLongPress={endLongPress}
             isLongPressTriggered={isLongPressTriggered}
+            fetchImportersGlobal={fetchImporters}
           />
         );
       case 'exporter-section':
@@ -2213,6 +2234,7 @@ function App() {
             startLongPress={startLongPress}
             endLongPress={endLongPress}
             isLongPressTriggered={isLongPressTriggered}
+            fetchExportersGlobal={fetchExporters}
           />
         );
       case 'supplier-section':
@@ -2233,6 +2255,7 @@ function App() {
             startLongPress={startLongPress}
             endLongPress={endLongPress}
             isLongPressTriggered={isLongPressTriggered}
+            fetchSuppliersGlobal={fetchSuppliers}
           />
         );
       case 'indian-cnf-section':
@@ -2298,6 +2321,7 @@ function App() {
             startLongPress={startLongPress}
             endLongPress={endLongPress}
             isLongPressTriggered={isLongPressTriggered}
+            fetchPortsGlobal={fetchPorts}
           />
         );
       case "stock-section":

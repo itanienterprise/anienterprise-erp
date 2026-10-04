@@ -5,6 +5,7 @@ import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
+import { getSocket } from '../../../utils/socket';
 import './Importer.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 
@@ -23,7 +24,8 @@ const Importer = ({
     startLongPress,
     endLongPress,
     isLongPressTriggered,
-    currentUser
+    currentUser,
+    fetchImportersGlobal
 }) => {
     // Local state
     // Dynamic permissions check
@@ -56,11 +58,6 @@ const Importer = ({
         signature: ''
     });
 
-    // Fetch importers on mount
-    useEffect(() => {
-        fetchImporters();
-    }, []);
-
     // Manage scroll lock when Import History modal is open
     useEffect(() => {
         if (viewData) {
@@ -73,23 +70,18 @@ const Importer = ({
         };
     }, [viewData]);
 
-
-    const fetchImporters = async () => {
-        const cached = queryClient.getQueryData(QUERY_KEYS.importers);
-        if (cached && cached.length > 0) {
-            setImporters(cached);
-        } else {
-            setIsLoading(true);
+    const fetchImporters = async (silent = false) => {
+        if (!silent) {
+            const cached = queryClient.getQueryData(QUERY_KEYS.importers);
+            if (cached && cached.length > 0 && importers.length === 0) {
+                setImporters(cached);
+            } else if (importers.length === 0) {
+                setIsLoading(true);
+            }
         }
         try {
             const [impResponse, lcResponse] = await Promise.all([
-                queryClient.fetchQuery({
-                    queryKey: QUERY_KEYS.importers,
-                    queryFn: async () => {
-                        const res = await axios.get(`${API_BASE_URL}/api/importers`);
-                        return Array.isArray(res.data) ? res.data : [];
-                    }
-                }),
+                axios.get(`${API_BASE_URL}/api/importers?_t=${Date.now()}`),
                 queryClient.fetchQuery({
                     queryKey: ['lc-management'],
                     queryFn: async () => {
@@ -98,14 +90,52 @@ const Importer = ({
                     }
                 })
             ]);
-            setImporters(Array.isArray(impResponse) ? impResponse : []);
+            const impData = Array.isArray(impResponse?.data) ? impResponse.data : (Array.isArray(impResponse) ? impResponse : []);
+            setImporters(impData);
             setLcRecords(Array.isArray(lcResponse) ? lcResponse : []);
+            queryClient.setQueryData(QUERY_KEYS.importers, impData);
+            if (typeof fetchImportersGlobal === 'function') {
+                fetchImportersGlobal();
+            }
         } catch (error) {
             console.error('Error fetching importers:', error);
         } finally {
             setIsLoading(false);
         }
     };
+
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
+    useEffect(() => {
+        fetchImporters();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[Importer] Real-time event received:', data);
+            if (!mod || mod === 'importers' || mod === 'importer' || mod === 'all') {
+                fetchImporters(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        // Fallback polling every 30s while viewing Importer module
+        const pollTimer = setInterval(() => {
+            fetchImporters(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
+    }, []);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -198,6 +228,7 @@ const Importer = ({
             setShowForm(false);
             setEditingId(null);
             resetForm();
+            fetchImporters(true);
         } catch (error) {
             console.error('Error saving importer:', error);
             setSubmitStatus('error');

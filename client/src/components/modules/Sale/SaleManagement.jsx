@@ -1351,6 +1351,15 @@ const SaleManagement = ({
                 fetchStockRecords();
                 fetchWarehouses();
             }
+            if (mod === 'ports' || mod === 'port' || mod === 'all') {
+                fetchPortsList();
+            }
+            if (mod === 'importers' || mod === 'importer' || mod === 'all') {
+                fetchImportersList();
+            }
+            if (mod === 'exporters' || mod === 'exporter' || mod === 'all') {
+                fetchExporters();
+            }
         };
 
         if (socket) {

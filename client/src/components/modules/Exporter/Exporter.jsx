@@ -5,6 +5,7 @@ import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
+import { getSocket } from '../../../utils/socket';
 import { decryptData } from '../../../utils/encryption';
 import { generateExporterProfileReportPDF } from '../../../utils/pdfGenerator';
 import { generateExporterProfileReportExcel } from '../../../utils/excelGenerator';
@@ -160,7 +161,8 @@ const Exporter = ({
     startLongPress,
     endLongPress,
     isLongPressTriggered,
-    currentUser
+    currentUser,
+    fetchExportersGlobal
 }) => {
     // Dynamic permissions check
     const canAdd = hasPermission(currentUser, 'importerExporter', 'add');
@@ -195,59 +197,62 @@ const Exporter = ({
         signature: ''
     });
 
-    useEffect(() => { fetchExporters(); }, []);
-
-    useEffect(() => {
-        if (viewData) {
-            document.body.style.overflow = 'hidden';
-            fetchExportHistory(viewData.name);
-            setHistorySearchQuery('');
-            setExpandedHistoryIdx(null); // Reset expansion on new view
-            setShowHistoryFilterPanel(false);
-            setShowReportFormatModal(false);
-            setHistoryFilters({
-                quickRange: 'all',
-                startDate: '',
-                endDate: '',
-                supplier: '',
-                product: '',
-                brand: '',
-                lcNo: '',
-                port: ''
-            });
-        } else {
-            document.body.style.overflow = 'auto';
-            setHistoryRecords([]);
-            setShowHistoryFilterPanel(false);
-        }
-
-        return () => {
-            document.body.style.overflow = 'auto';
-        };
-    }, [viewData]);
-
-    const fetchExporters = async () => {
-        const cached = queryClient.getQueryData(QUERY_KEYS.exporters);
-        if (cached && cached.length > 0) {
-            setExporters(cached);
-        } else {
-            setIsLoading(true);
+    const fetchExporters = async (silent = false) => {
+        if (!silent) {
+            const cached = queryClient.getQueryData(QUERY_KEYS.exporters);
+            if (cached && cached.length > 0 && exporters.length === 0) {
+                setExporters(cached);
+            } else if (exporters.length === 0) {
+                setIsLoading(true);
+            }
         }
         try {
-            const data = await queryClient.fetchQuery({
-                queryKey: QUERY_KEYS.exporters,
-                queryFn: async () => {
-                    const response = await axios.get(`${API_BASE_URL}/api/exporters`);
-                    return Array.isArray(response.data) ? response.data : [];
-                }
-            });
+            const response = await axios.get(`${API_BASE_URL}/api/exporters?_t=${Date.now()}`);
+            const data = Array.isArray(response.data) ? response.data : [];
             setExporters(data);
+            queryClient.setQueryData(QUERY_KEYS.exporters, data);
+            if (typeof fetchExportersGlobal === 'function') {
+                fetchExportersGlobal();
+            }
         } catch (error) {
             console.error('Error fetching exporters:', error);
         } finally {
             setIsLoading(false);
         }
     };
+
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
+    useEffect(() => {
+        fetchExporters();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[Exporter] Real-time event received:', data);
+            if (!mod || mod === 'exporters' || mod === 'exporter' || mod === 'all') {
+                fetchExporters(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        // Fallback polling every 30s while viewing Exporter module
+        const pollTimer = setInterval(() => {
+            fetchExporters(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
+    }, []);
 
     const fetchExportHistory = async (exporterName) => {
         setHistoryLoading(true);
@@ -502,10 +507,10 @@ const Exporter = ({
         try {
             // Optimistic update
             if (editingId) {
-                setExporters(prev => prev.map(exp => exp._id === editingId ? { ...exp, ...payload } : exp));
+                setExporters(prev => prev.map(exp => exp._id === editingId ? { ...exp, ...formData } : exp));
                 queryClient.setQueryData(QUERY_KEYS.exporters, (old) => {
                     if (!Array.isArray(old)) return old;
-                    return old.map(exp => exp._id === editingId ? { ...exp, ...payload } : exp);
+                    return old.map(exp => exp._id === editingId ? { ...exp, ...formData } : exp);
                 });
             }
 
@@ -513,9 +518,9 @@ const Exporter = ({
                 ? `${API_BASE_URL}/api/exporters/${editingId}`
                 : `${API_BASE_URL}/api/exporters`;
             if (editingId) {
-                await axios.put(url, payload);
+                await axios.put(url, formData);
             } else {
-                const res = await axios.post(url, payload);
+                const res = await axios.post(url, formData);
                 const newExp = res?.data?.exporter || res?.data;
                 if (newExp && newExp._id) {
                     setExporters(prev => [newExp, ...prev]);
@@ -526,6 +531,7 @@ const Exporter = ({
             setShowForm(false);
             setEditingId(null);
             resetForm();
+            fetchExporters(true);
         } catch (error) {
             console.error('Error saving exporter:', error);
             setSubmitStatus('error');
