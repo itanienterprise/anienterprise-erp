@@ -1425,6 +1425,7 @@ function App() {
         else if (type === 'product') fetchProducts();
         else if (type === 'stock') fetchStockRecords();
         else if (type === 'sales') fetchSales();
+        else if (type === 'cnf') fetchCnFs();
 
         if (['insurance', 'employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
@@ -1885,8 +1886,12 @@ function App() {
         'supplier': ['suppliers'],
         'ports': ['ports'],
         'port': ['ports'],
+        'banks': ['banks'],
+        'bank': ['banks'],
         'cnfs': ['cnfs'],
-        'cnf-payments': ['cnfs'],
+        'cnf': ['cnfs'],
+        'cnf-payments': ['cnfs', 'cnf-payments'],
+        'cnf-payment': ['cnfs', 'cnf-payments'],
         'damages': ['damages', 'stock', 'warehouses'],
         'returns': ['returns', 'stock', 'warehouses'],
         'notifications': ['notifications'],
@@ -1969,6 +1974,24 @@ function App() {
         }
       } catch (err) {
         console.warn('Error syncing suppliers in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'banks' || module === 'bank' || module === 'all') {
+          queryClient.invalidateQueries({ queryKey: ['banks'] });
+        }
+      } catch (err) {
+        console.warn('Error syncing banks in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'cnfs' || module === 'cnf' || module === 'cnf-payments' || module === 'cnf-payment' || module === 'all') {
+          if (typeof fetchCnFs === 'function') fetchCnFs();
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cnfs });
+          queryClient.invalidateQueries({ queryKey: ['cnf-payments'] });
+        }
+      } catch (err) {
+        console.warn('Error syncing cnfs in handleDataUpdate:', err);
       }
 
       try {
@@ -2276,6 +2299,7 @@ function App() {
             startLongPress={startLongPress}
             endLongPress={endLongPress}
             isLongPressTriggered={isLongPressTriggered}
+            fetchCnFsGlobal={fetchCnFs}
           />
         );
       case 'bd-cnf-section':
@@ -2296,6 +2320,7 @@ function App() {
             startLongPress={startLongPress}
             endLongPress={endLongPress}
             isLongPressTriggered={isLongPressTriggered}
+            fetchCnFsGlobal={fetchCnFs}
           />
         );
       case 'bank-section':

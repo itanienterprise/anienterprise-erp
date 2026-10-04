@@ -12,6 +12,7 @@ import { QUERY_KEYS } from '../../../hooks/useQueries';
 import './CnF.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CnFReport from './CnFReport';
+import { getSocket } from '../../../utils/socket';
 
 const toYYYYMMDD = (dateVal) => {
     if (!dateVal) return '';
@@ -43,7 +44,8 @@ const CnF = ({
     onDeleteConfirm,
     startLongPress,
     endLongPress,
-    isLongPressTriggered
+    isLongPressTriggered,
+    fetchCnFsGlobal
 }) => {
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -176,7 +178,6 @@ const CnF = ({
     const historyLongPressTimer = React.useRef(null);
     const isHistoryLongPressTriggered = React.useRef(false);
 
-    useEffect(() => { fetchCnFs(); }, [moduleType]);
 
     useEffect(() => {
         if (viewData && cnfs.length > 0) {
@@ -475,19 +476,19 @@ const CnF = ({
         setShowAgentHistoryFormatModal(true);
     };
 
-    const fetchCnFs = async () => {
-        const cached = queryClient.getQueryData(QUERY_KEYS.cnfs);
-        if (cached && cached.length > 0) {
-            setCnfs(cached);
-        } else {
-            setIsLoading(true);
+    const fetchCnFs = async (silent = false) => {
+        if (!silent) {
+            const cached = queryClient.getQueryData(QUERY_KEYS.cnfs);
+            if (cached && cached.length > 0 && cnfs.length === 0) {
+                const filteredCached = moduleType ? cached.filter(c => c.type === moduleType) : cached;
+                setCnfs(filteredCached);
+            } else if (cnfs.length === 0) {
+                setIsLoading(true);
+            }
         }
         try {
             const [cnfsRes, stockRes, salesRes, paymentsRes, expenseRes] = await Promise.all([
-                queryClient.fetchQuery({
-                    queryKey: QUERY_KEYS.cnfs,
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/cnfs`).then(r => Array.isArray(r.data) ? r.data : [])
-                }),
+                axios.get(`${API_BASE_URL}/api/cnfs?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []),
                 queryClient.fetchQuery({
                     queryKey: QUERY_KEYS.stock,
                     queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
@@ -507,6 +508,10 @@ const CnF = ({
             ]);
 
             const allCnfs = Array.isArray(cnfsRes) ? cnfsRes : [];
+            queryClient.setQueryData(QUERY_KEYS.cnfs, allCnfs);
+            if (typeof fetchCnFsGlobal === 'function') {
+                fetchCnFsGlobal();
+            }
             const allStock = Array.isArray(stockRes) ? stockRes : [];
             const allSales = Array.isArray(salesRes) ? salesRes : [];
             const allPayments = Array.isArray(paymentsRes) ? paymentsRes : [];
@@ -644,6 +649,39 @@ const CnF = ({
             setIsLoading(false);
         }
     };
+
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
+    useEffect(() => {
+        fetchCnFs();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[CnF] Real-time event received:', data);
+            if (!mod || mod === 'cnfs' || mod === 'cnf' || mod === 'cnf-payments' || mod === 'cnf-payment' || mod === 'stock' || mod === 'sales' || mod === 'orders' || mod === 'all') {
+                fetchCnFs(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        // Fallback polling every 30s while viewing C&F module
+        const pollTimer = setInterval(() => {
+            fetchCnFs(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
+    }, [moduleType]);
 
     const fetchCnFHistory = async (cnfName) => {
         setHistoryLoading(true);
@@ -1234,12 +1272,14 @@ const CnF = ({
                 }
             }
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cnfs });
+            fetchCnFs(true);
             setShowForm(false);
             setEditingId(null);
             resetForm();
         } catch (error) {
             console.error('Error saving C&F:', error);
             setSubmitStatus('error');
+            fetchCnFs(true);
         } finally {
             setIsSubmitting(false);
         }

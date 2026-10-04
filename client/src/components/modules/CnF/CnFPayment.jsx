@@ -10,6 +10,7 @@ import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
+import { getSocket } from '../../../utils/socket';
 
 const toYYYYMMDD = (dateVal) => {
     if (!dateVal) return '';
@@ -841,17 +842,19 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
         }
     };
 
-    const fetchPayments = async () => {
-        const cached = queryClient.getQueryData(['cnf-payments']);
-        if (cached && Array.isArray(cached) && cached.length > 0) {
-            setPayments(cached);
-        } else {
-            setIsLoading(true);
+    const fetchPayments = async (silent = false) => {
+        if (!silent) {
+            const cached = queryClient.getQueryData(['cnf-payments']);
+            if (cached && Array.isArray(cached) && cached.length > 0) {
+                setPayments(cached);
+            } else {
+                setIsLoading(true);
+            }
         }
         try {
             const data = await queryClient.fetchQuery({
                 queryKey: ['cnf-payments'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/cnf-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/cnf-payments?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setPayments(data);
         } catch (error) {
@@ -861,10 +864,39 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
         }
     };
 
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
     useEffect(() => {
         fetchPayments();
         fetchCnFs();
         fetchEmployees();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[CnFPayment] Real-time event received:', data);
+            if (!mod || mod === 'cnf-payments' || mod === 'cnf-payment' || mod === 'cnfs' || mod === 'cnf' || mod === 'stock' || mod === 'sales' || mod === 'all') {
+                fetchPayments(true);
+                fetchCnFs();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchPayments(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     // Click outside listener for dropdowns
@@ -1007,7 +1039,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
             setShowAddModal(false);
             setSubmitStatus(null);
             resetNewPayment();
-            fetchPayments();
+            fetchPayments(true);
             fetchCnFs();
             refreshPendingIndicators?.();
         } catch (error) {
@@ -1098,7 +1130,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                 }
             }
 
-            fetchPayments();
+            fetchPayments(true);
             fetchCnFs();
             refreshPendingIndicators?.();
         } catch (error) {
@@ -1193,7 +1225,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
             queryClient.invalidateQueries({ queryKey: ['cnf-payments'] });
             queryClient.invalidateQueries({ queryKey: ['cnfs'] });
             queryClient.invalidateQueries({ queryKey: ['banks'] });
-            fetchPayments();
+            fetchPayments(true);
             fetchCnFs();
             refreshPendingIndicators?.();
         } catch (error) {

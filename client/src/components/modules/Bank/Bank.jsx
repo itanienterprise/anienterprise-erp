@@ -10,6 +10,7 @@ import { generateLcBillHistoryReportExcel } from '../../../utils/excelGenerator'
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { getSocket } from '../../../utils/socket';
 
 
 const EyeIcon = ({ className }) => (
@@ -102,8 +103,58 @@ const Bank = ({ onDeleteConfirm }) => {
         status: 'Active'
     });
 
+    const fetchBanks = async (silent = false) => {
+        if (!silent) {
+            const cached = queryClient.getQueryData(['banks']);
+            if (cached && cached.length > 0 && banks.length === 0) {
+                setBanks(cached);
+            } else if (banks.length === 0) {
+                setIsLoading(true);
+            }
+        }
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/banks?_t=${Date.now()}`);
+            const data = Array.isArray(res.data) ? res.data : [];
+            setBanks(data);
+            queryClient.setQueryData(['banks'], data);
+        } catch (error) {
+            console.error('Error fetching banks:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
     useEffect(() => {
         fetchBanks();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[Bank] Real-time event received:', data);
+            if (!mod || mod === 'banks' || mod === 'bank' || mod === 'all') {
+                fetchBanks(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        // Fallback polling every 30s while viewing Bank module
+        const pollTimer = setInterval(() => {
+            fetchBanks(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     // Manage scroll lock when LC Bill History modal is open
@@ -162,25 +213,6 @@ const Bank = ({ onDeleteConfirm }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [historyFilterDropdownOpen]);
 
-    const fetchBanks = async () => {
-        const cached = queryClient.getQueryData(['banks']);
-        if (cached && cached.length > 0) {
-            setBanks(cached);
-        } else {
-            setIsLoading(true);
-        }
-        try {
-            const data = await queryClient.fetchQuery({
-                queryKey: ['banks'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
-            });
-            setBanks(data);
-        } catch (error) {
-            console.error('Error fetching banks:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const openLcBillHistory = async (bankName) => {
         setLcBillHistoryBank(bankName);
@@ -695,11 +727,11 @@ const Bank = ({ onDeleteConfirm }) => {
             }
 
             queryClient.invalidateQueries({ queryKey: ['banks'] });
-            fetchBanks();
+            fetchBanks(true);
         } catch (error) {
             console.error('Error saving bank:', error);
             alert('Failed to save bank details.');
-            fetchBanks();
+            fetchBanks(true);
         } finally {
             setIsSubmitting(false);
         }

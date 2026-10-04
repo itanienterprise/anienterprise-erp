@@ -1661,7 +1661,10 @@ apiRouter.post('/api/cnfs', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newCnF = new CnF({ data: encryptedData });
     const savedCnF = await newCnF.save();
-    res.status(201).json({ ...req.body, _id: savedCnF._id, createdAt: savedCnF.createdAt });
+    const result = { ...req.body, _id: savedCnF._id, createdAt: savedCnF.createdAt };
+    broadcastUpdate('cnfs', 'create', { id: savedCnF._id, cnf: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1671,6 +1674,8 @@ apiRouter.delete('/api/cnfs/:id', adminOnly, async (req, res) => {
   try {
     const deletedCnF = await CnF.findByIdAndDelete(req.params.id);
     if (!deletedCnF) return res.status(404).json({ message: 'C&F not found' });
+    broadcastUpdate('cnfs', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'C&F deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1682,7 +1687,10 @@ apiRouter.put('/api/cnfs/:id', adminOnly, async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedCnF = await CnF.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedCnF) return res.status(404).json({ message: 'C&F not found' });
-    res.json({ ...req.body, _id: updatedCnF._id, createdAt: updatedCnF.createdAt });
+    const result = { ...req.body, _id: updatedCnF._id, createdAt: updatedCnF.createdAt };
+    broadcastUpdate('cnfs', 'update', { id: req.params.id, cnf: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1707,7 +1715,10 @@ apiRouter.post('/api/cnf-payments', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newRecord = new CnFPayment({ data: encryptedData });
     const savedRecord = await newRecord.save();
-    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('cnf-payments', 'create', { id: savedRecord._id, payment: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1724,6 +1735,8 @@ apiRouter.delete('/api/cnf-payments/:id', async (req, res) => {
     }
 
     await CnFPayment.findByIdAndDelete(req.params.id);
+    broadcastUpdate('cnf-payments', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Payment record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1753,7 +1766,10 @@ apiRouter.put('/api/cnf-payments/:id', async (req, res) => {
 
     const encryptedData = encryptData(req.body);
     const updatedRecord = await CnFPayment.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
-    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('cnf-payments', 'update', { id: req.params.id, payment: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3235,7 +3251,10 @@ apiRouter.post('/api/banks', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newBank = new Bank({ data: encryptedData });
     const savedBank = await newBank.save();
-    res.status(201).json({ ...req.body, _id: savedBank._id, createdAt: savedBank.createdAt });
+    const result = { ...req.body, _id: savedBank._id, createdAt: savedBank.createdAt };
+    broadcastUpdate('banks', 'create', { id: savedBank._id, bank: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3250,6 +3269,8 @@ apiRouter.delete('/api/banks/:id', async (req, res) => {
 
     const deletedBank = await Bank.findByIdAndDelete(req.params.id);
     if (!deletedBank) return res.status(404).json({ message: 'Bank not found' });
+    broadcastUpdate('banks', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Bank deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3261,7 +3282,10 @@ apiRouter.put('/api/banks/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedBank = await Bank.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedBank) return res.status(404).json({ message: 'Bank not found' });
-    res.json({ ...req.body, _id: updatedBank._id, createdAt: updatedBank.createdAt });
+    const result = { ...req.body, _id: updatedBank._id, createdAt: updatedBank.createdAt };
+    broadcastUpdate('banks', 'update', { id: req.params.id, bank: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
