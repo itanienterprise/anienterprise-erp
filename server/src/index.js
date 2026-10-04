@@ -300,7 +300,6 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db')
     console.log('MongoDB connected successfully');
     seedAdminUser();
     cleanupZeroStockBaselineItems();
-    autoLinkPurchaseReceivesToCustomers();
   })
   .catch(err => console.log('MongoDB connection error:', err));
 
@@ -611,99 +610,86 @@ const cleanupZeroStockBaselineItems = async () => {
   }
 };
 
-const autoLinkPurchaseReceivesToCustomers = async () => {
+// Migration: Re-populate customerId on all PurchaseReceive documents.
+// Runs automatically after every backup restore to prevent customer purchase history
+// mismatches caused by old backups that didn't store the customerId on Purchase Receives.
+const migratePurchaseReceiveCustomerIds = async () => {
   try {
-    const prDocs = await PurchaseReceive.find({});
-    if (!prDocs || prDocs.length === 0) return;
+    const PRModel = mongoose.models['PurchaseReceive'];
+    const PModel = mongoose.models['Purchase'];
+    const CModel = mongoose.models['Customer'];
+    if (!PRModel || !PModel || !CModel) return;
 
-    let pDocs = null;
-    let cDocs = null;
-    let updatedCount = 0;
+    const prDocs = await PRModel.find({});
+    const purchaseDocs = await PModel.find({});
+    const customerDocs = await CModel.find({});
 
-    for (const prDoc of prDocs) {
-      if (!prDoc.data) continue;
-      let prData;
-      try {
-        prData = decryptData(prDoc.data);
-      } catch (e) {
-        continue;
+    const customers = customerDocs.map(c => {
+      let data = {};
+      try { data = c.data ? decryptData(c.data) : {}; } catch (e) {}
+      return { _id: c._id.toString(), ...data };
+    }).filter(c => c.companyName || c.customerName);
+
+    const purchaseByNo = {};
+    purchaseDocs.forEach(p => {
+      let data = {};
+      try { data = p.data ? decryptData(p.data) : {}; } catch (e) {}
+      const pNo = (data.purchaseNo || data.invoiceNo || '').trim().toUpperCase();
+      if (pNo && !purchaseByNo[pNo]) purchaseByNo[pNo] = data;
+    });
+
+    const isPRMatchForCustomer = (prData, cust) => {
+      const cComp = (cust.companyName || '').trim().toLowerCase();
+      const cCust = (cust.customerName || '').trim().toLowerCase();
+      const prComp = (prData.companyName || '').trim().toLowerCase();
+      const prSupp = (prData.supplierName || '').trim().toLowerCase();
+
+      if (cComp && prComp && (prComp === cComp || prComp.includes(cComp) || cComp.includes(prComp))) return true;
+      if (cComp && prSupp && (prSupp === cComp || prSupp.includes(cComp) || cComp.includes(prSupp))) return true;
+      if (cCust && prSupp && (prSupp === cCust || prSupp.includes(cCust) || cCust.includes(prSupp))) {
+        if (!prComp || !cComp || prComp === cComp || prComp.includes(cComp) || cComp.includes(prComp)) return true;
       }
-      if (!prData) continue;
+      return false;
+    };
 
-      if (!prData.customerId) {
-        if (!pDocs) pDocs = await Purchase.find({});
-        if (!cDocs) cDocs = await Customer.find({});
+    let updated = 0;
+    for (const prDoc of prDocs) {
+      let prData = {};
+      try { prData = prDoc.data ? decryptData(prDoc.data) : {}; } catch (e) { continue; }
 
-        const pNo = (prData.purchaseNo || prData.purchaseReceiveNo || '').trim().toUpperCase();
-        let targetCustId = null;
+      if (prData.customerId) continue;
 
-        if (pNo) {
-          for (const pDoc of pDocs) {
-            const pData = pDoc.data ? decryptData(pDoc.data) : pDoc;
-            if (pData && (pData.purchaseNo || pData.invoiceNo || '').trim().toUpperCase() === pNo && pData.customerId) {
-              targetCustId = pData.customerId;
-              break;
-            }
-          }
-        }
+      const pNo = (prData.purchaseNo || prData.purchaseReceiveNo || '').trim().toUpperCase();
+      let targetCustomerId = null;
 
-        if (!targetCustId) {
-          const comp = (prData.companyName || '').trim().toLowerCase();
-          if (comp) {
-            for (const cDoc of cDocs) {
-              const cData = cDoc.data ? decryptData(cDoc.data) : cDoc;
-              if (cData && (cData.companyName || '').trim().toLowerCase() === comp) {
-                targetCustId = cDoc._id.toString();
-                break;
-              }
-            }
-          }
-        }
+      if (pNo && purchaseByNo[pNo] && purchaseByNo[pNo].customerId) {
+        targetCustomerId = purchaseByNo[pNo].customerId;
+      }
 
-        if (targetCustId) {
-          prData.customerId = targetCustId;
-          await PurchaseReceive.findByIdAndUpdate(prDoc._id, { data: encryptData(prData) });
-          updatedCount++;
+      if (!targetCustomerId) {
+        const matchedCust = customers.find(c => isPRMatchForCustomer(prData, c));
+        if (matchedCust) targetCustomerId = matchedCust._id;
+      }
+
+      if (targetCustomerId) {
+        prData.customerId = targetCustomerId;
+        try {
+          await PRModel.findByIdAndUpdate(prDoc._id, { data: encryptData(prData) });
+          updated++;
+        } catch (e) {
+          console.error(`[PR Migration] Error updating PR ${prDoc._id}:`, e.message);
         }
       }
     }
 
-    if (updatedCount > 0) {
-      memoryCache.purchaseReceives = null;
-      console.log(`[Startup Migration] Auto-linked ${updatedCount} Purchase Receive(s) to matching customers.`);
+    if (updated > 0) {
+      console.log(`[Post-Restore Migration] Populated customerId on ${updated} PurchaseReceive document(s).`);
+      if (memoryCache) memoryCache.purchaseReceives = null;
     }
   } catch (err) {
-    console.error('Error auto-linking Purchase Receives to customers on startup:', err);
+    console.error('[Post-Restore Migration] migratePurchaseReceiveCustomerIds error:', err);
   }
 };
-
-const resolvePRCustomerId = async (body) => {
-  if (body.customerId) return body.customerId;
-  const pNo = (body.purchaseNo || body.purchaseReceiveNo || '').trim().toUpperCase();
-  if (pNo) {
-    const pDocs = await Purchase.find({});
-    for (const pDoc of pDocs) {
-      const pData = pDoc.data ? decryptData(pDoc.data) : pDoc;
-      if (pData && (pData.purchaseNo || pData.invoiceNo || '').trim().toUpperCase() === pNo && pData.customerId) {
-        return pData.customerId;
-      }
-    }
-  }
-  const comp = (body.companyName || body.supplierName || '').trim().toLowerCase();
-  if (comp) {
-    const cDocs = await Customer.find({});
-    for (const cDoc of cDocs) {
-      const cData = cDoc.data ? decryptData(cDoc.data) : cDoc;
-      if (cData && (cData.companyName || '').trim().toLowerCase() === comp) {
-        return cDoc._id.toString();
-      }
-    }
-  }
-  return null;
-};
-
-
-
 
 // Secure Gateway
 app.post('/v', (req, res, next) => {
@@ -3194,10 +3180,6 @@ apiRouter.post('/api/purchase-receives', async (req, res) => {
     } else if (req.body.purchaseNo && !req.body.purchaseReceiveNo) {
       req.body.purchaseReceiveNo = req.body.purchaseNo;
     }
-    if (!req.body.customerId) {
-      const resolvedCustId = await resolvePRCustomerId(req.body);
-      if (resolvedCustId) req.body.customerId = resolvedCustId;
-    }
     const encryptedData = encryptData(req.body);
     const newPurchaseReceive = new PurchaseReceive({ data: encryptedData });
     await newPurchaseReceive.save();
@@ -3209,10 +3191,6 @@ apiRouter.post('/api/purchase-receives', async (req, res) => {
 
 apiRouter.put('/api/purchase-receives/:id', async (req, res) => {
   try {
-    if (!req.body.customerId) {
-      const resolvedCustId = await resolvePRCustomerId(req.body);
-      if (resolvedCustId) req.body.customerId = resolvedCustId;
-    }
     const encryptedData = encryptData(req.body);
     const updatedPurchaseReceive = await PurchaseReceive.findByIdAndUpdate(req.params.id, {
       data: encryptedData
@@ -5149,6 +5127,14 @@ const performDatabaseRestore = async (backupData, selectedModels = null) => {
     }
   } catch (e) {
     console.error('Error cleaning up baseline items after restore:', e);
+  }
+
+  // Re-populate customerId on PurchaseReceive documents after restore
+  // (Old backups don't have this field, causing customer purchase history mismatches)
+  try {
+    await migratePurchaseReceiveCustomerIds();
+  } catch (e) {
+    console.error('Error migrating PR customerIds after restore:', e);
   }
 
   return {

@@ -645,7 +645,6 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
             ...prev,
             purchaseReceiveNo: pNo || prev.purchaseReceiveNo,
             purchaseNo: pNo,
-            customerId: p.customerId || prev.customerId,
             supplierName: p.supplierName || p.companyName || prev.supplierName,
             companyName: p.companyName || p.supplierName || prev.companyName,
             lcNo: p.lcNo || prev.lcNo,
@@ -1771,7 +1770,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                                     key={c._id || idx}
                                                     onClick={() => {
                                                         const name = c.companyName || c.customerName || c.name;
-                                                        setFormData(prev => ({ ...prev, companyName: name, supplierName: name, customerId: c._id }));
+                                                        setFormData(prev => ({ ...prev, companyName: name, supplierName: name }));
                                                         setIsCustomerDropdownOpen(false);
                                                     }}
                                                     className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm font-medium border-b border-gray-50 last:border-0"
