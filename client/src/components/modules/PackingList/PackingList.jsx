@@ -15,6 +15,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { PIDetailsModal } from '../PI/PIDetailsModal';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { getSocket } from '../../../utils/socket';
 
 const numberToWordsUSD = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
@@ -329,6 +330,33 @@ function PackingList({
     useEffect(() => {
         fetchRecords();
         preloadAlgerianFont().catch(() => { });
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[PackingList] Real-time event received:', data);
+            if (!mod || mod === 'packing-lists' || mod === 'packing-list' || mod === 'pi' || mod === 'lc-management' || mod === 'banks' || mod === 'ip-records' || mod === 'all') {
+                fetchRecords(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchRecords(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     useEffect(() => {
@@ -678,21 +706,23 @@ function PackingList({
         }
     };
 
-    const fetchRecords = async () => {
-        const cachedPl = queryClient.getQueryData(['packing-lists']);
-        if (cachedPl && Array.isArray(cachedPl) && cachedPl.length > 0) {
-            setRecords(cachedPl);
-        } else {
-            setIsLoading(true);
+    const fetchRecords = async (silent = false) => {
+        if (!silent) {
+            const cachedPl = queryClient.getQueryData(['packing-lists']);
+            if (cachedPl && Array.isArray(cachedPl) && cachedPl.length > 0 && records.length === 0) {
+                setRecords(cachedPl);
+            } else if (records.length === 0) {
+                setIsLoading(true);
+            }
         }
         try {
             // 1. Fetch Packing Lists first and render table instantly!
-            const plData = await queryClient.fetchQuery({
-                queryKey: ['packing-lists'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/packing-lists`).then(r => Array.isArray(r.data) ? r.data : [])
-            });
-            setRecords(Array.isArray(plData) ? plData : []);
-            setIsLoading(false);
+            const res = await axios.get(`${API_BASE_URL}/api/packing-lists?_t=${Date.now()}`);
+            const plData = Array.isArray(res.data) ? res.data : [];
+            setRecords(plData);
+            queryClient.setQueryData(['packing-lists'], plData);
+            queryClient.setQueryData(['packingLists'], plData);
+            if (!silent) setIsLoading(false);
 
             // 2. Fetch secondary data in background
             const [piData, lcData, bankData, ipData, notifRes] = await Promise.all([
@@ -1314,13 +1344,16 @@ function PackingList({
                 }
             }
             queryClient.invalidateQueries({ queryKey: ['packing-lists'] });
+            queryClient.invalidateQueries({ queryKey: ['packingLists'] });
             setShowForm(false);
             resetForm();
+            fetchRecords(true);
         } catch (err) {
             console.error('Error submitting:', err);
             const msg = err.response?.data?.message || 'Error occurred during submission';
             setSubmitStatus({ type: 'error', message: msg });
             showToast(msg, 'error');
+            fetchRecords(true);
         } finally {
             setIsSubmitting(false);
         }

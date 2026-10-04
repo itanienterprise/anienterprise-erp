@@ -3872,7 +3872,10 @@ apiRouter.post('/api/pi', async (req, res) => {
       data: encryptedData
     });
     const savedRecord = await newRecord.save();
-    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('pi', 'create', { id: savedRecord._id, pi: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     if (err.code === 11000) {
       return res.status(400).json({ message: 'Duplicate PI Number detected! This number already exists in the system.' });
@@ -3885,6 +3888,8 @@ apiRouter.delete('/api/pi/:id', async (req, res) => {
   try {
     const deletedRecord = await PI.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'PI record not found' });
+    broadcastUpdate('pi', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'PI record deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3908,7 +3913,10 @@ apiRouter.put('/api/pi/:id', async (req, res) => {
 
     const updatedRecord = await PI.findByIdAndUpdate(req.params.id, updateData, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'PI record not found' });
-    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('pi', 'update', { id: req.params.id, pi: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     if (err.code === 11000) {
       return res.status(400).json({ message: 'Duplicate PI Number detected! This number already exists in the system.' });
@@ -3953,7 +3961,10 @@ apiRouter.post('/api/packing-lists', async (req, res) => {
       data: encryptedData
     });
     const savedRecord = await newRecord.save();
-    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('packing-lists', 'create', { id: savedRecord._id, packingList: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     if (err.code === 11000) {
       return res.status(400).json({ message: 'Duplicate Packing List Number detected! This number already exists in the system.' });
@@ -3966,6 +3977,8 @@ apiRouter.delete('/api/packing-lists/:id', async (req, res) => {
   try {
     const deletedRecord = await PackingList.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Packing List record not found' });
+    broadcastUpdate('packing-lists', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Packing List record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3981,7 +3994,10 @@ apiRouter.put('/api/packing-lists/:id', async (req, res) => {
 
     const updatedRecord = await PackingList.findByIdAndUpdate(req.params.id, updateData, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Packing List record not found' });
-    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('packing-lists', 'update', { id: req.params.id, packingList: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     if (err.code === 11000) {
       return res.status(400).json({ message: 'Duplicate Packing List Number detected! This number already exists in the system.' });

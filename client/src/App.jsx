@@ -1891,6 +1891,9 @@ function App() {
         'bank': ['banks'],
         'ip-records': ['ip-records'],
         'ip': ['ip-records'],
+        'pi': ['pi'],
+        'packing-lists': ['packing-lists', 'packingLists'],
+        'packing-list': ['packing-lists', 'packingLists'],
         'cnfs': ['cnfs'],
         'cnf': ['cnfs'],
         'cnf-payments': ['cnfs', 'cnf-payments'],
@@ -2003,6 +2006,23 @@ function App() {
         }
       } catch (err) {
         console.warn('Error syncing ip-records in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'pi' || module === 'all') {
+          queryClient.invalidateQueries({ queryKey: ['pi'] });
+        }
+      } catch (err) {
+        console.warn('Error syncing pi in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'packing-lists' || module === 'packing-list' || module === 'all') {
+          queryClient.invalidateQueries({ queryKey: ['packing-lists'] });
+          queryClient.invalidateQueries({ queryKey: ['packingLists'] });
+        }
+      } catch (err) {
+        console.warn('Error syncing packing-lists in handleDataUpdate:', err);
       }
 
       try {

@@ -16,6 +16,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { IPDetailsModal } from '../IPManagement/IPDetailsModal';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { trackUserAction } from '../../../utils/activityTracker';
+import { getSocket } from '../../../utils/socket';
 
 function PI({
     importers,
@@ -664,6 +665,33 @@ function PI({
             fetchMetaData('certification', setCertifications),
             fetchMetaData('packingType', setPackingTypes)
         ]);
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[PI] Real-time event received:', data);
+            if (!mod || mod === 'pi' || mod === 'ip-records' || mod === 'ip' || mod === 'lc-management' || mod === 'stock' || mod === 'sales' || mod === 'banks' || mod === 'bank' || mod === 'all') {
+                fetchRecords(false);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchRecords(false);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     useEffect(() => {
@@ -770,19 +798,25 @@ function PI({
     };
 
     const fetchRecords = async (showFullLoading = true) => {
-        const cachedPi = queryClient.getQueryData(['pi']);
-        if (cachedPi && Array.isArray(cachedPi) && cachedPi.length > 0) {
-            setRecords(cachedPi);
-        } else if (showFullLoading) {
-            setIsLoading(true);
+        if (!showFullLoading) {
+            const cachedPi = queryClient.getQueryData(['pi']);
+            if (cachedPi && Array.isArray(cachedPi) && cachedPi.length > 0 && records.length === 0) {
+                setRecords(cachedPi);
+            }
+        } else {
+            const cachedPi = queryClient.getQueryData(['pi']);
+            if (cachedPi && Array.isArray(cachedPi) && cachedPi.length > 0) {
+                setRecords(cachedPi);
+            } else {
+                setIsLoading(true);
+            }
         }
         try {
             // 1. Fetch PI records first and render list table immediately!
-            const piData = await queryClient.fetchQuery({
-                queryKey: ['pi'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/pi`).then(r => Array.isArray(r.data) ? r.data : [])
-            });
-            setRecords(Array.isArray(piData) ? piData : []);
+            const res = await axios.get(`${API_BASE_URL}/api/pi?_t=${Date.now()}`);
+            const piData = Array.isArray(res.data) ? res.data : [];
+            setRecords(piData);
+            queryClient.setQueryData(['pi'], piData);
             if (showFullLoading) setIsLoading(false);
 
             // 2. Fetch supporting data asynchronously in background
@@ -2046,7 +2080,7 @@ function PI({
             queryClient.invalidateQueries({ queryKey: ['pi'] });
             setShowForm(false);
             resetForm();
-            fetchRecords();
+            fetchRecords(false);
         } catch (error) {
             console.error('Error saving PI record:', error);
             setSubmitStatus('error');
@@ -2342,7 +2376,7 @@ function PI({
                 queryClient.setQueryData(['pi'], (old = []) => old.filter(p => p._id !== id));
                 axios.delete(`${API_BASE_URL}/api/pi/${id}`).then(() => {
                     queryClient.invalidateQueries({ queryKey: ['pi'] });
-                    fetchRecords();
+                    fetchRecords(false);
                 });
             }
         }
@@ -3530,7 +3564,7 @@ function PI({
             }
             showToast(editingRevisionOriginalNo ? 'PI revision updated successfully!' : 'PI revision saved successfully!', 'success');
             resetReviseForm();
-            fetchRecords();
+            fetchRecords(false);
         } catch (error) {
             console.error('Error saving PI revision:', error);
             showToast('Failed to save PI revision', 'error');
