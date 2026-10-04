@@ -264,14 +264,14 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate, onProfileUpdate }) => {
             setPhotoStatus({ type: 'error', message: 'Please select a valid image file.' });
             return;
         }
-        if (file.size > 10 * 1024 * 1024) {
-            setPhotoStatus({ type: 'error', message: 'Image must be under 10 MB.' });
+        if (file.size > 15 * 1024 * 1024) {
+            setPhotoStatus({ type: 'error', message: 'Image must be under 15 MB.' });
             return;
         }
 
         setPhotoStatus({ type: '', message: '' });
         try {
-            const dataUrl = await compressImage(file, 480, 0.82) || await readFile(file);
+            const dataUrl = await compressImage(file, 1600, 0.90) || await readFile(file);
 
             // 1. Immediately set full compressed photo on card & server
             rawUploadedPhotoRef.current = dataUrl;

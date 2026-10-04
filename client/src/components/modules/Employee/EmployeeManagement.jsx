@@ -75,14 +75,14 @@ const EmployeeManagement = ({
             alert('Please select a valid image file.');
             return;
         }
-        if (file.size > 10 * 1024 * 1024) {
-            alert('Image must be under 10 MB.');
+        if (file.size > 15 * 1024 * 1024) {
+            alert('Image must be under 15 MB.');
             return;
         }
 
         setIsUploadingEmployeePhoto(true);
         try {
-            const compressedDataUrl = await compressImage(file, 400, 0.8);
+            const compressedDataUrl = await compressImage(file, 1600, 0.90);
             if (!compressedDataUrl) {
                 setIsUploadingEmployeePhoto(false);
                 return;

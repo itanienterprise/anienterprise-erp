@@ -78,6 +78,9 @@
     object-fit: cover;
     object-position: center top;
     transition: transform 0.4s ease;
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
 }
 
 /* Fallback Portrait Gradient */
