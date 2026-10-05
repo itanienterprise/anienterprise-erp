@@ -5453,6 +5453,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const amendmentPiRef = useRef(null);
     const portRef = useRef(null);
     const amendmentPortRef = useRef(null);
+    const amendmentAddnRef = useRef(null);
     const marineCoverNoteRef = useRef(null);
     const ipContainerRef = useRef(null);
 
@@ -5732,7 +5733,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
     useEffect(() => {
         const handleClickOutside = (e) => {
-            const refs = [piRef, bankRef, branchRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef, amendmentPiRef, portRef, amendmentPortRef, ipContainerRef];
+            const refs = [piRef, bankRef, branchRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef, amendmentPiRef, portRef, amendmentPortRef, amendmentAddnRef, marineCoverNoteRef, ipContainerRef];
             const isClickInside = refs.some(ref => ref.current && ref.current.contains(e.target));
             if (!isClickInside) {
                 setActiveDropdown(null);
@@ -5872,6 +5873,11 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const handleDropdownSelect = (field, value) => {
         if (field === 'amendmentPort') {
             setAmendmentFormData(prev => ({ ...prev, port: value }));
+            setActiveDropdown(null);
+            return;
+        }
+        if (field === 'amendmentAddnNo') {
+            setAmendmentFormData(prev => ({ ...prev, addnNo: value }));
             setActiveDropdown(null);
             return;
         }
@@ -7109,6 +7115,132 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         return lcRecords.find(lc => lc._id === selectedAmendmentLcId) || null;
     }, [selectedAmendmentLcId, lcRecords]);
 
+    const existingRevisedCoverNotes = useMemo(() => {
+        const targetInsCo = (selectedLcForAmendment?.insuranceCo || '').trim().toLowerCase();
+
+        const allNotes = [];
+        (lcRecords || []).forEach(lc => {
+            const lcIns = (lc.insuranceCo || '').trim().toLowerCase();
+            const lcOpeningDate = lc.openingDate || lc.createdAt || 0;
+
+            if (Array.isArray(lc.amendments)) {
+                lc.amendments.forEach(a => {
+                    const no = (a.addnNo || a.revisedCoverNoteNo || a.revisedCoverNote || '').trim();
+                    if (no) {
+                        const rawDate = a.addnDate || a.amendmentDate || a.date || a.createdAt || lcOpeningDate;
+                        allNotes.push({
+                            no,
+                            date: new Date(rawDate).getTime() || 0,
+                            ins: lc.insuranceCo || '',
+                            insLower: lcIns,
+                            lcNo: lc.lcNo || '',
+                            amendmentNo: a.amendmentNo || ''
+                        });
+                    }
+                });
+            }
+
+            const directAddn = (lc.addnNo || lc.revisedCoverNoteNo || lc.revisedCoverNote || '').trim();
+            if (directAddn) {
+                allNotes.push({
+                    no: directAddn,
+                    date: new Date(lc.addnDate || lcOpeningDate).getTime() || 0,
+                    ins: lc.insuranceCo || '',
+                    insLower: lcIns,
+                    lcNo: lc.lcNo || '',
+                    amendmentNo: 'Original'
+                });
+            }
+        });
+
+        // Sort newest first
+        allNotes.sort((a, b) => b.date - a.date);
+
+        // If target insurance company is specified, prioritize matching insurance company first
+        let prioritized = allNotes;
+        if (targetInsCo) {
+            const sameIns = allNotes.filter(n => n.insLower === targetInsCo);
+            const otherIns = allNotes.filter(n => n.insLower !== targetInsCo);
+            prioritized = [...sameIns, ...otherIns];
+        }
+
+        const seen = new Set();
+        const unique = [];
+        prioritized.forEach(item => {
+            const key = item.no.toLowerCase();
+            if (!seen.has(key)) {
+                seen.add(key);
+                unique.push(item);
+            }
+        });
+
+        return unique;
+    }, [lcRecords, selectedLcForAmendment?.insuranceCo]);
+
+    const filteredRevisedCoverNotes = useMemo(() => {
+        const q = (amendmentFormData.addnNo || '').trim().toLowerCase();
+        if (!q) return existingRevisedCoverNotes;
+        return existingRevisedCoverNotes.filter(item =>
+            item.no.toLowerCase().includes(q)
+        );
+    }, [amendmentFormData.addnNo, existingRevisedCoverNotes]);
+
+    const lastUsedRevisedCoverNote = useMemo(() => {
+        return existingRevisedCoverNotes[0]?.no || '';
+    }, [existingRevisedCoverNotes]);
+
+    const duplicateRevisedCoverNoteInfo = useMemo(() => {
+        const inputNo = (amendmentFormData.addnNo || '').trim();
+        if (!inputNo) return null;
+        const cleanNo = inputNo.toLowerCase();
+
+        for (const lc of (lcRecords || [])) {
+            const lcId = String(lc._id || lc.id || '');
+            const isSameLc = selectedAmendmentLcId && lcId === String(selectedAmendmentLcId);
+
+            if (Array.isArray(lc.amendments)) {
+                for (const a of lc.amendments) {
+                    if (isSameLc && editingAmendmentNo && a.amendmentNo === editingAmendmentNo) {
+                        continue;
+                    }
+                    const aNo = (a.addnNo || a.revisedCoverNoteNo || a.revisedCoverNote || '').trim().toLowerCase();
+                    if (aNo && aNo === cleanNo) {
+                        return {
+                            isDuplicate: true,
+                            lcNo: lc.lcNo,
+                            amendmentNo: a.amendmentNo,
+                            insuranceCo: lc.insuranceCo
+                        };
+                    }
+                }
+            }
+
+            const directNo = (lc.addnNo || lc.revisedCoverNoteNo || lc.revisedCoverNote || '').trim().toLowerCase();
+            if (directNo && directNo === cleanNo) {
+                if (!(isSameLc && editingAmendmentNo === 'Original LC')) {
+                    return {
+                        isDuplicate: true,
+                        lcNo: lc.lcNo,
+                        amendmentNo: 'Original LC',
+                        insuranceCo: lc.insuranceCo
+                    };
+                }
+            }
+
+            const origCn = (lc.marineCoverNote || '').trim().toLowerCase();
+            if (origCn && origCn === cleanNo) {
+                return {
+                    isDuplicate: true,
+                    lcNo: lc.lcNo,
+                    amendmentNo: 'Marine Cover Note',
+                    insuranceCo: lc.insuranceCo
+                };
+            }
+        }
+
+        return null;
+    }, [amendmentFormData.addnNo, lcRecords, selectedAmendmentLcId, editingAmendmentNo]);
+
     const prevMilestoneForAmendment = useMemo(() => {
         if (!selectedLcForAmendment) return null;
         const currentAmendments = [...(selectedLcForAmendment.amendments || [])];
@@ -7328,6 +7460,10 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         }
         if (!amendmentFormData.amendmentNo || !amendmentFormData.amendmentDate) {
             addNotification?.('Amendment Number and Date are required.', 'error');
+            return;
+        }
+        if (duplicateRevisedCoverNoteInfo) {
+            alert(`Cannot save: Duplicate Revised Cover Note Number detected. Already used in LC #${duplicateRevisedCoverNoteInfo.lcNo || 'N/A'}${duplicateRevisedCoverNoteInfo.amendmentNo ? ` (${duplicateRevisedCoverNoteInfo.amendmentNo})` : ''}. Please use a unique Revised Cover Note number.`);
             return;
         }
         setIsSaving(true);
@@ -10754,16 +10890,115 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         </div>
 
                                         <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="space-y-1.5 text-left">
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Revised Cover Note Number</label>
-                                                <input
-                                                    type="text"
-                                                    name="addnNo"
-                                                    value={amendmentFormData.addnNo || ''}
-                                                    onChange={(e) => setAmendmentFormData(prev => ({ ...prev, addnNo: e.target.value }))}
-                                                    placeholder="e.g. 01"
-                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                                />
+                                            <div className="space-y-1.5 text-left relative dropdown-container" ref={amendmentAddnRef}>
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Revised Cover Note Number</label>
+                                                    {duplicateRevisedCoverNoteInfo ? (
+                                                        <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                                                            ⚠️ Duplicate Cover Note
+                                                        </span>
+                                                    ) : lastUsedRevisedCoverNote ? (
+                                                        <span className="text-[10px] text-gray-400 font-medium">
+                                                            Last: <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setAmendmentFormData(prev => ({ ...prev, addnNo: lastUsedRevisedCoverNote }));
+                                                                    setActiveDropdown(null);
+                                                                }}
+                                                                className="text-blue-600 hover:text-blue-800 hover:underline font-mono font-bold transition-colors"
+                                                                title="Click to fill last revised cover note"
+                                                            >
+                                                                {lastUsedRevisedCoverNote}
+                                                            </button>
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        name="addnNo"
+                                                        value={amendmentFormData.addnNo || ''}
+                                                        onChange={(e) => {
+                                                            setAmendmentFormData(prev => ({ ...prev, addnNo: e.target.value }));
+                                                            setActiveDropdown('amendmentAddnNo');
+                                                            setHighlightedIndex(-1);
+                                                        }}
+                                                        onFocus={() => {
+                                                            setActiveDropdown('amendmentAddnNo');
+                                                            setHighlightedIndex(-1);
+                                                        }}
+                                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'amendmentAddnNo', 'amendmentAddnNo', filteredRevisedCoverNotes.map(n => n.no))}
+                                                        autoComplete="off"
+                                                        placeholder="e.g. 01"
+                                                        className={`w-full px-4 py-2.5 bg-white border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all font-medium pr-16 text-sm ${duplicateRevisedCoverNoteInfo ? 'border-red-500 bg-red-50/30 text-red-900 focus:ring-red-500' : 'border-gray-200 focus:ring-blue-500'}`}
+                                                    />
+                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                        {amendmentFormData.addnNo && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setAmendmentFormData(prev => ({ ...prev, addnNo: '' }))}
+                                                                className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                                                title="Clear"
+                                                            >
+                                                                <XIcon className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setActiveDropdown(activeDropdown === 'amendmentAddnNo' ? null : 'amendmentAddnNo');
+                                                                setHighlightedIndex(-1);
+                                                            }}
+                                                            className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                                                            title="Toggle revised cover notes"
+                                                        >
+                                                            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'amendmentAddnNo' ? 'rotate-180 text-blue-600' : ''}`} />
+                                                        </button>
+                                                    </div>
+
+                                                    {activeDropdown === 'amendmentAddnNo' && filteredRevisedCoverNotes.length > 0 && (
+                                                        <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-52 overflow-y-auto custom-scrollbar p-1">
+                                                            {filteredRevisedCoverNotes.map((item, idx) => {
+                                                                const isLastUsed = idx === 0 || item.no === lastUsedRevisedCoverNote;
+                                                                const isSelected = amendmentFormData.addnNo === item.no;
+                                                                return (
+                                                                    <button
+                                                                        key={item.no || idx}
+                                                                        type="button"
+                                                                        onMouseDown={() => {
+                                                                            setAmendmentFormData(prev => ({ ...prev, addnNo: item.no }));
+                                                                            setActiveDropdown(null);
+                                                                        }}
+                                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                        className={`w-full px-3.5 py-2.5 rounded-lg text-left text-sm flex items-center justify-between transition-colors ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                                                                    >
+                                                                        <div className="flex flex-col">
+                                                                            <span className="font-mono text-sm font-bold">{item.no}</span>
+                                                                            <span className="text-[10px] text-gray-400">
+                                                                                {item.lcNo ? `LC: ${item.lcNo}` : ''} {item.ins ? `• ${item.ins}` : ''}
+                                                                            </span>
+                                                                        </div>
+                                                                        {isLastUsed && (
+                                                                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 shrink-0 ml-2">
+                                                                                Last Used
+                                                                            </span>
+                                                                        )}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {duplicateRevisedCoverNoteInfo && (
+                                                    <p className="text-xs text-red-600 font-semibold flex items-center gap-1 mt-1 animate-in fade-in duration-200">
+                                                        <svg className="w-3.5 h-3.5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                        </svg>
+                                                        <span>
+                                                            Duplicate Revised Cover Note detected! Already used in LC #{duplicateRevisedCoverNoteInfo.lcNo || 'N/A'}{duplicateRevisedCoverNoteInfo.amendmentNo ? ` (${duplicateRevisedCoverNoteInfo.amendmentNo})` : ''}.
+                                                        </span>
+                                                    </p>
+                                                )}
                                             </div>
 
                                             <div className="space-y-1.5">
@@ -11130,8 +11365,8 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         </button>
                                         <button
                                             type="submit"
-                                            disabled={isSaving}
-                                            className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            disabled={isSaving || !!duplicateRevisedCoverNoteInfo}
+                                            className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${(isSaving || !!duplicateRevisedCoverNoteInfo) ? 'grayscale opacity-50 cursor-not-allowed' : ''}`}
                                         >
                                             {isSaving ? 'Saving...' : 'Save Amendment'}
                                         </button>
