@@ -31,6 +31,20 @@ const numberToWordsUSD = (amount) => {
     return words.replace(/\s+/g, ' ').trim() + '.';
 };
 
+const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fontStyle = 'bold') => {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return maxSize;
+    doc.setFont('helvetica', fontStyle);
+    let size = maxSize;
+    while (size > minSize) {
+        doc.setFontSize(size);
+        if (doc.getTextWidth(clean) <= maxWidth) return size;
+        size -= 0.25;
+    }
+    doc.setFontSize(minSize);
+    return minSize;
+};
+
 export const generatePI2PDF = (record) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -667,31 +681,52 @@ export const generatePI2PDF = (record) => {
                     pNameSize = 11; hsCodeFS = 8; nameGap = 5;
                 }
 
-                // Product Name — large, bold, centered
+                // Product Name — auto-adjusted, large, bold, centered
+                const maxPNameWidth = cellWidth - 10;
+                const adjustedPNameSize = fitFontSizeOneLine(doc, pName, maxPNameWidth, pNameSize, 8, 'bold');
                 doc.setFont("helvetica", "bold");
-                doc.setFontSize(pNameSize);
-                doc.text(pName, centerX, drawY, { align: 'center' });
-
-                // Add underline under product name
+                doc.setFontSize(adjustedPNameSize);
                 const pWidth = doc.getTextWidth(pName);
-                doc.setLineWidth(0.3);
-                doc.line(centerX - pWidth / 2, drawY + 1.8, centerX + pWidth / 2, drawY + 1.8);
-                doc.setLineWidth(0.1);
+
+                if (pWidth <= maxPNameWidth) {
+                    doc.text(pName, centerX, drawY, { align: 'center' });
+                    doc.setLineWidth(0.3);
+                    doc.line(centerX - pWidth / 2, drawY + 1.8, centerX + pWidth / 2, drawY + 1.8);
+                    doc.setLineWidth(0.1);
+                } else {
+                    const wrapFS = 9.5;
+                    doc.setFontSize(wrapFS);
+                    const lines = doc.splitTextToSize(pName, maxPNameWidth);
+                    const lineSpacing = 3.8;
+                    const startY = drawY - ((lines.length - 1) * lineSpacing) / 2;
+                    lines.forEach((line, lIdx) => {
+                        doc.text(line, centerX, startY + (lIdx * lineSpacing), { align: 'center' });
+                    });
+                    const lastLineY = startY + ((lines.length - 1) * lineSpacing);
+                    const lastLineWidth = doc.getTextWidth(lines[lines.length - 1]);
+                    doc.setLineWidth(0.3);
+                    doc.line(centerX - lastLineWidth / 2, lastLineY + 1.8, centerX + lastLineWidth / 2, lastLineY + 1.8);
+                    doc.setLineWidth(0.1);
+                }
 
                 drawY += nameGap;
 
                 // HS Code
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(hsCodeFS);
                 const isIndHsEnabled = prod.showIndHsCode === true && record.showIndHsCode !== false;
                 if (prod.hsCodeInd && isIndHsEnabled) {
                     const bdHsLine = `H.S. CODE NO.${prod.hsCode || ''} (BD)`;
                     const indHsLine = `H.S. CODE NO.${prod.hsCodeInd} (IND)`;
+                    const bdFS = fitFontSizeOneLine(doc, bdHsLine, maxPNameWidth, hsCodeFS, 7, 'bold');
+                    doc.setFontSize(bdFS);
                     doc.text(bdHsLine, centerX, drawY, { align: 'center' });
                     drawY += 4.5;
+                    const indFS = fitFontSizeOneLine(doc, indHsLine, maxPNameWidth, hsCodeFS, 7, 'bold');
+                    doc.setFontSize(indFS);
                     doc.text(indHsLine, centerX, drawY, { align: 'center' });
                 } else {
                     const hsCodeLine = `H.S. CODE NO.${prod.hsCode || ''}`;
+                    const curHsFS = fitFontSizeOneLine(doc, hsCodeLine, maxPNameWidth, hsCodeFS, 7, 'bold');
+                    doc.setFontSize(curHsFS);
                     doc.text(hsCodeLine, centerX, drawY, { align: 'center' });
                 }
                 const hasFreight = prod.freight && parseFloat(prod.freight) > 0;

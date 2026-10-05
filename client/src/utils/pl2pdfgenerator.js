@@ -1127,27 +1127,50 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                     pNameSize = 12; hsCodeFS = 10; nameGap = 5.5;
                 }
 
+                const maxPNameWidth = cellWidth - 10;
+                const adjustedPNameSize = fitFontSizeOneLine(doc, pName, maxPNameWidth, pNameSize, 8, 'bold');
                 doc.setFont("helvetica", "bold");
-                doc.setFontSize(pNameSize);
-                doc.text(pName, centerX, drawY, { align: 'center' });
-
+                doc.setFontSize(adjustedPNameSize);
                 const pWidth = doc.getTextWidth(pName);
-                doc.setLineWidth(0.3);
-                doc.line(centerX - pWidth / 2, drawY + 1.5, centerX + pWidth / 2, drawY + 1.5);
-                doc.setLineWidth(0.1);
+
+                if (pWidth <= maxPNameWidth) {
+                    doc.text(pName, centerX, drawY, { align: 'center' });
+                    doc.setLineWidth(0.3);
+                    doc.line(centerX - pWidth / 2, drawY + 1.5, centerX + pWidth / 2, drawY + 1.5);
+                    doc.setLineWidth(0.1);
+                } else {
+                    const wrapFS = 9.5;
+                    doc.setFontSize(wrapFS);
+                    const lines = doc.splitTextToSize(pName, maxPNameWidth);
+                    const lineSpacing = 3.8;
+                    const startY = drawY - ((lines.length - 1) * lineSpacing) / 2;
+                    lines.forEach((line, lIdx) => {
+                        doc.text(line, centerX, startY + (lIdx * lineSpacing), { align: 'center' });
+                    });
+                    const lastLineY = startY + ((lines.length - 1) * lineSpacing);
+                    const lastLineWidth = doc.getTextWidth(lines[lines.length - 1]);
+                    doc.setLineWidth(0.3);
+                    doc.line(centerX - lastLineWidth / 2, lastLineY + 1.5, centerX + lastLineWidth / 2, lastLineY + 1.5);
+                    doc.setLineWidth(0.1);
+                }
 
                 drawY += nameGap;
 
-                doc.setFontSize(hsCodeFS);
                 const isIndHsEnabled = (prod.showIndHsCode === true || pi?.productsList?.[pIdx]?.showIndHsCode === true);
                 if ((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && isIndHsEnabled) {
                     const bdHsLine = `H.S. CODE NO.${prod.hsCode || ''} (BD)`;
                     const indHsLine = `H.S. CODE NO.${prod.hsCodeInd || pi.productsList[pIdx].hsCodeInd} (IND)`;
+                    const bdFS = fitFontSizeOneLine(doc, bdHsLine, maxPNameWidth, hsCodeFS, 7, 'bold');
+                    doc.setFontSize(bdFS);
                     doc.text(bdHsLine, centerX, drawY, { align: 'center' });
                     drawY += 5;
+                    const indFS = fitFontSizeOneLine(doc, indHsLine, maxPNameWidth, hsCodeFS, 7, 'bold');
+                    doc.setFontSize(indFS);
                     doc.text(indHsLine, centerX, drawY, { align: 'center' });
                 } else {
                     const hsCodeLine = `H.S. CODE NO.${prod.hsCode || ''}`;
+                    const curHsFS = fitFontSizeOneLine(doc, hsCodeLine, maxPNameWidth, hsCodeFS, 7, 'bold');
+                    doc.setFontSize(curHsFS);
                     doc.text(hsCodeLine, centerX, drawY, { align: 'center' });
                 }
                 const hasFreight = prod.freight && parseFloat(prod.freight) > 0;

@@ -37,19 +37,20 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
     const canApprove = hasPermission(currentUser, 'paymentCollection', 'special') || hasPermission(currentUser, 'paymentCollection', 'approve') || isAdmin;
     const canApproveEditRequest = hasPermission(currentUser, 'paymentCollection', 'approveEditRequest') || isAdmin;
     const canViewEditRequest = hasPermission(currentUser, 'paymentCollection', 'editRequest') || hasPermission(currentUser, 'paymentCollection', 'approveEditRequest') || canApprove;
-    const canViewPaymentRequest = hasPermission(currentUser, 'paymentCollection', 'paymentRequest') || hasPermission(currentUser, 'paymentCollection', 'paymentApprovalRequest') || canApprove;
+    const canViewPaymentRequest = hasPermission(currentUser, 'paymentCollection', 'paymentRequest') || hasPermission(currentUser, 'paymentCollection', 'paymentApprovalRequest') || canApprove || canApproveFirst || canApproveSecond;
     const canShowEntryBy = isAdmin || (currentUser?.role || '').toLowerCase() === 'incharge' || hasPermission(currentUser, 'paymentCollection', 'showEntryBy');
 
     const canApproveFirst = hasPermission(currentUser, 'paymentCollection', 'firstApprove');
     const canApproveSecond = hasPermission(currentUser, 'paymentCollection', 'secondApprove');
 
     const showRequestedApprovalButtons = (group) => {
+        if (!group) return false;
         if (isAdmin) return true;
 
         // Only Admin can approve self entry; non-admin users cannot approve their own entry
         const item = group.items?.[0] || group;
-        const entryBy = String(item.entryBy || '').toLowerCase().trim();
-        const entryByName = String(item.entryByName || '').toLowerCase().trim();
+        const entryBy = String(item.entryBy || group.entryBy || '').toLowerCase().trim();
+        const entryByName = String(item.entryByName || group.entryByName || '').toLowerCase().trim();
         const myIdentifiers = [
             currentUser?.username,
             currentUser?.employeeId,
@@ -61,8 +62,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         const isSelfEntry = myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName);
         if (isSelfEntry) return false;
         
-        const entryRole = (group.items?.[0]?.entryByRole || '').toLowerCase();
-        const smApproved = group.items?.[0]?.smApproved === true;
+        const entryRole = (group.items?.[0]?.entryByRole || item.entryByRole || group.entryByRole || '').toLowerCase();
+        const smApproved = group.items?.[0]?.smApproved === true || item.smApproved === true || group.smApproved === true;
         const currentUserRole = (currentUser?.role || '').toLowerCase();
 
         const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
@@ -72,8 +73,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
         if (smApproved) {
             // Check if current user is the one who did 1st approval
-            const smApprovedBy = String(item.smApprovedBy || '').toLowerCase().trim();
-            const smApprovedByName = String(item.smApprovedByName || '').toLowerCase().trim();
+            const smApprovedBy = String(item.smApprovedBy || group.items?.[0]?.smApprovedBy || group.smApprovedBy || '').toLowerCase().trim();
+            const smApprovedByName = String(item.smApprovedByName || group.items?.[0]?.smApprovedByName || group.smApprovedByName || '').toLowerCase().trim();
             const isFirstApprover = (smApprovedBy || smApprovedByName) &&
                 (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
 
@@ -107,6 +108,23 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             if (currentUserRole === 'sales manager') return false;
             return currentUserRole === 'incharge' || currentUserRole === 'head of sales' || currentUserRole === 'accounts manager' || currentUserRole === 'account manager' || canApproveSecond;
         }
+
+        return false;
+    };
+
+    const canUserActOnGroup = (group) => {
+        if (!group) return false;
+        const status = (group.status || '').toLowerCase();
+        const isReq = status === 'requested';
+        const isEditReq = (group.isEdited === true || group.isEdited === 'true') && !isReq;
+
+        if (isReq) {
+            return !!showRequestedApprovalButtons(group);
+        }
+        if (isEditReq) {
+            return !!(canApproveEditRequest || canApprove);
+        }
+        return false;
     };
 
     // Creator can edit their own entry while it's still pending approval (before 1st SM approval)
@@ -209,7 +227,13 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         return () => clearTimeout(t1);
     }, [highlightId, payments]);
 
-    const handleLongPressStart = (groupKey) => {
+    const handleLongPressStart = (groupOrKey) => {
+        const targetGroup = typeof groupOrKey === 'object' && groupOrKey !== null
+            ? groupOrKey
+            : displayedGroups.find(g => g.key === groupOrKey);
+        if (!targetGroup || !canUserActOnGroup(targetGroup)) return;
+        const groupKey = targetGroup.key;
+
         isLongPressRef.current = false;
         if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
         longPressTimerRef.current = setTimeout(() => {
@@ -1314,14 +1338,14 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         const pendingSelectedGroups = displayedGroups.filter(group => {
             const isSelected = selectedItems.has(group.key);
             const isPending = (group.status || '').toLowerCase() === 'requested' || group.isEdited === true;
-            return isSelected && isPending;
+            return isSelected && isPending && canUserActOnGroup(group);
         });
 
         if (pendingSelectedGroups.length === 0) {
             setConfirmModalConfig({
-                title: 'No Pending Requests Selected',
+                title: 'No Actionable Requests Selected',
                 message: (requestedCount > 0 || editRequestedCount > 0)
-                    ? `The selected items are already accepted. You have pending request(s) waiting for approval.`
+                    ? 'The selected items are already approved or cannot be approved by you at this stage.'
                     : 'The selected items are already accepted and there are no pending requests.',
                 type: 'info',
                 confirmText: 'OK',
@@ -1347,31 +1371,66 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             setIsSubmitting(true);
             setConfirmModalConfig(null);
 
+            const validGroups = (groupsToAccept || []).filter(canUserActOnGroup);
+            if (validGroups.length === 0) {
+                alert('None of the selected items can be approved by you.');
+                return;
+            }
+
             const actorName = currentUser?.name || currentUser?.username || 'Admin';
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB');
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+            const myIdentifiers = [
+                currentUser?.username,
+                currentUser?.employeeId,
+                currentUser?.id,
+                currentUser?.name,
+                currentUser?.nameEn
+            ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
             // Instant optimistic update
-            const acceptGroupReceipts = new Set(groupsToAccept.map(g => g.receiptNo).filter(Boolean));
+            const acceptGroupReceipts = new Set(validGroups.map(g => g.receiptNo).filter(Boolean));
             const acceptItemIds = new Set();
-            groupsToAccept.forEach(g => (g.items || []).forEach(i => { if (i.id) acceptItemIds.add(i.id); }));
+            validGroups.forEach(g => (g.items || []).forEach(i => { if (i.id) acceptItemIds.add(i.id); }));
             setPayments(prev => (prev || []).map(p => {
                 if ((p.id && acceptItemIds.has(p.id)) || (p.receiptNo && acceptGroupReceipts.has(p.receiptNo))) {
-                    return {
-                        ...p,
-                        status: 'Accepted',
-                        isEdited: false,
-                        approvedBy: currentUser?.username || 'admin',
-                        approvedByName: currentUser?.name || currentUser?.username || 'Admin'
-                    };
+                    const entryRole = (p.entryByRole || '').toLowerCase();
+                    const smApproved = p.smApproved === true;
+                    const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+                    const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+
+                    if (isSMApprovalStep) {
+                        return {
+                            ...p,
+                            smApproved: true,
+                            smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                            smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                        };
+                    } else {
+                        const smApprovedBy = String(p.smApprovedBy || '').toLowerCase().trim();
+                        const smApprovedByName = String(p.smApprovedByName || '').toLowerCase().trim();
+                        const isFirstApprover = smApproved && (smApprovedBy || smApprovedByName) &&
+                            (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
+                        if (isFirstApprover && !isAdmin) {
+                            return p;
+                        }
+                        return {
+                            ...p,
+                            status: 'Accepted',
+                            isEdited: false,
+                            approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                            approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                        };
+                    }
                 }
                 return p;
             }));
             refreshPendingIndicators?.();
 
             const customerMap = {};
-            groupsToAccept.forEach(group => {
+            validGroups.forEach(group => {
                 if (!customerMap[group.customerId]) {
                     customerMap[group.customerId] = [];
                 }
@@ -1411,6 +1470,13 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                     smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
                                 };
                             } else {
+                                const smApprovedBy = String(p.smApprovedBy || '').toLowerCase().trim();
+                                const smApprovedByName = String(p.smApprovedByName || '').toLowerCase().trim();
+                                const isFirstApprover = smApproved && (smApprovedBy || smApprovedByName) &&
+                                    (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
+                                if (isFirstApprover && !isAdmin) {
+                                    return p;
+                                }
                                 return {
                                     ...rest,
                                     status: 'Accepted',
@@ -1430,7 +1496,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             if (addNotification) {
                 await addNotification(
                     'Bulk Payment Collection Accepted',
-                    `${dateStr} | ${timeStr} | ${actorName} bulk accepted ${groupsToAccept.length} payment collection request(s)`,
+                    `${dateStr} | ${timeStr} | ${actorName} bulk accepted ${validGroups.length} payment collection request(s)`,
                     ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
                     [],
                     true,
@@ -1462,13 +1528,13 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         const pendingSelectedGroups = displayedGroups.filter(group => {
             const isSelected = selectedItems.has(group.key);
             const isPending = (group.status || '').toLowerCase() === 'requested' || group.isEdited === true;
-            return isSelected && isPending;
+            return isSelected && isPending && canUserActOnGroup(group);
         });
 
         if (pendingSelectedGroups.length === 0) {
             setConfirmModalConfig({
                 title: 'No Pending Requests Selected',
-                message: 'None of the selected items are pending requests.',
+                message: 'None of the selected items can be rejected by you at this time.',
                 type: 'info',
                 confirmText: 'OK',
                 onConfirm: () => setConfirmModalConfig(null),
@@ -1493,20 +1559,23 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             setIsSubmitting(true);
             setConfirmModalConfig(null);
 
+            const validGroups = (groupsToReject || []).filter(canUserActOnGroup);
+            if (validGroups.length === 0) return;
+
             const actorName = currentUser?.name || currentUser?.username || 'Admin';
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB');
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             // Instant optimistic update
-            const rejectGroupReceipts = new Set(groupsToReject.map(g => g.receiptNo).filter(Boolean));
+            const rejectGroupReceipts = new Set(validGroups.map(g => g.receiptNo).filter(Boolean));
             const rejectItemIds = new Set();
-            groupsToReject.forEach(g => (g.items || []).forEach(i => { if (i.id) rejectItemIds.add(i.id); }));
+            validGroups.forEach(g => (g.items || []).forEach(i => { if (i.id) rejectItemIds.add(i.id); }));
             setPayments(prev => (prev || []).filter(p => !((p.id && rejectItemIds.has(p.id)) || (p.receiptNo && rejectGroupReceipts.has(p.receiptNo)))));
             refreshPendingIndicators?.();
 
             const customerMap = {};
-            groupsToReject.forEach(group => {
+            validGroups.forEach(group => {
                 if (!customerMap[group.customerId]) {
                     customerMap[group.customerId] = [];
                 }
@@ -1574,7 +1643,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             if (addNotification) {
                 await addNotification(
                     'Bulk Payment Collection Rejected',
-                    `${dateStr} | ${timeStr} | ${actorName} bulk rejected ${groupsToReject.length} payment collection request(s)`,
+                    `${dateStr} | ${timeStr} | ${actorName} bulk rejected ${validGroups.length} payment collection request(s)`,
                     ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
                     [],
                     true,
@@ -2070,6 +2139,12 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     isEdited: payment.isEdited,
                     entryBy: payment.entryBy || payment.entryByName || '',
                     entryByName: payment.entryByName || payment.entryBy || '',
+                    entryByRole: payment.entryByRole || '',
+                    smApproved: payment.smApproved === true,
+                    smApprovedBy: payment.smApprovedBy || '',
+                    smApprovedByName: payment.smApprovedByName || '',
+                    approvedBy: payment.approvedBy || '',
+                    approvedByName: payment.approvedByName || '',
                     editedBy: payment.editedBy || payment.editedByName || '',
                     editedByName: payment.editedByName || payment.editedBy || '',
                     items: []
@@ -2081,6 +2156,20 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 group.status = 'Requested';
             }
             group.isEdited = group.isEdited || payment.isEdited === true || payment.isEdited === 'true';
+            if (payment.smApproved) {
+                group.smApproved = true;
+            }
+            if (payment.entryByRole && !group.entryByRole) {
+                group.entryByRole = payment.entryByRole;
+            }
+            if (payment.smApprovedBy && !group.smApprovedBy) {
+                group.smApprovedBy = payment.smApprovedBy;
+                group.smApprovedByName = payment.smApprovedByName;
+            }
+            if (payment.approvedBy && !group.approvedBy) {
+                group.approvedBy = payment.approvedBy;
+                group.approvedByName = payment.approvedByName;
+            }
             // Keep the most-recent editedBy
             if (payment.editedBy || payment.editedByName) {
                 group.editedBy = payment.editedBy || payment.editedByName || group.editedBy;
@@ -2089,6 +2178,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         });
         return groups;
     }, [filteredPayments]);
+
+    const selectableGroups = useMemo(() => {
+        return displayedGroups.filter(canUserActOnGroup);
+    }, [displayedGroups, currentUser, canApproveFirst, canApproveSecond, canApprove, canApproveEditRequest, isAdmin]);
+
 
     const calculateCustomerBalance = (customer) => {
         if (!customer) return 0;
@@ -2506,28 +2600,24 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                 </span>
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
-                                {canApprove && (
-                                    <button
-                                        onClick={handleBulkAccept}
-                                        disabled={isSubmitting}
-                                        className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all disabled:opacity-50 cursor-pointer"
-                                        title="Accept all selected payment requests"
-                                    >
-                                        <CheckIcon className="w-4 h-4" />
-                                        <span>Bulk Accept ({selectedItems.size})</span>
-                                    </button>
-                                )}
-                                {canApprove && (
-                                    <button
-                                        onClick={handleBulkReject}
-                                        disabled={isSubmitting}
-                                        className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-red-600/20 transition-all disabled:opacity-50 cursor-pointer"
-                                        title="Reject all selected payment requests"
-                                    >
-                                        <XIcon className="w-4 h-4" />
-                                        <span>Bulk Reject ({selectedItems.size})</span>
-                                    </button>
-                                )}
+                                <button
+                                    onClick={handleBulkAccept}
+                                    disabled={isSubmitting}
+                                    className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                                    title="Accept all selected payment requests"
+                                >
+                                    <CheckIcon className="w-4 h-4" />
+                                    <span>Bulk Accept ({selectedItems.size})</span>
+                                </button>
+                                <button
+                                    onClick={handleBulkReject}
+                                    disabled={isSubmitting}
+                                    className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-red-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                                    title="Reject all selected payment requests"
+                                >
+                                    <XIcon className="w-4 h-4" />
+                                    <span>Bulk Reject ({selectedItems.size})</span>
+                                </button>
                                 <button
                                     onClick={() => setSelectedItems(new Set())}
                                     className="px-3.5 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
@@ -2548,15 +2638,16 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                             <th className="sale-mgmt-th w-10 text-center">
                                                 <input
                                                     type="checkbox"
-                                                    checked={displayedGroups.length > 0 && displayedGroups.every(g => selectedItems.has(g.key))}
+                                                    checked={selectableGroups.length > 0 && selectableGroups.every(g => selectedItems.has(g.key))}
+                                                    disabled={selectableGroups.length === 0}
                                                     onChange={(e) => {
                                                         if (e.target.checked) {
-                                                            setSelectedItems(new Set(displayedGroups.map(g => g.key)));
+                                                            setSelectedItems(new Set(selectableGroups.map(g => g.key)));
                                                         } else {
                                                             setSelectedItems(new Set());
                                                         }
                                                     }}
-                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
                                                 />
                                             </th>
                                         )}
@@ -2612,10 +2703,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                             return (
                                                 <tr
                                                     key={group.key}
-                                                    onMouseDown={() => handleLongPressStart(group.key)}
+                                                    onMouseDown={() => handleLongPressStart(group)}
                                                     onMouseUp={handleLongPressEnd}
                                                     onMouseLeave={handleLongPressEnd}
-                                                    onTouchStart={() => handleLongPressStart(group.key)}
+                                                    onTouchStart={() => handleLongPressStart(group)}
                                                     onTouchEnd={handleLongPressEnd}
                                                     onTouchMove={handleLongPressEnd}
                                                     onClick={(e) => {
@@ -2625,6 +2716,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                         }
                                                         if (selectedItems.size > 0) {
                                                             e.stopPropagation();
+                                                            if (!canUserActOnGroup(group)) return;
                                                             const newSelected = new Set(selectedItems);
                                                             if (newSelected.has(group.key)) {
                                                                 newSelected.delete(group.key);
@@ -2642,20 +2734,24 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                 >
                                                     {selectedItems.size > 0 && (
                                                         <td className="px-3 py-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedItems.has(group.key)}
-                                                                onChange={(e) => {
-                                                                    const newSelected = new Set(selectedItems);
-                                                                    if (e.target.checked) {
-                                                                        newSelected.add(group.key);
-                                                                    } else {
-                                                                        newSelected.delete(group.key);
-                                                                    }
-                                                                    setSelectedItems(newSelected);
-                                                                }}
-                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                            />
+                                                            {canUserActOnGroup(group) ? (
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedItems.has(group.key)}
+                                                                    onChange={(e) => {
+                                                                        const newSelected = new Set(selectedItems);
+                                                                        if (e.target.checked) {
+                                                                            newSelected.add(group.key);
+                                                                        } else {
+                                                                            newSelected.delete(group.key);
+                                                                        }
+                                                                        setSelectedItems(newSelected);
+                                                                    }}
+                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                />
+                                                            ) : (
+                                                                <span className="text-gray-300 text-xs select-none" title="Not available for approval by you">—</span>
+                                                            )}
                                                         </td>
                                                     )}
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center whitespace-nowrap`}>
@@ -2895,10 +2991,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                         <div
                                             key={group.key}
                                             className={`mobile-card transition-all duration-300 select-none ${isExpanded ? 'expanded' : 'collapsed'} ${selectedItems.has(group.key) ? 'ring-2 ring-blue-500 bg-blue-50/30' : ''}`}
-                                            onMouseDown={() => handleLongPressStart(group.key)}
+                                            onMouseDown={() => handleLongPressStart(group)}
                                             onMouseUp={handleLongPressEnd}
                                             onMouseLeave={handleLongPressEnd}
-                                            onTouchStart={() => handleLongPressStart(group.key)}
+                                            onTouchStart={() => handleLongPressStart(group)}
                                             onTouchEnd={handleLongPressEnd}
                                             onTouchMove={handleLongPressEnd}
                                             onClick={(e) => {
@@ -2908,6 +3004,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                 }
                                                 if (selectedItems.size > 0) {
                                                     e.stopPropagation();
+                                                    if (!canUserActOnGroup(group)) return;
                                                     const newSelected = new Set(selectedItems);
                                                     if (newSelected.has(group.key)) {
                                                         newSelected.delete(group.key);
@@ -2923,20 +3020,24 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                             <div className="mobile-card-header">
                                                 {selectedItems.size > 0 && (
                                                     <div onClick={(e) => e.stopPropagation()} className="pr-2 flex items-center">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedItems.has(group.key)}
-                                                            onChange={(e) => {
-                                                                const newSelected = new Set(selectedItems);
-                                                                if (e.target.checked) {
-                                                                    newSelected.add(group.key);
-                                                                } else {
-                                                                    newSelected.delete(group.key);
-                                                                }
-                                                                setSelectedItems(newSelected);
-                                                            }}
-                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                        />
+                                                        {canUserActOnGroup(group) ? (
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedItems.has(group.key)}
+                                                                onChange={(e) => {
+                                                                    const newSelected = new Set(selectedItems);
+                                                                    if (e.target.checked) {
+                                                                        newSelected.add(group.key);
+                                                                    } else {
+                                                                        newSelected.delete(group.key);
+                                                                    }
+                                                                    setSelectedItems(newSelected);
+                                                                }}
+                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            />
+                                                        ) : (
+                                                            <span className="text-gray-300 text-xs select-none">—</span>
+                                                        )}
                                                     </div>
                                                 )}
                                                 <div className="flex-1 min-w-0 pr-2">
