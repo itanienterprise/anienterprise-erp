@@ -1940,6 +1940,8 @@ function App() {
         'cost-of-goods': ['cost-of-goods', 'costOfGoods', 'lc-management'],
         'costofgoods': ['cost-of-goods', 'costOfGoods', 'lc-management'],
         'cog': ['cost-of-goods', 'costOfGoods', 'lc-management'],
+        'tokens': ['tokens'],
+        'token': ['tokens'],
         'notifications': ['notifications'],
       };
 

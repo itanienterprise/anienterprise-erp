@@ -108,6 +108,7 @@ const memoryCache = {
   cnfPayments: null,
   returns: null,
   costOfGoods: null,
+  tokens: null,
   pendingIndicators: null,
   pendingTimestamp: 0
 };
@@ -149,6 +150,9 @@ const invalidateMemoryCache = (modName) => {
   }
   if (['cost-of-goods', 'costofgoods', 'cog'].includes(mod)) {
     memoryCache.costOfGoods = null;
+  }
+  if (['token', 'tokens'].includes(mod)) {
+    memoryCache.tokens = null;
   }
 };
 
@@ -3495,6 +3499,9 @@ apiRouter.post('/api/tokens', async (req, res) => {
     const encryptedData = encryptData(payload);
     const newToken = new Token({ data: encryptedData });
     const savedToken = await newToken.save();
+    invalidateMemoryCache('tokens');
+    broadcastUpdate('tokens', 'create', { _id: savedToken._id, tokenNo: payload.tokenNo });
+    req._broadcastDone = true;
     res.status(201).json({ ...payload, _id: savedToken._id, createdAt: savedToken.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -3503,11 +3510,15 @@ apiRouter.post('/api/tokens', async (req, res) => {
 
 apiRouter.get('/api/tokens', async (req, res) => {
   try {
+    if (memoryCache.tokens && !req.query._t && !req.query._nocache) {
+      return res.json(memoryCache.tokens);
+    }
     const records = await Token.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
+    memoryCache.tokens = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3519,6 +3530,9 @@ apiRouter.put('/api/tokens/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedToken = await Token.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedToken) return res.status(404).json({ message: 'Token not found' });
+    invalidateMemoryCache('tokens');
+    broadcastUpdate('tokens', 'update', { _id: updatedToken._id, tokenNo: req.body.tokenNo });
+    req._broadcastDone = true;
     res.json({ ...req.body, _id: updatedToken._id, createdAt: updatedToken.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -3529,6 +3543,9 @@ apiRouter.delete('/api/tokens/:id', async (req, res) => {
   try {
     const deletedToken = await Token.findByIdAndDelete(req.params.id);
     if (!deletedToken) return res.status(404).json({ message: 'Token not found' });
+    invalidateMemoryCache('tokens');
+    broadcastUpdate('tokens', 'delete', { _id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Token deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

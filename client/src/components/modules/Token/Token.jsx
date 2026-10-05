@@ -8,8 +8,8 @@ import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Token.css';
 import { hasPermission } from '../../../utils/permissionHelper';
-import CustomDatePicker from '../../shared/CustomDatePicker';
 import { decryptData } from '../../../utils/encryption';
+import { getSocket } from '../../../utils/socket';
 
 const CATEGORIES = [
     'Entry Edit / Update',
@@ -231,16 +231,47 @@ const Token = ({ currentUser, addNotification }) => {
     useEffect(() => {
         fetchTokens();
         fetchEmployees();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['tokens', 'token', 'all'].includes(mod)) {
+                fetchTokens(true);
+            }
+            if (['employees', 'employee', 'all'].includes(mod)) {
+                fetchEmployees();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchTokens(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
-    const fetchTokens = async () => {
-        setIsLoading(true);
+    const fetchTokens = async (silent = false) => {
+        if (!silent) {
+            setIsLoading(true);
+        }
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/tokens`);
+            const res = await axios.get(`${API_BASE_URL}/api/tokens?_t=${Date.now()}`);
             setTokens(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error('Error fetching tokens:', error);
-            if (typeof addNotification === 'function') {
+            if (!silent && typeof addNotification === 'function') {
                 addNotification('Failed to load tokens', 'error');
             }
         } finally {
@@ -250,7 +281,7 @@ const Token = ({ currentUser, addNotification }) => {
 
     const fetchEmployees = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/employees`);
+            const res = await axios.get(`${API_BASE_URL}/api/employees?_t=${Date.now()}`);
             const rawData = Array.isArray(res.data) ? res.data : [];
             const list = rawData.map(e => {
                 let d = e;
@@ -377,6 +408,7 @@ const Token = ({ currentUser, addNotification }) => {
                     addNotification(`Token ${res.data.tokenNo || finalTokenNo} generated and submitted successfully!`, 'success');
                 }
             }
+            fetchTokens(true);
             setShowForm(false);
             setEditingId(null);
             setFormData(emptyForm);
@@ -395,6 +427,7 @@ const Token = ({ currentUser, addNotification }) => {
             await axios.delete(`${API_BASE_URL}/api/tokens/${id}`);
             setTokens(prev => prev.filter(t => t._id !== id));
             setDeleteConfirmId(null);
+            fetchTokens(true);
             if (viewingToken && viewingToken._id === id) {
                 setViewingToken(null);
             }
@@ -419,6 +452,7 @@ const Token = ({ currentUser, addNotification }) => {
             };
             await axios.put(`${API_BASE_URL}/api/tokens/${token._id}`, updated);
             setTokens(prev => prev.map(t => t._id === token._id ? { ...t, ...updated } : t));
+            fetchTokens(true);
             if (viewingToken && viewingToken._id === token._id) {
                 setViewingToken(updated);
             }
