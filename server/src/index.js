@@ -106,6 +106,8 @@ const memoryCache = {
   warehouses: null,
   insurancePayments: null,
   cnfPayments: null,
+  returns: null,
+  costOfGoods: null,
   pendingIndicators: null,
   pendingTimestamp: 0
 };
@@ -123,7 +125,11 @@ const invalidateMemoryCache = (modName) => {
   }
   if (['sale', 'sales'].includes(mod)) memoryCache.sales = null;
   if (['purchase', 'purchases'].includes(mod)) memoryCache.purchases = null;
-  if (['purchase-receive', 'purchase-receives'].includes(mod)) memoryCache.purchaseReceives = null;
+  if (['purchase-receive', 'purchase-receives', 'purchasereceive', 'purchasereceives'].includes(mod)) {
+    memoryCache.purchaseReceives = null;
+    memoryCache.stock = null;
+    memoryCache.warehouses = null;
+  }
   if (['customer', 'customers', 'payment-collection', 'paymentcollection', 'payments', 'pay-to-customer', 'paytocustomer'].includes(mod)) {
     memoryCache.customers = null;
     memoryCache.sales = null;
@@ -134,6 +140,16 @@ const invalidateMemoryCache = (modName) => {
   }
   if (['insurance-payment', 'insurance-payments'].includes(mod)) memoryCache.insurancePayments = null;
   if (['cnf-payment', 'cnf-payments'].includes(mod)) memoryCache.cnfPayments = null;
+  if (['return', 'returns', 'return-product', 'return-products', 'returnproduct', 'returnproducts'].includes(mod)) {
+    memoryCache.returns = null;
+    memoryCache.stock = null;
+    memoryCache.warehouses = null;
+    memoryCache.customers = null;
+    memoryCache.sales = null;
+  }
+  if (['cost-of-goods', 'costofgoods', 'cog'].includes(mod)) {
+    memoryCache.costOfGoods = null;
+  }
 };
 
 const broadcastUpdate = (moduleName, action = 'update', payload = {}) => {
@@ -1800,6 +1816,9 @@ apiRouter.post('/api/cost-of-goods', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newRecord = new CostOfGoods({ data: encryptedData });
     const savedRecord = await newRecord.save();
+    invalidateMemoryCache('cost-of-goods');
+    broadcastUpdate('cost-of-goods', 'create', { _id: savedRecord._id });
+    req._broadcastDone = true;
     res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -1810,6 +1829,9 @@ apiRouter.delete('/api/cost-of-goods/:id', async (req, res) => {
   try {
     const deletedRecord = await CostOfGoods.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Record not found' });
+    invalidateMemoryCache('cost-of-goods');
+    broadcastUpdate('cost-of-goods', 'delete', { _id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1821,6 +1843,9 @@ apiRouter.put('/api/cost-of-goods/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedRecord = await CostOfGoods.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Record not found' });
+    invalidateMemoryCache('cost-of-goods');
+    broadcastUpdate('cost-of-goods', 'update', { _id: updatedRecord._id });
+    req._broadcastDone = true;
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -1829,11 +1854,15 @@ apiRouter.put('/api/cost-of-goods/:id', async (req, res) => {
 
 apiRouter.get('/api/cost-of-goods', async (req, res) => {
   try {
+    if (memoryCache.costOfGoods && !req.query._t && !req.query._nocache) {
+      return res.json(memoryCache.costOfGoods);
+    }
     const records = await CostOfGoods.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
+    memoryCache.costOfGoods = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3313,6 +3342,9 @@ apiRouter.post('/api/purchase-receives', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newPurchaseReceive = new PurchaseReceive({ data: encryptedData });
     await newPurchaseReceive.save();
+    invalidateMemoryCache('purchase-receives');
+    broadcastUpdate('purchase-receives', 'create', { _id: newPurchaseReceive._id, purchaseReceiveNo: req.body.purchaseReceiveNo });
+    req._broadcastDone = true;
     res.status(201).json({ ...req.body, _id: newPurchaseReceive._id, createdAt: newPurchaseReceive.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -3326,6 +3358,9 @@ apiRouter.put('/api/purchase-receives/:id', async (req, res) => {
       data: encryptedData
     }, { returnDocument: 'after' });
     if (!updatedPurchaseReceive) return res.status(404).json({ message: 'Purchase Receive record not found' });
+    invalidateMemoryCache('purchase-receives');
+    broadcastUpdate('purchase-receives', 'update', { _id: updatedPurchaseReceive._id, purchaseReceiveNo: req.body.purchaseReceiveNo });
+    req._broadcastDone = true;
     res.json({ ...req.body, _id: updatedPurchaseReceive._id, createdAt: updatedPurchaseReceive.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -3335,6 +3370,9 @@ apiRouter.put('/api/purchase-receives/:id', async (req, res) => {
 apiRouter.delete('/api/purchase-receives/:id', async (req, res) => {
   try {
     await PurchaseReceive.findByIdAndDelete(req.params.id);
+    invalidateMemoryCache('purchase-receives');
+    broadcastUpdate('purchase-receives', 'delete', { _id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Purchase Receive deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3343,7 +3381,7 @@ apiRouter.delete('/api/purchase-receives/:id', async (req, res) => {
 
 apiRouter.get('/api/purchase-receives', async (req, res) => {
   try {
-    if (memoryCache.purchaseReceives) {
+    if (memoryCache.purchaseReceives && !req.query._t && !req.query._nocache) {
       return res.json(memoryCache.purchaseReceives);
     }
     const records = await PurchaseReceive.find().sort({ createdAt: -1 });
@@ -3367,6 +3405,9 @@ apiRouter.post('/api/returns', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newReturn = new Return({ data: encryptedData });
     const savedReturn = await newReturn.save();
+    invalidateMemoryCache('returns');
+    broadcastUpdate('returns', 'create', { _id: savedReturn._id });
+    req._broadcastDone = true;
     res.status(201).json({ ...req.body, _id: savedReturn._id, createdAt: savedReturn.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -3375,12 +3416,27 @@ apiRouter.post('/api/returns', async (req, res) => {
 
 apiRouter.get('/api/returns', async (req, res) => {
   try {
+    if (memoryCache.returns && !req.query._t && !req.query._nocache) {
+      return res.json(memoryCache.returns);
+    }
     const records = await Return.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
+    memoryCache.returns = decrypted;
     res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/returns/:id', async (req, res) => {
+  try {
+    const record = await Return.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: 'Return not found' });
+    const d = decryptData(record.data);
+    res.json({ ...d, _id: record._id, createdAt: record.createdAt });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -3391,6 +3447,9 @@ apiRouter.put('/api/returns/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedReturn = await Return.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedReturn) return res.status(404).json({ message: 'Return not found' });
+    invalidateMemoryCache('returns');
+    broadcastUpdate('returns', 'update', { _id: updatedReturn._id });
+    req._broadcastDone = true;
     res.json({ ...req.body, _id: updatedReturn._id, createdAt: updatedReturn.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -3401,6 +3460,9 @@ apiRouter.delete('/api/returns/:id', async (req, res) => {
   try {
     const deletedReturn = await Return.findByIdAndDelete(req.params.id);
     if (!deletedReturn) return res.status(404).json({ message: 'Return not found' });
+    invalidateMemoryCache('returns');
+    broadcastUpdate('returns', 'delete', { _id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Return deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

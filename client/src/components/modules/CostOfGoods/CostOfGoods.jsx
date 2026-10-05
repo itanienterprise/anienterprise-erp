@@ -4,6 +4,7 @@ import { EditIcon, TrashIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon, Fun
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
+import { getSocket } from '../../../utils/socket';
 import './CostOfGoods.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -202,17 +203,17 @@ const CostOfGoods = ({
         });
     };
 
-    const fetchRecords = async () => {
+    const fetchRecords = async (silent = false) => {
         const cached = queryClient.getQueryData(['cost-of-goods']);
         if (cached && Array.isArray(cached) && cached.length > 0) {
             setRecords(cached);
-        } else {
+        } else if (!silent) {
             setIsLoading(true);
         }
         try {
             const data = await queryClient.fetchQuery({
                 queryKey: ['cost-of-goods'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setRecords(data);
         } catch (error) {
@@ -230,7 +231,7 @@ const CostOfGoods = ({
         try {
             const data = await queryClient.fetchQuery({
                 queryKey: ['lc-management'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setLcs(data);
         } catch (error) {
@@ -246,7 +247,7 @@ const CostOfGoods = ({
         try {
             const data = await queryClient.fetchQuery({
                 queryKey: ['suppliers'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/suppliers`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/suppliers?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setSuppliers(data);
         } catch (error) {
@@ -262,7 +263,7 @@ const CostOfGoods = ({
         try {
             const data = await queryClient.fetchQuery({
                 queryKey: ['products'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/products?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setProducts(data);
         } catch (error) {
@@ -275,6 +276,41 @@ const CostOfGoods = ({
         fetchLCs();
         fetchSuppliers();
         fetchProducts();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['cost-of-goods', 'costofgoods', 'cog', 'all'].includes(mod)) {
+                fetchRecords(true);
+            }
+            if (['lc-management', 'lc', 'all'].includes(mod)) {
+                fetchLCs();
+            }
+            if (['suppliers', 'supplier', 'all'].includes(mod)) {
+                fetchSuppliers();
+            }
+            if (['products', 'product', 'all'].includes(mod)) {
+                fetchProducts();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchRecords(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     useEffect(() => {
@@ -711,7 +747,7 @@ const CostOfGoods = ({
             else await axios.post(url, payload);
 
             queryClient.invalidateQueries({ queryKey: ['cost-of-goods'] });
-            fetchRecords();
+            fetchRecords(true);
         } catch (error) {
             console.error('Error saving cost of goods:', error);
             setSubmitStatus('error');

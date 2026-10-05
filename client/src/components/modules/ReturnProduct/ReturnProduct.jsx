@@ -22,6 +22,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { decryptData } from '../../../utils/encryption';
 import { queryClient } from '../../../utils/queryClient';
+import { getSocket } from '../../../utils/socket';
 
 const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated }) => {
     const [showForm, setShowForm] = useState(false);
@@ -145,17 +146,17 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
         }
     }, [formData.quantity, formData.packetSize, formData.bags]);
 
-    const fetchReturns = async () => {
+    const fetchReturns = async (silent = false) => {
         const cached = queryClient.getQueryData(['returns']);
         if (cached && Array.isArray(cached) && cached.length > 0) {
             setReturns(cached);
-        } else {
+        } else if (!silent) {
             setIsLoading(true);
         }
         try {
             const data = await queryClient.fetchQuery({
                 queryKey: ['returns'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/returns`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/returns?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setReturns(data);
         } catch (error) {
@@ -173,7 +174,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
         try {
             const data = await queryClient.fetchQuery({
                 queryKey: ['sales'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setSales(data);
         } catch (error) {
@@ -186,11 +187,11 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
             const [whData, stockData] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['warehouses'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['stock'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
                 })
             ]);
 
@@ -335,6 +336,38 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
         fetchSales();
         fetchWarehouses();
         fetchEmployees();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['returns', 'return', 'return-product', 'return-products', 'returnproduct', 'all'].includes(mod)) {
+                fetchReturns(true);
+            }
+            if (['sales', 'sale', 'orders', 'all'].includes(mod)) {
+                fetchSales();
+            }
+            if (['warehouses', 'warehouse', 'stock', 'all'].includes(mod)) {
+                fetchWarehouses();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchReturns(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     // Handle outside click for warehouse dropdown
@@ -615,7 +648,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
             queryClient.invalidateQueries({ queryKey: ['sales'] });
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             queryClient.invalidateQueries({ queryKey: ['stock'] });
-            fetchReturns();
+            fetchReturns(true);
             if (typeof onReturnsUpdated === 'function') {
                 onReturnsUpdated();
             }
@@ -836,7 +869,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
             queryClient.invalidateQueries({ queryKey: ['sales'] });
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             queryClient.invalidateQueries({ queryKey: ['stock'] });
-            fetchReturns();
+            fetchReturns(true);
             showToast('Return record deleted successfully.', 'success');
             if (typeof onReturnsUpdated === 'function') {
                 onReturnsUpdated();

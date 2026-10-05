@@ -1806,7 +1806,7 @@ function App() {
       const data = await queryClient.fetchQuery({
         queryKey: QUERY_KEYS.returns,
         queryFn: async () => {
-          const response = await axios.get(`${API_BASE_URL}/api/returns`);
+          const response = await axios.get(`${API_BASE_URL}/api/returns?_t=${Date.now()}`);
           return Array.isArray(response.data) ? response.data : [];
         }
       });
@@ -1890,6 +1890,9 @@ function App() {
         'transfer': ['warehouses', 'rawWarehouses', 'stock', 'stockBaseline'],
         'purchases': ['purchases'],
         'purchase-receives': ['purchase-receives', 'stock', 'warehouses', 'rawWarehouses'],
+        'purchase-receive': ['purchase-receives', 'stock', 'warehouses', 'rawWarehouses'],
+        'purchasereceive': ['purchase-receives', 'stock', 'warehouses', 'rawWarehouses'],
+        'purchasereceives': ['purchase-receives', 'stock', 'warehouses', 'rawWarehouses'],
         'customers': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
         'customer': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
         'payment-collection': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
@@ -1929,7 +1932,14 @@ function App() {
         'margin-returns': ['margin-returns', 'lc-management'],
         'margin-return': ['margin-returns', 'lc-management'],
         'damages': ['damages', 'stock', 'warehouses', 'rawWarehouses'],
-        'returns': ['returns', 'stock', 'warehouses', 'rawWarehouses'],
+        'returns': ['returns', 'stock', 'warehouses', 'rawWarehouses', 'sales', 'customers'],
+        'return': ['returns', 'stock', 'warehouses', 'rawWarehouses', 'sales', 'customers'],
+        'return-product': ['returns', 'stock', 'warehouses', 'rawWarehouses', 'sales', 'customers'],
+        'return-products': ['returns', 'stock', 'warehouses', 'rawWarehouses', 'sales', 'customers'],
+        'returnproduct': ['returns', 'stock', 'warehouses', 'rawWarehouses', 'sales', 'customers'],
+        'cost-of-goods': ['cost-of-goods', 'costOfGoods', 'lc-management'],
+        'costofgoods': ['cost-of-goods', 'costOfGoods', 'lc-management'],
+        'cog': ['cost-of-goods', 'costOfGoods', 'lc-management'],
         'notifications': ['notifications'],
       };
 
@@ -1948,7 +1958,7 @@ function App() {
       }
 
       try {
-        if (['stock', 'stock-baseline', 'warehouses', 'warehouse', 'transfer', 'transfers', 'purchase-receives', 'sales'].includes(module) || module === 'all') {
+        if (['stock', 'stock-baseline', 'warehouses', 'warehouse', 'transfer', 'transfers', 'purchase-receives', 'purchase-receive', 'purchasereceive', 'purchasereceives', 'returns', 'return', 'return-product', 'returnproduct', 'sales'].includes(module) || module === 'all') {
           if (typeof fetchStockRecords === 'function') fetchStockRecords();
           if (typeof fetchWarehouses === 'function') fetchWarehouses();
         }
@@ -1973,7 +1983,7 @@ function App() {
       }
 
       try {
-        if (module === 'returns' || module === 'all') {
+        if (['returns', 'return', 'return-product', 'return-products', 'returnproduct'].includes(module) || module === 'all') {
           if (typeof fetchReturns === 'function') fetchReturns();
         }
       } catch (err) {
