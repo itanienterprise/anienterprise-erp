@@ -1562,8 +1562,7 @@ function LCReceive({
             const updatedBrands = [...currentBrands, { brand: newBrandName, purchasedPrice: '', packetSize: '' }];
             const updatedProductData = { ...product, brands: updatedBrands };
 
-            // Remove helper fields before encrypting and sending to backend
-            await axios.put(`${API_BASE_URL}/api/products/${product._id}`, dataToEncrypt);
+            await axios.put(`${API_BASE_URL}/api/products/${product._id}`, updatedProductData);
 
             if (fetchProducts) await fetchProducts();
 

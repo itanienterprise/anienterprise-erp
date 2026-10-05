@@ -783,9 +783,6 @@ const runSystemSelfHealingMigrations = async () => {
     if (typeof migratePurchaseReceiveCustomerIds === 'function') {
       await migratePurchaseReceiveCustomerIds();
     }
-    if (typeof repairChondonEntities === 'function') {
-      await repairChondonEntities();
-    }
     if (typeof repairSaleItemRates === 'function') {
       await repairSaleItemRates();
     }
@@ -2559,33 +2556,33 @@ apiRouter.put('/api/products/:id', async (req, res) => {
     const renamesToProcess = Array.isArray(brandRenames) ? [...brandRenames] : [];
     const prodName = (cleanBody.name || existingData.name || '').trim();
 
-    if (renamesToProcess.length === 0 && existingData.brands && cleanBody.brands) {
-      existingData.brands.forEach((oldB, idx) => {
-        const oldName = (oldB.brand || '').trim();
-        const newB = cleanBody.brands[idx];
-        const newName = (newB?.brand || '').trim();
-        if (oldName && newName && oldName.toLowerCase() !== newName.toLowerCase()) {
-          renamesToProcess.push({
-            oldBrand: oldName,
-            newBrand: newName,
-            productName: prodName
-          });
-        }
-      });
-    }
-
     const encryptedData = encryptData(cleanBody);
     const updatedProduct = await Product.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedProduct) return res.status(404).json({ message: 'Product not found' });
 
-    // Execute cascading updates across all collections for each brand rename
+    // Execute cascading updates across all collections for validated brand renames only
     const cascadeResults = [];
+    const oldBrandNames = (existingData.brands || []).map(b => (b.brand || '').trim().toLowerCase()).filter(Boolean);
+    const newBrandNames = (cleanBody.brands || []).map(b => (b.brand || '').trim().toLowerCase()).filter(Boolean);
+
     for (const rename of renamesToProcess) {
-      if (rename.oldBrand && rename.newBrand && rename.oldBrand.trim().toLowerCase() !== rename.newBrand.trim().toLowerCase()) {
-        const targetProduct = rename.productName || prodName;
-        const result = await updateBrandAcrossAllCollections(targetProduct, rename.oldBrand, rename.newBrand);
-        cascadeResults.push(result);
-      }
+      const oldB = (rename.oldBrand || '').trim();
+      const newB = (rename.newBrand || '').trim();
+      if (!oldB || !newB || oldB.toLowerCase() === newB.toLowerCase()) continue;
+
+      // STRICT SAFETY VALIDATIONS:
+      // 1. oldBrand must have existed in the product before
+      if (!oldBrandNames.includes(oldB.toLowerCase())) continue;
+      // 2. oldBrand must NO LONGER exist in the product (if it still exists, it is NOT renamed!)
+      if (newBrandNames.includes(oldB.toLowerCase())) continue;
+      // 3. newBrand must NOT have already existed in the product before (prevent accidental merges)
+      if (oldBrandNames.includes(newB.toLowerCase())) continue;
+      // 4. newBrand must be present in the new brands list
+      if (!newBrandNames.includes(newB.toLowerCase())) continue;
+
+      const targetProduct = rename.productName || prodName;
+      const result = await updateBrandAcrossAllCollections(targetProduct, oldB, newB);
+      cascadeResults.push(result);
     }
 
     invalidateMemoryCache('products');

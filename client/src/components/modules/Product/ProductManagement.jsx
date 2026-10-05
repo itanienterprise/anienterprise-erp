@@ -141,10 +141,20 @@ const ProductManagement = ({
 
         const brandRenames = [];
         if (editingId && originalBrands.length > 0) {
-            (productFormData.brands || []).forEach((b, i) => {
-                const oldBrand = (originalBrands[i] || '').trim();
+            const currentBrandNames = (productFormData.brands || []).map(b => (b.brand || '').trim().toLowerCase()).filter(Boolean);
+            const origBrandNames = originalBrands.map(ob => (ob || '').trim().toLowerCase()).filter(Boolean);
+
+            (productFormData.brands || []).forEach(b => {
+                const oldBrand = (b.origBrand || '').trim();
                 const newBrand = (b.brand || '').trim();
-                if (oldBrand && newBrand && oldBrand.toLowerCase() !== newBrand.toLowerCase()) {
+                if (
+                    oldBrand &&
+                    newBrand &&
+                    oldBrand.toLowerCase() !== newBrand.toLowerCase() &&
+                    origBrandNames.includes(oldBrand.toLowerCase()) &&
+                    !currentBrandNames.includes(oldBrand.toLowerCase()) &&
+                    !origBrandNames.includes(newBrand.toLowerCase())
+                ) {
                     brandRenames.push({
                         oldBrand,
                         newBrand,
@@ -159,9 +169,10 @@ const ProductManagement = ({
             name: (productFormData.name || '').trim(),
             category: (productFormData.category || '').trim(),
             brands: (productFormData.brands || []).map(b => ({
-                ...b,
                 brand: (b.brand || '').trim(),
-                quality: (b.quality || '').trim()
+                quality: (b.quality || '').trim(),
+                packetSize: b.packetSize || '',
+                purchasedPrice: b.purchasedPrice || ''
             })),
             brandRenames
         };
@@ -223,13 +234,15 @@ const ProductManagement = ({
                 brand: b.brand || '',
                 quality: b.quality || '',
                 packetSize: b.packetSize || '',
-                purchasedPrice: b.purchasedPrice || ''
+                purchasedPrice: b.purchasedPrice || '',
+                origBrand: (b.brand || '').trim()
             }))
             : [{
                 brand: fullProduct.brand || '',
                 quality: fullProduct.quality || '',
                 packetSize: fullProduct.packetSize || '',
-                purchasedPrice: fullProduct.purchasedPrice || ''
+                purchasedPrice: fullProduct.purchasedPrice || '',
+                origBrand: (fullProduct.brand || '').trim()
             }];
 
         setProductFormData({
