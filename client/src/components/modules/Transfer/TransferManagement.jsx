@@ -9,6 +9,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { getSocket } from '../../../utils/socket';
 
 const TransferManagement = ({ currentUser, addNotification, highlightId, isRequestedNotif, refreshPendingIndicators }) => {
     const canDelete = hasPermission(currentUser, 'warehouse', 'delete') || hasPermission(currentUser, 'transfer', 'delete');
@@ -124,20 +125,21 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     }, [activeDropdown]);
 
     // Fetch and Decrypt Data
-    const fetchData = async () => {
+    const fetchData = async (silent = false) => {
         const cachedWh = queryClient.getQueryData(['warehouses']);
-        if (!cachedWh) {
+        if (!cachedWh && !silent) {
             setIsLoading(true);
         }
         try {
+            const cacheBuster = `_t=${Date.now()}`;
             const [whRes, stockRes, prodRes, salesRes, damagesRes, baselineRes] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['warehouses'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['stock'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['products'],
@@ -159,7 +161,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
 
             setActiveBaseline(baselineRes || null);
 
-            const rawWh = Array.isArray(whRes) ? whRes : [];
+            const rawWh = Array.isArray(whRes) ? whRes : (Array.isArray(whRes?.data) ? whRes.data : []);
             const logs = [];
             const allDecryptedWh = [];
 
@@ -194,7 +196,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             });
 
             // Decrypt stock records
-            const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
+            const rawStock = Array.isArray(stockRes) ? stockRes : (Array.isArray(stockRes?.data) ? stockRes.data : []);
             const decryptedStock = rawStock.map(item => {
                 let dec = item.data ? decryptData(item.data) : item;
                 if (typeof dec === 'string') {
@@ -204,7 +206,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             });
 
             // Decrypt sales records
-            const rawSales = Array.isArray(salesRes.data) ? salesRes.data : [];
+            const rawSales = Array.isArray(salesRes) ? salesRes : (Array.isArray(salesRes?.data) ? salesRes.data : []);
             const decryptedSales = rawSales.map(item => {
                 let dec = item.data ? decryptData(item.data) : item;
                 if (typeof dec === 'string') {
@@ -217,7 +219,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             });
 
             // Decrypt damages records
-            const rawDamages = Array.isArray(damagesRes?.data) ? damagesRes.data : [];
+            const rawDamages = Array.isArray(damagesRes) ? damagesRes : (Array.isArray(damagesRes?.data) ? damagesRes.data : []);
             const decryptedDamages = rawDamages.map(item => {
                 let dec = item.data ? decryptData(item.data) : item;
                 if (typeof dec === 'string') {
@@ -230,7 +232,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             setStockRecords(decryptedStock);
             setSalesRecords(decryptedSales);
             setDamagesRecords(decryptedDamages);
-            setProducts(Array.isArray(prodRes.data) ? prodRes.data : []);
+            setProducts(Array.isArray(prodRes) ? prodRes : (Array.isArray(prodRes?.data) ? prodRes.data : []));
 
             // Sort logs: Requested items first, then date/createdAt desc
             logs.sort((a, b) => {
@@ -455,6 +457,32 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     useEffect(() => {
         fetchData();
         fetchEmployees();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['warehouses', 'warehouse', 'stock', 'transfer', 'transfers', 'products', 'sales', 'damages', 'all'].includes(mod)) {
+                fetchData(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchData(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     // Extract unique warehouses
@@ -861,7 +889,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             queryClient.invalidateQueries({ queryKey: ['stock'] });
             setShowForm(false);
             resetForm();
-            fetchData();
+            fetchData(true);
 
         } catch (error) {
             console.error('Error submitting stock transfer:', error);
@@ -971,7 +999,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             queryClient.invalidateQueries({ queryKey: ['stock'] });
             if (addNotification) addNotification('success', `Stock transfer for ${item.productName || item.product} approved successfully`);
-            fetchData();
+            fetchData(true);
         } catch (error) {
             console.error('Error approving transfer request:', error);
             if (addNotification) addNotification('error', 'Failed to approve transfer request');
@@ -1006,7 +1034,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                 queryClient.invalidateQueries({ queryKey: ['warehouses'] });
                 queryClient.invalidateQueries({ queryKey: ['stock'] });
                 if (addNotification) addNotification('info', `Stock transfer request for ${item.productName || item.product} rejected`);
-                fetchData();
+                fetchData(true);
             } catch (error) {
                 console.error('Error rejecting transfer request:', error);
                 if (addNotification) addNotification('error', 'Failed to reject transfer request');
@@ -1038,7 +1066,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                 queryClient.invalidateQueries({ queryKey: ['warehouses'] });
                 queryClient.invalidateQueries({ queryKey: ['stock'] });
                 if (addNotification) addNotification('success', 'Transfer record deleted and stock restored to source warehouse');
-                fetchData();
+                fetchData(true);
             } catch (error) {
                 console.error('Error deleting transfer record:', error);
                 if (addNotification) addNotification('error', 'Failed to delete transfer record');

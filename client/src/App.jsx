@@ -1882,12 +1882,21 @@ function App() {
       const moduleKeyMap = {
         'sales': ['sales', 'stock', 'warehouses'],
         'orders': ['sales', 'orders'],
-        'stock': ['stock', 'warehouses', 'stockBaseline'],
-        'stock-baseline': ['stock', 'warehouses', 'stockBaseline'],
-        'warehouses': ['warehouses', 'stock'],
+        'stock': ['stock', 'warehouses', 'rawWarehouses', 'stockBaseline'],
+        'stock-baseline': ['stock', 'warehouses', 'rawWarehouses', 'stockBaseline'],
+        'warehouses': ['warehouses', 'rawWarehouses', 'stock', 'stockBaseline'],
+        'warehouse': ['warehouses', 'rawWarehouses', 'stock', 'stockBaseline'],
+        'transfers': ['warehouses', 'rawWarehouses', 'stock', 'stockBaseline'],
+        'transfer': ['warehouses', 'rawWarehouses', 'stock', 'stockBaseline'],
         'purchases': ['purchases'],
-        'purchase-receives': ['purchase-receives', 'stock', 'warehouses'],
-        'customers': ['customers'],
+        'purchase-receives': ['purchase-receives', 'stock', 'warehouses', 'rawWarehouses'],
+        'customers': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
+        'customer': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
+        'payment-collection': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
+        'paymentcollection': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
+        'payments': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
+        'pay-to-customer': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
+        'paytocustomer': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
         'employees': ['employees'],
         'products': ['products'],
         'importers': ['importers'],
@@ -1919,8 +1928,8 @@ function App() {
         'lc-expense': ['lc-expenses', 'lc-management', 'cnfs', 'cnf-payments'],
         'margin-returns': ['margin-returns', 'lc-management'],
         'margin-return': ['margin-returns', 'lc-management'],
-        'damages': ['damages', 'stock', 'warehouses'],
-        'returns': ['returns', 'stock', 'warehouses'],
+        'damages': ['damages', 'stock', 'warehouses', 'rawWarehouses'],
+        'returns': ['returns', 'stock', 'warehouses', 'rawWarehouses'],
         'notifications': ['notifications'],
       };
 
@@ -1939,7 +1948,7 @@ function App() {
       }
 
       try {
-        if (['stock', 'stock-baseline', 'warehouses', 'purchase-receives', 'sales'].includes(module) || module === 'all') {
+        if (['stock', 'stock-baseline', 'warehouses', 'warehouse', 'transfer', 'transfers', 'purchase-receives', 'sales'].includes(module) || module === 'all') {
           if (typeof fetchStockRecords === 'function') fetchStockRecords();
           if (typeof fetchWarehouses === 'function') fetchWarehouses();
         }

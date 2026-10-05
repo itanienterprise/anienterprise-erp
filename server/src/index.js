@@ -117,12 +117,21 @@ const invalidateMemoryCache = (modName) => {
     Object.keys(memoryCache).forEach(k => { if (k !== 'pendingTimestamp') memoryCache[k] = null; });
     return;
   }
-  if (['stock', 'stock-baseline'].includes(mod)) memoryCache.stock = null;
+  if (['stock', 'stock-baseline'].includes(mod)) {
+    memoryCache.stock = null;
+    memoryCache.warehouses = null;
+  }
   if (['sale', 'sales'].includes(mod)) memoryCache.sales = null;
   if (['purchase', 'purchases'].includes(mod)) memoryCache.purchases = null;
   if (['purchase-receive', 'purchase-receives'].includes(mod)) memoryCache.purchaseReceives = null;
-  if (['customer', 'customers'].includes(mod)) memoryCache.customers = null;
-  if (['warehouse', 'warehouses'].includes(mod)) memoryCache.warehouses = null;
+  if (['customer', 'customers', 'payment-collection', 'paymentcollection', 'payments', 'pay-to-customer', 'paytocustomer'].includes(mod)) {
+    memoryCache.customers = null;
+    memoryCache.sales = null;
+  }
+  if (['warehouse', 'warehouses', 'transfer', 'transfers'].includes(mod)) {
+    memoryCache.warehouses = null;
+    memoryCache.stock = null;
+  }
   if (['insurance-payment', 'insurance-payments'].includes(mod)) memoryCache.insurancePayments = null;
   if (['cnf-payment', 'cnf-payments'].includes(mod)) memoryCache.cnfPayments = null;
 };
@@ -2055,7 +2064,10 @@ apiRouter.post('/api/stock', async (req, res) => {
     }
     const newStock = new Stock(stockDoc);
     const savedStock = await newStock.save();
-    res.status(201).json({ ...resolvedBody, _id: savedStock._id, createdAt: resolvedBody.createdAt || savedStock.createdAt });
+    const result = { ...resolvedBody, _id: savedStock._id, createdAt: resolvedBody.createdAt || savedStock.createdAt };
+    broadcastUpdate('stock', 'create', { id: savedStock._id, stock: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -2101,6 +2113,8 @@ apiRouter.delete('/api/stock/:id', async (req, res) => {
     }
 
     const deletedStock = await Stock.findByIdAndDelete(req.params.id);
+    broadcastUpdate('stock', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Item deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2176,7 +2190,10 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
       updateDoc.createdAt = new Date(resolvedBody.createdAt || req.body.createdAt);
     }
     const updatedStock = await Stock.findByIdAndUpdate(req.params.id, updateDoc, { returnDocument: 'after' });
-    res.json({ ...resolvedBody, _id: req.params.id, createdAt: resolvedBody.createdAt || updatedStock?.createdAt });
+    const result = { ...resolvedBody, _id: req.params.id, createdAt: resolvedBody.createdAt || updatedStock?.createdAt };
+    broadcastUpdate('stock', 'update', { id: req.params.id, stock: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -2184,6 +2201,9 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
 
 apiRouter.get('/api/stock', async (req, res) => {
   try {
+    if (req.query._t || req.query._nocache) {
+      memoryCache.stock = null;
+    }
     if (memoryCache.stock) {
       return res.json(memoryCache.stock);
     }
@@ -2560,6 +2580,8 @@ apiRouter.post('/api/customers', async (req, res) => {
 
     // Return decrypted record so middleware can re-encrypt it for transport
     const decrypted = { ...req.body, _id: savedCustomer._id, createdAt: savedCustomer.createdAt };
+    broadcastUpdate('customers', 'create', { id: savedCustomer._id, customer: decrypted });
+    req._broadcastDone = true;
     res.status(201).json(decrypted);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -2570,6 +2592,8 @@ apiRouter.delete('/api/customers/:id', async (req, res) => {
   try {
     const deletedCustomer = await Customer.findByIdAndDelete(req.params.id);
     if (!deletedCustomer) return res.status(404).json({ message: 'Customer not found' });
+    broadcastUpdate('customers', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Customer deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2764,6 +2788,8 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
 
     // Return decrypted record so middleware can re-encrypt it for transport
     const decrypted = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('customers', 'update', { id: req.params.id, customer: decrypted });
+    req._broadcastDone = true;
     res.json(decrypted);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -2772,6 +2798,9 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
 
 apiRouter.get('/api/customers', async (req, res) => {
   try {
+    if (req.query._t || req.query._nocache) {
+      memoryCache.customers = null;
+    }
     if (memoryCache.customers) {
       return res.json(memoryCache.customers);
     }
@@ -2874,7 +2903,10 @@ apiRouter.post('/api/warehouses', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newWarehouse = new Warehouse({ data: encryptedData });
     const savedWarehouse = await newWarehouse.save();
-    res.status(201).json({ ...req.body, _id: savedWarehouse._id, createdAt: savedWarehouse.createdAt });
+    const result = { ...req.body, _id: savedWarehouse._id, createdAt: savedWarehouse.createdAt };
+    broadcastUpdate('warehouses', 'create', { id: savedWarehouse._id, warehouse: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -2884,6 +2916,8 @@ apiRouter.delete('/api/warehouses/:id', async (req, res) => {
   try {
     const deletedWarehouse = await Warehouse.findByIdAndDelete(req.params.id);
     if (!deletedWarehouse) return res.status(404).json({ message: 'Warehouse not found' });
+    broadcastUpdate('warehouses', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Warehouse deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2895,7 +2929,10 @@ apiRouter.put('/api/warehouses/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedWarehouse = await Warehouse.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedWarehouse) return res.status(404).json({ message: 'Warehouse not found' });
-    res.json({ ...req.body, _id: updatedWarehouse._id, createdAt: updatedWarehouse.createdAt });
+    const result = { ...req.body, _id: updatedWarehouse._id, createdAt: updatedWarehouse.createdAt };
+    broadcastUpdate('warehouses', 'update', { id: req.params.id, warehouse: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -2903,6 +2940,9 @@ apiRouter.put('/api/warehouses/:id', async (req, res) => {
 
 apiRouter.get('/api/warehouses', async (req, res) => {
   try {
+    if (req.query._t || req.query._nocache) {
+      memoryCache.warehouses = null;
+    }
     if (memoryCache.warehouses) {
       return res.json(memoryCache.warehouses);
     }

@@ -28,6 +28,7 @@ import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
 import { ChevronDownIcon } from '../../Icons';
 import { calculatePktRemainder, calculateStockData } from '../../../utils/stockHelpers';
+import { getSocket } from '../../../utils/socket';
 
 const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
     const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
@@ -119,14 +120,15 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
 
     const fetchWarehouses = async () => {
         try {
+            const cacheBuster = `_t=${Date.now()}`;
             const [whData, stockData, salesData, baselineData] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['rawWarehouses'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: QUERY_KEYS.stock,
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: QUERY_KEYS.sales,
@@ -256,6 +258,32 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
     useEffect(() => {
         fetchWarehouses();
         fetchProducts();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['warehouses', 'warehouse', 'stock', 'transfer', 'transfers', 'sales', 'all'].includes(mod)) {
+                fetchWarehouses();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchWarehouses();
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     const [showWarehouseReport, setShowWarehouseReport] = useState(false);

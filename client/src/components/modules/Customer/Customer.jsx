@@ -7,6 +7,7 @@ import { generateSaleInvoicePDF, generateCustomerHistoryPDF, generateMoneyReceip
 import { generateCustomerHistoryExcel } from '../../../utils/excelGenerator';
 import { api } from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
+import { getSocket } from '../../../utils/socket';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import ReportFormatModal from '../../shared/ReportFormatModal';
@@ -252,6 +253,32 @@ const Customer = ({
 
     useEffect(() => {
         fetchCustomers();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['customers', 'customer', 'payment-collection', 'paymentcollection', 'payments', 'pay-to-customer', 'paytocustomer', 'sales', 'banks', 'all'].includes(mod)) {
+                fetchCustomers(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchCustomers(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     useEffect(() => {
@@ -298,49 +325,50 @@ const Customer = ({
         return lc?.port || '-';
     };
 
-    const fetchCustomers = async () => {
+    const fetchCustomers = async (silent = false) => {
         const cached = queryClient.getQueryData(['customers']);
         if (cached && cached.length > 0) {
             setCustomers(cached);
-        } else {
+        } else if (!silent) {
             setIsLoading(true);
         }
         try {
+            const cacheBuster = `_t=${Date.now()}`;
             const fetchSalesPromise = typeof fetchSalesGlobal === 'function'
                 ? fetchSalesGlobal()
                 : queryClient.fetchQuery({
                     queryKey: ['sales'],
-                    queryFn: () => api.get('/api/sales').then(r => Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : [])).catch(() => [])
+                    queryFn: () => api.get(`/api/sales?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : [])).catch(() => [])
                 });
 
             const [decryptedCustomers, gpRecords, lcData, purchasesData, stockData, prData, returnsData] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['customers'],
-                    queryFn: () => api.get('/api/customers')
+                    queryFn: () => api.get(`/api/customers?${cacheBuster}`)
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['lc-gp'],
-                    queryFn: () => api.get('/api/lc-gp')
+                    queryFn: () => api.get(`/api/lc-gp?${cacheBuster}`)
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['lc-management'],
-                    queryFn: () => api.get('/api/lc-management')
+                    queryFn: () => api.get(`/api/lc-management?${cacheBuster}`)
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['purchases'],
-                    queryFn: () => api.get('/api/purchases').catch(() => [])
+                    queryFn: () => api.get(`/api/purchases?${cacheBuster}`).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['stock'],
-                    queryFn: () => api.get('/api/stock').catch(() => [])
+                    queryFn: () => api.get(`/api/stock?${cacheBuster}`).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['purchase-receives'],
-                    queryFn: () => api.get('/api/purchase-receives').catch(() => [])
+                    queryFn: () => api.get(`/api/purchase-receives?${cacheBuster}`).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['returns'],
-                    queryFn: () => api.get('/api/returns').catch(() => [])
+                    queryFn: () => api.get(`/api/returns?${cacheBuster}`).catch(() => [])
                 }),
                 fetchSalesPromise
             ]);

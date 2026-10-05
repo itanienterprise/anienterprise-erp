@@ -12,6 +12,7 @@ import './PaymentCollection.css';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { trackUserAction } from '../../../utils/activityTracker';
 import { queryClient } from '../../../utils/queryClient';
+import { getSocket } from '../../../utils/socket';
 
 const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
     const [payments, setPayments] = useState([]);
@@ -356,6 +357,32 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         fetchPayments();
         fetchBanks();
         fetchEmployees();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['customers', 'customer', 'payment-collection', 'paymentcollection', 'payments', 'pay-to-customer', 'paytocustomer', 'sales', 'banks', 'all'].includes(mod)) {
+                fetchPayments(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchPayments(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     const fetchEmployees = async () => {
@@ -657,32 +684,33 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
     const uniqueBranches = [...new Set(payments.map(p => p.branch).filter(Boolean))].sort();
     const uniqueCustomers = [...new Set(payments.map(p => p.companyName || p.customerName).filter(Boolean))].sort();
 
-    const fetchPayments = async () => {
+    const fetchPayments = async (silent = false) => {
         const cachedCust = queryClient.getQueryData(['customers']);
-        if (!cachedCust) {
+        if (!cachedCust && !silent) {
             setIsLoading(true);
         }
         try {
+            const cacheBuster = `_t=${Date.now()}`;
             const [customersData, purchasesData, stockData, purchaseReceivesData, salesData] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['customers'],
-                    queryFn: () => api.get('/api/customers').catch(() => [])
+                    queryFn: () => api.get(`/api/customers?${cacheBuster}`).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['purchases'],
-                    queryFn: () => api.get('/api/purchases').catch(() => [])
+                    queryFn: () => api.get(`/api/purchases?${cacheBuster}`).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['stock'],
-                    queryFn: () => api.get('/api/stock').catch(() => [])
+                    queryFn: () => api.get(`/api/stock?${cacheBuster}`).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['purchase-receives'],
-                    queryFn: () => api.get('/api/purchase-receives').catch(() => [])
+                    queryFn: () => api.get(`/api/purchase-receives?${cacheBuster}`).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['sales'],
-                    queryFn: () => api.get('/api/sales').catch(() => [])
+                    queryFn: () => api.get(`/api/sales?${cacheBuster}`).catch(() => [])
                 })
             ]);
 
@@ -1121,7 +1149,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             setShowDeleteConfirm(false);
             setPaymentToDelete(null);
             setSubmitStatus(null);
-            fetchPayments();
+            fetchPayments(true);
 
             // Notification
             try {
@@ -1280,7 +1308,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
             }
             queryClient.invalidateQueries({ queryKey: ['customers'] });
-            fetchPayments();
+            fetchPayments(true);
             refreshPendingIndicators?.();
 
             // Notification
@@ -1505,7 +1533,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
             setSelectedItems(new Set());
             queryClient.invalidateQueries({ queryKey: ['customers'] });
-            fetchPayments();
+            fetchPayments(true);
             refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error performing bulk accept:', error);
@@ -1652,7 +1680,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
             setSelectedItems(new Set());
             queryClient.invalidateQueries({ queryKey: ['customers'] });
-            fetchPayments();
+            fetchPayments(true);
             refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error performing bulk reject:', error);
@@ -1759,7 +1787,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             queryClient.invalidateQueries({ queryKey: ['customers'] });
             queryClient.invalidateQueries({ queryKey: ['sales'] });
             queryClient.invalidateQueries({ queryKey: ['banks'] });
-            fetchPayments();
+            fetchPayments(true);
 
             (async () => {
                 try {
@@ -1929,7 +1957,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             queryClient.invalidateQueries({ queryKey: ['customers'] });
             queryClient.invalidateQueries({ queryKey: ['sales'] });
             queryClient.invalidateQueries({ queryKey: ['banks'] });
-            fetchPayments();
+            fetchPayments(true);
 
             (async () => {
                 try {
