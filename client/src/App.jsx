@@ -1902,6 +1902,7 @@ function App() {
         'paytocustomer': ['customers', 'payment-collection', 'pay-to-customer', 'sales'],
         'employees': ['employees'],
         'products': ['products'],
+        'product': ['products'],
         'importers': ['importers'],
         'importer': ['importers'],
         'exporters': ['exporters'],
