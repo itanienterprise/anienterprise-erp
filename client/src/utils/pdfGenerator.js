@@ -4638,13 +4638,15 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
         // --- Table ---
         const tableRows = [];
         let grandTotal = 0;
+        let totalDiscount = 0;
 
         const sortedPayments = [...payments].sort((a, b) => new Date(a.date) - new Date(b.date));
         sortedPayments.forEach((p, idx) => {
             const rawAmount = parseFloat(p.amount) || 0;
             const discount = parseFloat(p.discount) || 0;
-            const amount = rawAmount + discount;
+            const amount = rawAmount;
             grandTotal += amount;
+            totalDiscount += discount;
 
             let remark = (p.reference || p.remarks || '').trim();
             if (discount > 0) {
@@ -4670,7 +4672,7 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
         tableRows.push([
             { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             { content: `${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
-            { content: '', styles: { fillColor: [240, 240, 240] } }
+            { content: totalDiscount > 0 ? `Total Disc: ${totalDiscount.toLocaleString('en-IN')}` : '', styles: { fillColor: [240, 240, 240] } }
         ]);
 
         autoTable(doc, {

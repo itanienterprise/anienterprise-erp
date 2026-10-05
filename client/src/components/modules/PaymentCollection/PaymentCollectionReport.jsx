@@ -112,7 +112,8 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
         return true;
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    const grandTotal = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0) + (parseFloat(p.discount) || 0), 0);
+    const grandTotal = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const totalDiscount = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.discount) || 0), 0);
 
     const handlePrint = () => {
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
@@ -422,7 +423,7 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                         filteredPayments.map((p, idx) => {
                                             const rawAmount = parseFloat(p.amount) || 0;
                                             const discount = parseFloat(p.discount) || 0;
-                                            const amount = rawAmount + discount;
+                                            const amount = rawAmount;
                                             return (
                                                 <tr key={idx} className="border-b border-gray-200">
                                                     <td className="border-r border-gray-900 px-2 py-1.5 text-center">{idx + 1}</td>
@@ -458,7 +459,10 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan="7" className="px-2 py-2 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900 whitespace-nowrap">Grand Total</td>
                                             <td className="px-2 py-2 text-[14px] text-right font-black text-gray-900 whitespace-nowrap">
-                                                ৳{Number(grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                <div>৳{Number(grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                {totalDiscount > 0 && (
+                                                    <div className="text-[10px] text-rose-600 font-semibold font-normal">Discount: ৳{Number(totalDiscount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                )}
                                             </td>
                                         </tr>
                                     </tfoot>
@@ -467,7 +471,7 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                         </div>
 
                         {/* Summary Cards */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6 px-2 print:grid print:grid-cols-2">
+                        <div className={`grid grid-cols-1 ${totalDiscount > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4 pt-6 px-2 print:grid ${totalDiscount > 0 ? 'print:grid-cols-3' : 'print:grid-cols-2'}`}>
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm text-center">
                                 <div className="text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-2">Total Collections</div>
                                 <div className="text-2xl sm:text-3xl font-black text-gray-900">{filteredPayments.length}</div>
@@ -478,6 +482,14 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                     ৳{Number(grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </div>
                             </div>
+                            {totalDiscount > 0 && (
+                                <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-rose-50/50 shadow-sm text-center">
+                                    <div className="text-[12px] font-bold text-rose-500 uppercase tracking-wider mb-2">Total Discount</div>
+                                    <div className="text-xl sm:text-2xl font-black text-rose-700">
+                                        ৳{Number(totalDiscount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Signatures */}
