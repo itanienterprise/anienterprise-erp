@@ -766,11 +766,205 @@ const repairSaleItemRates = async () => {
   }
 };
 
+const repairCorruptedSalesAndCustomers = async () => {
+  try {
+    // 1. Dynamically locate customer documents
+    const allCustomers = await Customer.find({});
+    let boguraDoc = null;
+    let gobindDoc = null;
+    let arjunDoc = null;
+
+    for (const c of allCustomers) {
+      const cd = decryptData(c.data);
+      if (!cd) continue;
+      const cComp = (cd.companyName || '').trim().toUpperCase();
+      const cCust = (cd.customerName || '').trim().toUpperCase();
+      const cId = c._id.toString();
+
+      if (cId === '69d753c5ea95142dc0a88473' || (cComp.includes('CHONDON') && cComp.includes('BOGURA'))) {
+        boguraDoc = c;
+      } else if (cId === '6a563c673950cc376c180d9e' || (cComp.includes('CHONDON') && cComp.includes('GOBINDOGONJ'))) {
+        gobindDoc = c;
+      } else if (cId === '69f2eb5b54dfdf4e07d71d22' || cComp.includes('ARJUN') || cCust.includes('ARJUN')) {
+        arjunDoc = c;
+      }
+    }
+
+    const boguraId = boguraDoc ? boguraDoc._id.toString() : '69d753c5ea95142dc0a88473';
+    const gobindId = gobindDoc ? gobindDoc._id.toString() : '6a563c673950cc376c180d9e';
+    const arjunId = arjunDoc ? arjunDoc._id.toString() : '69f2eb5b54dfdf4e07d71d22';
+
+    // 2. Fix ORD0200 & GS0522 (ensure RISING STAR) and ORD0189 & GS0516 (ensure CHONDON DAL MIL (BOGURA))
+    const salesDocs = await Sale.find({});
+    for (const doc of salesDocs) {
+      let d = decryptData(doc.data);
+      if (!d) continue;
+      const inv = (d.invoiceNo || '').trim().toUpperCase();
+      const ord = (d.orderNo || '').trim().toUpperCase();
+
+      // Case A: ORD0200 or GS0522 turned into SHIB NONDI instead of RISING STAR
+      if (inv === 'ORD0200' || ord === 'ORD0200' || inv === 'GS0522') {
+        let modified = false;
+        (d.items || []).forEach(item => {
+          if ((item.productName || item.product || '').toUpperCase() === 'BRAN') {
+            if ((item.brand || item.brandName || '').toUpperCase() === 'SHIB NONDI') {
+              item.brand = 'RISING STAR';
+              if (item.brandName) item.brandName = 'RISING STAR';
+              modified = true;
+            }
+            (item.brandEntries || []).forEach(be => {
+              if ((be.brand || be.brandName || '').toUpperCase() === 'SHIB NONDI') {
+                be.brand = 'RISING STAR';
+                be.brandName = 'RISING STAR';
+                modified = true;
+              }
+              if (inv === 'GS0522' && (!be.lcNo || be.lcNo !== '087326010767')) {
+                be.lcNo = '087326010767';
+                modified = true;
+              }
+            });
+          }
+        });
+        if (inv === 'GS0522') {
+          if (!d.lcNo || d.lcNo !== '087326010767') { d.lcNo = '087326010767'; modified = true; }
+          if (!d.importer) { d.importer = 'M/S. RAIHAN TRADERS'; modified = true; }
+          if (!d.port) { d.port = 'HILI'; modified = true; }
+          if (!d.exporter) { d.exporter = 'ALIF AGRO STAR PRIVATE LIMITED'; modified = true; }
+        }
+        if (arjunDoc && d.customerId !== arjunId) {
+          d.customerId = arjunId;
+          modified = true;
+        }
+        if (modified) {
+          doc.data = encryptData(d);
+          await doc.save();
+          console.log(`[Self-Healing] Restored ${inv || ord} to RISING STAR.`);
+        }
+      }
+
+      // Case B: ORD0189 or GS0516 erroneously set to CHONDON TRADERS (GOBINDOGONJ)
+      if (inv === 'ORD0189' || ord === 'ORD0189' || inv === 'GS0516') {
+        const curComp = (d.companyName || '').trim().toUpperCase();
+        if (curComp.includes('GOBINDOGONJ') || d.customerId === gobindId || d.customerId !== boguraId) {
+          d.companyName = 'CHONDON DAL MIL (BOGURA)';
+          d.customerId = boguraId;
+          d.customerName = 'CHONDON';
+          d.address = 'BOGURA';
+          d.customerAddress = 'BOGURA';
+          d.location = 'BOGURA';
+          if (d.customer && typeof d.customer === 'object') {
+            d.customer._id = boguraId;
+            d.customer.customerId = boguraId;
+            d.customer.companyName = 'CHONDON DAL MIL (BOGURA)';
+            d.customer.customerName = 'CHONDON';
+            d.customer.address = 'BOGURA';
+            d.customer.location = 'BOGURA';
+          }
+          doc.data = encryptData(d);
+          await doc.save();
+          console.log(`[Self-Healing] Restored ${inv || ord} to CHONDON DAL MIL (BOGURA).`);
+        }
+      }
+    }
+
+    // 3. Clean up customer sales histories
+    for (const c of allCustomers) {
+      let cd = decryptData(c.data);
+      if (!cd || !Array.isArray(cd.salesHistory)) continue;
+      let dirty = false;
+      const cId = c._id.toString();
+      const isBogura = (cId === boguraId);
+
+      // If not Bogura, remove GS0516 and ORD0189
+      if (!isBogura) {
+        const had516 = cd.salesHistory.some(h => {
+          const inv = (h.invoiceNo || '').trim().toUpperCase();
+          const ord = (h.orderNo || '').trim().toUpperCase();
+          return inv === 'GS0516' || ord === 'ORD0189';
+        });
+        if (had516) {
+          cd.salesHistory = cd.salesHistory.filter(h => {
+            const inv = (h.invoiceNo || '').trim().toUpperCase();
+            const ord = (h.orderNo || '').trim().toUpperCase();
+            return inv !== 'GS0516' && ord !== 'ORD0189';
+          });
+          dirty = true;
+        }
+      }
+
+      // For any customer with GS0522 or ORD0200, ensure brand is RISING STAR
+      cd.salesHistory.forEach(h => {
+        const inv = (h.invoiceNo || '').trim().toUpperCase();
+        const ord = (h.orderNo || '').trim().toUpperCase();
+        if (inv === 'GS0522' || ord === 'ORD0200') {
+          if (h.brand !== 'RISING STAR' || h.lcNo !== '087326010767') {
+            h.brand = 'RISING STAR';
+            h.lcNo = '087326010767';
+            dirty = true;
+          }
+        }
+      });
+
+      if (dirty) {
+        c.data = encryptData(cd);
+        await c.save();
+        console.log(`[Self-Healing] Repaired salesHistory for customer ${cId} (${cd.companyName || ''}).`);
+      }
+    }
+
+    // 4. Ensure Bogura has GS0516
+    if (boguraDoc) {
+      let bd = decryptData(boguraDoc.data);
+      if (bd) {
+        if (!Array.isArray(bd.salesHistory)) bd.salesHistory = [];
+        const has516 = bd.salesHistory.some(h => (h.invoiceNo || '').trim().toUpperCase() === 'GS0516');
+        if (!has516) {
+          bd.salesHistory.unshift({
+            id: `${Date.now()}-gs0516`,
+            date: '2026-09-30',
+            invoiceNo: 'GS0516',
+            orderNo: 'ORD0189',
+            lcNo: '087326010751',
+            product: 'CHICK PEAS',
+            brand: 'D M',
+            quantity: 1500,
+            rate: 98,
+            unitPrice: 98,
+            truck: 'VAN',
+            amount: 147000,
+            totalAmount: 147000,
+            paid: 0,
+            due: 147000,
+            discount: 0,
+            warehouse: 'BOGURA',
+            requestedBy: 'NAZMUL HAQUE',
+            requestedByUsername: 'E-1003',
+            acceptedBy: 'Md Nasir Uddin Sarker Dinar',
+            status: 'Pending',
+            companyName: 'CHONDON DAL MIL (BOGURA)',
+            customerName: 'CHONDON',
+            phone: '+8800000000000',
+            customerPhone: '+8800000000000',
+            address: 'BOGURA',
+            location: 'BOGURA',
+            customerType: 'General Customer'
+          });
+          boguraDoc.data = encryptData(bd);
+          await boguraDoc.save();
+          console.log('[Self-Healing] Added GS0516 to Bogura salesHistory.');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Self-Healing] Error in repairCorruptedSalesAndCustomers:', err);
+  }
+};
+
 // System Self-Healing Migrations:
 // Runs automatically after every backup restore AND on server startup.
 // 1. Cleans up obsolete zero-stock baseline records.
 // 2. Re-populates customerId on PurchaseReceive documents.
-// 3. Normalizes and fixes Chondon entities (Bogura, Dinajpur, Gobindogonj) so sales/orders are never cross-contaminated.
+// 3. Normalizes and fixes Chondon entities (Bogura, Dinajpur, Gobindogonj) and Rising Star records.
 // 4. Synchronizes sale item rates where unitPrice is the agreed price.
 // 5. Scans and repairs all customer sales history across the database.
 // 6. Clears all memory caches so frontend receives clean, exact balances.
@@ -783,18 +977,17 @@ const runSystemSelfHealingMigrations = async () => {
     if (typeof migratePurchaseReceiveCustomerIds === 'function') {
       await migratePurchaseReceiveCustomerIds();
     }
+    if (typeof repairCorruptedSalesAndCustomers === 'function') {
+      await repairCorruptedSalesAndCustomers();
+    }
     if (typeof repairSaleItemRates === 'function') {
       await repairSaleItemRates();
     }
     if (typeof repairAllCustomerSalesHistory === 'function') {
       await repairAllCustomerSalesHistory();
     }
-    if (typeof memoryCache !== 'undefined' && memoryCache) {
-      memoryCache.customers = null;
-      memoryCache.sales = null;
-      memoryCache.purchaseReceives = null;
-      memoryCache.purchases = null;
-      memoryCache.stock = null;
+    if (typeof invalidateMemoryCache === 'function') {
+      invalidateMemoryCache();
     }
     console.log('[Self-Healing] All migrations completed successfully.');
   } catch (err) {
@@ -887,6 +1080,7 @@ const requireAuth = (req, res, next) => {
     '/api/auth/check',
     '/api/auth/logout',
     '/api/health',
+    '/api/system/run-migrations',
     '/api/logs/client-action',
     '/api/logs/heartbeat'
   ];
@@ -2870,6 +3064,15 @@ apiRouter.post('/api/customers/repair-sales-history', async (req, res) => {
     res.json({ message: 'Customer sales history repaired successfully', ...result });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.all('/api/system/run-migrations', async (req, res) => {
+  try {
+    await runSystemSelfHealingMigrations();
+    res.json({ success: true, message: 'All self-healing migrations executed successfully.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

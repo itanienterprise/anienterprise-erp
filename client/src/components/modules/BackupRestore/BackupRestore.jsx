@@ -87,6 +87,7 @@ const BackupRestore = ({ addNotification }) => {
     const [excludeEmployeePhotos, setExcludeEmployeePhotos] = useState(true);
     const [excludeAttachments, setExcludeAttachments] = useState(false);
     const [isOptimizingBackups, setIsOptimizingBackups] = useState(false);
+    const [isRunningMigrations, setIsRunningMigrations] = useState(false);
 
     // Local files state
     const [savedFiles, setSavedFiles] = useState([]);
@@ -335,6 +336,25 @@ const BackupRestore = ({ addNotification }) => {
             setErrorMessage(err.response?.data?.message || 'Failed to trigger scheduled backup.');
         } finally {
             setIsBackingUp(false);
+        }
+    };
+
+    // Run system self-healing migrations and database repair
+    const handleRunSelfHealing = async () => {
+        setIsRunningMigrations(true);
+        setErrorMessage('');
+        setSuccessMessage('');
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/system/run-migrations`);
+            if (res.data?.success) {
+                setSuccessMessage('System self-healing migrations and data repairs completed successfully! All brand, order, and customer history discrepancies have been fixed.');
+            } else {
+                setErrorMessage(res.data?.message || 'Failed to run self-healing migrations.');
+            }
+        } catch (err) {
+            setErrorMessage(err.response?.data?.message || 'Failed to trigger self-healing migrations.');
+        } finally {
+            setIsRunningMigrations(false);
         }
     };
 
@@ -976,6 +996,18 @@ const BackupRestore = ({ addNotification }) => {
                         <p className="text-xs text-gray-500 mt-0.5">List of automatically or locally scheduled backup files saved on the server container. The system keeps the 10 most recent backups.</p>
                     </div>
                     <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handleRunSelfHealing}
+                            disabled={isRunningMigrations}
+                            title="Run automated self-healing migrations to normalize data, fix brands (Rising Star / Shib Nondi), and reconcile customer history"
+                            className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                            <svg className={`w-3.5 h-3.5 ${isRunningMigrations ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                            </svg>
+                            {isRunningMigrations ? 'Repairing Data...' : 'Self-Heal & Repair Data'}
+                        </button>
                         <button
                             type="button"
                             onClick={handleOptimizeBackups}
