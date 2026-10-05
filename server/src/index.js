@@ -109,6 +109,7 @@ const memoryCache = {
   returns: null,
   costOfGoods: null,
   tokens: null,
+  products: null,
   pendingIndicators: null,
   pendingTimestamp: 0
 };
@@ -153,6 +154,9 @@ const invalidateMemoryCache = (modName) => {
   }
   if (['token', 'tokens'].includes(mod)) {
     memoryCache.tokens = null;
+  }
+  if (['product', 'products'].includes(mod)) {
+    memoryCache.products = null;
   }
 };
 
@@ -2517,6 +2521,9 @@ apiRouter.post('/api/products', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newProduct = new Product({ data: encryptedData });
     const savedProduct = await newProduct.save();
+    invalidateMemoryCache('products');
+    broadcastUpdate('products', 'create', { _id: savedProduct._id });
+    req._broadcastDone = true;
     res.status(201).json({ ...req.body, _id: savedProduct._id, createdAt: savedProduct.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -2527,6 +2534,9 @@ apiRouter.delete('/api/products/:id', async (req, res) => {
   try {
     const deletedProduct = await Product.findByIdAndDelete(req.params.id);
     if (!deletedProduct) return res.status(404).json({ message: 'Product not found' });
+    invalidateMemoryCache('products');
+    broadcastUpdate('products', 'delete', { _id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Product deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2578,6 +2588,10 @@ apiRouter.put('/api/products/:id', async (req, res) => {
       }
     }
 
+    invalidateMemoryCache('products');
+    broadcastUpdate('products', 'update', { _id: updatedProduct._id });
+    req._broadcastDone = true;
+
     res.json({
       ...cleanBody,
       _id: updatedProduct._id,
@@ -2592,11 +2606,15 @@ apiRouter.put('/api/products/:id', async (req, res) => {
 
 apiRouter.get('/api/products', async (req, res) => {
   try {
+    if (memoryCache.products && !req.query._t && !req.query._nocache) {
+      return res.json(memoryCache.products);
+    }
     const records = await Product.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
+    memoryCache.products = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });

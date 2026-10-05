@@ -1828,7 +1828,7 @@ function App() {
       const data = await queryClient.fetchQuery({
         queryKey: QUERY_KEYS.products,
         queryFn: async () => {
-          const response = await axios.get(`${API_BASE_URL}/api/products`);
+          const response = await axios.get(`${API_BASE_URL}/api/products?_t=${Date.now()}`);
           const rawData = Array.isArray(response.data) ? response.data : [];
           rawData.forEach(p => {
             if (p.brands && Array.isArray(p.brands)) {
@@ -1969,7 +1969,7 @@ function App() {
       }
 
       try {
-        if (module === 'products' || module === 'all') {
+        if (module === 'products' || module === 'product' || module === 'all') {
           if (typeof fetchProducts === 'function') fetchProducts();
         }
       } catch (err) {
@@ -2588,6 +2588,7 @@ function App() {
             key={refreshKey}
             currentUser={currentUser}
             addNotification={addNotification}
+            products={products}
             fetchSalesGlobal={fetchSales}
             refreshPendingIndicators={fetchPendingEntries}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}

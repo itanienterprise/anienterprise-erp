@@ -206,6 +206,7 @@ const ProductManagement = ({
             fetchProducts();
             setShowProductForm(false);
             resetProductForm();
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'products' } }));
         } catch (error) {
             console.error('Error saving product:', error);
             showToast('Failed to save product.', 'error');
@@ -264,6 +265,7 @@ const ProductManagement = ({
             await axios.delete(`${API_BASE_URL}/api/products/${id}`);
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.products });
             fetchProducts();
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'products' } }));
         } catch (error) {
             console.error('Error deleting product:', error);
             fetchProducts();

@@ -30,6 +30,7 @@ const getDisplayName = (code, name) => {
 const OrderManagement = ({
     currentUser,
     addNotification,
+    products: initialProducts,
     fetchSalesGlobal,
     refreshPendingIndicators,
     onDeleteConfirm,
@@ -278,9 +279,18 @@ const OrderManagement = ({
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
     // Reference Data: Products
-    const [products, setProducts] = useState([]);
+    const [products, setProducts] = useState(() => {
+        const cached = queryClient.getQueryData(['products']);
+        return Array.isArray(cached) && cached.length > 0 ? cached : (Array.isArray(initialProducts) ? initialProducts : []);
+    });
     const [productSearch, setProductSearch] = useState('');
     const [brandSearch, setBrandSearch] = useState('');
+
+    useEffect(() => {
+        if (Array.isArray(initialProducts) && initialProducts.length > 0) {
+            setProducts(initialProducts);
+        }
+    }, [initialProducts]);
 
     // Reference Data: Warehouses & Stock & Damages
     const [warehouses, setWarehouses] = useState([]);
@@ -346,17 +356,23 @@ const OrderManagement = ({
     useEffect(() => {
         const socket = getSocket();
         const handleRealtimeUpdate = (data) => {
-            const mod = data?.module;
-            if (!mod || mod === 'orders' || mod === 'sales' || mod === 'all' || mod === 'notifications') {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['orders', 'sales', 'order', 'sale', 'all', 'notifications'].includes(mod)) {
                 fetchOrders();
                 if (refreshPendingIndicators) refreshPendingIndicators();
             }
-            if (mod === 'customers' || mod === 'all') {
+            if (['customers', 'customer', 'all'].includes(mod)) {
                 fetchCustomers();
             }
-            if (mod === 'stock' || mod === 'warehouses' || mod === 'stock-baseline' || mod === 'all') {
+            if (['stock', 'warehouses', 'warehouse', 'stock-baseline', 'transfer', 'transfers', 'all'].includes(mod)) {
                 fetchStockRecords();
                 fetchWarehouses();
+            }
+            if (['products', 'product', 'all'].includes(mod)) {
+                fetchProducts(true);
+            }
+            if (['damages', 'damage', 'all'].includes(mod)) {
+                fetchDamagesRecords();
             }
         };
 
@@ -451,13 +467,22 @@ const OrderManagement = ({
         }
     };
 
-    const fetchProducts = async () => {
+    const fetchProducts = async (forceBust = false) => {
+        const cached = queryClient.getQueryData(['products']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setProducts(cached);
+        }
         try {
-            const list = await queryClient.fetchQuery({
+            if (forceBust) {
+                queryClient.invalidateQueries({ queryKey: ['products'] });
+            }
+            const data = await queryClient.fetchQuery({
                 queryKey: ['products'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/products?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
+            const list = Array.isArray(data) ? data : [];
             setProducts(list);
+            return list;
         } catch (err) {
             console.error('Error fetching products:', err);
         }
@@ -720,8 +745,10 @@ const OrderManagement = ({
     };
 
     const getFilteredProducts = () => {
-        return products.filter(p =>
-            (p.name || '').toLowerCase().includes((productSearch || '').toLowerCase())
+        const search = (productSearch || '').trim().toLowerCase();
+        if (!search) return products || [];
+        return (products || []).filter(p =>
+            (p.name || '').toLowerCase().includes(search)
         );
     };
 
@@ -729,16 +756,46 @@ const OrderManagement = ({
         const targetIdx = pIdx !== undefined ? pIdx : activeItemIndex;
         if (targetIdx === null) return [];
         const item = formData.items[targetIdx];
-        if (!item?.productId) return [];
-        const selectedProduct = products.find(p => p._id === item.productId);
-        if (!selectedProduct) return [];
+        if (!item) return [];
+
+        const targetProdId = item.productId ? item.productId.toString() : '';
+        const targetProdName = (item.productName || '').trim().toLowerCase();
+
+        const selectedProduct = (products || []).find(p => 
+            (targetProdId && p._id && p._id.toString() === targetProdId) ||
+            (targetProdName && (p.name || '').trim().toLowerCase() === targetProdName)
+        );
+
         const brandsSet = new Set();
-        if (selectedProduct.brand) brandsSet.add(selectedProduct.brand);
-        if (selectedProduct.brands && Array.isArray(selectedProduct.brands)) {
-            selectedProduct.brands.forEach(b => { if (b.brand) brandsSet.add(b.brand); });
+        if (selectedProduct) {
+            if (selectedProduct.brand) brandsSet.add(selectedProduct.brand.trim());
+            if (selectedProduct.brands && Array.isArray(selectedProduct.brands)) {
+                selectedProduct.brands.forEach(b => {
+                    const bName = typeof b === 'string' ? b : (b?.brand || b?.brandName);
+                    if (bName && typeof bName === 'string') brandsSet.add(bName.trim());
+                });
+            }
         }
+
+        // Also gather brands from stockRecords and warehouses for this product
+        if (targetProdName) {
+            (stockRecords || []).forEach(s => {
+                const sProd = (s.productName || s.product || '').trim().toLowerCase();
+                if (sProd === targetProdName && s.brand) {
+                    brandsSet.add(s.brand.trim());
+                }
+            });
+            (warehouses || []).forEach(w => {
+                const wProd = (w.productName || w.product || '').trim().toLowerCase();
+                if (wProd === targetProdName && w.brand) {
+                    brandsSet.add(w.brand.trim());
+                }
+            });
+        }
+
+        const search = (brandSearch || '').trim().toLowerCase();
         return [...brandsSet].filter(Boolean).filter(b =>
-            b.toLowerCase().includes((brandSearch || '').toLowerCase())
+            !search || b.toLowerCase().includes(search)
         );
     };
 
@@ -764,8 +821,13 @@ const OrderManagement = ({
         if (targetPIdx === null || targetBIdx === null) return;
         const brandNameStr = typeof brandName === 'string' ? brandName : (brandName?.brand || brandName?.brandName || '');
         const updated = [...formData.items];
-        const selectedProduct = products.find(p => p._id === updated[targetPIdx]?.productId);
-        const selectedBrandObj = selectedProduct?.brands?.find(b => b.brand === brandNameStr);
+        const targetProdId = updated[targetPIdx]?.productId ? updated[targetPIdx].productId.toString() : '';
+        const targetProdName = (updated[targetPIdx]?.productName || '').trim().toLowerCase();
+        const selectedProduct = (products || []).find(p =>
+            (targetProdId && p._id && p._id.toString() === targetProdId) ||
+            (targetProdName && (p.name || '').trim().toLowerCase() === targetProdName)
+        );
+        const selectedBrandObj = selectedProduct?.brands?.find(b => (typeof b === 'string' ? b : b?.brand) === brandNameStr);
         const packetSize = selectedBrandObj?.packetSize || selectedProduct?.packetSize || '';
         updated[targetPIdx].brandEntries[targetBIdx] = {
             ...updated[targetPIdx].brandEntries[targetBIdx],
@@ -1010,6 +1072,9 @@ const OrderManagement = ({
 
     // Form Action Handlers
     const handleOpenCreateForm = () => {
+        fetchProducts(true);
+        fetchStockRecords();
+        fetchWarehouses();
         setEditingId(null);
         setCompanyNameSearch('');
         setFormData({
@@ -1021,6 +1086,9 @@ const OrderManagement = ({
     };
 
     const handleEdit = (sale) => {
+        fetchProducts(true);
+        fetchStockRecords();
+        fetchWarehouses();
         setEditingId(sale._id);
         setOriginalData(sale);
         const comp = sale.companyName || sale.customerName || '';
@@ -2249,7 +2317,12 @@ const OrderManagement = ({
                                                     </div>
                                                 </div>
                                                 {activeFilterDropdown === 'brand' && (() => {
-                                                    const options = [...new Set(sales.flatMap(s => (s.items || []).flatMap(i => (i.brandEntries || []).map(b => b.brand))).filter(Boolean))].sort();
+                                                    const options = [...new Set([
+                                                        ...sales.flatMap(s => (s.items || []).flatMap(i => (i.brandEntries || []).map(b => b.brandName || b.brand))),
+                                                        ...products.flatMap(p => [p.brand, ...(Array.isArray(p.brands) ? p.brands.map(b => typeof b === 'string' ? b : b.brand) : [])]),
+                                                        ...(stockRecords || []).map(s => s.brand),
+                                                        ...(warehouses || []).map(w => w.brand)
+                                                    ].filter(Boolean))].sort();
                                                     const filtered = options.filter(b => b.toLowerCase().includes((saleFilterSearch.brandSearch || '').toLowerCase()));
                                                     return filtered.length > 0 ? (
                                                         <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
@@ -2511,7 +2584,8 @@ const OrderManagement = ({
                                                         setHighlightedIndex(-1);
                                                     }}
                                                     onFocus={() => {
-                                                        setProductSearch(item.productName || '');
+                                                        if (!products || products.length === 0) fetchProducts(true);
+                                                        setProductSearch('');
                                                         setActiveDropdown('product');
                                                         setActiveItemIndex(pIdx);
                                                         setHighlightedIndex(-1);
@@ -2525,7 +2599,14 @@ const OrderManagement = ({
                                                             <XIcon className="w-4 h-4" />
                                                         </button>
                                                     )}
-                                                    <button type="button" onClick={() => { setActiveDropdown(activeDropdown === 'product' && activeItemIndex === pIdx ? null : 'product'); setActiveItemIndex(pIdx); }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                    <button type="button" onClick={() => {
+                                                        if (activeDropdown !== 'product' || activeItemIndex !== pIdx) {
+                                                            if (!products || products.length === 0) fetchProducts(true);
+                                                            setProductSearch('');
+                                                        }
+                                                        setActiveDropdown(activeDropdown === 'product' && activeItemIndex === pIdx ? null : 'product');
+                                                        setActiveItemIndex(pIdx);
+                                                    }} className="text-gray-300 hover:text-blue-500 transition-colors">
                                                         <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'product' && activeItemIndex === pIdx ? 'rotate-180' : ''}`} />
                                                     </button>
                                                 </div>
@@ -2599,14 +2680,29 @@ const OrderManagement = ({
                                                             placeholder={be.brandName || "Brand"}
                                                             value={activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? brandSearch : (be.brandName || '')}
                                                             onChange={(e) => { setBrandSearch(e.target.value); setActiveDropdown('brand'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); setHighlightedIndex(-1); updateBrandEntry(pIdx, bIdx, 'brandName', e.target.value); }}
-                                                            onFocus={() => { setActiveDropdown('brand'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); setBrandSearch(be.brandName || ''); setHighlightedIndex(-1); }}
+                                                            onFocus={() => {
+                                                                if (!products || products.length === 0) fetchProducts(true);
+                                                                setActiveDropdown('brand');
+                                                                setActiveItemIndex(pIdx);
+                                                                setActiveEntryIndex(bIdx);
+                                                                setBrandSearch('');
+                                                                setHighlightedIndex(-1);
+                                                            }}
                                                             onKeyDown={(e) => handleDropdownKeyDown(e, getFilteredBrands(pIdx), (b) => handleBrandSelect(b, pIdx, bIdx))}
                                                             autoComplete="off"
                                                             className={`sale-mgmt-input !text-xs pr-8 ${be.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                         />
                                                         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
                                                             {be.brandName && (<button type="button" onClick={() => { updateBrandEntry(pIdx, bIdx, 'brand', ''); updateBrandEntry(pIdx, bIdx, 'brandName', ''); setBrandSearch(''); }} className="text-gray-400 hover:text-red-500"><XIcon className="w-3 h-3" /></button>)}
-                                                            <button type="button" onClick={() => { setActiveDropdown(activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? null : 'brand'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                            <button type="button" onClick={() => {
+                                                                if (activeDropdown !== 'brand' || activeItemIndex !== pIdx || activeEntryIndex !== bIdx) {
+                                                                    if (!products || products.length === 0) fetchProducts(true);
+                                                                    setBrandSearch('');
+                                                                }
+                                                                setActiveDropdown(activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? null : 'brand');
+                                                                setActiveItemIndex(pIdx);
+                                                                setActiveEntryIndex(bIdx);
+                                                            }} className="text-gray-300 hover:text-blue-500 transition-colors">
                                                                 <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? 'rotate-180' : ''}`} />
                                                             </button>
                                                         </div>
