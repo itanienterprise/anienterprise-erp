@@ -28,6 +28,7 @@ import ReportFormatModal from '../../shared/ReportFormatModal';
 import { isProductMatch } from '../../../utils/lcValueUtils';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { getSocket } from '../../../utils/socket';
 
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -316,6 +317,32 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
     useEffect(() => {
         fetchData();
         fetchEmployees();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['margin-returns', 'margin-return', 'lc-management', 'lc', 'banks', 'bank', 'stock', 'sales', 'all'].includes(mod)) {
+                fetchData(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchData(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, [refreshKey]);
 
     // Close LC dropdown when clicking outside
@@ -396,15 +423,15 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
         setShowReportFormatModal(true);
     };
 
-    const fetchData = async () => {
-        setIsLoading(true);
+    const fetchData = async (silent = false) => {
+        if (!silent) setIsLoading(true);
         try {
             const [returnsRes, lcRes, bankRes, stockRes, salesRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/margin-returns`),
-                axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/banks`),
-                axios.get(`${API_BASE_URL}/api/stock`).catch(() => ({ data: [] })),
-                axios.get(`${API_BASE_URL}/api/sales`).catch(() => ({ data: [] }))
+                axios.get(`${API_BASE_URL}/api/margin-returns?_t=${Date.now()}`),
+                axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`),
+                axios.get(`${API_BASE_URL}/api/banks?_t=${Date.now()}`),
+                axios.get(`${API_BASE_URL}/api/stock?_t=${Date.now()}`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`).catch(() => ({ data: [] }))
             ]);
 
             setMarginReturns(Array.isArray(returnsRes.data) ? returnsRes.data : []);
@@ -414,7 +441,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
             setSalesRecords(Array.isArray(salesRes.data) ? salesRes.data : []);
         } catch (error) {
             console.error('Error fetching Margin Return data:', error);
-            addNotification?.('Failed to load Margin Return records', 'error');
+            if (!silent) addNotification?.('Failed to load Margin Return records', 'error');
         } finally {
             setIsLoading(false);
         }

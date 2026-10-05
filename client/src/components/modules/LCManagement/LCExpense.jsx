@@ -10,6 +10,7 @@ import { generateLCExpenseReportExcel } from '../../../utils/excelGenerator';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import ReportFormatModal from '../../shared/ReportFormatModal';
+import { getSocket } from '../../../utils/socket';
 
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, highlightId, isRequestedNotif }) => {
     const [localHighlightId, setLocalHighlightId] = useState(null);
@@ -309,6 +310,33 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
         fetchInsurancePayments();
         fetchEmployees();
         setExpandedExpenseIdx(null);
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['lc-expenses', 'lc-expense', 'lc-management', 'lc', 'cnfs', 'cnf', 'cnf-payments', 'stock', 'insurance-payments', 'all'].includes(mod)) {
+                fetchExpenses(true);
+                fetchLCs();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchExpenses(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, [refreshKey]);
 
     useEffect(() => {
@@ -410,22 +438,26 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
         }
     };
 
-    const fetchExpenses = async () => {
-        const cached = queryClient.getQueryData(['lc-expenses']);
-        if (cached && Array.isArray(cached) && cached.length > 0) {
-            setExpenses(cached);
-        } else {
-            setIsLoading(true);
+    const fetchExpenses = async (silent = false) => {
+        if (!silent) {
+            const cached = queryClient.getQueryData(['lc-expenses']);
+            if (cached && Array.isArray(cached) && cached.length > 0) {
+                setExpenses(cached);
+            } else {
+                setIsLoading(true);
+            }
         }
         try {
             const data = await queryClient.fetchQuery({
                 queryKey: ['lc-expenses'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-expenses`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-expenses?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
-            setExpenses(data);
+            const valid = Array.isArray(data) ? data : [];
+            setExpenses(valid);
+            queryClient.setQueryData(['lc-expenses'], valid);
         } catch (error) {
             console.error('Error fetching LC Expenses:', error);
-            addNotification?.('Failed to load expenses', 'error');
+            if (!silent) addNotification?.('Failed to load expenses', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -435,9 +467,11 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
         try {
             const data = await queryClient.fetchQuery({
                 queryKey: ['lc-management'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
-            setLcs(data);
+            const valid = Array.isArray(data) ? data : [];
+            setLcs(valid);
+            queryClient.setQueryData(['lc-management'], valid);
         } catch (error) {
             console.error('Error fetching LCs:', error);
         }

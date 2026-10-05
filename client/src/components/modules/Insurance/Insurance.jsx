@@ -11,6 +11,7 @@ import { generateInsuranceHistoryReportExcel } from '../../../utils/excelGenerat
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import { ViewDetailsModal } from '../LCManagement/LCManagement';
 import { getLcMilestoneFinances, getLcMilestonesBreakdown } from '../../../utils/lcValueUtils';
+import { getSocket } from '../../../utils/socket';
 
 const renderMilestoneStatusBadge = (status, label) => {
     let bg = 'bg-rose-50 text-rose-600 border-rose-100/50';
@@ -201,29 +202,33 @@ const Insurance = ({ onDeleteConfirm }) => {
         status: 'Active'
     });
 
-    const fetchInsurance = async () => {
-        const cached = queryClient.getQueryData(['insurance']);
-        if (cached && Array.isArray(cached) && cached.length > 0) {
-            setInsuranceRecords(cached);
-        } else {
-            setIsInitialLoading(true);
+    const fetchInsurance = async (silent = false) => {
+        if (!silent) {
+            const cached = queryClient.getQueryData(['insurance']);
+            if (cached && Array.isArray(cached) && cached.length > 0) {
+                setInsuranceRecords(cached);
+            } else {
+                setIsInitialLoading(true);
+            }
         }
         try {
             const [insData, lcData, paymentsData] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['insurance'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/insurance`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/insurance?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['lc-management'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['insurance-payments'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
                 })
             ]);
-            setInsuranceRecords(Array.isArray(insData) ? insData : []);
+            const finalIns = Array.isArray(insData) ? insData : [];
+            setInsuranceRecords(finalIns);
+            queryClient.setQueryData(['insurance'], finalIns);
             setLcRecords(Array.isArray(lcData) ? lcData : []);
             setInsurancePayments(Array.isArray(paymentsData) ? paymentsData : []);
         } catch (error) {
@@ -233,8 +238,35 @@ const Insurance = ({ onDeleteConfirm }) => {
         }
     };
 
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
     useEffect(() => {
         fetchInsurance();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || mod === 'insurance' || mod === 'insurance-payments' || mod === 'insurance-payment' || mod === 'lc-management' || mod === 'all') {
+                fetchInsurance(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchInsurance(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     // Click-outside handlers for filter panel and LC No dropdown
@@ -305,11 +337,11 @@ const Insurance = ({ onDeleteConfirm }) => {
             }
 
             queryClient.invalidateQueries({ queryKey: ['insurance'] });
-            fetchInsurance();
+            fetchInsurance(true);
         } catch (error) {
             console.error('Error saving insurance record:', error);
             alert('Failed to save insurance record');
-            fetchInsurance();
+            fetchInsurance(true);
         } finally {
             setIsSubmitting(false);
         }

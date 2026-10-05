@@ -1909,6 +1909,16 @@ function App() {
         'cnf': ['cnfs'],
         'cnf-payments': ['cnfs', 'cnf-payments'],
         'cnf-payment': ['cnfs', 'cnf-payments'],
+        'insurance': ['insurance', 'insurance-payments'],
+        'insurance-payments': ['insurance-payments', 'insurance'],
+        'insurance-payment': ['insurance-payments', 'insurance'],
+        'lc-management': ['lc-management', 'lc-gp', 'lc-expenses', 'margin-returns'],
+        'lc': ['lc-management', 'lc-gp', 'lc-expenses', 'margin-returns'],
+        'lc-gp': ['lc-gp', 'lc-management'],
+        'lc-expenses': ['lc-expenses', 'lc-management', 'cnfs', 'cnf-payments'],
+        'lc-expense': ['lc-expenses', 'lc-management', 'cnfs', 'cnf-payments'],
+        'margin-returns': ['margin-returns', 'lc-management'],
+        'margin-return': ['margin-returns', 'lc-management'],
         'damages': ['damages', 'stock', 'warehouses'],
         'returns': ['returns', 'stock', 'warehouses'],
         'notifications': ['notifications'],
@@ -2034,6 +2044,26 @@ function App() {
         }
       } catch (err) {
         console.warn('Error syncing packing-lists in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'insurance-payments' || module === 'insurance-payment' || module === 'insurance' || module === 'all') {
+          queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });
+          queryClient.invalidateQueries({ queryKey: ['insurance'] });
+        }
+      } catch (err) {
+        console.warn('Error syncing insurance-payments in handleDataUpdate:', err);
+      }
+
+      try {
+        if (module === 'lc-management' || module === 'lc' || module === 'lc-gp' || module === 'lc-expenses' || module === 'lc-expense' || module === 'margin-returns' || module === 'margin-return' || module === 'all') {
+          queryClient.invalidateQueries({ queryKey: ['lc-management'] });
+          queryClient.invalidateQueries({ queryKey: ['lc-gp'] });
+          queryClient.invalidateQueries({ queryKey: ['lc-expenses'] });
+          queryClient.invalidateQueries({ queryKey: ['margin-returns'] });
+        }
+      } catch (err) {
+        console.warn('Error syncing lc-management in handleDataUpdate:', err);
       }
 
       try {

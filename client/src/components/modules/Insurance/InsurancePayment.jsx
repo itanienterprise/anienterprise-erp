@@ -11,6 +11,7 @@ import { generateInsurancePaymentReportExcel } from '../../../utils/excelGenerat
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { getSocket } from '../../../utils/socket';
 
 import { getLcMilestoneFinances } from '../../../utils/lcValueUtils';
 export { getLcMilestoneFinances };
@@ -215,12 +216,6 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
         reference: '',
         remarks: ''
     });
-
-    useEffect(() => {
-        fetchPayments();
-        fetchInsurances();
-        fetchEmployees();
-    }, []);
 
     const fetchEmployees = async () => {
         try {
@@ -461,25 +456,63 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
         }
     };
 
-    const fetchPayments = async () => {
-        const cached = queryClient.getQueryData(['insurance-payments']);
-        if (cached && Array.isArray(cached) && cached.length > 0) {
-            setPayments(cached);
-        } else {
-            setIsLoading(true);
+    const fetchPayments = async (silent = false) => {
+        if (!silent) {
+            const cached = queryClient.getQueryData(['insurance-payments']);
+            if (cached && Array.isArray(cached) && cached.length > 0) {
+                setPayments(cached);
+            } else {
+                setIsLoading(true);
+            }
         }
         try {
             const data = await queryClient.fetchQuery({
                 queryKey: ['insurance-payments'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setPayments(data);
+            queryClient.setQueryData(['insurance-payments'], data);
         } catch (error) {
             console.error('Error fetching insurance payments:', error);
         } finally {
             setIsLoading(false);
         }
     };
+
+    // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
+    useEffect(() => {
+        fetchPayments();
+        fetchInsurances();
+        fetchEmployees();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || mod === 'insurance-payments' || mod === 'insurance-payment' || mod === 'insurance' || mod === 'lc-management' || mod === 'all') {
+                fetchPayments(true);
+                fetchInsurances();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchPayments(true);
+            fetchInsurances();
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
+    }, []);
 
     // Click outside listener for dropdowns
     useEffect(() => {
@@ -597,7 +630,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             setShowAddModal(false);
             setSubmitStatus(null);
             resetNewPayment();
-            fetchPayments();
+            fetchPayments(true);
             fetchInsurances();
         } catch (error) {
             console.error('Error saving insurance payment:', error);
@@ -630,7 +663,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                     ['Admin', 'Incharge', 'Accounts Manager', 'Sales Manager']
                 );
             }
-            fetchPayments();
+            fetchPayments(true);
             fetchInsurances();
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
         } catch (err) {
@@ -661,7 +694,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                     ['Admin', 'Incharge', 'Accounts Manager']
                 );
             }
-            await fetchPayments();
+            await fetchPayments(true);
             await fetchInsurances();
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
         } catch (err) {
@@ -737,7 +770,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             await axios.delete(`${API_BASE_URL}/api/insurance-payments/${delId}`);
             queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });
             queryClient.invalidateQueries({ queryKey: ['insurance'] });
-            fetchPayments();
+            fetchPayments(true);
             fetchInsurances();
         } catch (error) {
             console.error('Error deleting insurance payment:', error);

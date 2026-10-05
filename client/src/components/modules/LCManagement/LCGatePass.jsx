@@ -11,6 +11,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { getSocket } from '../../../utils/socket';
 
 const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNotif }) => {
     const [localHighlightId, setLocalHighlightId] = useState(null);
@@ -269,22 +270,22 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
         return getFirstNameFromIdentifier(candidate) || candidate;
     };
 
-    const fetchRecords = async () => {
-        setIsLoading(true);
+    const fetchRecords = async (silent = false) => {
+        if (!silent) setIsLoading(true);
         try {
             const [gpRes, lcRes, custRes, salesRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/lc-gp`),
-                axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/customers`),
-                axios.get(`${API_BASE_URL}/api/sales`)
+                axios.get(`${API_BASE_URL}/api/lc-gp?_t=${Date.now()}`),
+                axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`),
+                axios.get(`${API_BASE_URL}/api/customers?_t=${Date.now()}`),
+                axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`)
             ]);
-            setRecords(gpRes.data);
-            setLcRecordsRaw(lcRes.data);
-            setCustomerRecordsRaw(custRes.data);
-            setSalesRecordsRaw(salesRes.data);
+            setRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
+            setLcRecordsRaw(Array.isArray(lcRes.data) ? lcRes.data : []);
+            setCustomerRecordsRaw(Array.isArray(custRes.data) ? custRes.data : []);
+            setSalesRecordsRaw(Array.isArray(salesRes.data) ? salesRes.data : []);
         } catch (error) {
             console.error('Error fetching records:', error);
-            addNotification?.('Failed to fetch records', 'error');
+            if (!silent) addNotification?.('Failed to fetch records', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -293,6 +294,32 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
     useEffect(() => {
         fetchRecords();
         fetchEmployees();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['lc-gp', 'lc-management', 'lc', 'customers', 'sales', 'all'].includes(mod)) {
+                fetchRecords(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchRecords(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     // Outside click handler for dropdown

@@ -17,6 +17,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getCogNetBillBdt, isProductMatch } from '../../../utils/lcValueUtils';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { getSocket } from '../../../utils/socket';
 
 const gridColsClassMap = {
     1: 'md:grid-cols-1',
@@ -5697,6 +5698,36 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
     useEffect(() => {
         fetchInitialData();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || [
+                'lc-management', 'lc', 'lc-gp', 'lc-expenses', 'lc-expense', 'margin-returns', 'margin-return',
+                'banks', 'bank', 'importers', 'importer', 'exporters', 'exporter', 'insurance', 'ip-records', 'ip',
+                'pi', 'products', 'product', 'stock', 'sales', 'ports', 'port', 'insurance-payments', 'all'
+            ].includes(mod)) {
+                fetchInitialData(true);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchInitialData(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     useEffect(() => {
@@ -6091,28 +6122,34 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             queryClient.invalidateQueries({ queryKey: ['lc-management'] });
             const freshLcRecords = await queryClient.fetchQuery({
                 queryKey: ['lc-management'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
-            setLcRecords(freshLcRecords);
+            const valid = Array.isArray(freshLcRecords) ? freshLcRecords : [];
+            setLcRecords(valid);
+            queryClient.setQueryData(['lc-management'], valid);
         } catch (error) {
             console.error("Failed to fetch LC records in background:", error);
         }
     };
 
-    const fetchInitialData = async () => {
-        const cachedLc = queryClient.getQueryData(['lc-management']);
-        if (cachedLc && Array.isArray(cachedLc) && cachedLc.length > 0) {
-            setLcRecords(cachedLc);
-        } else {
-            setIsLoading(true);
+    const fetchInitialData = async (silent = false) => {
+        if (!silent) {
+            const cachedLc = queryClient.getQueryData(['lc-management']);
+            if (cachedLc && Array.isArray(cachedLc) && cachedLc.length > 0) {
+                setLcRecords(cachedLc);
+            } else {
+                setIsLoading(true);
+            }
         }
         try {
             // 1. Fetch main LC records first and render table instantly
             const lcData = await queryClient.fetchQuery({
                 queryKey: ['lc-management'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
-            setLcRecords(Array.isArray(lcData) ? lcData : []);
+            const validLcs = Array.isArray(lcData) ? lcData : [];
+            setLcRecords(validLcs);
+            queryClient.setQueryData(['lc-management'], validLcs);
             setIsLoading(false);
 
             // 2. Fetch secondary metadata in background without blocking UI

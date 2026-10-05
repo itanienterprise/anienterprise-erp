@@ -66,7 +66,7 @@ const isAllowedOrigin = (origin) => {
     if (process.env.CLIENT_URL && (origin === process.env.CLIENT_URL || origin.startsWith(process.env.CLIENT_URL))) {
       return true;
     }
-  } catch (e) {}
+  } catch (e) { }
   return false;
 };
 
@@ -343,11 +343,11 @@ const ActivityLog = require('./models/ActivityLog');
 const UserDailyActivity = require('./models/UserDailyActivity');
 
 // ─── Attendance Module Models ────────────────────────────────────────────────
-const AttendancePunch  = require('./models/AttendancePunch');
-const AttendanceLog    = require('./models/AttendanceLog');
-const ShiftConfig      = require('./models/ShiftConfig');
-const LeaveRequest     = require('./models/LeaveRequest');
-const DeviceMapping    = require('./models/DeviceMapping');
+const AttendancePunch = require('./models/AttendancePunch');
+const AttendanceLog = require('./models/AttendanceLog');
+const ShiftConfig = require('./models/ShiftConfig');
+const LeaveRequest = require('./models/LeaveRequest');
+const DeviceMapping = require('./models/DeviceMapping');
 // ────────────────────────────────────────────────────────────────────────────
 
 // Intelligent Cluster-based Calculation of Actual ERP Active Usage Time
@@ -625,14 +625,14 @@ const migratePurchaseReceiveCustomerIds = async () => {
 
     const customers = customerDocs.map(c => {
       let data = {};
-      try { data = c.data ? decryptData(c.data) : {}; } catch (e) {}
+      try { data = c.data ? decryptData(c.data) : {}; } catch (e) { }
       return { _id: c._id.toString(), ...data };
     }).filter(c => c.companyName || c.customerName);
 
     const purchaseByNo = {};
     purchaseDocs.forEach(p => {
       let data = {};
-      try { data = p.data ? decryptData(p.data) : {}; } catch (e) {}
+      try { data = p.data ? decryptData(p.data) : {}; } catch (e) { }
       const pNo = (data.purchaseNo || data.invoiceNo || '').trim().toUpperCase();
       if (pNo && !purchaseByNo[pNo]) purchaseByNo[pNo] = data;
     });
@@ -698,7 +698,7 @@ const repairSaleItemRates = async () => {
     for (const doc of sales) {
       let saleData = doc.data ? decryptData(doc.data) : doc;
       if (saleData && saleData.data && typeof saleData.data === 'string') {
-        try { saleData = decryptData(saleData.data); } catch (e) {}
+        try { saleData = decryptData(saleData.data); } catch (e) { }
       }
       if (!saleData || !Array.isArray(saleData.items)) continue;
       let modified = false;
@@ -924,7 +924,7 @@ apiRouter.get('/api/pending-indicators', async (req, res) => {
       const decrypted = records.map(r => {
         let d = decryptData(r.data);
         if (d && d.data && typeof d.data === 'string' && !d.invoiceNo && !d.productName) {
-          try { d = decryptData(d.data); } catch (e) {}
+          try { d = decryptData(d.data); } catch (e) { }
         }
         return { ...d, _id: r._id, createdAt: d?.createdAt || r.createdAt, ...(decryptFn ? decryptFn(r, d) : {}) };
       });
@@ -947,7 +947,7 @@ apiRouter.get('/api/pending-indicators', async (req, res) => {
     const hasRequestedStockMgmt = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !item.lcNo);
     const hasRequestedTransfer = whData.some(item => {
       let dec = item.data ? decryptData(item.data) : item;
-      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) {} }
+      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
       return (dec?.status || '').toLowerCase() === 'requested';
     });
 
@@ -1063,7 +1063,7 @@ const isUserAdmin = async (user) => {
         const name = (d?.name || '').toLowerCase().trim();
         if (['admin', 'superadmin', 'incharge'].includes(name)) return true;
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Check custom permissions for backupRestore module
@@ -1332,7 +1332,7 @@ apiRouter.use(async (req, res, next) => {
     if (!resBodyData && data) {
       try {
         resBodyData = typeof data === 'string' ? JSON.parse(data) : data;
-      } catch (e) {}
+      } catch (e) { }
     }
     return originalSend.apply(this, arguments);
   };
@@ -1353,7 +1353,7 @@ apiRouter.use(async (req, res, next) => {
               previousDocSnapshot.category = doc.category;
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
   }
@@ -2045,7 +2045,7 @@ apiRouter.post('/api/stock', async (req, res) => {
     let resolvedBody = req.body;
     if (req.body && typeof req.body.data === 'string' && req.body.data.startsWith('U2FsdGVk')) {
       finalData = req.body.data;
-      try { resolvedBody = decryptData(req.body.data) || req.body; } catch(e) {}
+      try { resolvedBody = decryptData(req.body.data) || req.body; } catch (e) { }
     } else {
       finalData = encryptData(req.body);
     }
@@ -2089,7 +2089,7 @@ apiRouter.delete('/api/stock/:id', async (req, res) => {
       const curUser = (userSession?.username || '').trim().toLowerCase();
       const curName = (userSession?.name || '').trim().toLowerCase();
       const isOwner = (ownerUser && (ownerUser === curUser || (curName && ownerUser === curName))) ||
-                      (ownerName && (ownerName === curUser || (curName && ownerName === curName)));
+        (ownerName && (ownerName === curUser || (curName && ownerName === curName)));
 
       if (!hasDeletePermission && !isOwner) {
         return res.status(403).json({ message: 'Forbidden: Only the owner of the requested stock entry or an authorized user can delete it.' });
@@ -2151,7 +2151,7 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
         const curUser = (userSession?.username || '').trim().toLowerCase();
         const curName = (userSession?.name || '').trim().toLowerCase();
         const isOwner = (ownerUser && (ownerUser === curUser || (curName && ownerUser === curName))) ||
-                        (ownerName && (ownerName === curUser || (curName && ownerName === curName)));
+          (ownerName && (ownerName === curUser || (curName && ownerName === curName)));
 
         if (!hasEditPermission && !isOwner) {
           return res.status(403).json({ message: 'Forbidden: Only the owner of the requested stock entry can edit it.' });
@@ -2167,7 +2167,7 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
     let resolvedBody = req.body;
     if (req.body && typeof req.body.data === 'string' && req.body.data.startsWith('U2FsdGVk')) {
       finalData = req.body.data;
-      try { resolvedBody = decryptData(req.body.data) || req.body; } catch(e) {}
+      try { resolvedBody = decryptData(req.body.data) || req.body; } catch (e) { }
     } else {
       finalData = encryptData(req.body);
     }
@@ -2584,7 +2584,7 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
     let oldData = {};
     try {
       oldData = decryptData(oldRecord.data) || {};
-    } catch (e) {}
+    } catch (e) { }
 
     const newCompanyName = (req.body.companyName || '').trim();
     const newCustomerName = (req.body.customerName || '').trim();
@@ -2808,7 +2808,7 @@ apiRouter.get('/api/customers/:id', async (req, res) => {
         try {
           const d = decryptData(r.data);
           return d.customerId === req.params.id || d._id === req.params.id;
-        } catch(e) {
+        } catch (e) {
           return false;
         }
       });
@@ -3386,7 +3386,7 @@ apiRouter.post('/api/tokens', async (req, res) => {
               if (!isNaN(num) && num > maxSeq) maxSeq = num;
             }
           }
-        } catch (_) {}
+        } catch (_) { }
       });
       payload.tokenNo = `${prefix}-${String(maxSeq + 1).padStart(3, '0')}`;
     }
@@ -3499,7 +3499,10 @@ apiRouter.post('/api/insurance', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newRecord = new Insurance({ data: encryptedData });
     const savedRecord = await newRecord.save();
-    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('insurance', 'create', { id: savedRecord._id, insurance: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3514,6 +3517,8 @@ apiRouter.delete('/api/insurance/:id', async (req, res) => {
 
     const deletedRecord = await Insurance.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Insurance record not found' });
+    broadcastUpdate('insurance', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Insurance record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3525,7 +3530,10 @@ apiRouter.put('/api/insurance/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedRecord = await Insurance.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Insurance record not found' });
-    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('insurance', 'update', { id: req.params.id, insurance: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3550,7 +3558,10 @@ apiRouter.post('/api/insurance-payments', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newRecord = new InsurancePayment({ data: encryptedData });
     const savedRecord = await newRecord.save();
-    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('insurance-payments', 'create', { id: savedRecord._id, payment: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3560,6 +3571,8 @@ apiRouter.delete('/api/insurance-payments/:id', async (req, res) => {
   try {
     const deletedRecord = await InsurancePayment.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Payment record not found' });
+    broadcastUpdate('insurance-payments', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Payment record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3571,7 +3584,10 @@ apiRouter.put('/api/insurance-payments/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedRecord = await InsurancePayment.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Payment record not found' });
-    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('insurance-payments', 'update', { id: req.params.id, payment: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3579,6 +3595,9 @@ apiRouter.put('/api/insurance-payments/:id', async (req, res) => {
 
 apiRouter.get('/api/insurance-payments', async (req, res) => {
   try {
+    if (req.query._t || req.query._nocache) {
+      memoryCache.insurancePayments = null;
+    }
     if (memoryCache.insurancePayments) {
       return res.json(memoryCache.insurancePayments);
     }
@@ -3600,7 +3619,10 @@ apiRouter.post('/api/lc-management', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newRecord = new LCManagement({ data: encryptedData });
     const savedRecord = await newRecord.save();
-    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('lc-management', 'create', { id: savedRecord._id, lc: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
     checkLcExpiryNotifications().catch(err => console.error('[LCNotification] Error triggering check on save:', err));
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -3611,6 +3633,8 @@ apiRouter.delete('/api/lc-management/:id', async (req, res) => {
   try {
     const deletedRecord = await LCManagement.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'LC record not found' });
+    broadcastUpdate('lc-management', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'LC record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3622,7 +3646,10 @@ apiRouter.put('/api/lc-management/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedRecord = await LCManagement.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'LC record not found' });
-    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('lc-management', 'update', { id: req.params.id, lc: result });
+    req._broadcastDone = true;
+    res.json(result);
     checkLcExpiryNotifications().catch(err => console.error('[LCNotification] Error triggering check on update:', err));
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -3646,7 +3673,7 @@ apiRouter.post('/api/metadata', async (req, res) => {
           if (exVal === newVal) {
             return res.status(200).json({ ...dec, _id: rec._id, category: rec.category, createdAt: rec.createdAt });
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -3692,7 +3719,7 @@ apiRouter.delete('/api/metadata', async (req, res) => {
           await MetaData.findByIdAndDelete(rec._id);
           deletedCount++;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     res.json({ message: `Deleted ${deletedCount} record(s)` });
   } catch (err) {
@@ -3710,7 +3737,7 @@ apiRouter.delete('/api/metadata/:id', async (req, res) => {
     try {
       const dec = decryptData(target.data);
       targetVal = (dec?.value || dec || '').toString().trim().toLowerCase();
-    } catch (e) {}
+    } catch (e) { }
 
     if (category === 'certification' && targetVal === 'safta') {
       return res.status(400).json({ message: 'SAFTA is a permanent certification and cannot be deleted' });
@@ -3729,7 +3756,7 @@ apiRouter.delete('/api/metadata/:id', async (req, res) => {
           if (val === targetVal) {
             await MetaData.findByIdAndDelete(item._id);
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -3787,7 +3814,10 @@ apiRouter.post('/api/lc-gp', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newRecord = new LCGatePass({ data: encryptedData });
     const savedRecord = await newRecord.save();
-    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('lc-gp', 'create', { id: savedRecord._id, gatePass: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3798,7 +3828,10 @@ apiRouter.put('/api/lc-gp/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedRecord = await LCGatePass.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Gate Pass record not found' });
-    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('lc-gp', 'update', { id: req.params.id, gatePass: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3808,6 +3841,8 @@ apiRouter.delete('/api/lc-gp/:id', async (req, res) => {
   try {
     const deletedRecord = await LCGatePass.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Gate Pass record not found' });
+    broadcastUpdate('lc-gp', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Gate Pass record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3867,13 +3902,17 @@ apiRouter.post('/api/lc-expenses', async (req, res) => {
           const encPayData = encryptData(paymentBody);
           const newPayRecord = new CnFPayment({ data: encPayData });
           await newPayRecord.save();
+          broadcastUpdate('cnf-payments', 'create', { id: newPayRecord._id });
         }
       } catch (syncErr) {
         console.error('Error syncing C&F Payment on LCExpense POST:', syncErr);
       }
     }
 
-    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('lc-expenses', 'create', { id: savedRecord._id, expense: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3925,8 +3964,10 @@ apiRouter.put('/api/lc-expenses/:id', async (req, res) => {
           };
           const encPayData = encryptData(paymentBody);
           await CnFPayment.findByIdAndUpdate(existingPay._id, { data: encPayData });
+          broadcastUpdate('cnf-payments', 'update', { id: existingPay._id });
         } else {
           await CnFPayment.findByIdAndDelete(existingPay._id);
+          broadcastUpdate('cnf-payments', 'delete', { id: existingPay._id });
         }
       } else if (isCnfCommPayment) {
         const cnfs = await CnF.find();
@@ -3952,13 +3993,17 @@ apiRouter.put('/api/lc-expenses/:id', async (req, res) => {
           const encPayData = encryptData(paymentBody);
           const newPayRecord = new CnFPayment({ data: encPayData });
           await newPayRecord.save();
+          broadcastUpdate('cnf-payments', 'create', { id: newPayRecord._id });
         }
       }
     } catch (syncErr) {
       console.error('Error syncing C&F Payment on LCExpense PUT:', syncErr);
     }
 
-    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('lc-expenses', 'update', { id: req.params.id, expense: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3984,11 +4029,14 @@ apiRouter.delete('/api/lc-expenses/:id', async (req, res) => {
 
       if (existingPay) {
         await CnFPayment.findByIdAndDelete(existingPay._id);
+        broadcastUpdate('cnf-payments', 'delete', { id: existingPay._id });
       }
     } catch (syncErr) {
       console.error('Error deleting C&F Payment on LCExpense DELETE:', syncErr);
     }
 
+    broadcastUpdate('lc-expenses', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'LC Expense record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -4014,7 +4062,10 @@ apiRouter.post('/api/margin-returns', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newRecord = new MarginReturn({ data: encryptedData });
     const savedRecord = await newRecord.save();
-    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('margin-returns', 'create', { id: savedRecord._id, marginReturn: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -4025,7 +4076,10 @@ apiRouter.put('/api/margin-returns/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedRecord = await MarginReturn.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Margin Return record not found' });
-    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('margin-returns', 'update', { id: req.params.id, marginReturn: result });
+    req._broadcastDone = true;
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -4035,6 +4089,8 @@ apiRouter.delete('/api/margin-returns/:id', async (req, res) => {
   try {
     const deletedRecord = await MarginReturn.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Margin Return record not found' });
+    broadcastUpdate('margin-returns', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
     res.json({ message: 'Margin Return record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -5083,7 +5139,7 @@ const cleanBackupDocuments = (modelName, docs, options = {}) => {
               delete dec.profilePhoto;
               e.data = encryptData(dec);
             }
-          } catch (_err) {}
+          } catch (_err) { }
         }
       });
     }
@@ -5098,7 +5154,7 @@ const cleanBackupDocuments = (modelName, docs, options = {}) => {
             delete dec.ipAttachment;
             ip.data = encryptData(dec);
           }
-        } catch (_err) {}
+        } catch (_err) { }
       }
     });
   }
@@ -5271,7 +5327,7 @@ apiRouter.post('/api/restore-database-upload', adminOnly, backupUpload.single('b
     if (tempFilePath && fs.existsSync(tempFilePath)) {
       try {
         fs.unlinkSync(tempFilePath);
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 });
@@ -5616,10 +5672,10 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
         const checkpointBytes = collStats.wiredTiger && collStats.wiredTiger['block-manager'] ? collStats.wiredTiger['block-manager']['checkpoint size'] : 0;
         const diskBytes = collStats.storageSize || 0;
         const logicalBytes = collStats.size || 0;
-        
+
         // checkpointBytes in WiredTiger represents the exact physical compressed data footprint on disk
         const actualBytes = (checkpointBytes > 0 && checkpointBytes < diskBytes) ? checkpointBytes : (diskBytes > 0 ? diskBytes : logicalBytes);
-        
+
         const formatDynamicBytes = (bytes) => {
           if (!bytes || bytes <= 0) return '0 B';
           if (bytes < 1024) return `${bytes} B`;
@@ -5630,7 +5686,7 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
         storageSizeFormatted = formatDynamicBytes(actualBytes);
         dataSizeFormatted = formatDynamicBytes(logicalBytes);
       }
-    } catch (statErr) {}
+    } catch (statErr) { }
 
     // Build user mapping (username -> full displayName)
     const userNamesMap = {
@@ -5644,14 +5700,14 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
         try {
           let decrypted = decryptData(emp.data);
           if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
-            try { decrypted = decryptData(decrypted.data); } catch (e) {}
+            try { decrypted = decryptData(decrypted.data); } catch (e) { }
           }
           if (decrypted && decrypted.employeeId && decrypted.name) {
             userNamesMap[decrypted.employeeId] = decrypted.name.trim();
           }
-        } catch (e) {}
+        } catch (e) { }
       }
-    } catch (empErr) {}
+    } catch (empErr) { }
 
     try {
       const logNames = await ActivityLog.aggregate([
@@ -5663,12 +5719,12 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
           userNamesMap[l._id] = l.displayName.trim();
         }
       });
-    } catch (logErr) {}
+    } catch (logErr) { }
 
     // Fetch detailed activity for active users today
     let todayActiveUsersList = [];
     let todayLiveUsers = 0;
-    
+
     // Fetch UserDailyActivity tracked engagement today safely
     let dailyMap = {};
     try {
@@ -5861,16 +5917,16 @@ apiRouter.get('/api/logs/user-history', adminOnly, async (req, res) => {
         try {
           let decrypted = decryptData(emp.data);
           if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
-            try { decrypted = decryptData(decrypted.data); } catch (e) {}
+            try { decrypted = decryptData(decrypted.data); } catch (e) { }
           }
           if (decrypted && (decrypted.employeeId === username || decrypted.username === username || decrypted.email === username)) {
             if (decrypted.name) displayName = decrypted.name.trim();
             if (decrypted.designation || decrypted.role) userRole = decrypted.designation || decrypted.role;
             break;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Group logs by day within the target month using timezone
     const targetMonthKey = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
@@ -6064,7 +6120,7 @@ apiRouter.post('/api/logs/client-action', async (req, res) => {
           $setOnInsert: { firstActive: new Date() }
         },
         { upsert: true }
-      ).catch(() => {});
+      ).catch(() => { });
     }
 
     res.json({ success: true, count: logsToInsert.length });
@@ -6195,7 +6251,7 @@ const cleanupOldActivityLogs = async () => {
       try {
         await mongoose.connection.db.command({ compact: 'activitylogs' });
         await mongoose.connection.db.command({ compact: 'notifications' });
-      } catch (ce) {}
+      } catch (ce) { }
     }
   } catch (e) {
     console.warn('[LogHousekeeping] Retention run failed:', e.message);
@@ -6379,7 +6435,7 @@ const checkLcExpiryNotifications = async () => {
       try {
         data = decryptData(record.data);
         if (data && data.data && typeof data.data === 'string' && !data.lcNo && !data.lcNoVal) {
-          try { data = decryptData(data.data); } catch (e) {}
+          try { data = decryptData(data.data); } catch (e) { }
         }
         if (!data || typeof data !== 'object') continue;
       } catch (err) {
@@ -6614,7 +6670,7 @@ const dayDiff = (from, to) => {
 const processEmployeeDay = async (employeeId, date) => {
   try {
     const dayStart = new Date(`${date}T00:00:00.000Z`);
-    const dayEnd   = new Date(`${date}T23:59:59.999Z`);
+    const dayEnd = new Date(`${date}T23:59:59.999Z`);
 
     const punches = await AttendancePunch.find({
       employeeId,
@@ -6628,11 +6684,11 @@ const processEmployeeDay = async (employeeId, date) => {
       $or: [{ applicableTo: employeeId }, { isDefault: true, applicableTo: { $size: 0 } }]
     }).sort({ isDefault: 1 });
 
-    const inPunches  = punches.filter(p => p.punchType === 'IN'  || p.punchType === 'UNKNOWN');
+    const inPunches = punches.filter(p => p.punchType === 'IN' || p.punchType === 'UNKNOWN');
     const outPunches = punches.filter(p => p.punchType === 'OUT');
 
-    const firstIn  = inPunches[0]?.punchTime  || punches[0].punchTime;
-    const lastOut  = outPunches.length ? outPunches[outPunches.length - 1].punchTime : null;
+    const firstIn = inPunches[0]?.punchTime || punches[0].punchTime;
+    const lastOut = outPunches.length ? outPunches[outPunches.length - 1].punchTime : null;
 
     let totalHours = 0;
     let overtimeHours = 0;
@@ -6685,11 +6741,11 @@ app.post('/api/attendance/device/push', async (req, res) => {
   try {
     // ADMS format: body may be urlencoded or JSON; query params also common
     const raw = { ...req.query, ...req.body };
-    const deviceId  = raw.sn   || raw.DeviceSN || 'F8-DEFAULT';
-    const enrollId  = parseInt(raw.PIN || raw.pin || raw.UserId || 0);
-    const stamp     = raw.Stamp || raw.stamp || raw.DateTime || raw.datetime || new Date().toISOString();
-    const checked   = parseInt(raw.Checked || raw.checked || 0);
-    const verify    = raw.Verify || raw.verify || 'UNKNOWN';
+    const deviceId = raw.sn || raw.DeviceSN || 'F8-DEFAULT';
+    const enrollId = parseInt(raw.PIN || raw.pin || raw.UserId || 0);
+    const stamp = raw.Stamp || raw.stamp || raw.DateTime || raw.datetime || new Date().toISOString();
+    const checked = parseInt(raw.Checked || raw.checked || 0);
+    const verify = raw.Verify || raw.verify || 'UNKNOWN';
 
     // Checked codes: 0=IN, 1=OUT, 2=BREAK_OUT, 3=BREAK_IN (ZK standard)
     const punchTypeMap = { 0: 'IN', 1: 'OUT', 2: 'BREAK_OUT', 3: 'BREAK_IN' };
@@ -6712,8 +6768,8 @@ app.post('/api/attendance/device/push', async (req, res) => {
       punchType,
       verifyMode: verify,
       rawPayload: JSON.stringify(raw),
-      processed:  false,
-      unmatched:  !mapping
+      processed: false,
+      unmatched: !mapping
     });
     await punch.save();
 
@@ -6799,7 +6855,7 @@ apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('attendance', 
     try {
       const userData = await zk.getUsers();
       users = Array.isArray(userData?.data) ? userData.data : (Array.isArray(userData) ? userData : []);
-    } catch (_) {}
+    } catch (_) { }
 
     await zk.disconnect();
 
@@ -6823,7 +6879,7 @@ apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('attendance', 
       usersFound: users.length
     });
   } catch (err) {
-    try { await zk.disconnect(); } catch (_) {}
+    try { await zk.disconnect(); } catch (_) { }
     console.error('[Attendance] ZK direct IP sync error:', err.message);
     res.status(500).json({
       success: false,
@@ -7096,7 +7152,7 @@ const getEmployeeForUser = async (user) => {
     for (const emp of employees) {
       let d = decryptData(emp.data);
       if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
-        try { d = decryptData(d.data); } catch (e) {}
+        try { d = decryptData(d.data); } catch (e) { }
       }
       if (!d) continue;
       const empId = (d.employeeId || '').toLowerCase().trim();
@@ -7163,7 +7219,7 @@ apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit')
     const targetDate = date || new Date().toISOString().split('T')[0];
 
     const dayStart = new Date(`${targetDate}T00:00:00.000Z`);
-    const dayEnd   = new Date(`${targetDate}T23:59:59.999Z`);
+    const dayEnd = new Date(`${targetDate}T23:59:59.999Z`);
 
     // Get all unique employeeIds that punched on this date
     const uniqueEmployees = await AttendancePunch.distinct('employeeId', {
@@ -7181,7 +7237,7 @@ apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit')
       try {
         dec = decryptData(emp.data);
         if (dec && dec.data && typeof dec.data === 'string' && !dec.employeeId) {
-          try { dec = decryptData(dec.data); } catch (e) {}
+          try { dec = decryptData(dec.data); } catch (e) { }
         }
       } catch (e) { continue; }
 
@@ -7359,7 +7415,7 @@ apiRouter.get('/api/attendance/report/monthly', verifyPermission('attendance', '
       else if (s === 'LATE') { byEmp[key].present++; byEmp[key].late++; }
       else if (s === 'HALF_DAY') byEmp[key].halfDay++;
       else if (s === 'LEAVE') byEmp[key].leave++;
-      byEmp[key].totalHours    = Math.round((byEmp[key].totalHours    + (log.totalHours    || 0)) * 100) / 100;
+      byEmp[key].totalHours = Math.round((byEmp[key].totalHours + (log.totalHours || 0)) * 100) / 100;
       byEmp[key].overtimeHours = Math.round((byEmp[key].overtimeHours + (log.overtimeHours || 0)) * 100) / 100;
       byEmp[key].logs.push({ date: log.date, status: log.status, firstPunchIn: log.firstPunchIn, lastPunchOut: log.lastPunchOut, totalHours: log.totalHours });
     }
