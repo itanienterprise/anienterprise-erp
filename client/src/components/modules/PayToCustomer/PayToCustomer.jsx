@@ -36,11 +36,10 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
     const canApprove = hasPermission(currentUser, 'payToCustomer', 'special') || hasPermission(currentUser, 'payToCustomer', 'approve') || isAdmin;
     const canApproveEditRequest = hasPermission(currentUser, 'payToCustomer', 'approveEditRequest') || isAdmin;
     const canViewEditRequest = hasPermission(currentUser, 'payToCustomer', 'editRequest') || hasPermission(currentUser, 'payToCustomer', 'approveEditRequest') || canApprove;
-    const canViewPaymentRequest = hasPermission(currentUser, 'payToCustomer', 'paymentRequest') || hasPermission(currentUser, 'payToCustomer', 'paymentApprovalRequest') || canApprove;
-    const canShowEntryBy = isAdmin || (currentUser?.role || '').toLowerCase() === 'incharge' || hasPermission(currentUser, 'payToCustomer', 'showEntryBy');
-
     const canApproveFirst = hasPermission(currentUser, 'payToCustomer', 'firstApprove');
     const canApproveSecond = hasPermission(currentUser, 'payToCustomer', 'secondApprove');
+    const canViewPaymentRequest = hasPermission(currentUser, 'payToCustomer', 'paymentRequest') || hasPermission(currentUser, 'payToCustomer', 'paymentApprovalRequest') || canApprove || canApproveFirst || canApproveSecond;
+    const canShowEntryBy = isAdmin || (currentUser?.role || '').toLowerCase() === 'incharge' || hasPermission(currentUser, 'payToCustomer', 'showEntryBy');
 
     const showRequestedApprovalButtons = (group) => {
         if (!group) return false;
