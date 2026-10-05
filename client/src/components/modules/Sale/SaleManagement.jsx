@@ -3387,21 +3387,6 @@ const SaleManagement = ({
             filtered = filtered.filter(lc => isLcMatchingTargetProduct(lc, targetProd, targetIpName));
         }
 
-        if (saleType !== 'Border' && activeItemIndex !== null && activeEntryIndex !== null) {
-            const currentItem = formData.items[activeItemIndex];
-            if (currentItem && currentItem.brandEntries) {
-                const alreadySelectedLcs = new Set(
-                    currentItem.brandEntries
-                        .filter((_, eIdx) => eIdx !== activeEntryIndex)
-                        .map(e => (e.lcNo || '').trim().toLowerCase())
-                        .filter(Boolean)
-                );
-                if (alreadySelectedLcs.size > 0) {
-                    filtered = filtered.filter(lc => !alreadySelectedLcs.has((lc.lcNo || '').trim().toLowerCase()));
-                }
-            }
-        }
-
         if (!query) {
             return filtered.slice(0, 50);
         }
@@ -3785,9 +3770,13 @@ const SaleManagement = ({
                     entry.lcNo = '';
                 } else {
                     entry.lcNo = selectedLcNo;
-                    if (lc.brand) {
+                    // Only auto-fill brand if brand is not already selected by the user
+                    if (lc.brand && !entry.brand && !entry.brandName) {
                         entry.brand = lc.brand;
                         entry.brandName = lc.brand;
+                        const selectedProduct = products.find(p => p._id === item.productId || (p.name || '').toLowerCase().trim() === (item.productName || '').toLowerCase().trim());
+                        const selectedBrandObj = selectedProduct?.brands?.find(b => b.brand === lc.brand);
+                        entry.bagSize = selectedBrandObj?.packetSize || selectedProduct?.packetSize || '';
                     }
                 }
 
@@ -6431,11 +6420,11 @@ const SaleManagement = ({
                                     const norm = str => (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
                                     const brandEntries = item.brandEntries || [];
 
-                                    // LCs already selected in this product
-                                    const selectedLcs = new Set(
+                                    // Brand + LC combinations already selected in this product
+                                    const selectedBrandLcs = new Set(
                                         brandEntries
-                                            .map(e => (e.lcNo || '').trim().toLowerCase())
-                                            .filter(Boolean)
+                                            .filter(e => (e.brandName || e.brand) && e.lcNo)
+                                            .map(e => `${norm(e.brandName || e.brand)}:::${(e.lcNo || '').trim().toLowerCase()}`)
                                     );
 
                                     // Brands that still have at least one entry without an LC selected
@@ -6454,9 +6443,9 @@ const SaleManagement = ({
                                         // Only show brands that still have rows needing an LC
                                         if (!brandsNeedingLc.has(bName)) return false;
 
-                                        // Hide specific LCs that have already been selected in this product
+                                        // Hide specific LC if this exact brand + LC combination has already been selected in this product
                                         const bLc = (b.lcNo || '').trim().toLowerCase();
-                                        if (bLc && bLc !== '—' && selectedLcs.has(bLc)) return false;
+                                        if (bLc && bLc !== '—' && selectedBrandLcs.has(`${bName}:::${bLc}`)) return false;
 
                                         return true;
                                     });
