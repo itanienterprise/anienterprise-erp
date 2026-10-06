@@ -47,10 +47,15 @@ const LoginPage = ({ onLogin }) => {
 
     return (
         <div className="lp-bg">
-            {/* Decorative blobs */}
-            <div className="lp-blob lp-blob-1" />
-            <div className="lp-blob lp-blob-2" />
-            <div className="lp-blob lp-blob-3" />
+            {/* Animated logistics background scene */}
+            <div className="lp-scene" aria-hidden="true">
+                <div className="lp-scene-canvas">
+                    <img src="/login-bg-scenery.jpg" alt="" className="lp-scene-bg" />
+                    <img src="/plane.png" alt="" className="lp-anim-plane" />
+                    <img src="/ship.png" alt="" className="lp-anim-ship" />
+                    <img src="/truck.png" alt="" className="lp-anim-truck" />
+                </div>
+            </div>
 
             <div className="lp-card">
                 {/* Logo section */}
