@@ -535,15 +535,6 @@ async function syncSaleOnDelete(saleInv, saleOrd) {
 }
 
 /**
- * Ensures Chondon entities (Bogura, Dinajpur, Gobindogonj) have their sales and orders
- * correctly attributed and never cross-contaminated.
- */
-async function repairChondonEntities() {
-  // Deprecated: No-op to avoid hardcoded customer overwrites
-  return;
-}
-
-/**
  * Scan all sales and customers in database, repair misallocated sales
  */
 async function repairAllCustomerSalesHistory() {
@@ -612,6 +603,5 @@ module.exports = {
   findCustomerForSale,
   syncSaleOnSave,
   syncSaleOnDelete,
-  repairChondonEntities,
   repairAllCustomerSalesHistory
 };
