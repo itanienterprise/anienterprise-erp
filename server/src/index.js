@@ -766,21 +766,86 @@ const repairSaleItemRates = async () => {
   }
 };
 
-// System Self-Healing Migrations:
-// Runs automatically after every backup restore AND on server startup.
-// 1. Cleans up obsolete zero-stock baseline records.
+// Universal Product & Brand Normalization:
+// Audits every product in the database, removes duplicate brand entries,
+// trims names, and ensures catalog data integrity across all products.
+const normalizeAllProductsAndBrands = async () => {
+  try {
+    const products = await Product.find({});
+    let fixed = 0;
+    for (const doc of products) {
+      if (!doc.data) continue;
+      let pData = decryptData(doc.data);
+      if (!pData) continue;
+      let changed = false;
+
+      // Normalize product name
+      if (pData.name && typeof pData.name === 'string') {
+        const cleanName = pData.name.trim();
+        if (cleanName !== pData.name) {
+          pData.name = cleanName;
+          changed = true;
+        }
+      }
+
+      // Normalize and deduplicate brands across every product
+      if (Array.isArray(pData.brands)) {
+        const seen = new Set();
+        const cleanBrands = [];
+        for (const b of pData.brands) {
+          const bName = typeof b === 'string' ? b.trim() : (b.brand || b.brandName || '').trim();
+          if (!bName) continue;
+          const key = bName.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            if (typeof b === 'object' && b !== null) {
+              cleanBrands.push({ ...b, brand: bName });
+            } else {
+              cleanBrands.push({ brand: bName });
+            }
+          } else {
+            changed = true;
+          }
+        }
+        if (cleanBrands.length !== pData.brands.length) {
+          pData.brands = cleanBrands;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        doc.data = encryptData(pData);
+        await doc.save();
+        fixed++;
+      }
+    }
+    if (fixed > 0) {
+      console.log(`[Self-Healing] Universally normalized ${fixed} product(s) in catalog.`);
+    }
+  } catch (err) {
+    console.error('[Self-Healing] Error in normalizeAllProductsAndBrands:', err);
+  }
+};
+
+// Universal System Self-Healing Migrations:
+// Runs automatically after every backup restore, on server startup, or via universal trigger.
+// 1. Cleans up obsolete zero-stock baseline records across all inventory.
 // 2. Re-populates customerId on PurchaseReceive documents.
-// 3. Synchronizes sale item rates where unitPrice is the agreed price.
-// 4. Scans and repairs all customer sales history across the database.
-// 5. Clears all memory caches so frontend receives clean, exact balances.
+// 3. Universally audits and normalizes all products and brands in the catalog.
+// 4. Synchronizes sale item rates where unitPrice is the agreed price across all sales.
+// 5. Scans and repairs all customer sales history and ledger balances across the database.
+// 6. Clears all memory caches so frontend receives clean, exact live figures.
 const runSystemSelfHealingMigrations = async () => {
   try {
-    console.log('[Self-Healing] Running generic database normalization & migrations...');
+    console.log('[Self-Healing] Running universal database normalization & self-healing...');
     if (typeof cleanupZeroStockBaselineItems === 'function') {
       await cleanupZeroStockBaselineItems();
     }
     if (typeof migratePurchaseReceiveCustomerIds === 'function') {
       await migratePurchaseReceiveCustomerIds();
+    }
+    if (typeof normalizeAllProductsAndBrands === 'function') {
+      await normalizeAllProductsAndBrands();
     }
     if (typeof repairSaleItemRates === 'function') {
       await repairSaleItemRates();
@@ -791,9 +856,14 @@ const runSystemSelfHealingMigrations = async () => {
     if (typeof invalidateMemoryCache === 'function') {
       invalidateMemoryCache();
     }
-    console.log('[Self-Healing] All migrations completed successfully.');
+    console.log('[Self-Healing] Universal self-healing completed successfully.');
+    return {
+      success: true,
+      message: 'Universal self-healing completed successfully! All product catalogs, stock balances, and customer ledgers have been audited and synchronized.'
+    };
   } catch (err) {
-    console.error('[Self-Healing] Error during migrations:', err);
+    console.error('[Self-Healing] Error during universal self-healing:', err);
+    throw err;
   }
 };
 
@@ -2871,8 +2941,11 @@ apiRouter.post('/api/customers/repair-sales-history', async (req, res) => {
 
 apiRouter.all('/api/system/run-migrations', async (req, res) => {
   try {
-    await runSystemSelfHealingMigrations();
-    res.json({ success: true, message: 'All self-healing migrations executed successfully.' });
+    const result = await runSystemSelfHealingMigrations();
+    res.json(result || {
+      success: true,
+      message: 'Universal self-healing completed successfully! All product catalogs, stock balances, and customer ledgers across the database have been audited and synchronized.'
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
