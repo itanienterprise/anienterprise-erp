@@ -43,6 +43,8 @@ export const isLcMatch = (targetLc, filterLc) => {
     return false;
 };
 
+export const isPlaceholderLc = (v) => !v || v.toString().trim() === '' || v.toString().trim() === '-' || v.toString().trim() === '—' || v.toString().trim() === '--' || v.toString().trim() === '0000';
+
 // Helper to group split brand entries by quality & brand name to avoid split-induced inflation in subtotals/totals
 export const getGroupedBrandList = (brandList) => {
     if (!Array.isArray(brandList)) return [];
@@ -233,6 +235,10 @@ export const reconcilePriceReportBrandList = (brandList) => {
     const result = [];
 
     Object.values(brandGroups).forEach(group => {
+        const totalBrandOrderQty = group.entries.reduce((sum, e) => sum + (e.orderQuantity || 0), 0);
+        const totalBrandOrderPkt = group.entries.reduce((sum, e) => sum + (e.orderPacket || 0), 0);
+        const groupResultStartIdx = result.length;
+
         const positiveEntries = [];
         const preSoldEntries = [];
 
@@ -251,7 +257,7 @@ export const reconcilePriceReportBrandList = (brandList) => {
                 } else {
                     // Mismatched or non-pre-sold entry: do not deduct from distinct positive LC arrivals
                 }
-            } else if (closing > 0.001 || (e.openingQuantity || 0) > 0.001) {
+            } else if (closing > 0.001) {
                 positiveEntries.push({ ...e, inHouseQuantity: closing, closingQuantity: closing });
             }
         });
@@ -276,27 +282,6 @@ export const reconcilePriceReportBrandList = (brandList) => {
             }
         }
 
-        // If no positive arrivals or pre-sold entries exist for this brand, preserve any genuine negative pre-sales
-        if (positiveEntries.length === 0 && preSoldEntries.length === 0) {
-            group.entries.forEach(e => {
-                const closing = (e.closingQuantity !== undefined ? e.closingQuantity : (e.inHouseQuantity || 0));
-                if (closing < -0.001) {
-                    const pktSize = e.packetSize || 30;
-                    const { whole, remainder } = calculatePktRemainder(closing, pktSize);
-                    const inHousePacket = whole + (remainder / pktSize);
-                    result.push({
-                        ...e,
-                        inHouseQuantity: closing,
-                        closingQuantity: closing,
-                        inHousePacket: inHousePacket,
-                        closingPacket: inHousePacket,
-                        saleableQuantity: 0,
-                        saleablePacket: 0
-                    });
-                }
-            });
-        }
-
         // Add genuine pre-sold entries
         for (const entry of preSoldEntries) {
             const remainingQty = entry.inHouseQuantity;
@@ -313,6 +298,60 @@ export const reconcilePriceReportBrandList = (brandList) => {
                 saleableQuantity: 0,
                 saleablePacket: 0
             });
+        }
+
+        const addedGroupEntries = result.slice(groupResultStartIdx);
+
+        // If no positive arrivals or pre-sold entries were added for this brand, preserve any genuine negative entries or active orders
+        if (addedGroupEntries.length === 0) {
+            const negEntry = group.entries.find(e => (e.closingQuantity !== undefined ? e.closingQuantity : (e.inHouseQuantity || 0)) < -0.001);
+            if (negEntry) {
+                const closing = (negEntry.closingQuantity !== undefined ? negEntry.closingQuantity : (negEntry.inHouseQuantity || 0));
+                const pktSize = negEntry.packetSize || 30;
+                const { whole, remainder } = calculatePktRemainder(closing, pktSize);
+                const inHousePacket = whole + (remainder / pktSize);
+                result.push({
+                    ...negEntry,
+                    inHouseQuantity: closing,
+                    closingQuantity: closing,
+                    inHousePacket: inHousePacket,
+                    closingPacket: inHousePacket,
+                    orderQuantity: totalBrandOrderQty,
+                    orderPacket: totalBrandOrderPkt,
+                    saleableQuantity: 0,
+                    saleablePacket: 0
+                });
+            } else if (totalBrandOrderQty > 0.001 || totalBrandOrderPkt > 0.001) {
+                // In stock is zero, but brand has active orders: preserve entry so order is visible!
+                const repEntry = group.entries.find(e => (e.orderQuantity || 0) > 0) || group.entries[group.entries.length - 1] || group.entries[0];
+                const pktSize = repEntry?.packetSize || 30;
+                result.push({
+                    ...repEntry,
+                    inHouseQuantity: 0,
+                    closingQuantity: 0,
+                    inHousePacket: 0,
+                    closingPacket: 0,
+                    orderQuantity: totalBrandOrderQty,
+                    orderPacket: totalBrandOrderPkt,
+                    saleableQuantity: 0,
+                    saleablePacket: 0
+                });
+            }
+        }
+
+        // Ensure that any unallocated brand order quantities are not lost if entries were pruned
+        const finalGroupEntries = result.slice(groupResultStartIdx);
+        if (finalGroupEntries.length > 0 && (totalBrandOrderQty > 0.001 || totalBrandOrderPkt > 0.001)) {
+            const accountedOrderQty = finalGroupEntries.reduce((sum, e) => sum + (e.orderQuantity || 0), 0);
+            const accountedOrderPkt = finalGroupEntries.reduce((sum, e) => sum + (e.orderPacket || 0), 0);
+            const unallocatedOrderQty = Math.max(0, totalBrandOrderQty - accountedOrderQty);
+            const unallocatedOrderPkt = Math.max(0, totalBrandOrderPkt - accountedOrderPkt);
+            if (unallocatedOrderQty > 0.001 || unallocatedOrderPkt > 0.001) {
+                finalGroupEntries[0].orderQuantity = (finalGroupEntries[0].orderQuantity || 0) + unallocatedOrderQty;
+                finalGroupEntries[0].orderPacket = (finalGroupEntries[0].orderPacket || 0) + unallocatedOrderPkt;
+                finalGroupEntries[0].saleableQuantity = Math.max(0, (finalGroupEntries[0].inHouseQuantity || 0) - finalGroupEntries[0].orderQuantity);
+                finalGroupEntries[0].saleablePacket = Math.max(0, (finalGroupEntries[0].inHousePacket || 0) - finalGroupEntries[0].orderPacket);
+            }
         }
     });
 
@@ -1228,7 +1267,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                     if (!hasStockLc && hasSaleLc) return;
                                     if (hasStockLc && hasSaleLc && !isLcMatch(effSaleLc, stockLc) && !isLcMatch(stockLc, effSaleLc)) return;
                                 }
-                                if (stockFilters.lcNo && !isLcMatch(effSaleLc, stockFilters.lcNo)) return;
+                                if (stockFilters.lcNo && (!isOrderSale || hasSaleLc) && !isLcMatch(effSaleLc, stockFilters.lcNo)) return;
                                 if (stockSearchQuery) {
                                     const q = stockSearchQuery.toLowerCase();
                                     const matchesQuery = normBrand.includes(q) || keyLower.includes(q) || effSaleLc.toLowerCase().includes(q);
@@ -1470,7 +1509,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const beLc = ((be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '')).trim();
                 const bePrice = parseFloat(be.purchasedPrice) || 0;
 
-                if (stockFilters.lcNo && !isLcMatch(beLc, stockFilters.lcNo)) return;
+                const hasBeLc = !isPlaceholderLc(beLc);
+                if (stockFilters.lcNo && (!isOrderSale || hasBeLc) && !isLcMatch(beLc, stockFilters.lcNo)) return;
                 if (stockSearchQuery) {
                     const q = stockSearchQuery.toLowerCase();
                     const matchesQuery = sProdName.toLowerCase().includes(q) ||
