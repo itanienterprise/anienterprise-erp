@@ -521,9 +521,12 @@ export default function ProfitLoss({ salesRecords, products }) {
           if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
 
           if (!productStockMap[prodName]) {
-            productStockMap[prodName] = { purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: getPurchasePrice(prodName) };
+            productStockMap[prodName] = { purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: getPurchasePrice(prodName), salePrice: 0 };
           }
-          productStockMap[prodName].saleQty += parseFloat(entry.quantity) || 0;
+          const entryQty = parseFloat(entry.quantity) || 0;
+          const entryTotal = parseFloat(entry.totalAmount) || (entryQty * (parseFloat(entry.unitPrice) || 0)) || 0;
+          productStockMap[prodName].saleQty += entryQty;
+          productStockMap[prodName].salePrice = (productStockMap[prodName].salePrice || 0) + entryTotal;
         });
       });
     });
@@ -537,17 +540,40 @@ export default function ProfitLoss({ salesRecords, products }) {
       if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
 
       if (!productStockMap[prodName]) {
-        productStockMap[prodName] = { purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: parseFloat(d.price) || getPurchasePrice(prodName) };
+        productStockMap[prodName] = { purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: parseFloat(d.price) || getPurchasePrice(prodName), salePrice: 0 };
       }
       productStockMap[prodName].damageQty += parseFloat(d.quantity) || 0;
     });
 
     // 4. Calculate Current Stock Value (in hand)
     let currentStockValue = 0;
+    const totalLcSalesQtyVal = salesRecords.reduce((sum, s) => {
+      const sStatus = (s.status || '').toLowerCase();
+      if (sStatus !== 'accepted' && sStatus !== 'pending') return sum;
+      if (!hasLcFilter && !isDateInRange(s.date)) return sum;
+      return sum + (s.items || []).reduce((iSum, itm) => {
+        const itemLc = (itm.lcNo !== undefined && itm.lcNo !== null) ? itm.lcNo : (s.lcNo || '');
+        const brandEntries = (itm.brandEntries && itm.brandEntries.length > 0)
+          ? itm.brandEntries
+          : [{ quantity: itm.quantity, lcNo: itemLc }];
+        return iSum + brandEntries.reduce((bSum, b) => {
+          const entryLc = (b.lcNo !== undefined && b.lcNo !== null) ? b.lcNo : itemLc;
+          if (hasLcFilter && cleanLc(entryLc) !== targetLcClean) return bSum;
+          return bSum + (parseFloat(b.quantity) || 0);
+        }, 0);
+      }, 0);
+    }, 0);
+    const overallLcSalesRate = (hasLcFilter && totalLcSalesQtyVal > 0) ? (salesRevenue / totalLcSalesQtyVal) : 0;
+
     Object.values(productStockMap).forEach(prod => {
       const currentStockQty = Math.max(0, prod.inhouseQty - prod.saleQty - prod.damageQty);
-      const avgPurchasePrice = prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : (prod.fallbackPrice || 0);
-      currentStockValue += currentStockQty * avgPurchasePrice;
+      const avgSalePrice = (prod.saleQty > 0 && (prod.salePrice || 0) > 0) ? (prod.salePrice / prod.saleQty) : 0;
+      const effectiveRate = overallLcSalesRate > 0
+        ? overallLcSalesRate
+        : (avgSalePrice > 0
+            ? avgSalePrice
+            : (prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : (prod.fallbackPrice || 0)));
+      currentStockValue += currentStockQty * effectiveRate;
     });
 
     const finalRevenue = salesRevenue + currentStockValue;
@@ -923,7 +949,8 @@ export default function ProfitLoss({ salesRecords, products }) {
       totalLcSalesAmount,
       totalLcSalesQty,
       productSummary,
-      profitLossData
+      profitLossData,
+      selectedLcDamages
     });
   }, [
     selectedLc,
@@ -938,7 +965,8 @@ export default function ProfitLoss({ salesRecords, products }) {
     totalLcSalesAmount,
     totalLcSalesQty,
     productSummary,
-    profitLossData
+    profitLossData,
+    selectedLcDamages
   ]);
 
   const handlePrint = () => {
@@ -949,6 +977,7 @@ export default function ProfitLoss({ salesRecords, products }) {
       selectedLcCostOfGoods,
       selectedLcStocks,
       selectedLcSales,
+      selectedLcDamages,
       productSummary,
       totalLcExpensesAmount,
       totalLcCostOfGoodsAmount,
@@ -1928,9 +1957,18 @@ export default function ProfitLoss({ salesRecords, products }) {
                             <div className="text-sm font-black text-gray-900">{Math.round(prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0)).toLocaleString()} {prod.unit}</div>
                             <div className="text-sm font-bold text-indigo-600 mt-1">
                               ৳ {(() => {
-                                const currentStockQty = prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0);
-                                const avgPurchasePrice = prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : 0;
-                                return Math.round(currentStockQty * avgPurchasePrice).toLocaleString('en-IN');
+                                const currentStockQty = Math.max(0, prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0));
+                                if (currentStockQty <= 0) return '0';
+                                if (conclusionData && conclusionData.unsoldStockKg > 0 && conclusionData.unsoldStockPriceAppx !== undefined) {
+                                  const proportionalPrice = Math.round((currentStockQty / conclusionData.unsoldStockKg) * conclusionData.unsoldStockPriceAppx);
+                                  return proportionalPrice.toLocaleString('en-IN');
+                                }
+                                const salesRate = (conclusionData?.salesValuePerKg > 0)
+                                  ? conclusionData.salesValuePerKg
+                                  : ((prod.saleQty > 0 && prod.salePrice > 0)
+                                      ? (prod.salePrice / prod.saleQty)
+                                      : (prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : 0));
+                                return Math.round(currentStockQty * salesRate).toLocaleString('en-IN');
                               })()}
                             </div>
                           </div>
@@ -2000,11 +2038,11 @@ export default function ProfitLoss({ salesRecords, products }) {
                       <td className="py-2 px-6 text-right font-bold text-gray-900">{conclusionData.supplier}</td>
                     </tr>
 
-                    {/* 4. LC Bill Paid in USD */}
+                    {/* Total LC Value */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">LC Bill Paid in USD</td>
+                      <td className="py-2 px-6 font-semibold text-gray-700">Total LC Value</td>
                       <td className="py-2 px-6 text-right font-bold text-gray-900">
-                        $ {Math.round(conclusionData.billValueUsd).toLocaleString('en-US')}
+                        {conclusionData.totalLcValue ? `$ ${Math.round(conclusionData.totalLcValue).toLocaleString('en-US')}` : '-'}
                       </td>
                     </tr>
 
@@ -2024,6 +2062,30 @@ export default function ProfitLoss({ salesRecords, products }) {
                       </td>
                     </tr>
 
+                    {/* Total COG IN BDT (C&F/Others) */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Total COG IN BDT (C&F/Others)</td>
+                      <td className="py-2 px-6 text-right font-black text-gray-900">
+                        ৳ {Math.round(conclusionData.totalCogBdt || 0).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+
+                    {/* Insurance */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Insurance</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        ৳ {Math.round(conclusionData.insuranceAmount).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+
+                    {/* Total Invest */}
+                    <tr className="bg-blue-50/40 hover:bg-blue-50/60 transition-colors border-t border-b border-blue-100">
+                      <td className="py-2.5 px-6 font-black text-blue-950 text-sm sm:text-base">Total Invest</td>
+                      <td className="py-2.5 px-6 text-right font-black text-blue-700 text-sm sm:text-base">
+                        ৳ {Math.round(conclusionData.totalInvest).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+
                     {/* 7. LC Inv Qty in kg */}
                     <tr className="bg-blue-50/30 hover:bg-blue-50/50 transition-colors">
                       <td className="py-2.5 px-6 font-bold text-blue-950">LC Inv Qty in kg</td>
@@ -2032,31 +2094,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                       </td>
                     </tr>
 
-                    {/* 8. Rcv Qty in kg */}
-                    <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Rcv Qty in kg</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
-                        {Math.round(conclusionData.rcvQtyKg).toLocaleString('en-US')} KG
-                      </td>
-                    </tr>
-
-                    {/* 9. Rate/kg in BDT */}
-                    <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Rate/kg in BDT</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
-                        ৳ {conclusionData.rateKgBdt.toFixed(2)}
-                      </td>
-                    </tr>
-
-                    {/* 10. CnF & Others (BDT) */}
-                    <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">CnF & Others (BDT)</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
-                        ৳ {conclusionData.cnfAndOthersPerKg.toFixed(2)}
-                      </td>
-                    </tr>
-
-                    {/* 11. Total Rate/kg in BDT */}
+                    {/* Total Rate/kg in BDT */}
                     <tr className="bg-emerald-50/40 hover:bg-emerald-50/60 transition-colors">
                       <td className="py-2.5 px-6 font-bold text-emerald-950">Total Rate/kg in BDT</td>
                       <td className="py-2.5 px-6 text-right font-black text-emerald-700">
@@ -2064,19 +2102,11 @@ export default function ProfitLoss({ salesRecords, products }) {
                       </td>
                     </tr>
 
-                    {/* 12. Sales Qty in kg */}
-                    <tr className="bg-orange-50/30 hover:bg-orange-50/50 transition-colors">
-                      <td className="py-2.5 px-6 font-bold text-orange-950">Sales Qty in kg</td>
-                      <td className="py-2.5 px-6 text-right font-black text-orange-800">
-                        {Math.round(conclusionData.salesQtyKg).toLocaleString('en-US')} KG
-                      </td>
-                    </tr>
-
-                    {/* 13. Unsold Stock in kg */}
+                    {/* 8. Rcv Qty in kg */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Unsold Stock in kg</td>
+                      <td className="py-2 px-6 font-semibold text-gray-700">Rcv Qty in kg</td>
                       <td className="py-2 px-6 text-right font-bold text-gray-900">
-                        {Math.round(conclusionData.unsoldStockKg).toLocaleString('en-US')} KG
+                        {Math.round(conclusionData.rcvQtyKg).toLocaleString('en-US')} KG
                       </td>
                     </tr>
 
@@ -2090,27 +2120,29 @@ export default function ProfitLoss({ salesRecords, products }) {
                       </td>
                     </tr>
 
-                    {/* 15. LC Invest */}
-                    <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">LC Invest</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
-                        ৳ {Math.round(conclusionData.lcInvest).toLocaleString('en-IN')}
+                    {/* Damage Qty in kg */}
+                    <tr className="bg-rose-50/30 hover:bg-rose-50/50 transition-colors">
+                      <td className="py-2.5 px-6 font-bold text-rose-950">Damage Qty in kg</td>
+                      <td className="py-2.5 px-6 text-right">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-200">
+                          {Math.round(conclusionData.damageQtyKg || 0).toLocaleString('en-US')} KG
+                        </span>
                       </td>
                     </tr>
 
-                    {/* 16. Insurance */}
-                    <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Insurance</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
-                        ৳ {Math.round(conclusionData.insuranceAmount).toLocaleString('en-IN')}
+                    {/* 12. Sales Qty in kg */}
+                    <tr className="bg-orange-50/30 hover:bg-orange-50/50 transition-colors">
+                      <td className="py-2.5 px-6 font-bold text-orange-950">Sales Qty in kg</td>
+                      <td className="py-2.5 px-6 text-right font-black text-orange-800">
+                        {Math.round(conclusionData.salesQtyKg).toLocaleString('en-US')} KG
                       </td>
                     </tr>
 
-                    {/* 17. Total Invest */}
-                    <tr className="bg-blue-50/40 hover:bg-blue-50/60 transition-colors border-t border-b border-blue-100">
-                      <td className="py-2.5 px-6 font-black text-blue-950 text-sm sm:text-base">Total Invest</td>
-                      <td className="py-2.5 px-6 text-right font-black text-blue-700 text-sm sm:text-base">
-                        ৳ {Math.round(conclusionData.totalInvest).toLocaleString('en-IN')}
+                    {/* 19. Sales Value/kg */}
+                    <tr className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-2 px-6 font-semibold text-gray-700">Sales Value/kg</td>
+                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                        ৳ {conclusionData.salesValuePerKg.toFixed(2)}
                       </td>
                     </tr>
 
@@ -2122,11 +2154,11 @@ export default function ProfitLoss({ salesRecords, products }) {
                       </td>
                     </tr>
 
-                    {/* 19. Sales Value/kg */}
+                    {/* 13. Unsold Stock in kg */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Sales Value/kg</td>
+                      <td className="py-2 px-6 font-semibold text-gray-700">Unsold Stock in kg</td>
                       <td className="py-2 px-6 text-right font-bold text-gray-900">
-                        ৳ {conclusionData.salesValuePerKg.toFixed(2)}
+                        {Math.round(conclusionData.unsoldStockKg).toLocaleString('en-US')} KG
                       </td>
                     </tr>
 

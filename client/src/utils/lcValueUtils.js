@@ -591,7 +591,9 @@ export const calculateLcConclusion = ({
     totalLcSalesAmount = 0,
     totalLcSalesQty = 0,
     productSummary = [],
-    profitLossData = null
+    profitLossData = null,
+    selectedLcDamages = [],
+    totalLcDamagesQty = 0
 }) => {
     if (!selectedLc) return null;
 
@@ -607,6 +609,16 @@ export const calculateLcConclusion = ({
 
     const supplier = selectedLc.exporterName || selectedLc.supplier || selectedLc.supplierName || '-';
 
+    // Total LC Value (USD)
+    const rawTotalLcValue = (typeof getMilestoneTotalDollar === 'function' ? getMilestoneTotalDollar(selectedLc) : 0)
+        || parseFloat(selectedLc.totalDollar || selectedLc.lcValueUsd || selectedLc.lcValue || selectedLc.amountUsd || 0)
+        || (selectedLc.productsList && selectedLc.productsList.length > 0
+            ? selectedLc.productsList.reduce((sum, p) => sum + (parseFloat(p.totalDollar) || ((parseFloat(p.quantity) || 0) * (parseFloat(p.rate) || 0))), 0)
+            : 0);
+    const totalLcValue = Math.abs(rawTotalLcValue - Math.round(rawTotalLcValue)) < 0.1
+        ? Math.round(rawTotalLcValue)
+        : Math.round(rawTotalLcValue * 100) / 100;
+
     const rawBillUsd = parseFloat(adjValues?.billValueUsd || 0)
         || parseFloat(selectedLc.totalDollar || selectedLc.lcValueUsd || selectedLc.lcValue || selectedLc.amountUsd || 0);
     const billValueUsd = Math.abs(rawBillUsd - Math.round(rawBillUsd)) < 0.1
@@ -615,9 +627,11 @@ export const calculateLcConclusion = ({
 
     const dollarRate = parseFloat(adjValues?.dollarRate || selectedLc.dollarRate || selectedLc.openingDollarRate || selectedLc.exchangeRate || 0);
 
-    const totalRateKgBdt = (billValueUsd > 0 && dollarRate > 0)
-        ? Math.round(billValueUsd * dollarRate)
-        : (parseFloat(adjValues?.adjustedTotalAmount || 0) || parseFloat(selectedLc.totalAmount || 0));
+    const totalRateKgBdt = (totalLcValue > 0 && dollarRate > 0)
+        ? Math.round(totalLcValue * dollarRate)
+        : ((billValueUsd > 0 && dollarRate > 0)
+            ? Math.round(billValueUsd * dollarRate)
+            : (parseFloat(adjValues?.adjustedTotalAmount || 0) || parseFloat(selectedLc.totalAmount || 0)));
 
     // 1. LC Inv Qty in kg = Total COG qty
     const cogQtySum = (parseFloat(totalLcCostOfGoodsQty) || 0)
@@ -657,32 +671,12 @@ export const calculateLcConclusion = ({
             ? inhouseFromStocks
             : (parseFloat(adjValues?.totalReceivedQtyKg || 0) || invQtyKg));
 
-    // 3. Overall rate per kg in BDT: use the Average Cost/KG from Cost of Goods (COG) (Net Bill / Quantity) if available
-    const cogNetBillTotal = (parseFloat(totalLcCostOfGoodsAmount) || 0)
-        || (selectedLcCostOfGoods && selectedLcCostOfGoods.length > 0
-            ? selectedLcCostOfGoods.reduce((sum, rec) => {
-                const costingKg = typeof getRecCostingKg === 'function'
-                    ? getRecCostingKg(rec)
-                    : (Math.round(parseFloat(rec.costingKg || 0) * 100) / 100);
-                const qty = parseFloat(rec.quantity || 0);
-                return sum + Math.round(costingKg * qty);
-            }, 0)
-            : 0);
-
-    const cogAvgCostKg = (cogQtySum > 0 && cogNetBillTotal > 0)
-        ? (cogNetBillTotal / cogQtySum)
-        : 0;
-
-    const totalRatePerKgBdt = cogAvgCostKg > 0
-        ? cogAvgCostKg
-        : (rcvQtyKg > 0 ? (totalRateKgBdt / rcvQtyKg) : (invQtyKg > 0 ? (totalRateKgBdt / invQtyKg) : 0));
-
-    // 4. Insurance
+    // 3. Insurance
     const insuranceExpenses = (selectedLcExpenses || []).filter(e => (e.expenseHead || '').toLowerCase().includes('insurance'));
     const insuranceAmount = insuranceExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
         || parseFloat(selectedLc.insurance || selectedLc.netPremium || selectedLc.grossPremium || 0);
 
-    // 5. CnF & Others (BDT)
+    // 4. CnF & Others (BDT)
     let cnfAndOthersPerKg = 0;
     let cnfAndOthersBdt = 0;
 
@@ -703,6 +697,30 @@ export const calculateLcConclusion = ({
         cnfAndOthersPerKg = rcvQtyKg > 0 ? (cnfAndOthersBdt / rcvQtyKg) : (invQtyKg > 0 ? (cnfAndOthersBdt / invQtyKg) : 0);
     }
 
+    // 5. Overall rate per kg in BDT: use the Average Cost/KG from Cost of Goods (COG) (Net Bill / Quantity) if available
+    const cogNetBillTotal = (parseFloat(totalLcCostOfGoodsAmount) || 0)
+        || (selectedLcCostOfGoods && selectedLcCostOfGoods.length > 0
+            ? selectedLcCostOfGoods.reduce((sum, rec) => {
+                const costingKg = typeof getRecCostingKg === 'function'
+                    ? getRecCostingKg(rec)
+                    : (Math.round(parseFloat(rec.costingKg || 0) * 100) / 100);
+                const qty = parseFloat(rec.quantity || 0);
+                return sum + Math.round(costingKg * qty);
+            }, 0)
+            : 0);
+
+    const cogAvgCostKg = (cogQtySum > 0 && cogNetBillTotal > 0)
+        ? (cogNetBillTotal / cogQtySum)
+        : 0;
+
+    const totalCogBdt = cogNetBillTotal > 0
+        ? Math.round(cogNetBillTotal)
+        : Math.round(totalRateKgBdt + (cnfAndOthersBdt || 0));
+
+    const totalRatePerKgBdt = cogAvgCostKg > 0
+        ? cogAvgCostKg
+        : (rcvQtyKg > 0 ? (totalRateKgBdt / rcvQtyKg) : (invQtyKg > 0 ? (totalRateKgBdt / invQtyKg) : 0));
+
     // 6. Base Rate/kg in BDT: Since C&F (1.50) is included in rate/kg, Base Rate = Total Rate - CnF
     const rateKgBdt = Math.max(0, totalRatePerKgBdt - cnfAndOthersPerKg);
 
@@ -714,50 +732,70 @@ export const calculateLcConclusion = ({
                 ? productSummary.reduce((sum, p) => sum + (parseFloat(p.saleQty) || 0), 0)
                 : 0));
 
-    // 8. Unsold Stock in kg = Rcv Qty in kg - Sales Qty in kg
-    const unsoldStockKg = Math.max(0, rcvQtyKg - salesQtyKg);
+    // 8. Damage Qty in kg
+    const damageFromSummary = (productSummary && productSummary.length > 0)
+        ? productSummary.reduce((sum, p) => sum + (parseFloat(p.damageQty) || 0), 0)
+        : 0;
+
+    const damageFromRecords = (selectedLcDamages && selectedLcDamages.length > 0)
+        ? selectedLcDamages.reduce((sum, d) => sum + (parseFloat(d.quantity || d.itemQty) || 0), 0)
+        : 0;
+
+    const damageQtyKg = damageFromSummary > 0
+        ? damageFromSummary
+        : (damageFromRecords > 0
+            ? damageFromRecords
+            : (parseFloat(totalLcDamagesQty || 0) || parseFloat(selectedLc?.damageQty || 0)));
 
     // 9. Short Qty in kg = LC Inv Qty in kg - Rcv Qty in kg
     const shortQtyKg = Math.max(0, invQtyKg - rcvQtyKg);
 
-    // 10. LC Invest = LC Inv Qty in kg * Total Rate/kg in BDT
+    // 10. Unsold Stock in kg = Rcv Qty in kg - Sales Qty in kg - Damage Qty in kg
+    const unsoldStockKg = Math.max(0, rcvQtyKg - salesQtyKg - damageQtyKg);
+
+    // 11. LC Invest = LC Inv Qty in kg * Total Rate/kg in BDT
     const lcInvest = (invQtyKg > 0 && totalRatePerKgBdt > 0)
         ? Math.round(invQtyKg * totalRatePerKgBdt)
         : totalRateKgBdt;
 
-    // 11. Total Invest = LC Invest + Insurance
+    // 12. Total Invest = LC Invest + Insurance
     const totalInvest = lcInvest + insuranceAmount;
 
-    // 12. Sales Value
+    // 13. Sales Value
     const salesValue = parseFloat(totalLcSalesAmount || 0) || parseFloat(profitLossData?.summary?.salesRevenue || 0);
 
-    // 13. Sales Value/kg
+    // 14. Sales Value/kg
     const salesValuePerKg = salesQtyKg > 0 ? (salesValue / salesQtyKg) : 0;
 
-    // 14. Unsold Stock Price (Appx)
+    // 15. Unsold Stock Price (Appx) = Unsold Stock in kg * Sales Value/kg
     const unsoldStockPriceAppx = unsoldStockKg > 0
-        ? (parseFloat(profitLossData?.summary?.currentStockValue || 0) || Math.round(unsoldStockKg * totalRatePerKgBdt))
+        ? (salesValuePerKg > 0
+            ? Math.round(unsoldStockKg * salesValuePerKg)
+            : (parseFloat(profitLossData?.summary?.currentStockValue || 0) || Math.round(unsoldStockKg * totalRatePerKgBdt)))
         : 0;
 
-    // 15. Profit/Loss
+    // 16. Profit/Loss
     const profitOrLoss = (salesValue + unsoldStockPriceAppx) - totalInvest;
 
     return {
         lcNo,
         item,
         supplier,
+        totalLcValue,
         billValueUsd,
         dollarRate,
         totalRateKgBdt,
+        totalCogBdt,
         invQtyKg,
         rcvQtyKg,
         rateKgBdt,
         cnfAndOthersPerKg,
         cnfAndOthersBdt,
         totalRatePerKgBdt,
+        shortQtyKg,
+        damageQtyKg,
         salesQtyKg,
         unsoldStockKg,
-        shortQtyKg,
         lcInvest,
         insuranceAmount,
         totalInvest,

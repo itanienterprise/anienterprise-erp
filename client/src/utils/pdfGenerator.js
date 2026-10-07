@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
+import { preloadBengaliFont, ensureBengaliFont } from './bengaliFontLoader';
 import { computeCustomerBalance, compareTransactions, getIsoDateString } from './helpers';
 import { api } from './api';
 import { getAdjustedLcValues, getRecCostingKg, getLcMilestoneFinances, calculateLcConclusion } from './lcValueUtils';
@@ -8114,6 +8115,7 @@ export const generateProfitLossPDF = async (params) => {
             selectedLcCostOfGoods = [],
             selectedLcStocks = [],
             selectedLcSales = [],
+            selectedLcDamages = [],
             productSummary = [],
             totalLcExpensesAmount = 0,
             totalLcCostOfGoodsAmount = 0,
@@ -8160,24 +8162,51 @@ export const generateProfitLossPDF = async (params) => {
             img.src = '/logo.png';
         });
 
+        // --- Header (identical to Stock Report) ---
         if (logoImg) {
-            doc.addImage(logoImg, 'PNG', margin, margin, 22, 22);
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
         } else {
             doc.setFillColor(249, 115, 22);
-            doc.roundedRect(margin, margin, 20, 20, 3, 3, 'F');
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
             doc.setTextColor(255, 255, 255);
-            doc.setFontSize(18);
+            doc.setFontSize(16);
             doc.setFont('helvetica', 'bold');
-            doc.text("A", margin + 10, margin + 13, { align: 'center' });
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
         }
 
-        doc.setTextColor(20, 25, 35);
-        doc.setFontSize(26);
-        doc.setFont('helvetica', 'bold');
-        doc.text("ANI ENTERPRISE", margin + 24, margin + 13);
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
 
-        // Contact Info (Right Aligned)
-        doc.setFontSize(9.5);
+        await preloadBengaliFont().catch(() => { });
+        const isBengaliLoaded = ensureBengaliFont(doc);
+        const tkSym = isBengaliLoaded ? '৳' : 'Tk';
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill (no black border)
+        doc.setTextColor(249, 115, 22); // Orange (#f97316)
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
         doc.text([
@@ -8185,18 +8214,24 @@ export const generateProfitLossPDF = async (params) => {
             "Borogola, Bogura, Bangladesh",
             "Tel: +8802588813057",
             "Email: anienterprise051@gmail.com"
-        ], pageWidth - margin, margin + 3, { align: 'right', lineHeightFactor: 1.15 });
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
 
         // --- Invoice Header Title Badge ---
-        let y = margin + 26;
-        doc.setFillColor(251, 146, 60);
-        doc.roundedRect((pageWidth / 2) - 45, y - 6, 90, 8, 2, 2, 'F');
+        let badgeY = y + 3;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - 45, badgeY, 90, 8, 2, 2, 'F');
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
-        doc.text("PROFIT & LOSS STATEMENT", pageWidth / 2, y - 0.5, { align: 'center' });
+        doc.text("PROFIT & LOSS STATEMENT", pageWidth / 2, badgeY + 5.5, { align: 'center' });
 
-        let currentY = y + 4;
+        let currentY = badgeY + 11;
 
         // LC No Badge Box (if LC is selected)
         if (selectedLcNo && selectedLcNo !== 'All') {
@@ -8492,17 +8527,36 @@ export const generateProfitLossPDF = async (params) => {
 
             const totalStockQty = productSummary.reduce((sum, p) => sum + Math.max(0, Math.round((p.inhouseQty || 0) - (p.saleQty || 0) - (p.damageQty || 0))), 0);
 
+            const concForStock = conclusionData || (calculateLcConclusion ? calculateLcConclusion({
+                selectedLc,
+                adjustedLcValues,
+                selectedLcCostOfGoods,
+                totalLcCostOfGoodsQty,
+                totalLcCostOfGoodsAmount,
+                selectedLcExpenses,
+                totalLcExpensesAmount,
+                selectedLcStocks,
+                selectedLcSales,
+                selectedLcDamages,
+                totalLcSalesAmount,
+                totalLcSalesQty,
+                productSummary,
+                profitLossData
+            }) : null);
+
             let calcTotalStockValue = 0;
             const tableRows = productSummary.map(p => {
                 const currentStockQty = Math.max(0, Math.round((p.inhouseQty || 0) - (p.saleQty || 0) - (p.damageQty || 0)));
                 let stockVal = 0;
-                if (p.purchaseQty > 0 && p.purchasePrice > 0) {
-                    const avgPrice = p.purchasePrice / p.purchaseQty;
-                    stockVal = Math.round(currentStockQty * avgPrice);
-                } else if (profitLossData?.summary?.currentStockValue && productSummary.length === 1) {
-                    stockVal = Math.round(profitLossData.summary.currentStockValue);
-                } else if (profitLossData?.summary?.currentStockValue && totalStockQty > 0) {
-                    stockVal = Math.round((currentStockQty / totalStockQty) * profitLossData.summary.currentStockValue);
+                if (currentStockQty > 0 && concForStock && concForStock.unsoldStockKg > 0 && concForStock.unsoldStockPriceAppx !== undefined) {
+                    stockVal = Math.round((currentStockQty / concForStock.unsoldStockKg) * concForStock.unsoldStockPriceAppx);
+                } else {
+                    const salesRate = (concForStock?.salesValuePerKg > 0)
+                        ? concForStock.salesValuePerKg
+                        : ((p.saleQty > 0 && (p.salePrice || 0) > 0)
+                            ? (p.salePrice / p.saleQty)
+                            : (p.purchaseQty > 0 && p.purchasePrice > 0 ? (p.purchasePrice / p.purchaseQty) : 0));
+                    stockVal = Math.round(currentStockQty * salesRate);
                 }
                 calcTotalStockValue += stockVal;
 
@@ -8514,13 +8568,15 @@ export const generateProfitLossPDF = async (params) => {
                     `${Math.round(p.damageQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
                     `${Math.round(p.saleQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
                     `${currentStockQty.toLocaleString()} ${p.unit || 'KG'}`,
-                    `Tk ${stockVal.toLocaleString('en-IN')}`
+                    `${tkSym} ${stockVal.toLocaleString('en-IN')}`
                 ];
             });
 
-            const finalTotalStockValue = (profitLossData?.summary?.currentStockValue && productSummary.length === 1)
-                ? Math.round(profitLossData.summary.currentStockValue)
-                : calcTotalStockValue;
+            const finalTotalStockValue = (concForStock && concForStock.unsoldStockPriceAppx > 0)
+                ? concForStock.unsoldStockPriceAppx
+                : ((profitLossData?.summary?.currentStockValue && productSummary.length === 1)
+                    ? Math.round(profitLossData.summary.currentStockValue)
+                    : calcTotalStockValue);
 
             autoTable(doc, {
                 startY: currentY,
@@ -8531,10 +8587,11 @@ export const generateProfitLossPDF = async (params) => {
                     [
                         { content: 'Total Current Stock', colSpan: 6, styles: { fontStyle: 'bold', halign: 'right' } },
                         { content: `${totalStockQty.toLocaleString()} KG`, styles: { fontStyle: 'bold', halign: 'right' } },
-                        { content: `Tk ${finalTotalStockValue.toLocaleString('en-IN')}`, styles: { fontStyle: 'bold', halign: 'right' } }
+                        { content: `${tkSym} ${finalTotalStockValue.toLocaleString('en-IN')}`, styles: { fontStyle: 'bold', halign: 'right' } }
                     ]
                 ],
                 theme: 'grid',
+                styles: { font: isBengaliLoaded ? 'NotoSansBengali' : 'helvetica', fontSize: 9, textColor: [30, 41, 59] },
                 headStyles: { fillColor: [99, 102, 241], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
                 bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
                 columnStyles: {
@@ -8670,26 +8727,51 @@ export const generateProfitLossPDF = async (params) => {
         if (selectedLc) {
             doc.addPage();
 
-            // Brand Header on Conclusion Page
+            // --- Brand Header on Conclusion Page (identical to Stock Report) ---
             let concY = margin;
             if (logoImg) {
-                doc.addImage(logoImg, 'PNG', margin, concY, 22, 22);
+                doc.addImage(logoImg, 'PNG', margin, concY, 18, 18);
             } else {
                 doc.setFillColor(249, 115, 22);
-                doc.roundedRect(margin, concY, 20, 20, 3, 3, 'F');
+                doc.roundedRect(margin, concY, 18, 18, 3, 3, 'F');
                 doc.setTextColor(255, 255, 255);
-                doc.setFontSize(18);
+                doc.setFontSize(16);
                 doc.setFont('helvetica', 'bold');
-                doc.text("A", margin + 10, concY + 13, { align: 'center' });
+                doc.text("A", margin + 9, concY + 11, { align: 'center' });
             }
 
-            doc.setTextColor(20, 25, 35);
+            await preloadFrauncesFont().catch(() => { });
+            const isFrauncesLoadedConc = ensureFrauncesFont(doc);
+
+            await preloadBengaliFont().catch(() => { });
+            const isBengaliLoaded = ensureBengaliFont(doc);
+
+            const xPos = margin + 22;
+            const headerYPos = concY + 11;
+
             doc.setFontSize(26);
-            doc.setFont('helvetica', 'bold');
-            doc.text("ANI ENTERPRISE", margin + 24, concY + 13);
+            if (isFrauncesLoadedConc) {
+                doc.setFont('Fraunces', 'normal');
+            } else {
+                doc.setFont('helvetica', 'bold');
+            }
+
+            // 1. Subtle drop shadow behind text
+            doc.setTextColor(210, 210, 210);
+            if (typeof doc.setTextRenderingMode === 'function') {
+                doc.setTextRenderingMode(0); // fill only
+            }
+            doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+            // 2. Main text: Clean orange fill (no black border)
+            doc.setTextColor(249, 115, 22); // Orange (#f97316)
+            if (typeof doc.setTextRenderingMode === 'function') {
+                doc.setTextRenderingMode(0); // fill only
+            }
+            doc.text("ANI ENTERPRISE", xPos, headerYPos);
 
             // Contact Info (Right Aligned)
-            doc.setFontSize(9.5);
+            doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0, 0, 0);
             doc.text([
@@ -8697,16 +8779,22 @@ export const generateProfitLossPDF = async (params) => {
                 "Borogola, Bogura, Bangladesh",
                 "Tel: +8802588813057",
                 "Email: anienterprise051@gmail.com"
-            ], pageWidth - margin, concY + 3, { align: 'right', lineHeightFactor: 1.15 });
+            ], pageWidth - margin, concY + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+            // Orange divider line
+            let divY = concY + 20;
+            doc.setDrawColor(249, 115, 22);
+            doc.setLineWidth(0.6);
+            doc.line(margin, divY, pageWidth - margin, divY);
 
             // Title Badge
-            let badgeY = concY + 26;
-            doc.setFillColor(251, 146, 60);
-            doc.roundedRect((pageWidth / 2) - 45, badgeY - 6, 90, 8, 2, 2, 'F');
+            let badgeY = divY + 3;
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect((pageWidth / 2) - 45, badgeY, 90, 8, 2, 2, 'F');
             doc.setFontSize(11);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(255, 255, 255);
-            doc.text("CONCLUSION STATEMENT", pageWidth / 2, badgeY - 0.5, { align: 'center' });
+            doc.text("CONCLUSION STATEMENT", pageWidth / 2, badgeY + 5.5, { align: 'center' });
 
             const conc = conclusionData || calculateLcConclusion({
                 selectedLc,
@@ -8718,6 +8806,7 @@ export const generateProfitLossPDF = async (params) => {
                 totalLcExpensesAmount,
                 selectedLcStocks,
                 selectedLcSales,
+                selectedLcDamages,
                 totalLcSalesAmount,
                 totalLcSalesQty,
                 productSummary,
@@ -8727,6 +8816,7 @@ export const generateProfitLossPDF = async (params) => {
             if (conc) {
                 const tableWidth = 145;
                 const leftPos = (pageWidth - tableWidth) / 2;
+                const tkSym = isBengaliLoaded ? '৳' : 'Tk';
 
                 const conclusionRows = [
                     [
@@ -8742,85 +8832,82 @@ export const generateProfitLossPDF = async (params) => {
                         { content: String(conc.supplier), styles: { halign: 'right', fontStyle: 'bold' } }
                     ],
                     [
-                        { content: 'LC Bill Paid in USD', styles: { fontStyle: 'bold' } },
-                        { content: Math.round(conc.billValueUsd).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
+                        { content: 'Total LC Value', styles: { fontStyle: 'bold' } },
+                        { content: conc.totalLcValue ? `$ ${Math.round(conc.totalLcValue).toLocaleString('en-US')}` : '-', styles: { halign: 'right', fontStyle: 'bold' } }
                     ],
                     [
                         { content: 'Calculation USD Rate', styles: { fontStyle: 'bold' } },
-                        { content: conc.dollarRate ? conc.dollarRate.toFixed(2) : '0.00', styles: { halign: 'right', fontStyle: 'bold' } }
+                        { content: conc.dollarRate ? `${tkSym} ${conc.dollarRate.toFixed(2)}` : `${tkSym} 0.00`, styles: { halign: 'right', fontStyle: 'bold' } }
                     ],
                     [
                         { content: 'Total Value in BDT', styles: { fontStyle: 'bold' } },
-                        { content: Math.round(conc.totalRateKgBdt).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
+                        { content: `${tkSym} ${Math.round(conc.totalRateKgBdt).toLocaleString('en-US')}`, styles: { halign: 'right', fontStyle: 'bold' } }
                     ],
                     [
-                        { content: 'LC Inv Qty in kg', styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold' } },
-                        { content: Math.round(conc.invQtyKg).toLocaleString('en-US'), styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
-                    ],
-                    [
-                        { content: 'Rcv Qty in kg', styles: { fontStyle: 'bold' } },
-                        { content: Math.round(conc.rcvQtyKg).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
-                    ],
-                    [
-                        { content: 'Rate/kg in BDT', styles: { fontStyle: 'bold' } },
-                        { content: conc.rateKgBdt.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }
-                    ],
-                    [
-                        { content: 'CnF & Others (BDT)', styles: { fontStyle: 'bold' } },
-                        { content: conc.cnfAndOthersPerKg.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }
-                    ],
-                    [
-                        { content: 'Total Rate/kg in BDT', styles: { fillColor: [226, 239, 218], textColor: [0, 0, 0], fontStyle: 'bold' } },
-                        { content: conc.totalRatePerKgBdt.toFixed(2), styles: { fillColor: [226, 239, 218], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
-                    ],
-                    [
-                        { content: 'Sales Qty in kg', styles: { fillColor: [252, 228, 214], textColor: [0, 0, 0], fontStyle: 'bold' } },
-                        { content: Math.round(conc.salesQtyKg).toLocaleString('en-US'), styles: { fillColor: [252, 228, 214], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
-                    ],
-                    [
-                        { content: 'Unsold Stock in kg', styles: { fontStyle: 'bold' } },
-                        { content: Math.round(conc.unsoldStockKg).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
-                    ],
-                    [
-                        { content: 'Short Qty in kg', styles: { fillColor: [254, 185, 185], textColor: [0, 0, 0], fontStyle: 'bold' } },
-                        { content: Math.round(conc.shortQtyKg).toLocaleString('en-US'), styles: { fillColor: [254, 185, 185], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
-                    ],
-                    [
-                        { content: 'LC Invest', styles: { fontStyle: 'bold' } },
-                        { content: Math.round(conc.lcInvest).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
+                        { content: 'Total COG IN BDT (C&F/Others)', styles: { fontStyle: 'bold' } },
+                        { content: `${tkSym} ${Math.round(conc.totalCogBdt || 0).toLocaleString('en-US')}`, styles: { halign: 'right', fontStyle: 'bold' } }
                     ],
                     [
                         { content: 'Insurance', styles: { fontStyle: 'bold' } },
-                        { content: Math.round(conc.insuranceAmount).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } }
+                        { content: `${tkSym} ${Math.round(conc.insuranceAmount).toLocaleString('en-US')}`, styles: { halign: 'right', fontStyle: 'bold' } }
                     ],
                     [
                         { content: 'Total Invest', styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold' } },
-                        { content: Math.round(conc.totalInvest).toLocaleString('en-US'), styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                        { content: `${tkSym} ${Math.round(conc.totalInvest).toLocaleString('en-US')}`, styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
                     ],
                     [
-                        { content: 'Sales Value', styles: { fillColor: [255, 242, 204], textColor: [0, 0, 0], fontStyle: 'bold' } },
-                        { content: Math.round(conc.salesValue).toLocaleString('en-US'), styles: { fillColor: [255, 242, 204], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                        { content: 'LC Inv Qty in kg', styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: `${Math.round(conc.invQtyKg).toLocaleString('en-US')} KG`, styles: { fillColor: [217, 225, 242], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Total Rate/kg in BDT', styles: { fillColor: [226, 239, 218], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: `${tkSym} ${conc.totalRatePerKgBdt.toFixed(2)}`, styles: { fillColor: [226, 239, 218], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Rcv Qty in kg', styles: { fontStyle: 'bold' } },
+                        { content: `${Math.round(conc.rcvQtyKg).toLocaleString('en-US')} KG`, styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Short Qty in kg', styles: { fillColor: [254, 185, 185], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: `${Math.round(conc.shortQtyKg).toLocaleString('en-US')} KG`, styles: { fillColor: [254, 185, 185], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Damage Qty in kg', styles: { fillColor: [254, 185, 185], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: `${Math.round(conc.damageQtyKg || 0).toLocaleString('en-US')} KG`, styles: { fillColor: [254, 185, 185], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Sales Qty in kg', styles: { fillColor: [252, 228, 214], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: `${Math.round(conc.salesQtyKg).toLocaleString('en-US')} KG`, styles: { fillColor: [252, 228, 214], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
                     ],
                     [
                         { content: 'Sales Value/kg', styles: { fontStyle: 'bold' } },
-                        { content: conc.salesValuePerKg.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }
+                        { content: `${tkSym} ${conc.salesValuePerKg.toFixed(2)}`, styles: { halign: 'right', fontStyle: 'bold' } }
+                    ],
+                    [
+                        { content: 'Sales Value', styles: { fillColor: [255, 242, 204], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: `${tkSym} ${Math.round(conc.salesValue).toLocaleString('en-US')}`, styles: { fillColor: [255, 242, 204], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                    ],
+                    [
+                        { content: 'Unsold Stock in kg', styles: { fontStyle: 'bold' } },
+                        { content: `${Math.round(conc.unsoldStockKg).toLocaleString('en-US')} KG`, styles: { halign: 'right', fontStyle: 'bold' } }
                     ],
                     [
                         { content: 'Unsold Stock Price (Appx)', styles: { fontStyle: 'bold' } },
-                        { content: conc.unsoldStockPriceAppx > 0 ? Math.round(conc.unsoldStockPriceAppx).toLocaleString('en-US') : '-', styles: { halign: 'right', fontStyle: 'bold' } }
+                        { content: conc.unsoldStockPriceAppx > 0 ? `${tkSym} ${Math.round(conc.unsoldStockPriceAppx).toLocaleString('en-US')}` : '-', styles: { halign: 'right', fontStyle: 'bold' } }
                     ],
                     [
-                        { content: conc.profitOrLoss >= 0 ? 'Profit' : 'Loss', styles: { fontStyle: 'bold' } },
-                        { content: Math.round(conc.profitOrLoss).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold', textColor: conc.profitOrLoss >= 0 ? [16, 120, 80] : [200, 20, 40] } }
+                        { content: conc.profitOrLoss >= 0 ? 'Profit' : 'Loss', styles: { fillColor: conc.profitOrLoss >= 0 ? [226, 239, 218] : [254, 185, 185], textColor: [0, 0, 0], fontStyle: 'bold' } },
+                        { content: conc.profitOrLoss < 0 ? `-${tkSym} ${Math.abs(Math.round(conc.profitOrLoss)).toLocaleString('en-US')}` : `${tkSym} ${Math.round(conc.profitOrLoss).toLocaleString('en-US')}`, styles: { fillColor: conc.profitOrLoss >= 0 ? [226, 239, 218] : [254, 185, 185], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
                     ]
                 ];
 
                 autoTable(doc, {
-                    startY: badgeY + 6,
+                    startY: badgeY + 12,
                     margin: { left: leftPos, right: leftPos },
                     body: conclusionRows,
                     theme: 'grid',
                     styles: {
+                        font: isBengaliLoaded ? 'NotoSansBengali' : 'helvetica',
                         lineWidth: 0.15,
                         lineColor: [226, 232, 240],
                         cellPadding: 2.2,
