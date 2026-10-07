@@ -5043,66 +5043,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             let grandCredit = 0;
             let grandDiscount = 0;
 
-            // Merge same invoice numbers
-            const chronoHistory = sortedHistoryData.reduce((acc, item) => {
-                const invoice = item.invoiceNo || item.lcNo || item.purchaseNo;
-                const existing = (item.type === 'sale' || item.type === 'purchase') && invoice
-                    ? acc.find(x => x.type === item.type && (x.invoiceNo === invoice || x.lcNo === invoice || x.purchaseNo === invoice))
-                    : null;
-
-                if (existing) {
-                    existing.amount = (parseFloat(existing.amount || 0)) + (parseFloat(item.amount || 0));
-                    existing.paid = (parseFloat(existing.paid || 0)) + (parseFloat(item.paid || 0));
-                    existing.truck = (parseFloat(existing.truck || 0)) + (parseFloat(item.truck || 0));
-
-                    // Initialize sub-items for merging logic if not present
-                    if (!existing.items) {
-                        existing.items = [{
-                            product: existing.product_original || existing.product,
-                            brand: existing.brand,
-                            quantity: parseFloat(existing.quantity_original || existing.quantity || existing.qty || 0),
-                            rate: parseFloat(existing.rate_original || existing.rate || 0)
-                        }];
-                    }
-
-                    const itemRate = parseFloat(item.rate || 0);
-                    const matchingItem = existing.items.find(si =>
-                        (si.product?.trim() === item.product?.trim()) &&
-                        ((si.brand || '').trim() === (item.brand || '').trim()) &&
-                        (parseFloat(si.rate || 0) === itemRate)
-                    );
-                    if (matchingItem) {
-                        matchingItem.quantity += parseFloat(item.quantity || item.qty || 0);
-                    } else {
-                        existing.items.push({
-                            product: item.product,
-                            brand: item.brand,
-                            quantity: parseFloat(item.quantity || item.qty || 0),
-                            rate: itemRate
-                        });
-                    }
-
-                    // Rebuild display properties
-                    existing.product = existing.items.map(si => {
-                        const p = si.product || '—';
-                        const b = (si.brand && si.brand !== '-') ? ` (${si.brand})` : '';
-                        return `${p}${b}`;
-                    }).join('\n');
-                    existing.quantity_display = existing.items.map(si => (si.quantity || 0).toLocaleString('en-US')).join('\n');
-                    existing.rate_display = existing.items.map(si => (si.rate || 0) > 0 ? si.rate.toLocaleString('en-IN') : '—').join('\n');
-
-                    existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || item.qty || 0));
-                    existing.runningBalance = item.runningBalance;
-                    return acc;
-                }
-                acc.push({
-                    ...item,
-                    product_original: item.product,
-                    quantity_original: item.quantity || item.qty,
-                    rate_original: item.rate
-                });
-                return acc;
-            }, []);
+            const chronoHistory = sortedHistoryData;
 
             let lastBalance = chronoHistory.length > 0 ? chronoHistory[chronoHistory.length - 1].runningBalance : 0;
 
@@ -5110,7 +5051,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 const typeLabel = item.type === 'sale' ? '[SALE]' : (item.type === 'payment' ? '[COLLECTION]' : (item.type === 'payToCustomer' ? '[PAYOUT]' : (item.type === 'return' ? '[RETURN]' : '[PURCHASE]')));
                 let particularsStr = "";
                 if (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') {
-                    const pName = item.product ? (item.items ? item.product : `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}`) : (item.type === 'sale' ? 'Sales Invoice' : (item.type === 'return' ? 'Product Return' : 'Purchase Invoice'));
+                    const pName = item.product ? `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}` : (item.type === 'sale' ? 'Sales Invoice' : (item.type === 'return' ? 'Product Return' : 'Purchase Invoice'));
                     particularsStr = `${typeLabel} ${pName}`;
                     if (item.reason) {
                         particularsStr += `\nReason: ${item.reason}`;
@@ -5145,6 +5086,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     : (item.type === 'sale' && parseFloat(item.paid || 0) > 0 ? parseFloat(item.paid || 0) : 0);
                 const discVal = parseFloat(item.discount || 0);
                 const qtyVal = (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? parseFloat(item.quantity || item.qty || 0) : 0;
+                const rateVal = (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? parseFloat(item.rate || 0) : 0;
 
                 grandQty += qtyVal;
                 grandDebit += debitVal;
@@ -5156,8 +5098,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     formatDate(item.date),
                     item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '-',
                     particularsStr,
-                    (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? (item.quantity_display || (qtyVal > 0 ? qtyVal.toLocaleString('en-US') : '-')) : '-',
-                    (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? (item.rate_display || (parseFloat(item.rate || 0) > 0 ? parseFloat(item.rate || 0).toLocaleString('en-IN') : '-')) : '-',
+                    (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? (qtyVal > 0 ? qtyVal.toLocaleString('en-US') : '-') : '-',
+                    (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? (rateVal > 0 ? rateVal.toLocaleString('en-IN') : '-') : '-',
                     debitVal > 0 ? debitVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
                     creditVal > 0 ? creditVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
                     discVal > 0 ? discVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
@@ -5225,6 +5167,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 foot: [foot],
                 theme: 'grid',
                 showFoot: 'lastPage',
+                rowPageBreak: 'avoid',
                 styles: { fontSize: 9, cellPadding: { top: 1, bottom: 1, left: 1.5, right: 1.5 }, minCellHeight: 5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'top' },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center', noWrap: true, valign: 'middle' },
                 columnStyles: {
@@ -5255,7 +5198,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                         const startX = cell.x + cell.padding('left');
 
                         lines.forEach((line) => {
-                            const tagMatch = line.match(/^(\[(?:SALE|PURCHASE|COLLECTION|PAYOUT)\])(.*)/i);
+                            const tagMatch = line.match(/^(\[(?:SALE|PURCHASE|COLLECTION|PAYOUT|RETURN)\])(.*)/i);
                             if (tagMatch) {
                                 const tag = tagMatch[1];
                                 const rest = tagMatch[2];
