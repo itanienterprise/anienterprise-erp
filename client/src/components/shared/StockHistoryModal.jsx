@@ -257,6 +257,8 @@ const StockHistoryModal = ({
                     totalSaleQuantity: saleQty,
                     totalSalePacket: salePkt,
                     entries: [{
+                        _id: item._id,
+                        purchaseReceiveId: item.purchaseReceiveId,
                         brand: item.brand || item.productName,
                         purchasedPrice: item.purchasedPrice,
                         packet: item.packet,
@@ -272,6 +274,13 @@ const StockHistoryModal = ({
                     }]
                 };
             } else {
+                const isDuplicateDoc = (item._id && acc[key].allIds.includes(item._id)) || (
+                    Boolean(item.purchaseReceiveId) && acc[key].entries.some(e => e.purchaseReceiveId === item.purchaseReceiveId && (e.brand || '').trim().toLowerCase() === targetBrand)
+                );
+                if (isDuplicateDoc) {
+                    return acc;
+                }
+
                 acc[key].allIds.push(item._id);
                 acc[key].totalQuantity += parseFloat(item.quantity) || 0;
                 acc[key].totalPacket += parseFloat(item.packet) || 0;
@@ -289,6 +298,8 @@ const StockHistoryModal = ({
                 acc[key].totalSaleQuantity += saleQty;
                 acc[key].totalSalePacket += salePkt;
                 acc[key].entries.push({
+                    _id: item._id,
+                    purchaseReceiveId: item.purchaseReceiveId,
                     brand: item.brand || item.productName,
                     purchasedPrice: item.purchasedPrice,
                     packet: item.packet,

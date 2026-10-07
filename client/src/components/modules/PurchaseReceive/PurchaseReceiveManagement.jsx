@@ -81,6 +81,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [statusUpdatingId, setStatusUpdatingId] = useState(null);
 
     // Form Fields
     const [formData, setFormData] = useState({
@@ -962,11 +963,11 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
             const prCompany = (purchaseData.companyName || purchaseData.supplierName || '').trim();
             const prCreatedAt = purchaseData.createdAt || new Date().toISOString();
 
-            const stockRes = await axios.get(`${API_BASE_URL}/api/stock`);
+            const stockRes = await axios.get(`${API_BASE_URL}/api/stock?_t=${Date.now()}`);
             const existingStock = Array.isArray(stockRes.data) ? stockRes.data : [];
 
             const myStockRecords = existingStock.filter(s =>
-                (prId && s.purchaseReceiveId === prId) ||
+                (prId && String(s.purchaseReceiveId) === String(prId)) ||
                 (!s.purchaseReceiveId && (s.lcNo || '').trim().toUpperCase() === pNo.toUpperCase() && s.date === prDate && (s.warehouse || s.whName || '').trim().toUpperCase() === prWarehouse.toUpperCase())
             );
 
@@ -1000,11 +1001,20 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                     const pktSize = getProductPacketSize(pName, bName) || (effBag > 0 ? effQty / effBag : 25);
                     const rate = parseFloat(be.rate) || 0;
 
-                    const matchedStock = myStockRecords.find(s =>
+                    let matchedStock = myStockRecords.find(s =>
                         !claimedStockIds.has(s._id) &&
                         (s.productName || s.product || '').trim().toLowerCase() === pName.toLowerCase() &&
                         (s.brand || '').trim().toLowerCase() === bName.toLowerCase()
                     );
+
+                    if (!matchedStock) {
+                        matchedStock = existingStock.find(s =>
+                            !claimedStockIds.has(s._id) &&
+                            String(s.purchaseReceiveId) === String(prId) &&
+                            (s.productName || s.product || '').trim().toLowerCase() === pName.toLowerCase() &&
+                            (s.brand || '').trim().toLowerCase() === bName.toLowerCase()
+                        );
+                    }
 
                     const recordPayload = {
                         purchaseReceiveId: prId,
@@ -1042,13 +1052,14 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                         const postRes = await axios.post(`${API_BASE_URL}/api/stock`, recordPayload);
                         if (postRes?.data?._id) {
                             claimedStockIds.add(postRes.data._id);
+                            myStockRecords.push({ ...recordPayload, _id: postRes.data._id });
                         }
                     }
                 }
             }
 
             for (const s of myStockRecords) {
-                if (!claimedStockIds.has(s._id) && s.purchaseReceiveId === prId) {
+                if (!claimedStockIds.has(s._id) && String(s.purchaseReceiveId) === String(prId)) {
                     await axios.delete(`${API_BASE_URL}/api/stock/${s._id}`);
                 }
             }
@@ -1312,6 +1323,8 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
     };
 
     const handleStatusUpdate = async (purchase, newStatus) => {
+        if (!purchase?._id || statusUpdatingId === purchase._id) return;
+        setStatusUpdatingId(purchase._id);
         try {
             const employeeId = currentUser?.employeeId || currentUser?.username || 'admin';
             const employeeDisplayName = currentUser?.name || currentUser?.nameEn || currentUser?.username || 'Admin';
@@ -1359,6 +1372,8 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
         } catch (error) {
             console.error('Error updating purchase receive status:', error);
+        } finally {
+            setStatusUpdatingId(null);
         }
     };
 
@@ -1583,14 +1598,16 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                                     <>
                                                         <button
                                                             onClick={() => handleStatusUpdate(p, 'Accepted')}
-                                                            className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
+                                                            disabled={statusUpdatingId === p._id}
+                                                            className={`p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors ${statusUpdatingId === p._id ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                             title="Accept"
                                                         >
                                                             <CheckIcon className="w-5 h-5" />
                                                         </button>
                                                         <button
                                                             onClick={() => handleStatusUpdate(p, 'Rejected')}
-                                                            className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                                            disabled={statusUpdatingId === p._id}
+                                                            className={`p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors ${statusUpdatingId === p._id ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                             title="Reject"
                                                         >
                                                             <XIcon className="w-5 h-5" />
@@ -1676,14 +1693,16 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                             <>
                                                 <button
                                                     onClick={() => handleStatusUpdate(p, 'Accepted')}
-                                                    className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
+                                                    disabled={statusUpdatingId === p._id}
+                                                    className={`p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors ${statusUpdatingId === p._id ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                     title="Accept"
                                                 >
                                                     <CheckIcon className="w-5 h-5" />
                                                 </button>
                                                 <button
                                                     onClick={() => handleStatusUpdate(p, 'Rejected')}
-                                                    className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                                    disabled={statusUpdatingId === p._id}
+                                                    className={`p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors ${statusUpdatingId === p._id ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                     title="Reject"
                                                 >
                                                     <XIcon className="w-5 h-5" />

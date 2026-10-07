@@ -2158,12 +2158,41 @@ apiRouter.post('/api/stock', async (req, res) => {
     } else {
       finalData = encryptData(req.body);
     }
+
+    // Deduplication check for Purchase Receive stock entries
+    if (resolvedBody && resolvedBody.purchaseReceiveId) {
+      const allStockDocs = await Stock.find();
+      const existingDoc = allStockDocs.find(s => {
+        let dec = decryptData(s.data);
+        if (dec && dec.data && typeof dec.data === 'string' && !dec.productName) {
+          try { dec = decryptData(dec.data); } catch (e) { }
+        }
+        return dec &&
+          String(dec.purchaseReceiveId) === String(resolvedBody.purchaseReceiveId) &&
+          (dec.productName || '').trim().toLowerCase() === (resolvedBody.productName || '').trim().toLowerCase() &&
+          (dec.brand || '').trim().toLowerCase() === (resolvedBody.brand || '').trim().toLowerCase();
+      });
+      if (existingDoc) {
+        existingDoc.data = finalData;
+        if (resolvedBody.createdAt || req.body.createdAt) {
+          existingDoc.createdAt = new Date(resolvedBody.createdAt || req.body.createdAt);
+        }
+        const updatedStock = await existingDoc.save();
+        invalidateMemoryCache('stock');
+        const result = { ...resolvedBody, _id: updatedStock._id, createdAt: resolvedBody.createdAt || updatedStock.createdAt };
+        broadcastUpdate('stock', 'update', { id: updatedStock._id, stock: result });
+        req._broadcastDone = true;
+        return res.status(200).json(result);
+      }
+    }
+
     const stockDoc = { data: finalData };
     if (resolvedBody.createdAt || req.body.createdAt) {
       stockDoc.createdAt = new Date(resolvedBody.createdAt || req.body.createdAt);
     }
     const newStock = new Stock(stockDoc);
     const savedStock = await newStock.save();
+    invalidateMemoryCache('stock');
     const result = { ...resolvedBody, _id: savedStock._id, createdAt: resolvedBody.createdAt || savedStock.createdAt };
     broadcastUpdate('stock', 'create', { id: savedStock._id, stock: result });
     req._broadcastDone = true;
@@ -2213,6 +2242,7 @@ apiRouter.delete('/api/stock/:id', async (req, res) => {
     }
 
     const deletedStock = await Stock.findByIdAndDelete(req.params.id);
+    invalidateMemoryCache('stock');
     broadcastUpdate('stock', 'delete', { id: req.params.id });
     req._broadcastDone = true;
     res.json({ message: 'Item deleted' });
@@ -2290,6 +2320,7 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
       updateDoc.createdAt = new Date(resolvedBody.createdAt || req.body.createdAt);
     }
     const updatedStock = await Stock.findByIdAndUpdate(req.params.id, updateDoc, { returnDocument: 'after' });
+    invalidateMemoryCache('stock');
     const result = { ...resolvedBody, _id: req.params.id, createdAt: resolvedBody.createdAt || updatedStock?.createdAt };
     broadcastUpdate('stock', 'update', { id: req.params.id, stock: result });
     req._broadcastDone = true;
