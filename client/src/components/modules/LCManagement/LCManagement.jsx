@@ -2454,8 +2454,8 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                                                 <td className="px-1 py-1.5 text-sm font-bold text-gray-900 whitespace-nowrap">{record.supplier || '—'}</td>
                                                                 <td className="px-1 py-1.5 text-sm text-gray-500 font-bold whitespace-nowrap">{record.brand || '—'}</td>
                                                                 <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900 whitespace-nowrap">{qtyVal.toLocaleString('en-IN')}</td>
-                                                                <td className="px-1 py-1.5 text-sm text-right text-gray-600 whitespace-nowrap">{parseFloat(record.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS</td>
-                                                                <td className="px-1 py-1.5 text-sm font-semibold text-right text-gray-700 whitespace-nowrap">{netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS</td>
+                                                                <td className="px-1 py-1.5 text-sm text-right text-gray-600 whitespace-nowrap">₹{parseFloat(record.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                <td className="px-1 py-1.5 text-sm font-semibold text-right text-gray-700 whitespace-nowrap">₹{netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                 <td className="px-1 py-1.5 text-sm font-bold text-right text-blue-600 whitespace-nowrap">৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                 <td className="px-1 py-1.5 text-sm font-black text-right text-emerald-600 whitespace-nowrap">৳{(costingKgVal * qtyVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                 <td className="px-4 py-1.5 text-sm text-gray-600 text-center whitespace-nowrap">{lcReceiveDateStr}</td>
@@ -2481,15 +2481,15 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                                         {filteredCogRecords.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0).toLocaleString('en-IN')}
                                                     </td>
                                                     <td className="px-1 py-1.5 text-sm font-semibold text-right text-gray-600">
-                                                        {filteredCogRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS
+                                                        ₹{filteredCogRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                     </td>
                                                     <td className="px-1 py-1.5 text-sm font-semibold text-right text-gray-600">
-                                                        {filteredCogRecords.reduce((sum, r) => {
+                                                        ₹{filteredCogRecords.reduce((sum, r) => {
                                                             const billSum = r.totalBill !== undefined ? r.totalBill : ((parseFloat(r.amount) || 0) + (parseFloat(r.indTruckFare) || 0) + (parseFloat(r.slofCf) || 0));
                                                             const rebatePct = r.rebate !== undefined ? r.rebate : (r.redate !== undefined ? r.redate : '2.9');
                                                             const rebateVal = r.rebateAmount !== undefined ? r.rebateAmount : (r.redateAmount !== undefined ? r.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
                                                             return sum + (billSum - rebateVal);
-                                                        }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS
+                                                        }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                     </td>
                                                     <td></td>
                                                     <td className="px-1 py-1.5 text-sm font-black text-right text-emerald-600">
@@ -2671,11 +2671,11 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                                                     <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invoice Value</span>
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-semibold text-gray-700 text-[11px]">{record.amount ? `${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</span>
+                                                                        <span className="font-semibold text-gray-700 text-[11px]">{record.amount ? `₹${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</span>
 
                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Bill</span>
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-semibold text-gray-700 text-[11px]">{netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS</span>
+                                                                        <span className="font-semibold text-gray-700 text-[11px]">₹{netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
 
                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate/KG (BDT)</span>
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>

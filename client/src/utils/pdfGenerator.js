@@ -4841,7 +4841,7 @@ export const generateInsurancePaymentReportPDF = (payments, filters, dateStr, lc
                 ? (lc && expReturn > 0 ? expReturn.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-')
                 : '0.00';
 
-            const lcDisplay = p.lcNo 
+            const lcDisplay = p.lcNo
                 ? (p.amendmentNo ? `${p.lcNo}\n(${p.amendmentNo})` : p.lcNo)
                 : '-';
 
@@ -7385,16 +7385,16 @@ export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
         // Prepare columns & rows
         const hasChina = records.some(r => r.country === 'CHINA');
         const tableHeaders = [
-            ['Date', 'LC No', 'Supplier', 'Invoice No', 'Truck No', 'Product', 'Brand', 'Quantity (kg)', hasChina ? 'Invoice Value (USD)' : 'Invoice Value (RS)', hasChina ? 'Net Bill (USD)' : 'Net Bill (RS)', 'Rate / KG (BDT)', 'C&F & Other (BDT) ', 'Net Costing/kg (BDT)']
+            ['SL', 'Date', 'LC No', 'Supplier', 'Invoice No', 'Truck No', 'Product', 'Brand', 'Quantity (kg)', hasChina ? 'Invoice Value (USD)' : 'Invoice Value (RS)', hasChina ? 'Total Bill (USD)' : 'Total Bill (RS)', 'Rate / KG (BDT)', 'C&F & Other (BDT) ', 'Net Costing/kg (BDT)']
         ];
 
-        const totals = { quantity: 0, amount: 0, netBill: 0 };
+        const totals = { quantity: 0, amount: 0, totalBill: 0 };
 
-        const tableRows = records.map(record => {
+        const tableRows = records.map((record, idx) => {
             const isChina = record.country === 'CHINA';
             const qtyVal = parseFloat(record.quantity) || 0;
             const amountVal = parseFloat(record.amount) || 0;
-            const billSum = isChina ? amountVal : (record.totalBill !== undefined ? record.totalBill : (amountVal + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0)));
+            const billSum = isChina ? amountVal : (record.totalBill !== undefined ? record.totalBill : (amountVal + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.truckChangeFare) || 0) + (parseFloat(record.slofCf) || 0)));
             const rebatePct = isChina ? 0 : (record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9'));
             const rebateVal = isChina ? 0 : (record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100)));
             const netBillVal = isChina ? amountVal : (record.netBill !== undefined ? record.netBill : (billSum - rebateVal));
@@ -7409,9 +7409,10 @@ export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
 
             totals.quantity += qtyVal;
             totals.amount += amountVal;
-            totals.netBill += parseFloat(netBillVal) || 0;
+            totals.totalBill += parseFloat(billSum) || 0;
 
             return [
+                idx + 1,
                 record.date ? formatDate(record.date) : '-',
                 record.lcNo ? record.lcNo.slice(-5) : '-',
                 record.supplier || '-',
@@ -7421,7 +7422,7 @@ export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
                 record.brand || '-',
                 qtyVal ? `${Math.round(qtyVal).toLocaleString('en-US')}` : '—',
                 amountVal ? `${Math.round(amountVal).toLocaleString('en-US')}` : '—',
-                netBillVal ? `${Math.round(netBillVal).toLocaleString('en-US')}` : '—',
+                billSum ? `${Math.round(billSum).toLocaleString('en-US')}` : '—',
                 rateKgBdtVal ? `${Number(rateKgBdtVal).toFixed(2)}` : '—',
                 cfExpVal ? `${Number(cfExpVal).toFixed(2)}` : '—',
                 costingKgVal ? `${Number(costingKgVal).toFixed(2)}` : '—'
@@ -7429,10 +7430,10 @@ export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
         });
 
         const footerRow = [
-            { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: totals.quantity ? `${Math.round(totals.quantity).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
             { content: totals.amount ? `${Math.round(totals.amount).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
-            { content: totals.netBill ? `${Math.round(totals.netBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.totalBill ? `${Math.round(totals.totalBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
             { content: '', colSpan: 3 }
         ];
 
@@ -7465,19 +7466,20 @@ export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
                 lineWidth: 0.1
             },
             columnStyles: {
-                0: { cellWidth: 19, halign: 'center' }, // Date
-                1: { cellWidth: 12, halign: 'center' }, // LC No
-                2: { cellWidth: 36, overflow: 'hidden' }, // Supplier
-                3: { cellWidth: 28 }, // Invoice No
-                4: { cellWidth: 25 }, // Truck No
-                5: { cellWidth: 28 }, // Product
-                6: { cellWidth: 30 }, // Brand
-                7: { cellWidth: 16, halign: 'right' }, // Quantity
-                8: { cellWidth: 20, halign: 'right' }, // Invoice Value
-                9: { cellWidth: 20, halign: 'right' }, // Net Bill
-                10: { cellWidth: 15, halign: 'right' }, // Rate/KG BDT
-                11: { cellWidth: 15, halign: 'right' }, // C&F & Other
-                12: { cellWidth: 21, halign: 'right', fontStyle: 'bold' } // Costing/kg
+                0: { cellWidth: 8, halign: 'center' }, // SL
+                1: { cellWidth: 20, halign: 'center' }, // Date
+                2: { cellWidth: 12, halign: 'center' }, // LC No
+                3: { cellWidth: 33, overflow: 'hidden' }, // Supplier
+                4: { cellWidth: 27 }, // Invoice No
+                5: { cellWidth: 24 }, // Truck No
+                6: { cellWidth: 27 }, // Product
+                7: { cellWidth: 28 }, // Brand
+                8: { cellWidth: 16, halign: 'right' }, // Quantity
+                9: { cellWidth: 20, halign: 'right' }, // Invoice Value
+                10: { cellWidth: 20, halign: 'right' }, // Net Bill
+                11: { cellWidth: 15, halign: 'right' }, // Rate/KG BDT
+                12: { cellWidth: 15, halign: 'right' }, // C&F & Other
+                13: { cellWidth: 21, halign: 'right', fontStyle: 'bold' } // Costing/kg
             },
             margin: { left: margin, right: margin },
         });

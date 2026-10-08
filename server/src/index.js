@@ -353,6 +353,7 @@ const Employee = require('./models/Employee');
 const Notification = require('./models/Notification');
 const Bank = require('./models/Bank');
 const Deposit = require('./models/Deposit');
+const Withdrawal = require('./models/Withdrawal');
 const Exporter = require('./models/Exporter');
 const Supplier = require('./models/Supplier');
 const CostOfGoods = require('./models/CostOfGoods');
@@ -1383,6 +1384,7 @@ const ROUTE_MODEL_MAP = {
   'returns': Return,
   'banks': Bank,
   'deposits': Deposit,
+  'withdrawals': Withdrawal,
   'insurance': Insurance,
   'insurance-payments': InsurancePayment,
   'lc-management': LCManagement,
@@ -3796,6 +3798,65 @@ apiRouter.get('/api/deposits', async (req, res) => {
   }
 });
 
+// Withdrawal APIs
+apiRouter.post('/api/withdrawals', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newWithdrawal = new Withdrawal({ data: encryptedData });
+    const savedWithdrawal = await newWithdrawal.save();
+    const result = { ...req.body, _id: savedWithdrawal._id, createdAt: savedWithdrawal.createdAt };
+    broadcastUpdate('withdrawals', 'create', { id: savedWithdrawal._id, withdrawal: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/withdrawals/:id', async (req, res) => {
+  try {
+    const userSession = req.session.user;
+    if (userSession && ['incharge', 'lc manager', 'sales manager'].includes((userSession.role || '').toLowerCase())) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to delete withdrawals' });
+    }
+
+    const deletedWithdrawal = await Withdrawal.findByIdAndDelete(req.params.id);
+    if (!deletedWithdrawal) return res.status(404).json({ message: 'Withdrawal not found' });
+    broadcastUpdate('withdrawals', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
+    res.json({ message: 'Withdrawal deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/withdrawals/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedWithdrawal = await Withdrawal.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
+    if (!updatedWithdrawal) return res.status(404).json({ message: 'Withdrawal not found' });
+    const result = { ...req.body, _id: updatedWithdrawal._id, createdAt: updatedWithdrawal.createdAt };
+    broadcastUpdate('withdrawals', 'update', { id: req.params.id, withdrawal: result });
+    req._broadcastDone = true;
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/withdrawals', async (req, res) => {
+  try {
+    const records = await Withdrawal.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 // Insurance APIs
 apiRouter.post('/api/insurance', async (req, res) => {
@@ -5377,7 +5438,7 @@ const ERP_MODULE_COLLECTIONS = {
   port: { label: 'Ports', models: ['Port'], description: 'Ports of loading / discharge' },
   importerExporter: { label: 'Importers & Exporters', models: ['Importer', 'Exporter'], description: 'Registered Importers & Exporters' },
   product: { label: 'Products', models: ['Product'], description: 'Product catalog & categories' },
-  bank: { label: 'Banks', models: ['Bank', 'Deposit'], description: 'Bank accounts & configurations, deposits' },
+  bank: { label: 'Banks', models: ['Bank', 'Deposit', 'Withdrawal'], description: 'Bank accounts & configurations, deposits, withdrawals' },
   cnf: { label: 'C&F Management', models: ['CnF', 'CnFPayment'], description: 'C&F Agents & payment transactions' },
   insurance: { label: 'Insurance', models: ['Insurance', 'InsurancePayment'], description: 'Insurance policies & payments' },
   costOfGoods: { label: 'Cost of Goods', models: ['CostOfGoods'], description: 'COG sheets & cost calculations' },

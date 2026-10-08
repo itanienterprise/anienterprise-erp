@@ -23,6 +23,25 @@ const EyeIcon = ({ className }) => (
   </svg>
 );
 
+const toDateStr = (dateVal) => {
+  if (!dateVal) return '';
+  if (dateVal instanceof Date) {
+    try {
+      return dateVal.toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  }
+  if (typeof dateVal === 'number') {
+    try {
+      return new Date(dateVal).toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  }
+  return String(dateVal).split('T')[0];
+};
+
 const DEPOSIT_TYPES = [
   'Cash Deposit',
   'Cheque Deposit',
@@ -1082,7 +1101,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
 
       let matchDate = true;
       if (filters.startDate || filters.endDate) {
-        const itemDate = (item.date || '').split('T')[0];
+        const itemDate = toDateStr(item.date);
         if (filters.startDate && itemDate < filters.startDate) matchDate = false;
         if (filters.endDate && itemDate > filters.endDate) matchDate = false;
       }
@@ -1098,7 +1117,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
 
     const todayStr = new Date().toISOString().split('T')[0];
     const todayAmount = deposits
-      .filter(d => (d.date || '').split('T')[0] === todayStr)
+      .filter(d => toDateStr(d.date) === todayStr)
       .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
 
     const activeBanks = new Set(deposits.map(d => d.bankName).filter(Boolean)).size;
@@ -1539,23 +1558,64 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
         </div>
       </div>
 
-      {/* Records Count & Status Bar */}
-      <div className="flex items-center justify-between text-xs text-gray-500 font-medium px-1">
-        <div>
-          Showing <span className="font-bold text-gray-800">{filteredDeposits.length}</span> of {deposits.length} records
-          {isFilterActive && (
-            <span className="ml-2 text-blue-600 font-semibold inline-flex items-center gap-1.5">
-              <span>(Filtered)</span>
-              <button
-                onClick={resetFilters}
-                className="text-rose-500 hover:underline cursor-pointer"
-              >
-                Clear filters
+      {/* Active Filter Badges */}
+      {isFilterActive && (
+        <div className="flex items-center gap-2 flex-wrap text-xs px-1">
+          <span className="font-semibold text-gray-400 text-[11px] uppercase tracking-wider">Active Filters:</span>
+          {filters.bankName && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+              Bank: {filters.bankName}
+              <button onClick={() => handleFilterChange('bankName', '')} className="hover:text-blue-900 cursor-pointer">
+                <XIcon className="w-3 h-3" />
               </button>
             </span>
           )}
+          {filters.branch && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+              Branch: {filters.branch}
+              <button onClick={() => handleFilterChange('branch', '')} className="hover:text-blue-900 cursor-pointer">
+                <XIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filters.accountNo && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+              A/C: {filters.accountNo}
+              <button onClick={() => handleFilterChange('accountNo', '')} className="hover:text-blue-900 cursor-pointer">
+                <XIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filters.depositType && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+              Type: {filters.depositType}
+              <button onClick={() => handleFilterChange('depositType', '')} className="hover:text-blue-900 cursor-pointer">
+                <XIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {(filters.startDate || filters.endDate) && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+              Date: {filters.startDate || '...'} to {filters.endDate || '...'}
+              <button
+                onClick={() => {
+                  handleFilterChange('startDate', '');
+                  handleFilterChange('endDate', '');
+                }}
+                className="hover:text-blue-900 cursor-pointer"
+              >
+                <XIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          <button
+            onClick={resetFilters}
+            className="text-[11px] font-bold text-gray-500 hover:text-gray-700 underline ml-1 cursor-pointer"
+          >
+            Clear all
+          </button>
         </div>
-      </div>
+      )}
 
       {/* Table Section */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">

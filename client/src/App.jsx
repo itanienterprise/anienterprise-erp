@@ -67,6 +67,7 @@ import PaymentCollection from './components/modules/PaymentCollection/PaymentCol
 import PayToCustomer from './components/modules/PayToCustomer/PayToCustomer';
 import Bank from './components/modules/Bank/Bank';
 import Deposit from './components/modules/Bank/Deposit';
+import Withdrawal from './components/modules/Bank/Withdrawal';
 import Insurance from './components/modules/Insurance/Insurance';
 import InsurancePayment from './components/modules/Insurance/InsurancePayment';
 import LCManagement from './components/modules/LCManagement/LCManagement';
@@ -1272,6 +1273,7 @@ function App() {
                       type === 'customer' ? 'customers' :
                         type === 'bank' ? 'banks' :
                           type === 'deposit' ? 'deposits' :
+                          type === 'withdrawal' ? 'withdrawals' :
                             type === 'indian-bank' ? 'indian-banks' :
                             type === 'cnf' ? 'cnfs' :
                               type === 'pi' ? 'pi' :
@@ -1448,7 +1450,7 @@ function App() {
         else if (type === 'sales') fetchSales();
         else if (type === 'cnf') fetchCnFs();
 
-        if (['insurance', 'employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'deposit', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
+        if (['insurance', 'employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'deposit', 'withdrawal', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
 
@@ -1466,6 +1468,7 @@ function App() {
           'customer': 'Customer',
           'bank': 'Bank',
           'deposit': 'Deposit',
+          'withdrawal': 'Withdrawal',
           'indian-bank': 'Indian Bank',
           'cnf': 'C&F Agent',
           'pi': 'Proforma Invoice',
@@ -2036,9 +2039,10 @@ function App() {
       }
 
       try {
-        if (module === 'banks' || module === 'bank' || module === 'deposits' || module === 'deposit' || module === 'all') {
+        if (module === 'banks' || module === 'bank' || module === 'deposits' || module === 'deposit' || module === 'withdrawals' || module === 'withdrawal' || module === 'all') {
           queryClient.invalidateQueries({ queryKey: ['banks'] });
           queryClient.invalidateQueries({ queryKey: ['deposits'] });
+          queryClient.invalidateQueries({ queryKey: ['withdrawals'] });
         }
       } catch (err) {
         console.warn('Error syncing banks and deposits in handleDataUpdate:', err);
@@ -2438,6 +2442,14 @@ function App() {
       case 'deposit-section':
         return (
           <Deposit
+            key={refreshKey}
+            currentUser={currentUser}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+          />
+        );
+      case 'withdrawal-section':
+        return (
+          <Withdrawal
             key={refreshKey}
             currentUser={currentUser}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
@@ -3054,7 +3066,7 @@ function App() {
                       }
                     }}
                     title={isMini ? 'Bank' : undefined}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['bank-section', 'deposit-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['bank-section', 'deposit-section', 'withdrawal-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
                     <div className="flex items-center min-w-0">
                       <DollarSignIcon className="w-5 h-5 flex-shrink-0" />
@@ -3066,7 +3078,7 @@ function App() {
                       <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${bankDropdownOpen ? 'transform rotate-180' : ''}`} />
                     </div>
                   </button>
-                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && bankDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && bankDropdownOpen ? 'max-h-60 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                     <div className="pl-7 pr-2 space-y-1">
                       <button
                         onClick={() => { handleViewChange('bank-section'); }}
@@ -3081,6 +3093,13 @@ function App() {
                       >
                         <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                         <span>Deposit</span>
+                      </button>
+                      <button
+                        onClick={() => { handleViewChange('withdrawal-section'); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'withdrawal-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                      >
+                        <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Withdrawal</span>
                       </button>
                     </div>
                   </div>

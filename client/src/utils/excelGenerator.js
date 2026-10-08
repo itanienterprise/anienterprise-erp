@@ -4061,8 +4061,8 @@ export const generateCostOfGoodsReportExcel = (records = [], filters = {}, searc
             'Product',
             'Brand',
             'Quantity (KG)',
-            hasChina ? 'Invoice Value (USD)' : 'Invoice Value (RS)',
-            hasChina ? 'Net Bill (USD)' : 'Net Bill (RS)',
+            hasChina ? 'Invoice Value ($)' : 'Invoice Value (₹)',
+            hasChina ? 'Total Bill ($)' : 'Total Bill (₹)',
             'Rate / KG (BDT)',
             'C&F & Other (BDT)',
             'Net Costing/kg (BDT)'
@@ -4070,13 +4070,13 @@ export const generateCostOfGoodsReportExcel = (records = [], filters = {}, searc
         rows.push(headers);
 
         // 4. Data Rows & Total Calculation
-        const totals = { quantity: 0, amount: 0, netBill: 0 };
+        const totals = { quantity: 0, amount: 0, totalBill: 0 };
 
         records.forEach((record, idx) => {
             const isChina = record.country === 'CHINA';
             const qtyVal = parseFloat(record.quantity) || 0;
             const amountVal = parseFloat(record.amount) || 0;
-            const billSum = isChina ? amountVal : (record.totalBill !== undefined ? record.totalBill : (amountVal + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0)));
+            const billSum = isChina ? amountVal : (record.totalBill !== undefined ? record.totalBill : (amountVal + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.truckChangeFare) || 0) + (parseFloat(record.slofCf) || 0)));
             const rebatePct = isChina ? 0 : (record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9'));
             const rebateVal = isChina ? 0 : (record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100)));
             const netBillVal = isChina ? amountVal : (record.netBill !== undefined ? record.netBill : (billSum - rebateVal));
@@ -4091,7 +4091,7 @@ export const generateCostOfGoodsReportExcel = (records = [], filters = {}, searc
 
             totals.quantity += qtyVal;
             totals.amount += amountVal;
-            totals.netBill += parseFloat(netBillVal) || 0;
+            totals.totalBill += parseFloat(billSum) || 0;
 
             rows.push([
                 idx + 1,
@@ -4104,7 +4104,7 @@ export const generateCostOfGoodsReportExcel = (records = [], filters = {}, searc
                 record.brand || '-',
                 qtyVal > 0 ? qtyVal : 0,
                 amountVal > 0 ? Number(amountVal.toFixed(2)) : 0,
-                netBillVal > 0 ? Number(netBillVal.toFixed(2)) : 0,
+                billSum > 0 ? Number(billSum.toFixed(2)) : 0,
                 rateKgBdtVal > 0 ? Number(rateKgBdtVal.toFixed(2)) : 0,
                 cfExpVal > 0 ? Number(cfExpVal.toFixed(2)) : 0,
                 costingKgVal > 0 ? Number(costingKgVal.toFixed(2)) : 0
@@ -4123,7 +4123,7 @@ export const generateCostOfGoodsReportExcel = (records = [], filters = {}, searc
             '',
             Number(totals.quantity.toFixed(2)),
             Number(totals.amount.toFixed(2)),
-            Number(totals.netBill.toFixed(2)),
+            Number(totals.totalBill.toFixed(2)),
             '',
             '',
             ''
@@ -4143,7 +4143,7 @@ export const generateCostOfGoodsReportExcel = (records = [], filters = {}, searc
             { wch: 20 }, // Brand
             { wch: 18 }, // Quantity
             { wch: 22 }, // Invoice Value
-            { wch: 20 }, // Net Bill
+            { wch: 20 }, // Total Bill
             { wch: 18 }, // Rate / KG (BDT)
             { wch: 18 }, // C&F & Other (BDT)
             { wch: 22 }  // Net Costing/kg (BDT)
