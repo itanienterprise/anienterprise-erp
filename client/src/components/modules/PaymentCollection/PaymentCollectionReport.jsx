@@ -115,6 +115,26 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
     const grandTotal = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
     const totalDiscount = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.discount) || 0), 0);
 
+    // Group filtered payments by customer so that the same customer is not shown multiple times
+    const groupedPayments = [];
+    const customerGroupMap = new Map();
+
+    filteredPayments.forEach((payment, idx) => {
+        const rawParty = payment.companyName || payment.customerName;
+        const partyName = rawParty ? rawParty.trim() : '-';
+        const key = rawParty ? partyName.toLowerCase() : `__unknown_${payment._id || idx}`;
+
+        if (!customerGroupMap.has(key)) {
+            const group = {
+                partyName,
+                payments: []
+            };
+            customerGroupMap.set(key, group);
+            groupedPayments.push(group);
+        }
+        customerGroupMap.get(key).payments.push(payment);
+    });
+
     const handlePrint = () => {
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         generatePaymentCollectionReportPDF(filteredPayments, filters, dateStr);
@@ -419,34 +439,84 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-900 text-[13px] sm:text-[14px]">
-                                    {filteredPayments.length > 0 ? (
-                                        filteredPayments.map((p, idx) => {
-                                            const rawAmount = parseFloat(p.amount) || 0;
-                                            const discount = parseFloat(p.discount) || 0;
-                                            const amount = rawAmount;
-                                            return (
-                                                <tr key={idx} className="border-b border-gray-200">
-                                                    <td className="border-r border-gray-900 px-2 py-1.5 text-center">{idx + 1}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1.5">{formatDate(p.date)}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1.5 font-bold">{p.companyName || p.customerName || '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1.5">{p.method || '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1.5">
-                                                        {p.method === 'Cash' ? (p.receiveBy || '-') : (p.bankName || '-')}
-                                                    </td>
-                                                    <td className="border-r border-gray-900 px-2 py-1.5">
-                                                        {p.method === 'Cash' ? (p.place || '-') : (p.branch || '-')}
-                                                    </td>
-                                                    <td className="border-r border-gray-900 px-2 py-1.5">
-                                                        {p.accountNo || '-'}
-                                                    </td>
-                                                    <td className="px-2 py-1.5 text-right font-bold text-gray-900 whitespace-nowrap">
-                                                        <div>৳{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                        {discount > 0 && (
-                                                            <div className="text-[10px] text-rose-600 font-semibold">Discount: ৳{Number(discount).toLocaleString('en-IN')}</div>
+                                    {groupedPayments.length > 0 ? (
+                                        groupedPayments.flatMap((group, groupIdx) => {
+                                            const rowSpan = group.payments.length;
+                                            const sl = groupIdx + 1;
+
+                                            // Pre-calculate date spans for consecutive payments with the same date
+                                            const paymentsWithDateSpans = [];
+                                            let i = 0;
+                                            while (i < group.payments.length) {
+                                                const curDateStr = formatDate(group.payments[i].date);
+                                                let j = i + 1;
+                                                while (j < group.payments.length && formatDate(group.payments[j].date) === curDateStr) {
+                                                    j++;
+                                                }
+                                                const dateSpan = j - i;
+                                                for (let k = i; k < j; k++) {
+                                                    paymentsWithDateSpans.push({
+                                                        payment: group.payments[k],
+                                                        pIdx: k,
+                                                        isFirstInDate: k === i,
+                                                        dateSpan: k === i ? dateSpan : 0,
+                                                        dateFormatted: curDateStr
+                                                    });
+                                                }
+                                                i = j;
+                                            }
+
+                                            return paymentsWithDateSpans.map(({ payment: p, pIdx, isFirstInDate, dateSpan, dateFormatted }) => {
+                                                const rawAmount = parseFloat(p.amount) || 0;
+                                                const discount = parseFloat(p.discount) || 0;
+                                                const amount = rawAmount;
+                                                const isFirstRow = pIdx === 0;
+
+                                                return (
+                                                    <tr key={p._id ? `${p._id}-${pIdx}` : `${groupIdx}-${pIdx}`} className="border-b border-gray-200">
+                                                        {isFirstRow && (
+                                                            <td
+                                                                rowSpan={rowSpan}
+                                                                className="border-r border-gray-900 px-2 py-1.5 text-center font-bold align-middle bg-white"
+                                                            >
+                                                                {sl}
+                                                            </td>
                                                         )}
-                                                    </td>
-                                                </tr>
-                                            );
+                                                        {isFirstInDate && (
+                                                            <td
+                                                                rowSpan={dateSpan}
+                                                                className="border-r border-gray-900 px-2 py-1.5 align-middle bg-white"
+                                                            >
+                                                                {dateFormatted}
+                                                            </td>
+                                                        )}
+                                                        {isFirstRow && (
+                                                            <td
+                                                                rowSpan={rowSpan}
+                                                                className="border-r border-gray-900 px-2 py-1.5 font-bold align-middle bg-white"
+                                                            >
+                                                                {group.partyName}
+                                                            </td>
+                                                        )}
+                                                        <td className="border-r border-gray-900 px-2 py-1.5 align-middle">{p.method || '-'}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1.5 align-middle">
+                                                            {p.method === 'Cash' ? (p.receiveBy || '-') : (p.bankName || '-')}
+                                                        </td>
+                                                        <td className="border-r border-gray-900 px-2 py-1.5 align-middle">
+                                                            {p.method === 'Cash' ? (p.place || '-') : (p.branch || '-')}
+                                                        </td>
+                                                        <td className="border-r border-gray-900 px-2 py-1.5 align-middle">
+                                                            {p.accountNo || '-'}
+                                                        </td>
+                                                        <td className="px-2 py-1.5 text-right font-bold text-gray-900 whitespace-nowrap align-middle">
+                                                            <div>৳{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            {discount > 0 && (
+                                                                <div className="text-[10px] text-rose-600 font-semibold">Discount: ৳{Number(discount).toLocaleString('en-IN')}</div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            });
                                         })
                                     ) : (
                                         <tr>

@@ -306,9 +306,10 @@ const SearchableFilterSelect = ({
 
 const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
   const user = currentUser || JSON.parse(localStorage.getItem('currentUser') || '{}');
-  const canAdd = hasPermission(user, 'bank', 'add');
-  const canEdit = hasPermission(user, 'bank', 'edit');
-  const canDelete = hasPermission(user, 'bank', 'delete');
+  const canAdd = hasPermission(user, 'withdrawal', 'add');
+  const canEdit = hasPermission(user, 'withdrawal', 'edit');
+  const canDelete = hasPermission(user, 'withdrawal', 'delete');
+  const canShowEntryBy = hasPermission(user, 'withdrawal', 'showEntryBy');
   const cannotAddEdit = !canAdd && !canEdit;
 
   const [withdrawals, setWithdrawals] = useState(() => {
@@ -1670,21 +1671,23 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                     <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Withdrawn By</th>
                     <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Remarks / Note</th>
                     <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Amount (BDT)</th>
-                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Entry By</th>
+                    {canShowEntryBy && (
+                      <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Entry By</th>
+                    )}
                     <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {isLoading ? (
                     <tr>
-                      <td colSpan="12" className="px-5 py-12 text-center text-gray-400">
+                      <td colSpan={canShowEntryBy ? 12 : 11} className="px-5 py-12 text-center text-gray-400">
                         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-rose-600 mb-2"></div>
                         <p className="text-sm">Loading withdrawal records...</p>
                       </td>
                     </tr>
                   ) : filteredWithdrawals.length === 0 ? (
                     <tr>
-                      <td colSpan="12" className="px-5 py-16 text-center text-gray-400">
+                      <td colSpan={canShowEntryBy ? 12 : 11} className="px-5 py-16 text-center text-gray-400">
                         <div className="max-w-xs mx-auto space-y-3">
                           <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl mx-auto flex items-center justify-center">
                             <ArrowUpRightIcon className="w-6 h-6" />
@@ -1744,23 +1747,25 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                         <td className="px-5 py-4 whitespace-nowrap text-right font-bold text-rose-600 text-[13px]">
                           ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="px-5 py-4 whitespace-nowrap text-center align-middle">
-                          <div className="flex flex-col items-center justify-center gap-0.5">
-                            <span className="text-xs font-semibold text-gray-700">
-                              {getEntryByName(item.entryBy, item.entryByName || item.createdBy || item.createdByName || item.userName || item.user)}
-                            </span>
-                            {(item.editedBy || item.editedByName || (item.updatedBy && item.updatedBy !== item.entryBy && item.updatedBy !== item.entryByName)) && (
-                              <span className="text-[10px] text-amber-600 font-medium">
-                                ✎ {getEditedByName(item.editedBy, item.editedByName || item.updatedBy)}
+                        {canShowEntryBy && (
+                          <td className="px-5 py-4 whitespace-nowrap text-center align-middle">
+                            <div className="flex flex-col items-center justify-center gap-0.5">
+                              <span className="text-xs font-semibold text-gray-700">
+                                {getEntryByName(item.entryBy, item.entryByName || item.createdBy || item.createdByName || item.userName || item.user)}
                               </span>
-                            )}
-                            {(item.approvedByName || item.approvedBy) && (
-                              <span className="text-[10px] text-emerald-600 font-semibold" title="Approved">
-                                ✓ {getFirstNameFromIdentifier(item.approvedByName || item.approvedBy)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                              {(item.editedBy || item.editedByName || (item.updatedBy && item.updatedBy !== item.entryBy && item.updatedBy !== item.entryByName)) && (
+                                <span className="text-[10px] text-amber-600 font-medium">
+                                  ✎ {getEditedByName(item.editedBy, item.editedByName || item.updatedBy)}
+                                </span>
+                              )}
+                              {(item.approvedByName || item.approvedBy) && (
+                                <span className="text-[10px] text-emerald-600 font-semibold" title="Approved">
+                                  ✓ {getFirstNameFromIdentifier(item.approvedByName || item.approvedBy)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        )}
                         <td className="px-5 py-4 whitespace-nowrap text-center">
                           <div className="flex items-center justify-center space-x-1.5">
                             <button
@@ -1876,7 +1881,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                 </div>
               )}
 
-              {(viewingWithdrawal.entryByName || viewingWithdrawal.entryBy || viewingWithdrawal.createdBy) && (
+              {canShowEntryBy && (viewingWithdrawal.entryByName || viewingWithdrawal.entryBy || viewingWithdrawal.createdBy) && (
                 <div className="p-3 bg-gray-50 rounded-xl text-xs space-y-1">
                   <span className="text-gray-400 font-medium block">Entry By</span>
                   <div className="font-semibold text-gray-800">

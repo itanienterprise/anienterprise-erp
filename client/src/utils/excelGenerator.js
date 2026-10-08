@@ -3246,45 +3246,94 @@ export const generatePaymentCollectionReportExcel = (payments = [], filters = {}
 
         const sortedPayments = [...payments].sort((a, b) => new Date(a.date) - new Date(b.date));
 
+        // Group payments by customer so that the same customer is not shown multiple times
+        const groupedPayments = [];
+        const customerGroupMap = new Map();
+
         sortedPayments.forEach((p, idx) => {
-            const rawAmount = parseFloat(p.amount) || 0;
-            const discount = parseFloat(p.discount) || 0;
-            const totalAmount = rawAmount + discount;
+            const rawParty = p.companyName || p.customerName;
+            const partyName = rawParty ? rawParty.trim() : '-';
+            const key = rawParty ? partyName.toLowerCase() : `__unknown_${p._id || idx}`;
 
-            sumRawAmount += rawAmount;
-            sumDiscount += discount;
-            sumTotalAmount += totalAmount;
+            if (!customerGroupMap.has(key)) {
+                const group = {
+                    partyName,
+                    payments: []
+                };
+                customerGroupMap.set(key, group);
+                groupedPayments.push(group);
+            }
+            customerGroupMap.get(key).payments.push(p);
+        });
 
-            let remark = (p.reference || p.remarks || p.note || '').trim();
-            if (discount > 0) {
-                const discountText = `Discount (${Math.round(discount).toLocaleString('en-IN')})`;
-                remark = remark ? `${remark}, ${discountText}` : discountText;
+        groupedPayments.forEach((group, groupIdx) => {
+            const sl = groupIdx + 1;
+
+            // Pre-calculate date spans for consecutive payments with the same date
+            const paymentsWithDateSpans = [];
+            let i = 0;
+            while (i < group.payments.length) {
+                const curDateStr = p_date => p_date ? formatDate(p_date) : '-';
+                const curStr = curDateStr(group.payments[i].date);
+                let j = i + 1;
+                while (j < group.payments.length && curDateStr(group.payments[j].date) === curStr) {
+                    j++;
+                }
+                const dateSpan = j - i;
+                for (let k = i; k < j; k++) {
+                    paymentsWithDateSpans.push({
+                        payment: group.payments[k],
+                        pIdx: k,
+                        isFirstInDate: k === i,
+                        dateSpan: k === i ? dateSpan : 0,
+                        dateFormatted: curStr
+                    });
+                }
+                i = j;
             }
 
-            const bankOrReceiver = p.method === 'Cash'
-                ? (p.receiveBy || '-')
-                : (p.bankName || '-');
-            const branchOrPlace = p.method === 'Cash'
-                ? (p.place || '-')
-                : (p.branch || '-');
+            paymentsWithDateSpans.forEach(({ payment: p, pIdx, isFirstInDate, dateFormatted }) => {
+                const rawAmount = parseFloat(p.amount) || 0;
+                const discount = parseFloat(p.discount) || 0;
+                const totalAmount = rawAmount + discount;
 
-            rows.push([
-                idx + 1,
-                p.date ? formatDate(p.date) : '-',
-                p.receiptNo || '-',
-                p.companyName || p.customerName || '-',
-                p.customerType || '-',
-                p.place || p.customerAddress || '-',
-                p.method || '-',
-                bankOrReceiver,
-                branchOrPlace,
-                p.accountNo || '-',
-                Math.round(rawAmount),
-                Math.round(discount),
-                Math.round(totalAmount),
-                p.status || 'Accepted',
-                remark || '-'
-            ]);
+                sumRawAmount += rawAmount;
+                sumDiscount += discount;
+                sumTotalAmount += totalAmount;
+
+                let remark = (p.reference || p.remarks || p.note || '').trim();
+                if (discount > 0) {
+                    const discountText = `Discount (${Math.round(discount).toLocaleString('en-IN')})`;
+                    remark = remark ? `${remark}, ${discountText}` : discountText;
+                }
+
+                const bankOrReceiver = p.method === 'Cash'
+                    ? (p.receiveBy || '-')
+                    : (p.bankName || '-');
+                const branchOrPlace = p.method === 'Cash'
+                    ? (p.place || '-')
+                    : (p.branch || '-');
+
+                const isFirstRow = pIdx === 0;
+
+                rows.push([
+                    isFirstRow ? sl : '',
+                    isFirstInDate ? dateFormatted : '',
+                    p.receiptNo || '-',
+                    isFirstRow ? group.partyName : '',
+                    p.customerType || '-',
+                    p.place || p.customerAddress || '-',
+                    p.method || '-',
+                    bankOrReceiver,
+                    branchOrPlace,
+                    p.accountNo || '-',
+                    Math.round(rawAmount),
+                    Math.round(discount),
+                    Math.round(totalAmount),
+                    p.status || 'Accepted',
+                    remark || '-'
+                ]);
+            });
         });
 
         // 5. Grand Total Row

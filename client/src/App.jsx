@@ -790,7 +790,7 @@ function App() {
   const [cnfDropdownOpen, setCnfDropdownOpen] = useState(false);
   const [bankDropdownOpen, setBankDropdownOpen] = useState(() => {
     const saved = localStorage.getItem('currentView');
-    return saved === 'bank-section' || saved === 'deposit-section';
+    return saved === 'bank-section' || saved === 'deposit-section' || saved === 'withdrawal-section';
   });
   const [crmDropdownOpen, setCrmDropdownOpen] = useState(false);
   const [collectionPaymentDropdownOpen, setCollectionPaymentDropdownOpen] = useState(true);
@@ -2440,6 +2440,13 @@ function App() {
           />
         );
       case 'deposit-section':
+        if (!hasPermission(currentUser, 'deposit', 'view')) {
+          return (
+            <div className="p-8 text-center text-gray-500 font-medium">
+              You do not have permission to access Bank Deposit.
+            </div>
+          );
+        }
         return (
           <Deposit
             key={refreshKey}
@@ -2448,6 +2455,13 @@ function App() {
           />
         );
       case 'withdrawal-section':
+        if (!hasPermission(currentUser, 'withdrawal', 'view')) {
+          return (
+            <div className="p-8 text-center text-gray-500 font-medium">
+              You do not have permission to access Bank Withdrawal.
+            </div>
+          );
+        }
         return (
           <Withdrawal
             key={refreshKey}
@@ -3055,12 +3069,18 @@ function App() {
               )}
 
               {/* Bank */}
-              {hasPermission(currentUser, 'bank', 'view') && (
+              {(hasPermission(currentUser, 'bank', 'view') || hasPermission(currentUser, 'deposit', 'view') || hasPermission(currentUser, 'withdrawal', 'view')) && (
                 <div>
                   <button
                     onClick={() => {
                       if (isMini) {
-                        handleViewChange('bank-section');
+                        if (hasPermission(currentUser, 'bank', 'view')) {
+                          handleViewChange('bank-section');
+                        } else if (hasPermission(currentUser, 'deposit', 'view')) {
+                          handleViewChange('deposit-section');
+                        } else {
+                          handleViewChange('withdrawal-section');
+                        }
                       } else {
                         toggleSidebarDropdown('bank');
                       }
@@ -3080,27 +3100,33 @@ function App() {
                   </button>
                   <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && bankDropdownOpen ? 'max-h-60 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                     <div className="pl-7 pr-2 space-y-1">
-                      <button
-                        onClick={() => { handleViewChange('bank-section'); }}
-                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bank-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                      >
-                        <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Bank</span>
-                      </button>
-                      <button
-                        onClick={() => { handleViewChange('deposit-section'); }}
-                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'deposit-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                      >
-                        <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Deposit</span>
-                      </button>
-                      <button
-                        onClick={() => { handleViewChange('withdrawal-section'); }}
-                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'withdrawal-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                      >
-                        <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Withdrawal</span>
-                      </button>
+                      {hasPermission(currentUser, 'bank', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('bank-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bank-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                        >
+                          <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Bank</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'deposit', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('deposit-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'deposit-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                        >
+                          <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Deposit</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'withdrawal', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('withdrawal-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'withdrawal-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                        >
+                          <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Withdrawal</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
