@@ -258,42 +258,90 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
     if (record?.productsList && record.productsList.length > 0) {
         doc.setTextColor(0, 0, 0);
 
-        const drawProduct = (prod, startXRatio) => {
+        const hasMoreThanTwo = record.productsList.length > 2;
+        // Spacing parameters tuned for perfect visual hierarchy and zero overlap
+        const hsLineSpacing = pageHeight * (hasMoreThanTwo ? 0.0165 : 0.0175); // ~3.46mm from product name to HS code
+        const productRowGap = pageHeight * (hasMoreThanTwo ? 0.024 : 0.025);   // ~5.04mm gap between product rows
+        const lcLineSpacing = pageHeight * (hasMoreThanTwo ? 0.015 : 0.0155);  // ~3.15mm between LC details lines
+        const lcStartGap = pageHeight * (hasMoreThanTwo ? 0.020 : 0.024);      // ~4.2mm gap between last product and LC details
+
+        const colWidth = (layout.descRightX - layout.descLeftX) * pageWidth;
+        const maxColWidth = colWidth - 2; // Safety margin so left column text never overlaps right column
+
+        const drawProduct = (prod, startXRatio, startY) => {
             const name = String(prod.productName || '').trim().toUpperCase();
             const hsIndia = String(prod.hsCodeInd || '').trim().toUpperCase();
             const hsBd = String(prod.hsCode || '').trim().toUpperCase();
 
             const x = pageX + pageWidth * startXRatio;
-            const startY = pageY + pageHeight * layout.descY;
-            const lineSpacing = pageHeight * 0.0155; // Snug relative line spacing (~3.67mm)
 
-            // Draw product name in larger font size
-            const nameFontSize = Math.max(13, Math.round(pageHeight * 0.065));
-            applyAlgerianFont(doc, nameFontSize);
+            // Draw product name in larger font size, auto-scaling down if the name is long to prevent horizontal collision
+            const baseNameFontSize = hasMoreThanTwo
+                ? Math.max(12, Math.round(pageHeight * 0.060))
+                : Math.max(13, Math.round(pageHeight * 0.065));
+            applyAlgerianFont(doc, baseNameFontSize);
+            const nameWidth = doc.getTextWidth(name);
+            if (nameWidth > maxColWidth && maxColWidth > 0) {
+                const scaledFontSize = Math.max(9, Math.floor((baseNameFontSize * (maxColWidth / nameWidth)) * 10) / 10);
+                applyAlgerianFont(doc, scaledFontSize);
+            }
             doc.text(name, x, startY, { charSpace: -0.15 });
 
-            // Draw HS codes in smaller font size, displaying only if a value is present
-            const hsFontSize = Math.max(8.5, Math.round(pageHeight * 0.042)); // Reduced size (~8.8pt)
-            applyAlgerianFont(doc, hsFontSize);
+            // Draw HS codes in smaller font size
+            const baseHsFontSize = Math.max(8.5, Math.round(pageHeight * 0.042));
+            applyAlgerianFont(doc, baseHsFontSize);
 
-            let currentY = startY + lineSpacing;
+            let currentY = startY;
             const isIndHsEnabled = prod.showIndHsCode === true && record.showIndHsCode !== false;
             if (hsIndia && isIndHsEnabled) {
-                doc.text(`H.S. CODE NO. ${hsIndia} (INDIA)`, x, currentY, { charSpace: -0.15 });
-                currentY += lineSpacing;
+                currentY += hsLineSpacing;
+                const indText = `H.S. CODE NO. ${hsIndia} (INDIA)`;
+                const indWidth = doc.getTextWidth(indText);
+                if (indWidth > maxColWidth && maxColWidth > 0) {
+                    const scaledHsSize = Math.max(7.5, Math.floor((baseHsFontSize * (maxColWidth / indWidth)) * 10) / 10);
+                    applyAlgerianFont(doc, scaledHsSize);
+                }
+                doc.text(indText, x, currentY, { charSpace: -0.15 });
+                applyAlgerianFont(doc, baseHsFontSize);
             }
             if (hsBd) {
-                doc.text(`H.S. CODE NO. ${hsBd} (BD)`, x, currentY, { charSpace: -0.15 });
+                currentY += hsLineSpacing;
+                const bdText = `H.S. CODE NO. ${hsBd} (BD)`;
+                const bdWidth = doc.getTextWidth(bdText);
+                if (bdWidth > maxColWidth && maxColWidth > 0) {
+                    const scaledHsSize = Math.max(7.5, Math.floor((baseHsFontSize * (maxColWidth / bdWidth)) * 10) / 10);
+                    applyAlgerianFont(doc, scaledHsSize);
+                }
+                doc.text(bdText, x, currentY, { charSpace: -0.15 });
+                applyAlgerianFont(doc, baseHsFontSize);
             }
+
+            // Return the Y position of the last line drawn for this product
+            return currentY;
         };
 
-        // Draw 1st product on the left
-        drawProduct(record.productsList[0], layout.descLeftX);
+        const baseStartY = pageY + pageHeight * layout.descY;
+        let currentRowY = baseStartY;
+        let lastDrawnY = baseStartY;
 
-        // If there are multiple products, draw the 2nd product on the right
-        if (record.productsList.length > 1) {
-            drawProduct(record.productsList[1], layout.descRightX);
+        // Draw products in pairs: row 1 has prod 0 (left) & prod 1 (right)
+        // If there are more than 2 products, row 2 has prod 2 (left) on next line & prod 3 (right), etc.
+        for (let i = 0; i < record.productsList.length; i += 2) {
+            const prodLeft = record.productsList[i];
+            const prodRight = record.productsList[i + 1];
+
+            // If not the first row, start with productRowGap below the previous row's last drawn line
+            if (i > 0) {
+                currentRowY = lastDrawnY + productRowGap;
+            }
+
+            const endYLeft = prodLeft ? drawProduct(prodLeft, layout.descLeftX, currentRowY) : currentRowY;
+            const endYRight = prodRight ? drawProduct(prodRight, layout.descRightX, currentRowY) : currentRowY;
+
+            lastDrawnY = Math.max(endYLeft, endYRight);
         }
+
+        const afterProductsY = lastDrawnY + lcStartGap;
 
         // Draw total bags and bag type in the leftmost column ("Packages")
         let totalBags = 0;
@@ -369,9 +417,10 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
             doc.setTextColor(0, 0, 0);
 
             const x = pageX + pageWidth * layout.descLeftX;
-            const startY = pageY + pageHeight * layout.descY;
-            const lineSpacing = pageHeight * 0.0155; // Snug relative line spacing (~3.67mm)
-            let currentLineY = startY + 3 * lineSpacing;
+            // For 1-2 products, keep the standard 3-lines offset from top; for >2 products, start directly below the last product row
+            let currentLineY = hasMoreThanTwo
+                ? afterProductsY
+                : Math.max(baseStartY + 3 * (pageHeight * 0.0155), afterProductsY);
 
             const maxWidth = pageWidth * (layout.descMaxWidth || 0.40);
 
@@ -380,7 +429,7 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
                 const lines = doc.splitTextToSize(text, maxWidth);
                 lines.forEach(line => {
                     doc.text(line, x, currentLineY, { charSpace: -0.15 });
-                    currentLineY += lineSpacing;
+                    currentLineY += lcLineSpacing;
                 });
             };
 
@@ -498,8 +547,8 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
                 const frt = parseFloat(prod.totalFreight) || parseFloat(prod.freight) || 0;
                 const formatted = frt.toLocaleString('en-IN', { minimumFractionDigits: 2 });
                 const isLast = idx === record.productsList.length - 1;
-                // Append " &" to the line if it is not the last freight item in the breakdown
-                const lineText = isLast ? formatted : `${formatted} $ &`;
+                // Append " &" to the line if it is not the last freight item in the breakdown, but always include "$"
+                const lineText = isLast ? `${formatted} $` : `${formatted} $ &`;
                 doc.text(lineText, fX, fY, { charSpace: -0.15 });
                 fY += fLS * 0.85;
             });
