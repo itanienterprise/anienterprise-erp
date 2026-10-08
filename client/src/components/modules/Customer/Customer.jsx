@@ -635,9 +635,6 @@ const Customer = ({
     const handleDownloadMoneyReceipt = (payment) => {
         const customer = viewData;
         const paidAmount = parseFloat(payment.amount) || 0;
-        const balanceDue = customer ? Math.max(0, getCustomerFinalBalance(customer)) : 0;
-        const previousBalance = balanceDue + paidAmount;
-
         const tableItems = payment.items && payment.items.length > 0 ? payment.items : [{
             id: payment._id || payment.id,
             method: payment.method,
@@ -646,8 +643,12 @@ const Customer = ({
             branch: payment.branch,
             receiveBy: payment.receiveBy,
             place: payment.place,
-            amount: paidAmount
+            amount: paidAmount,
+            discount: parseFloat(payment.discount) || 0
         }];
+        const totalDiscount = parseFloat(payment.discount) || tableItems.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+        const balanceDue = customer ? Math.max(0, getCustomerFinalBalance(customer)) : 0;
+        const previousBalance = balanceDue + paidAmount + totalDiscount;
 
         const receiptData = {
             ...payment,
@@ -657,6 +658,7 @@ const Customer = ({
             address: customer?.address || customer?.location || payment.address || '',
             phone: customer?.phone || payment.phone || '',
             amount: paidAmount,
+            discount: totalDiscount,
             previousBalance: payment.previousBalance !== undefined ? payment.previousBalance : previousBalance,
             balanceDue: payment.balanceDue !== undefined ? payment.balanceDue : balanceDue,
             items: tableItems

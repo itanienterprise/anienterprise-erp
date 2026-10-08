@@ -1070,15 +1070,17 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         // Calculate historic balance
         const paidAmount = customAmount !== null ? customAmount : (parseFloat(payment.amount) || 0);
 
-        const balanceDue = customer ? Math.max(0, getCustomerFinalBalance(customer, payment.date)) : 0;
-        const previousBalance = balanceDue + paidAmount;
-
         // Build items array for the table
         const tableItems = items || [payment];
+        const totalDiscount = tableItems.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0) || (parseFloat(payment.discount) || 0);
+
+        const balanceDue = customer ? Math.max(0, getCustomerFinalBalance(customer, payment.date)) : 0;
+        const previousBalance = balanceDue + paidAmount + totalDiscount;
 
         const receiptData = {
             ...payment,
             amount: paidAmount,
+            discount: totalDiscount,
             address: customer?.address || '',
             phone: customer?.phone || '',
             previousBalance: previousBalance,
@@ -2725,7 +2727,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                             const isExpanded = !collapsedRows.has(group.key);
                                             const paidAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
                                             const groupDiscount = group.items.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
-                                            const totalAmount = paidAmount + groupDiscount;
+                                            const totalAmount = paidAmount;
 
                                             return (
                                                 <tr
@@ -2874,7 +2876,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                         ) : (
                                                             <div className="flex flex-col gap-1 items-center">
                                                                 {group.items.map((item, idx) => {
-                                                                    const itemTotal = (parseFloat(item.amount) || 0) + (parseFloat(item.discount) || 0);
+                                                                    const itemTotal = parseFloat(item.amount) || 0;
                                                                     const itemDisc = parseFloat(item.discount) || 0;
                                                                     return (
                                                                         <div key={idx} className={`flex flex-col items-center ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
@@ -3012,7 +3014,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                     const isExpanded = expandedMobileCards === group.key;
                                     const paidAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
                                     const groupDiscount = group.items.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
-                                    const totalAmount = paidAmount + groupDiscount;
+                                    const totalAmount = paidAmount;
 
                                     return (
                                         <div
@@ -3130,7 +3132,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                     <span className="mobile-card-label text-blue-600">Amount:</span>
                                                                     <div className="flex flex-col items-end">
                                                                         <span className="mobile-card-value font-black text-blue-600">
-                                                                            ৳{Number((parseFloat(item.amount) || 0) + (parseFloat(item.discount) || 0)).toLocaleString('en-IN')}
+                                                                            ৳{Number(parseFloat(item.amount) || 0).toLocaleString('en-IN')}
                                                                         </span>
                                                                         {parseFloat(item.discount) > 0 && (
                                                                             <span className="text-[9px] text-rose-700 bg-rose-50 border border-rose-200/60 px-1 rounded font-bold mt-0.5">

@@ -286,8 +286,13 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
 
-        const prevBal = payment.previousBalance || 0;
-        const dueBal = payment.balanceDue || 0;
+        const startY = y;
+        const discountAmt = parseFloat(payment.discount !== undefined && payment.discount !== null ? payment.discount : 0) ||
+            (payment.items || []).reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+        const dueBal = parseFloat(payment.balanceDue) || 0;
+        const prevBal = payment.previousBalance !== undefined && payment.previousBalance !== null
+            ? (parseFloat(payment.previousBalance) || 0)
+            : (dueBal + (parseFloat(payment.amount) || 0) + discountAmt);
 
         doc.text("Amount of Balance", margin, y);
         doc.text(":", margin + labelWidth, y);
@@ -295,7 +300,7 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.text(prevBal.toLocaleString('en-IN'), margin + labelWidth + 12, y);
         drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
 
-        y += 10;
+        y += 8.5;
         doc.text("Payment Amount", margin, y);
         doc.text(":", margin + labelWidth, y);
         doc.text("TK.", margin + labelWidth + 3, y);
@@ -304,7 +309,16 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.text(parseFloat(payment.amount).toLocaleString('en-IN'), margin + labelWidth + 12, y);
         drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
 
-        y += 10;
+        y += 8.5;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text("Discount", margin, y);
+        doc.text(":", margin + labelWidth, y);
+        doc.text("TK.", margin + labelWidth + 3, y);
+        doc.text(discountAmt.toLocaleString('en-IN'), margin + labelWidth + 12, y);
+        drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
+
+        y += 8.5;
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
         doc.text("Balance Due", margin, y);
@@ -315,7 +329,7 @@ export const generateMoneyReceiptPDF = async (payment) => {
 
         // Payment Method Checkboxes (Middle-Right) - Compact Layout
         const allUsedMethods = (payment.items || [payment]).map(item => item.method);
-        const methodYStart = y - 20;
+        const methodYStart = startY;
         const methodX = margin + 90;
         const col2X = methodX + 45;
 
