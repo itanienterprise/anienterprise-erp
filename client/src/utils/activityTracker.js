@@ -36,6 +36,8 @@ const VIEW_MODULE_MAP = {
     'cnf': 'C&F',
     'bank-section': 'Bank',
     'bank': 'Bank',
+    'deposit-section': 'Deposit',
+    'deposit': 'Deposit',
     'port-section': 'Port',
     'port': 'Port',
     'products-section': 'Product',

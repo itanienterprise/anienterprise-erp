@@ -66,6 +66,7 @@ import RoleCreation from './components/modules/Employee/RoleCreation';
 import PaymentCollection from './components/modules/PaymentCollection/PaymentCollection';
 import PayToCustomer from './components/modules/PayToCustomer/PayToCustomer';
 import Bank from './components/modules/Bank/Bank';
+import Deposit from './components/modules/Bank/Deposit';
 import Insurance from './components/modules/Insurance/Insurance';
 import InsurancePayment from './components/modules/Insurance/InsurancePayment';
 import LCManagement from './components/modules/LCManagement/LCManagement';
@@ -200,6 +201,7 @@ function App() {
     setHrmsDropdownOpen(false);
     setImporterDropdownOpen(false);
     setCnfDropdownOpen(false);
+    setBankDropdownOpen(false);
     setCrmDropdownOpen(false);
     setCollectionPaymentDropdownOpen(false);
     setLcDropdownOpen(false);
@@ -227,6 +229,7 @@ function App() {
       setHrmsDropdownOpen(false);
       setImporterDropdownOpen(false);
       setCnfDropdownOpen(false);
+      setBankDropdownOpen(false);
       setCrmDropdownOpen(false);
       setCollectionPaymentDropdownOpen(false);
       setLcDropdownOpen(false);
@@ -784,6 +787,10 @@ function App() {
   const [hrmsDropdownOpen, setHrmsDropdownOpen] = useState(false);
   const [importerDropdownOpen, setImporterDropdownOpen] = useState(false);
   const [cnfDropdownOpen, setCnfDropdownOpen] = useState(false);
+  const [bankDropdownOpen, setBankDropdownOpen] = useState(() => {
+    const saved = localStorage.getItem('currentView');
+    return saved === 'bank-section' || saved === 'deposit-section';
+  });
   const [crmDropdownOpen, setCrmDropdownOpen] = useState(false);
   const [collectionPaymentDropdownOpen, setCollectionPaymentDropdownOpen] = useState(true);
   const [lcDropdownOpen, setLcDropdownOpen] = useState(false);
@@ -804,6 +811,7 @@ function App() {
     setHrmsDropdownOpen(dropdownName === 'hrms' ? !hrmsDropdownOpen : false);
     setImporterDropdownOpen(dropdownName === 'importer' ? !importerDropdownOpen : false);
     setCnfDropdownOpen(dropdownName === 'cnf' ? !cnfDropdownOpen : false);
+    setBankDropdownOpen(dropdownName === 'bank' ? !bankDropdownOpen : false);
     setCrmDropdownOpen(dropdownName === 'crm' ? !crmDropdownOpen : false);
     setCollectionPaymentDropdownOpen(dropdownName === 'collectionPayment' ? !collectionPaymentDropdownOpen : false);
     setLcDropdownOpen(dropdownName === 'lc' ? !lcDropdownOpen : false);
@@ -1263,7 +1271,8 @@ function App() {
                     type === 'employees' ? 'employees' :
                       type === 'customer' ? 'customers' :
                         type === 'bank' ? 'banks' :
-                          type === 'indian-bank' ? 'indian-banks' :
+                          type === 'deposit' ? 'deposits' :
+                            type === 'indian-bank' ? 'indian-banks' :
                             type === 'cnf' ? 'cnfs' :
                               type === 'pi' ? 'pi' :
                                 type === 'lc-expense' ? 'lc-expenses' :
@@ -1439,7 +1448,7 @@ function App() {
         else if (type === 'sales') fetchSales();
         else if (type === 'cnf') fetchCnFs();
 
-        if (['insurance', 'employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
+        if (['insurance', 'employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'deposit', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
 
@@ -1456,6 +1465,7 @@ function App() {
           'employees': 'Employee Account',
           'customer': 'Customer',
           'bank': 'Bank',
+          'deposit': 'Deposit',
           'indian-bank': 'Indian Bank',
           'cnf': 'C&F Agent',
           'pi': 'Proforma Invoice',
@@ -2026,11 +2036,12 @@ function App() {
       }
 
       try {
-        if (module === 'banks' || module === 'bank' || module === 'all') {
+        if (module === 'banks' || module === 'bank' || module === 'deposits' || module === 'deposit' || module === 'all') {
           queryClient.invalidateQueries({ queryKey: ['banks'] });
+          queryClient.invalidateQueries({ queryKey: ['deposits'] });
         }
       } catch (err) {
-        console.warn('Error syncing banks in handleDataUpdate:', err);
+        console.warn('Error syncing banks and deposits in handleDataUpdate:', err);
       }
 
       try {
@@ -2421,6 +2432,14 @@ function App() {
         return (
           <Bank
             key={refreshKey}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+          />
+        );
+      case 'deposit-section':
+        return (
+          <Deposit
+            key={refreshKey}
+            currentUser={currentUser}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
         );
@@ -3025,16 +3044,47 @@ function App() {
 
               {/* Bank */}
               {hasPermission(currentUser, 'bank', 'view') && (
-                <button
-                  onClick={() => { handleViewChange('bank-section'); }}
-                  title={isMini ? 'Bank' : undefined}
-                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-                >
-                  <DollarSignIcon className="w-5 h-5 flex-shrink-0" />
-                  <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
-                    Bank
-                  </span>
-                </button>
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange('bank-section');
+                      } else {
+                        toggleSidebarDropdown('bank');
+                      }
+                    }}
+                    title={isMini ? 'Bank' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['bank-section', 'deposit-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <DollarSignIcon className="w-5 h-5 flex-shrink-0" />
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        Bank
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${bankDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && bankDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      <button
+                        onClick={() => { handleViewChange('bank-section'); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bank-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                      >
+                        <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Bank</span>
+                      </button>
+                      <button
+                        onClick={() => { handleViewChange('deposit-section'); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'deposit-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                      >
+                        <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Deposit</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* C&F */}

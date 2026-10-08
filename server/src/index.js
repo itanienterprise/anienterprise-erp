@@ -352,6 +352,7 @@ const User = require('./models/User');
 const Employee = require('./models/Employee');
 const Notification = require('./models/Notification');
 const Bank = require('./models/Bank');
+const Deposit = require('./models/Deposit');
 const Exporter = require('./models/Exporter');
 const Supplier = require('./models/Supplier');
 const CostOfGoods = require('./models/CostOfGoods');
@@ -1381,6 +1382,7 @@ const ROUTE_MODEL_MAP = {
   'damages': Damage,
   'returns': Return,
   'banks': Bank,
+  'deposits': Deposit,
   'insurance': Insurance,
   'insurance-payments': InsurancePayment,
   'lc-management': LCManagement,
@@ -3735,6 +3737,65 @@ apiRouter.get('/api/banks', async (req, res) => {
   }
 });
 
+// Deposit APIs
+apiRouter.post('/api/deposits', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newDeposit = new Deposit({ data: encryptedData });
+    const savedDeposit = await newDeposit.save();
+    const result = { ...req.body, _id: savedDeposit._id, createdAt: savedDeposit.createdAt };
+    broadcastUpdate('deposits', 'create', { id: savedDeposit._id, deposit: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/deposits/:id', async (req, res) => {
+  try {
+    const userSession = req.session.user;
+    if (userSession && ['incharge', 'lc manager', 'sales manager'].includes((userSession.role || '').toLowerCase())) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to delete deposits' });
+    }
+
+    const deletedDeposit = await Deposit.findByIdAndDelete(req.params.id);
+    if (!deletedDeposit) return res.status(404).json({ message: 'Deposit not found' });
+    broadcastUpdate('deposits', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
+    res.json({ message: 'Deposit deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/deposits/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedDeposit = await Deposit.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
+    if (!updatedDeposit) return res.status(404).json({ message: 'Deposit not found' });
+    const result = { ...req.body, _id: updatedDeposit._id, createdAt: updatedDeposit.createdAt };
+    broadcastUpdate('deposits', 'update', { id: req.params.id, deposit: result });
+    req._broadcastDone = true;
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/deposits', async (req, res) => {
+  try {
+    const records = await Deposit.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 // Insurance APIs
 apiRouter.post('/api/insurance', async (req, res) => {
@@ -5316,7 +5377,7 @@ const ERP_MODULE_COLLECTIONS = {
   port: { label: 'Ports', models: ['Port'], description: 'Ports of loading / discharge' },
   importerExporter: { label: 'Importers & Exporters', models: ['Importer', 'Exporter'], description: 'Registered Importers & Exporters' },
   product: { label: 'Products', models: ['Product'], description: 'Product catalog & categories' },
-  bank: { label: 'Banks', models: ['Bank'], description: 'Bank accounts & configurations' },
+  bank: { label: 'Banks', models: ['Bank', 'Deposit'], description: 'Bank accounts & configurations, deposits' },
   cnf: { label: 'C&F Management', models: ['CnF', 'CnFPayment'], description: 'C&F Agents & payment transactions' },
   insurance: { label: 'Insurance', models: ['Insurance', 'InsurancePayment'], description: 'Insurance policies & payments' },
   costOfGoods: { label: 'Cost of Goods', models: ['CostOfGoods'], description: 'COG sheets & cost calculations' },

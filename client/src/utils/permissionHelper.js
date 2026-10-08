@@ -442,6 +442,14 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
         }
     }
 
+    // Special fallback for deposit if not explicitly defined in custom permissions
+    if (moduleName === 'deposit') {
+        if (currentUser.permissions && currentUser.permissions.deposit && currentUser.permissions.deposit[checkAction] !== undefined) {
+            return !!currentUser.permissions.deposit[checkAction];
+        }
+        return hasPermission(currentUser, 'bank', action);
+    }
+
     // 2. Custom permission check
     if (currentUser.permissions && currentUser.permissions[moduleName]) {
         return !!currentUser.permissions[moduleName][checkAction];
