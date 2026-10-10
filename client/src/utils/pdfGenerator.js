@@ -6459,7 +6459,14 @@ export const generateCnFPaymentsListReportPDF = (payments = [], filters = {}, da
             totalAmount += amt;
             totalDiscount += disc;
 
-            const refBank = p.bankName ? (p.reference ? `${p.bankName} (${p.reference})` : p.bankName) : (p.reference || '-');
+            let bankDetails = p.bankName || '';
+            if (bankDetails) {
+                if (p.branch) bankDetails += ` (${p.branch})`;
+                if (p.accountNo) bankDetails += ` [A/C: ${p.accountNo}]`;
+            }
+            const refBank = bankDetails
+                ? (p.reference ? `${bankDetails} - Ref: ${p.reference}` : bankDetails)
+                : (p.reference || '-');
             const billRange = (p.billFrom && p.billTo) ? ` (${formatDate(p.billFrom)} - ${formatDate(p.billTo)})` : '';
 
             tableRows.push([
@@ -6655,7 +6662,14 @@ export const generateCnFPaymentReportPDF = (reportData, agentInfo, filters) => {
         const tableRows = reportData.map((row) => [
             formatDate(row.date),
             row.method || '-',
-            row.bankName ? (row.reference ? `${row.reference} / ${row.bankName}` : row.bankName) : (row.reference || '-'),
+            (() => {
+                let bDetail = row.bankName || '';
+                if (bDetail) {
+                    if (row.branch) bDetail += ` (${row.branch})`;
+                    if (row.accountNo) bDetail += ` [A/C: ${row.accountNo}]`;
+                }
+                return bDetail ? (row.reference ? `${row.reference} / ${bDetail}` : bDetail) : (row.reference || '-');
+            })(),
             parseFloat(row.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
             parseFloat(row.discount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })
         ]);
@@ -6842,8 +6856,14 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
                 qtyNum > 0 ? `${qtyNum.toLocaleString('en-US')} kg` : (row.qty && row.qty !== '-' ? `${row.qty}` : '-'),
                 truckDisplay,
                 row.billingAmount > 0 ? row.billingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
-                row.method || '-',
-                row.bankName ? (row.reference ? `${row.reference} / ${row.bankName}` : row.bankName) : (row.reference || '-'),
+                (() => {
+                    let bDetail = row.bankName || '';
+                    if (bDetail) {
+                        if (row.branch) bDetail += ` (${row.branch})`;
+                        if (row.accountNo) bDetail += ` [A/C: ${row.accountNo}]`;
+                    }
+                    return bDetail ? (row.reference ? `${row.reference} / ${bDetail}` : bDetail) : (row.reference || '-');
+                })(),
                 row.amount > 0 ? row.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
                 row.discount > 0 ? row.discount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
                 row.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })

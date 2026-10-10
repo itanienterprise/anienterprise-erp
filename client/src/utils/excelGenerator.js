@@ -908,7 +908,14 @@ export const generateCnFPaymentsListReportExcel = (payments = [], filters = {}) 
             totalAmount += amt;
             totalDiscount += disc;
 
-            const refBank = p.bankName ? (p.reference ? `${p.bankName} (${p.reference})` : p.bankName) : (p.reference || '-');
+            let bankDetails = p.bankName || '';
+            if (bankDetails) {
+                if (p.branch) bankDetails += ` (${p.branch})`;
+                if (p.accountNo) bankDetails += ` [A/C: ${p.accountNo}]`;
+            }
+            const refBank = bankDetails
+                ? (p.reference ? `${bankDetails} - Ref: ${p.reference}` : bankDetails)
+                : (p.reference || '-');
             const billRange = (p.billFrom && p.billTo) ? ` (${formatDate(p.billFrom)} - ${formatDate(p.billTo)})` : '';
 
             rows.push([
