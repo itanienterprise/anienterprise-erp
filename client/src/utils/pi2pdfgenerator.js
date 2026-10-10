@@ -112,12 +112,17 @@ export const generatePI2PDF = (record) => {
         doc.line(margin + (leftColWidth / 2) - (eLW / 2), y + 6, margin + (leftColWidth / 2) + (eLW / 2), y + 6);
     }
 
-    doc.setFontSize(14);
-    const nameLines = doc.splitTextToSize(record.exporterName || '', leftColWidth - 10);
+    const exporterName = String(record.exporterName || '').trim();
+    const maxExpNameWidth = leftColWidth - 8;
+    const expNameFontSize = fitFontSizeOneLine(doc, exporterName, maxExpNameWidth, 14, 7.5, 'bold');
+    doc.setFontSize(expNameFontSize);
+    doc.setFont("helvetica", "bold");
+    const nameLines = doc.splitTextToSize(exporterName, maxExpNameWidth);
+    const expNameY = y + 11.5;
     if (isStyle3) {
-        doc.text(nameLines, margin + 5, y + 12);
+        doc.text(nameLines, margin + 5, expNameY);
     } else {
-        doc.text(nameLines, margin + leftColWidth / 2, y + 12, { align: 'center' });
+        doc.text(nameLines, margin + leftColWidth / 2, expNameY, { align: 'center' });
     }
 
     doc.setFontSize(9);
@@ -134,7 +139,9 @@ export const generatePI2PDF = (record) => {
     
     const exporterColWidth = leftColWidth - 10;
     const exporterCenterX = margin + leftColWidth / 2;
-    let expLineY = y + 17;
+    let expLineY = (nameLines.length > 1)
+        ? Math.max(y + 16.5, expNameY + (nameLines.length * (expNameFontSize * 0.35 + 1.2)))
+        : y + 16.5;
     const expLineH = 4;
     exporterInfo.trim().split('\n').forEach(rawLine => {
         const trimmed = rawLine.trim();
@@ -273,12 +280,17 @@ export const generatePI2PDF = (record) => {
         doc.line(margin + (leftColWidth / 2) - (iLW / 2), y + 6, margin + (leftColWidth / 2) + (iLW / 2), y + 6);
     }
 
-    doc.setFontSize(14);
-    const pnLines = doc.splitTextToSize(record.partyName || '', leftColWidth - 10);
+    const partyName = String(record.partyName || '').trim();
+    const maxImpNameWidth = leftColWidth - 8;
+    const impNameFontSize = fitFontSizeOneLine(doc, partyName, maxImpNameWidth, 14, 7.5, 'bold');
+    doc.setFontSize(impNameFontSize);
+    doc.setFont("helvetica", "bold");
+    const pnLines = doc.splitTextToSize(partyName, maxImpNameWidth);
+    const impNameY = y + 11.5;
     if (isStyle3) {
-        doc.text(pnLines, margin + 5, y + 12);
+        doc.text(pnLines, margin + 5, impNameY);
     } else {
-        doc.text(pnLines, margin + leftColWidth / 2, y + 12, { align: 'center' });
+        doc.text(pnLines, margin + leftColWidth / 2, impNameY, { align: 'center' });
     }
 
     doc.setFontSize(9);
@@ -292,10 +304,13 @@ export const generatePI2PDF = (record) => {
     if (email) {
         impInfo = impInfo.trim() + `\nEmail: ${email}`;
     }
+    const impAddressY = (pnLines.length > 1)
+        ? Math.max(y + 16.5, impNameY + (pnLines.length * (impNameFontSize * 0.35 + 1.2)))
+        : y + 16.5;
     if (isStyle3) {
-        doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + 5, y + 17);
+        doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + 5, impAddressY);
     } else {
-        doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
+        doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, impAddressY, { align: 'center' });
     }
 
     // Shipping rows (left)

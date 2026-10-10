@@ -591,9 +591,13 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const eLW = doc.getTextWidth("Exporter");
     doc.line(margin + (leftColWidth / 2) - (eLW / 2), y + 6, margin + (leftColWidth / 2) + (eLW / 2), y + 6);
 
-    doc.setFontSize(14);
-    const nameLines = doc.splitTextToSize(record.exporterName || '', leftColWidth - 10);
-    const exporterNameY = (isPiRevised || displayPlPis.length > 1) ? y + 13 : y + 12;
+    const exporterName = String(record.exporterName || '').trim();
+    const maxExpNameWidth = leftColWidth - 8;
+    const expNameFontSize = fitFontSizeOneLine(doc, exporterName, maxExpNameWidth, 14, 7.5, 'bold');
+    doc.setFontSize(expNameFontSize);
+    doc.setFont("helvetica", "bold");
+    const nameLines = doc.splitTextToSize(exporterName, maxExpNameWidth);
+    const exporterNameY = (isPiRevised || displayPlPis.length > 1) ? y + 12 : y + 11.5;
     doc.text(nameLines, margin + leftColWidth / 2, exporterNameY, { align: 'center' });
 
     doc.setFontSize(9);
@@ -609,7 +613,9 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     if (exporterEmail) {
         exporterInfo = exporterInfo.trim() + `\nEmail: ${exporterEmail}`;
     }
-    const exporterAddressY = (isPiRevised || displayPlPis.length > 1) ? y + 17 : y + 15.5;
+    const exporterAddressY = (nameLines.length > 1)
+        ? Math.max(exporterNameY + (nameLines.length * (expNameFontSize * 0.35 + 1.2)), (isPiRevised || displayPlPis.length > 1) ? y + 17 : y + 16)
+        : ((isPiRevised || displayPlPis.length > 1) ? y + 17 : y + 16);
     doc.text(doc.splitTextToSize(exporterInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, exporterAddressY, { align: 'center' });
 
     // Right: Invoice Info
@@ -704,9 +710,14 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const iLW = doc.getTextWidth("Importer");
     doc.line(margin + (leftColWidth / 2) - (iLW / 2), y + 6, margin + (leftColWidth / 2) + (iLW / 2), y + 6);
 
-    doc.setFontSize(14);
-    const pnLines = doc.splitTextToSize(record.partyName || '', leftColWidth - 10);
-    doc.text(pnLines, margin + leftColWidth / 2, y + 12, { align: 'center' });
+    const partyName = String(record.partyName || '').trim();
+    const maxImpNameWidth = leftColWidth - 8;
+    const impNameFontSize = fitFontSizeOneLine(doc, partyName, maxImpNameWidth, 14, 7.5, 'bold');
+    doc.setFontSize(impNameFontSize);
+    doc.setFont("helvetica", "bold");
+    const pnLines = doc.splitTextToSize(partyName, maxImpNameWidth);
+    const impNameY = y + 11.5;
+    doc.text(pnLines, margin + leftColWidth / 2, impNameY, { align: 'center' });
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
@@ -719,7 +730,10 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     if (email) {
         impInfo = impInfo.trim() + `\nEmail: ${email}`;
     }
-    doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
+    const impAddressY = (pnLines.length > 1)
+        ? Math.max(y + 16.5, impNameY + (pnLines.length * (impNameFontSize * 0.35 + 1.2)))
+        : y + 16.5;
+    doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, impAddressY, { align: 'center' });
 
     // Shipping rows (left)
     doc.line(margin, y + 29, margin + leftColWidth, y + 29);

@@ -68,6 +68,7 @@ import PayToCustomer from './components/modules/PayToCustomer/PayToCustomer';
 import Bank from './components/modules/Bank/Bank';
 import Deposit from './components/modules/Bank/Deposit';
 import Withdrawal from './components/modules/Bank/Withdrawal';
+import Statement from './components/modules/Bank/Statement';
 import PattyCash from './components/modules/PattyCash/PattyCash';
 import Insurance from './components/modules/Insurance/Insurance';
 import InsurancePayment from './components/modules/Insurance/InsurancePayment';
@@ -791,7 +792,7 @@ function App() {
   const [cnfDropdownOpen, setCnfDropdownOpen] = useState(false);
   const [bankDropdownOpen, setBankDropdownOpen] = useState(() => {
     const saved = localStorage.getItem('currentView');
-    return saved === 'bank-section' || saved === 'deposit-section' || saved === 'withdrawal-section';
+    return saved === 'bank-section' || saved === 'deposit-section' || saved === 'withdrawal-section' || saved === 'statement-section' || saved === 'bank-statement-section';
   });
   const [crmDropdownOpen, setCrmDropdownOpen] = useState(false);
   const [collectionPaymentDropdownOpen, setCollectionPaymentDropdownOpen] = useState(true);
@@ -2481,6 +2482,22 @@ function App() {
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
         );
+      case 'statement-section':
+      case 'bank-statement-section':
+        if (!hasPermission(currentUser, 'bankStatement', 'view')) {
+          return (
+            <div className="p-8 text-center text-gray-500 font-medium">
+              You do not have permission to access Bank Statement.
+            </div>
+          );
+        }
+        return (
+          <Statement
+            key={refreshKey}
+            currentUser={currentUser}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+          />
+        );
       case 'patty-cash-section':
         if (!hasPermission(currentUser, 'pattyCash', 'view')) {
           return (
@@ -3096,7 +3113,7 @@ function App() {
               )}
 
               {/* Bank */}
-              {(hasPermission(currentUser, 'bank', 'view') || hasPermission(currentUser, 'deposit', 'view') || hasPermission(currentUser, 'withdrawal', 'view')) && (
+              {(hasPermission(currentUser, 'bank', 'view') || hasPermission(currentUser, 'deposit', 'view') || hasPermission(currentUser, 'withdrawal', 'view') || hasPermission(currentUser, 'bankStatement', 'view')) && (
                 <div>
                   <button
                     onClick={() => {
@@ -3105,15 +3122,17 @@ function App() {
                           handleViewChange('bank-section');
                         } else if (hasPermission(currentUser, 'deposit', 'view')) {
                           handleViewChange('deposit-section');
-                        } else {
+                        } else if (hasPermission(currentUser, 'withdrawal', 'view')) {
                           handleViewChange('withdrawal-section');
+                        } else {
+                          handleViewChange('statement-section');
                         }
                       } else {
                         toggleSidebarDropdown('bank');
                       }
                     }}
                     title={isMini ? 'Bank' : undefined}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['bank-section', 'deposit-section', 'withdrawal-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['bank-section', 'deposit-section', 'withdrawal-section', 'statement-section', 'bank-statement-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
                     <div className="flex items-center min-w-0">
                       <DollarSignIcon className="w-5 h-5 flex-shrink-0" />
@@ -3125,7 +3144,7 @@ function App() {
                       <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${bankDropdownOpen ? 'transform rotate-180' : ''}`} />
                     </div>
                   </button>
-                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && bankDropdownOpen ? 'max-h-60 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && bankDropdownOpen ? 'max-h-80 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                     <div className="pl-7 pr-2 space-y-1">
                       {hasPermission(currentUser, 'bank', 'view') && (
                         <button
@@ -3152,6 +3171,15 @@ function App() {
                         >
                           <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                           <span>Withdrawal</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'bankStatement', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('statement-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'statement-section' || currentView === 'bank-statement-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                        >
+                          <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Statement</span>
                         </button>
                       )}
                     </div>

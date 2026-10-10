@@ -39,6 +39,19 @@ const formatExporterAddressOneLine = (addressStr) => {
     return resultLines.join('\n');
 };
 
+const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fontStyle = 'bold') => {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return maxSize;
+    doc.setFont('helvetica', fontStyle);
+    let size = maxSize;
+    while (size > minSize) {
+        doc.setFontSize(size);
+        if (doc.getTextWidth(clean) <= maxWidth) return size;
+        size -= 0.25;
+    }
+    doc.setFontSize(minSize);
+    return minSize;
+};
 
 export const generatePLPDF = async (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = [], products = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
@@ -80,8 +93,9 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
 
     // --- Header ---
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
     const exporterName = record.exporterName || 'ANI Enterprise';
+    const expHeaderFontSize = fitFontSizeOneLine(doc, exporterName.toUpperCase(), pageWidth - (margin * 2) - 10, 16, 9, 'bold');
+    doc.setFontSize(expHeaderFontSize);
     doc.text(exporterName.toUpperCase(), pageWidth / 2, y, { align: 'center' });
     y += 5;
 
@@ -148,8 +162,10 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
     doc.text("Importer / Buyer:", leftColX + 3, leftY);
     leftY += 4.5;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text(record.partyName || '', leftColX + 3, leftY);
+    const partyName = record.partyName || '';
+    const partyFontSize = fitFontSizeOneLine(doc, partyName, colWidth - 8, 9, 6.5, 'bold');
+    doc.setFontSize(partyFontSize);
+    doc.text(partyName, leftColX + 3, leftY);
     leftY += 4.5;
 
     doc.setFont("helvetica", "normal");

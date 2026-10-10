@@ -11040,4 +11040,320 @@ export const generatePattyCashReportPDF = async (records = [], filters = {}, sum
     }
 };
 
+/**
+ * Generates and downloads or previews a professional Bank Statement PDF.
+ * Matches ANI Enterprise ERP corporate styling with header, account metadata,
+ * financial summary cards, chronological ledger table with running balances, and signatures.
+ * 
+ * @param {Array} statementData - List of transaction records with runningBalance
+ * @param {Object} meta - Account and report metadata (bankName, branch, accountNo, dates, openingBalance, closingBalance, etc.)
+ */
+export const generateBankStatementPDF = (statementData = [], meta = {}) => {
+    try {
+        const doc = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // --- Company Header ---
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(17, 24, 39);
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 13, { align: 'center' });
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(75, 85, 99);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 18, { align: 'center' });
+        doc.text("+8802588813057 | anienterprise051@gmail.com | www.anienterprises.com.bd", pageWidth / 2, 22.5, { align: 'center' });
+
+        // Decorative separator line
+        doc.setDrawColor(209, 213, 219);
+        doc.setLineWidth(0.4);
+        doc.line(margin, 26, pageWidth - margin, 26);
+
+        // Statement Title Badge
+        doc.setFillColor(30, 58, 138); // Deep Blue / Indigo
+        doc.roundedRect(pageWidth / 2 - 42, 28, 84, 7.5, 1.5, 1.5, 'F');
+        doc.setFontSize(10.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text("BANK ACCOUNT STATEMENT", pageWidth / 2, 33, { align: 'center' });
+
+        // --- Metadata Box (Account & Statement Details) ---
+        let infoY = 39.5;
+        const infoBoxWidth = pageWidth - (margin * 2);
+        const infoBoxHeight = 19;
+        
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, infoY, infoBoxWidth, infoBoxHeight, 2, 2, 'FD');
+
+        const col1LabelX = margin + 4;
+        const col1ValX = margin + 28;
+        const col2LabelX = margin + (infoBoxWidth / 2) + 4;
+        const col2ValX = margin + (infoBoxWidth / 2) + 32;
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(71, 85, 105);
+
+        // Row 1
+        doc.setFont('helvetica', 'bold');
+        doc.text("Bank Name:", col1LabelX, infoY + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(meta.bankName || 'All Banks / Consolidated', col1ValX, infoY + 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Statement Period:", col2LabelX, infoY + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        const periodStr = meta.dateRangeStr || (
+            meta.startDate || meta.endDate
+                ? `${meta.startDate ? formatDate(meta.startDate) : 'Start'} to ${meta.endDate ? formatDate(meta.endDate) : 'Present'}`
+                : 'All Records'
+        );
+        doc.text(periodStr, col2ValX, infoY + 5);
+
+        // Row 2
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Branch:", col1LabelX, infoY + 10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(meta.branch || 'All Branches', col1ValX, infoY + 10);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Currency:", col2LabelX, infoY + 10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text("BDT (Taka)", col2ValX, infoY + 10);
+
+        // Row 3
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Account No:", col1LabelX, infoY + 15);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        const accInfo = meta.accountNo 
+            ? `${meta.accountNo}${meta.accountName ? ` (${meta.accountName})` : ''}`
+            : 'All Accounts';
+        doc.text(accInfo, col1ValX, infoY + 15);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Statement Date:", col2LabelX, infoY + 15);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(formatDate(new Date().toISOString().split('T')[0]), col2ValX, infoY + 15);
+
+        // --- Summary Cards Row (Opening, Inflow, Outflow, Closing) ---
+        const cardY = infoY + infoBoxHeight + 3.5;
+        const totalCards = 4;
+        const cardGap = 2.5;
+        const totalGaps = cardGap * (totalCards - 1);
+        const cardWidth = (infoBoxWidth - totalGaps) / totalCards;
+        const cardHeight = 14;
+
+        const summaryItems = [
+            {
+                label: 'OPENING BALANCE',
+                value: `TK ${(Number(meta.openingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                bg: [239, 246, 255],      // Light blue
+                border: [191, 219, 254],
+                text: [30, 64, 175]
+            },
+            {
+                label: 'TOTAL DEPOSITS (+)',
+                value: `TK ${(Number(meta.totalDeposits) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                bg: [240, 253, 244],      // Light green
+                border: [187, 247, 208],
+                text: [22, 101, 52]
+            },
+            {
+                label: 'TOTAL WITHDRAWALS (-)',
+                value: `TK ${(Number(meta.totalWithdrawals) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                bg: [255, 241, 242],      // Light rose
+                border: [254, 205, 211],
+                text: [159, 18, 57]
+            },
+            {
+                label: 'CLOSING BALANCE',
+                value: `TK ${(Number(meta.closingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                bg: [245, 243, 255],      // Light purple
+                border: [221, 214, 254],
+                text: [91, 33, 182]
+            }
+        ];
+
+        summaryItems.forEach((card, idx) => {
+            const cx = margin + idx * (cardWidth + cardGap);
+            doc.setFillColor(...card.bg);
+            doc.setDrawColor(...card.border);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(cx, cardY, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+            doc.setFontSize(6.8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(100, 116, 139);
+            doc.text(card.label, cx + (cardWidth / 2), cardY + 4.5, { align: 'center' });
+
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...card.text);
+            doc.text(card.value, cx + (cardWidth / 2), cardY + 10.5, { align: 'center' });
+        });
+
+        // --- Table Body Data ---
+        const tableRows = [];
+
+        // Baseline Opening Balance Row
+        tableRows.push([
+            { content: '-', styles: { halign: 'center', textColor: [100, 116, 139] } },
+            { content: meta.startDate ? formatDate(meta.startDate) : '-', styles: { halign: 'center', textColor: [100, 116, 139] } },
+            { content: 'OPENING BALANCE FORWARD', colSpan: 3, styles: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [30, 58, 138] } },
+            { content: '-', styles: { halign: 'right', textColor: [148, 163, 184] } },
+            { content: '-', styles: { halign: 'right', textColor: [148, 163, 184] } },
+            { 
+                content: (Number(meta.openingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [15, 23, 42] } 
+            }
+        ]);
+
+        // Transaction Rows
+        statementData.forEach((tx, index) => {
+            const isDeposit = tx.type === 'deposit';
+            const depStr = isDeposit && tx.amount > 0 
+                ? tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) 
+                : '-';
+            const withStr = !isDeposit && tx.amount > 0 
+                ? tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) 
+                : '-';
+            const balStr = (Number(tx.runningBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            const particulars = [
+                tx.sourceModule ? `[${tx.sourceModule}]` : '',
+                tx.partyOrPerson ? (isDeposit ? `From: ${tx.partyOrPerson}` : `To: ${tx.partyOrPerson}`) : '',
+                tx.remarks ? `Note: ${tx.remarks}` : ''
+            ].filter(Boolean).join(' | ') || (isDeposit ? 'Deposit Entry' : 'Withdrawal Entry');
+
+            tableRows.push([
+                { content: String(index + 1), styles: { halign: 'center' } },
+                { content: formatDate(tx.date), styles: { halign: 'center' } },
+                { content: tx.typeName || (isDeposit ? 'Deposit' : 'Withdrawal'), styles: { halign: 'left', fontStyle: 'bold' } },
+                { content: tx.referenceNo || '-', styles: { halign: 'center' } },
+                { content: particulars, styles: { halign: 'left' } },
+                { content: depStr, styles: { halign: 'right', fontStyle: isDeposit ? 'bold' : 'normal', textColor: isDeposit ? [22, 101, 52] : [100, 116, 139] } },
+                { content: withStr, styles: { halign: 'right', fontStyle: !isDeposit ? 'bold' : 'normal', textColor: !isDeposit ? [159, 18, 57] : [100, 116, 139] } },
+                { content: balStr, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] } }
+            ]);
+        });
+
+        // Grand Total Summary Row
+        tableRows.push([
+            { content: 'TOTALS / CLOSING', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
+            { 
+                content: (Number(meta.totalDeposits) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 253, 244], textColor: [22, 101, 52] } 
+            },
+            { 
+                content: (Number(meta.totalWithdrawals) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [255, 241, 242], textColor: [159, 18, 57] } 
+            },
+            { 
+                content: (Number(meta.closingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 243, 255], textColor: [91, 33, 182] } 
+            }
+        ]);
+
+        autoTable(doc, {
+            startY: cardY + cardHeight + 4.5,
+            head: [['SL', 'Date', 'Type / Method', 'Ref No', 'Particulars / Remarks', 'Deposit (+)', 'Withdrawal (-)', 'Balance (TK)']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 8,
+                cellPadding: 1.5,
+                lineColor: [226, 232, 240],
+                lineWidth: 0.1,
+                textColor: [30, 41, 59]
+            },
+            headStyles: {
+                fillColor: [30, 58, 138],
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                halign: 'center',
+                fontSize: 8.5
+            },
+            columnStyles: {
+                0: { cellWidth: 9, halign: 'center' },   // SL
+                1: { cellWidth: 19, halign: 'center' },  // Date
+                2: { cellWidth: 26, halign: 'left' },    // Type / Method
+                3: { cellWidth: 19, halign: 'center' },  // Ref No
+                4: { cellWidth: 47, halign: 'left' },    // Particulars
+                5: { cellWidth: 23, halign: 'right' },   // Deposit
+                6: { cellWidth: 23, halign: 'right' },   // Withdrawal
+                7: { cellWidth: 24, halign: 'right' }    // Balance
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // --- Signatures ---
+        let sigY = doc.lastAutoTable.finalY + 28;
+        if (sigY + 20 > pageHeight) {
+            doc.addPage();
+            sigY = 32;
+        }
+
+        const sigWidth = 45;
+        doc.setDrawColor(156, 163, 175);
+        doc.setLineWidth(0.4);
+        doc.setLineDashPattern([1, 1], 0);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.line(pageWidth / 2 - sigWidth / 2, sigY, pageWidth / 2 + sigWidth / 2, sigY);
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(55, 65, 81);
+        doc.setLineDashPattern([], 0);
+        doc.text("Prepared By", margin + (sigWidth / 2), sigY + 4.5, { align: 'center' });
+        doc.text("Verified By", pageWidth / 2, sigY + 4.5, { align: 'center' });
+        doc.text("Authorized Signature", pageWidth - margin - (sigWidth / 2), sigY + 4.5, { align: 'center' });
+
+        // --- Page Numbering on all pages ---
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - BANK ACCOUNT STATEMENT', margin, pageHeight - 5);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+        }
+
+        // Open in browser tab for instant preview/print, fallback to download
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        const newTab = window.open(blobURL, '_blank');
+        if (!newTab) {
+            const fileName = `Bank_Statement_${(meta.bankName || 'Consolidated').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(fileName);
+        }
+    } catch (err) {
+        console.error("Error generating Bank Statement PDF:", err);
+        alert("Failed to generate PDF statement: " + err.message);
+    }
+};
+
+
 

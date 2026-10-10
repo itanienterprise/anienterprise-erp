@@ -5024,6 +5024,156 @@ export const generatePattyCashReportExcel = (records = [], filters = {}, summary
     }
 };
 
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for the Bank Statement.
+ * Includes company header, bank & account metadata, financial summary,
+ * and the complete chronological transaction ledger with running balance.
+ * 
+ * @param {Array} statementData - List of transactions with runningBalance
+ * @param {Object} meta - Account metadata (bankName, branch, accountNo, dates, openingBalance, closingBalance, etc.)
+ */
+export const generateBankStatementExcel = (statementData = [], meta = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['BANK ACCOUNT STATEMENT']);
+        rows.push([]);
+
+        // 2. Account & Report Metadata
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const periodStr = meta.dateRangeStr || (
+            meta.startDate || meta.endDate
+                ? `${meta.startDate ? formatDate(meta.startDate) : 'Start'} to ${meta.endDate ? formatDate(meta.endDate) : 'Present'}`
+                : 'All Records'
+        );
+
+        rows.push(['Bank Name:', meta.bankName || 'All Banks / Consolidated', '', 'Statement Period:', periodStr]);
+        rows.push(['Branch:', meta.branch || 'All Branches', '', 'Currency:', 'BDT (Taka)']);
+        rows.push(['Account No:', meta.accountNo ? `${meta.accountNo}${meta.accountName ? ` (${meta.accountName})` : ''}` : 'All Accounts', '', 'Generated Date:', dateStr]);
+        rows.push([]);
+
+        // 3. Financial Summary Block
+        rows.push(['FINANCIAL SUMMARY']);
+        rows.push(['Opening Balance (TK):', Number(meta.openingBalance) || 0]);
+        rows.push(['Total Deposits / Credits (TK):', Number(meta.totalDeposits) || 0]);
+        rows.push(['Total Withdrawals / Debits (TK):', Number(meta.totalWithdrawals) || 0]);
+        rows.push(['Net Movement (TK):', (Number(meta.totalDeposits) || 0) - (Number(meta.totalWithdrawals) || 0)]);
+        rows.push(['Closing Balance (TK):', Number(meta.closingBalance) || 0]);
+        rows.push([]);
+
+        // 4. Ledger Table Header
+        const headers = [
+            'SL',
+            'Date',
+            'Source Module',
+            'Transaction Type',
+            'Method / Mode',
+            'Bank Name',
+            'Branch',
+            'Account No',
+            'Ref / Slip #',
+            'Particulars / Beneficiary',
+            'Deposit / Credit (+)',
+            'Withdrawal / Debit (-)',
+            'Running Balance (TK)',
+            'Remarks / Notes'
+        ];
+        rows.push(headers);
+
+        // 5. Baseline Opening Balance Row
+        rows.push([
+            '-',
+            meta.startDate ? formatDate(meta.startDate) : '-',
+            'Opening Balance',
+            'Opening Balance',
+            '-',
+            meta.bankName || '-',
+            meta.branch || '-',
+            meta.accountNo || '-',
+            '-',
+            'OPENING BALANCE FORWARD',
+            0,
+            0,
+            Number(meta.openingBalance) || 0,
+            'Initial / Previous Balance'
+        ]);
+
+        // 6. Transaction Rows
+        statementData.forEach((tx, idx) => {
+            const isDeposit = tx.type === 'deposit';
+            const depAmt = isDeposit ? (Number(tx.amount) || 0) : 0;
+            const withAmt = !isDeposit ? (Number(tx.amount) || 0) : 0;
+
+            rows.push([
+                idx + 1,
+                formatDate(tx.date),
+                tx.sourceModule || (isDeposit ? 'Bank Deposit' : 'Bank Withdrawal'),
+                isDeposit ? 'Deposit' : 'Withdrawal',
+                tx.typeName || (isDeposit ? 'Deposit' : 'Withdrawal'),
+                tx.bankName || '-',
+                tx.branch || '-',
+                tx.accountNo || '-',
+                tx.referenceNo || '-',
+                tx.partyOrPerson || '-',
+                depAmt,
+                withAmt,
+                Number(tx.runningBalance) || 0,
+                tx.remarks || '-'
+            ]);
+        });
+
+        // 7. Grand Total Row
+        rows.push([
+            'TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'CLOSING TOTALS',
+            Number(meta.totalDeposits) || 0,
+            Number(meta.totalWithdrawals) || 0,
+            Number(meta.closingBalance) || 0,
+            ''
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        // Column widths
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 13 }, // Date
+            { wch: 20 }, // Source Module
+            { wch: 16 }, // Type
+            { wch: 20 }, // Method
+            { wch: 22 }, // Bank
+            { wch: 18 }, // Branch
+            { wch: 18 }, // Account No
+            { wch: 16 }, // Ref No
+            { wch: 28 }, // Particulars
+            { wch: 20 }, // Deposit
+            { wch: 20 }, // Withdrawal
+            { wch: 22 }, // Running Balance
+            { wch: 25 }  // Remarks
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Bank Statement');
+        const fileName = `Bank_Statement_${(meta.bankName || 'Consolidated').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    } catch (err) {
+        console.error('Error generating Bank Statement Excel:', err);
+        alert(`Failed to generate Excel statement: ${err.message}`);
+    }
+};
+
+
 
 
 

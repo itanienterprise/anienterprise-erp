@@ -54,6 +54,20 @@ const numberToWordsUSD = (amount) => {
     return words.replace(/\s+/g, ' ').trim() + '.';
 };
 
+const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fontStyle = 'bold') => {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return maxSize;
+    doc.setFont('helvetica', fontStyle);
+    let size = maxSize;
+    while (size > minSize) {
+        doc.setFontSize(size);
+        if (doc.getTextWidth(clean) <= maxWidth) return size;
+        size -= 0.25;
+    }
+    doc.setFontSize(minSize);
+    return minSize;
+};
+
 export const generatePIPDF = (record) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -123,10 +137,14 @@ export const generatePIPDF = (record) => {
     const labelX = margin + (leftColWidth / 2) - (exporterLabelWidth / 2);
     doc.line(labelX, y + 7, labelX + exporterLabelWidth, y + 7);
 
-    doc.setFontSize(14); // Scaled up name accordingly
-    const exporterName = record.exporterName || '';
-    const nameLines = doc.splitTextToSize(exporterName, leftColWidth - 10);
-    doc.text(nameLines, margin + leftColWidth / 2, y + 14, { align: 'center' });
+    const exporterName = String(record.exporterName || '').trim();
+    const maxExpNameWidth = leftColWidth - 8;
+    const expNameFontSize = fitFontSizeOneLine(doc, exporterName, maxExpNameWidth, 14, 7.5, 'bold');
+    doc.setFontSize(expNameFontSize);
+    doc.setFont("helvetica", "bold");
+    const nameLines = doc.splitTextToSize(exporterName, maxExpNameWidth);
+    const expNameY = y + 13;
+    doc.text(nameLines, margin + leftColWidth / 2, expNameY, { align: 'center' });
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
@@ -145,7 +163,9 @@ export const generatePIPDF = (record) => {
     const exporterColWidth = leftColWidth - 10;
     const exporterRawLines = exporterInfo.trim().split('\n');
     const exporterCenterX = margin + leftColWidth / 2;
-    let expLineY = y + 21;
+    let expLineY = (nameLines.length > 1)
+        ? Math.max(y + 19, expNameY + (nameLines.length * (expNameFontSize * 0.35 + 1.2)))
+        : y + 19;
     const expLineH = 4;
     exporterRawLines.forEach(rawLine => {
         const trimmed = rawLine.trim();
@@ -309,10 +329,14 @@ export const generatePIPDF = (record) => {
     const impLabelX = margin + (leftColWidth / 2) - (importerLabelWidth / 2);
     doc.line(impLabelX, y + 6, impLabelX + importerLabelWidth, y + 6);
 
-    doc.setFontSize(14); // Scaled up name accordingly
-    const partyName = record.partyName || '';
-    const partyNameLines = doc.splitTextToSize(partyName, leftColWidth - 10);
-    doc.text(partyNameLines, margin + leftColWidth / 2, y + 12, { align: 'center' });
+    const partyName = String(record.partyName || '').trim();
+    const maxImpNameWidth = leftColWidth - 8;
+    const impNameFontSize = fitFontSizeOneLine(doc, partyName, maxImpNameWidth, 14, 7.5, 'bold');
+    doc.setFontSize(impNameFontSize);
+    doc.setFont("helvetica", "bold");
+    const partyNameLines = doc.splitTextToSize(partyName, maxImpNameWidth);
+    const impNameY = y + 11.5;
+    doc.text(partyNameLines, margin + leftColWidth / 2, impNameY, { align: 'center' });
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
@@ -328,7 +352,10 @@ export const generatePIPDF = (record) => {
     }
 
     const partyLines = doc.splitTextToSize(importerInfo.trim(), leftColWidth - 10);
-    doc.text(partyLines, margin + leftColWidth / 2, y + 17, { align: 'center' });
+    const impAddressY = (partyNameLines.length > 1)
+        ? Math.max(y + 17, impNameY + (partyNameLines.length * (impNameFontSize * 0.35 + 1.2)))
+        : y + 17;
+    doc.text(partyLines, margin + leftColWidth / 2, impAddressY, { align: 'center' });
 
     // Shipping Section 1 (Compact)
     doc.line(margin, y + 29, margin + leftColWidth, y + 29);
