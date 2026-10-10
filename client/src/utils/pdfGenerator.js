@@ -4583,7 +4583,7 @@ export const generateCustomerReportPDF = async (
     }
 };
 
-export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) => {
+export const generatePaymentCollectionReportPDF = async (payments, filters, dateStr) => {
     try {
         const doc = new jsPDF('l', 'mm', 'a4');
 
@@ -4598,71 +4598,135 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
         const pageHeight = doc.internal.pageSize.height;
         const margin = 10;
 
-        // --- Header ---
-        doc.setFontSize(22);
-        doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+        // Load company logo (same as Stock Report)
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
 
-        doc.setFontSize(10);
+        // --- Header (same as Stock Report) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill (no black border)
+        doc.setTextColor(249, 115, 22); // Orange (#f97316)
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
 
-        // Separator
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.5);
-        doc.line(margin, 32, pageWidth - margin, 32);
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
 
-        // Report Title
+        // Title badge
+        y += 2;
+        doc.setFillColor(249, 115, 22);
         const isSingleCustomerType = filters?.customerType && filters.customerType !== 'All Customer';
         const reportTitle = isSingleCustomerType
             ? `${filters.customerType.toUpperCase()} COLLECTION REPORT`
             : "PAYMENT COLLECTION REPORT";
-
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(0);
-        const titleBoxWidth = isSingleCustomerType ? 110 : 90;
-        doc.rect(pageWidth / 2 - (titleBoxWidth / 2), 29, titleBoxWidth, 8, 'FD');
+        const titleBadgeWidth = isSingleCustomerType ? 105 : 90;
+        doc.roundedRect((pageWidth / 2) - (titleBadgeWidth / 2), y, titleBadgeWidth, 7, 2, 2, 'F');
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0);
-        doc.text(reportTitle, pageWidth / 2, 34, { align: 'center' });
+        doc.setTextColor(255, 255, 255);
+        doc.text(reportTitle, pageWidth / 2, y + 5, { align: 'center' });
 
-        // --- Info Row ---
-        let yPos = 47;
-        doc.setFontSize(10);
+        y += 9;
 
+        // Filter info pill
+        const dateRange = `${formatDate(filters?.startDate) === '-' ? 'Start' : formatDate(filters?.startDate)} — ${formatDate(filters?.endDate) === '-' ? 'Present' : formatDate(filters?.endDate)}`;
+        const filterParts = [`Date: ${dateRange}`];
+        if (filters?.customer) filterParts.push(`Customer: ${filters.customer}`);
+        if (filters?.method) filterParts.push(`Method: ${filters.method}`);
+        if (filters?.bankName) filterParts.push(`Bank: ${filters.bankName}`);
+        if (isSingleCustomerType) filterParts.push(`Type: ${filters.customerType}`);
+        const filterText = filterParts.join('   |   ');
+
+        // Center: Date / Filter Pill
+        doc.setFontSize(8.5);
         doc.setFont('helvetica', 'bold');
-        doc.text("Total Records:", margin, yPos);
+        doc.setTextColor(71, 85, 105);
+        const filterTW = doc.getTextWidth(filterText);
+        const pillW = Math.min(filterTW + 12, pageWidth - margin * 2 - 80);
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth / 2) - (pillW / 2), y, pillW, 6, 1.5, 1.5, 'FD');
+        doc.setTextColor(30, 41, 59);
+        doc.text(filterText, pageWidth / 2, y + 4.2, { align: 'center' });
+
+        // Left Side: Total Records Pill
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        const recText = `Total Records: ${payments.length || 0}`;
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        const recTW = doc.getTextWidth(recText);
+        doc.roundedRect(margin, y, recTW + 8, 6, 1.5, 1.5, 'FD');
+        doc.setTextColor(30, 41, 59);
+        doc.text(recText, margin + 4, y + 4.2);
+
+        // Right Side: Printed on
         doc.setFont('helvetica', 'normal');
-        doc.text((payments.length || 0).toString(), margin + 30, yPos);
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 4.2, { align: 'right' });
 
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, yPos, { align: 'right' });
-
-        if (isSingleCustomerType) {
-            yPos += 5;
-            doc.setFont('helvetica', 'bold');
-            doc.text("Customer Type:", margin, yPos);
-            doc.setFont('helvetica', 'normal');
-            doc.text(filters.customerType, margin + 30, yPos);
-        }
-
-        if (filters?.startDate) {
-            yPos += 5;
-            doc.setFont('helvetica', 'bold');
-            doc.text("Start Date:", margin, yPos);
-            doc.setFont('helvetica', 'normal');
-            doc.text(formatDate(filters.startDate), margin + 30, yPos);
-        }
-
-        if (filters?.endDate) {
-            yPos += 5;
-            doc.setFont('helvetica', 'bold');
-            doc.text("End Date:", margin, yPos);
-            doc.setFont('helvetica', 'normal');
-            doc.text(formatDate(filters.endDate), margin + 30, yPos);
-        }
+        let yPos = y + 8;
 
         // --- Table ---
         const tableRows = [];
@@ -4813,7 +4877,7 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
             fontSize: 9
         };
 
-        let currentY = yPos + 6;
+        let currentY = yPos + 2;
 
         if (isSingleCustomerType) {
             const singleData = buildSectionRows(payments, 1);
@@ -4849,14 +4913,20 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
                 grandTotal += genData.total;
                 totalDiscount += genData.discount;
 
-                // Section Banner for General Customer Table
-                doc.setFillColor(245, 247, 250);
-                doc.setDrawColor(0);
-                doc.rect(margin, currentY, pageWidth - (margin * 2), 6.5, 'FD');
-                doc.setFontSize(9.5);
+                // Centered Section Tag for General Customer Table
+                const genTagText = `GENERAL CUSTOMER COLLECTIONS (${generalList.length} ${generalList.length === 1 ? 'Record' : 'Records'})`;
+                doc.setFontSize(8.5);
                 doc.setFont('helvetica', 'bold');
-                doc.setTextColor(0);
-                doc.text(`GENERAL CUSTOMER COLLECTIONS (${generalList.length} ${generalList.length === 1 ? 'Record' : 'Records'})`, margin + 3, currentY + 4.5);
+                const genTagW = doc.getTextWidth(genTagText) + 14;
+                const genTagX = (pageWidth / 2) - (genTagW / 2);
+
+                doc.setFillColor(241, 245, 249);
+                doc.setDrawColor(203, 213, 225);
+                doc.setLineWidth(0.3);
+                doc.roundedRect(genTagX, currentY, genTagW, 5.8, 1.5, 1.5, 'FD');
+
+                doc.setTextColor(30, 41, 59);
+                doc.text(genTagText, pageWidth / 2, currentY + 4.1, { align: 'center' });
 
                 const genFoot = [
                     { content: 'SUBTOTAL (GENERAL CUSTOMER)', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
@@ -4865,7 +4935,7 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
                 ];
 
                 autoTable(doc, {
-                    startY: currentY + 6.5,
+                    startY: currentY + 7.5,
                     head: [['SL', 'Date', 'Party Name', 'Location', 'Method', 'Bank/Receiver', 'Branch', 'Account No', 'Amount', 'Remark']],
                     body: genData.rows,
                     foot: [genFoot],
@@ -4878,7 +4948,7 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
                     margin: { left: margin, right: margin }
                 });
 
-                currentY = doc.lastAutoTable.finalY + 8;
+                currentY = doc.lastAutoTable.finalY + 4;
             }
 
             // --- Table 2: Party Customer Collections (NEW Table) ---
@@ -4893,14 +4963,20 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
                 grandTotal += partyData.total;
                 totalDiscount += partyData.discount;
 
-                // Section Banner for Party Customer Table
-                doc.setFillColor(245, 247, 250);
-                doc.setDrawColor(0);
-                doc.rect(margin, currentY, pageWidth - (margin * 2), 6.5, 'FD');
-                doc.setFontSize(9.5);
+                // Centered Section Tag for Party Customer Table
+                const partyTagText = `PARTY CUSTOMER COLLECTIONS (${partyList.length} ${partyList.length === 1 ? 'Record' : 'Records'})`;
+                doc.setFontSize(8.5);
                 doc.setFont('helvetica', 'bold');
-                doc.setTextColor(0);
-                doc.text(`PARTY CUSTOMER COLLECTIONS (${partyList.length} ${partyList.length === 1 ? 'Record' : 'Records'})`, margin + 3, currentY + 4.5);
+                const partyTagW = doc.getTextWidth(partyTagText) + 14;
+                const partyTagX = (pageWidth / 2) - (partyTagW / 2);
+
+                doc.setFillColor(241, 245, 249);
+                doc.setDrawColor(203, 213, 225);
+                doc.setLineWidth(0.3);
+                doc.roundedRect(partyTagX, currentY, partyTagW, 5.8, 1.5, 1.5, 'FD');
+
+                doc.setTextColor(30, 41, 59);
+                doc.text(partyTagText, pageWidth / 2, currentY + 4.1, { align: 'center' });
 
                 const partyFoot = [
                     { content: 'SUBTOTAL (PARTY CUSTOMER)', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
@@ -4909,7 +4985,7 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
                 ];
 
                 autoTable(doc, {
-                    startY: currentY + 6.5,
+                    startY: currentY + 7.5,
                     head: [['SL', 'Date', 'Party Name', 'Location', 'Method', 'Bank/Receiver', 'Branch', 'Account No', 'Amount', 'Remark']],
                     body: partyData.rows,
                     foot: [partyFoot],
@@ -4922,7 +4998,7 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
                     margin: { left: margin, right: margin }
                 });
 
-                currentY = doc.lastAutoTable.finalY + 6;
+                currentY = doc.lastAutoTable.finalY + 3;
             }
 
             // --- Grand Total Summary Table ---
@@ -4953,9 +5029,9 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
 
         // --- Signatures ---
         let finalY = doc.lastAutoTable.finalY + 12;
-        if (finalY + 15 > pageHeight - margin) {
+        if (finalY + 8 > pageHeight - margin) {
             doc.addPage();
-            finalY = margin + 18;
+            finalY = margin + 16;
         }
 
         const sigWidth = 45;

@@ -271,13 +271,13 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [], customers = [
         });
     };
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         const enriched = filteredPayments.map(p => ({
             ...p,
             customerType: getCustomerType(p)
         }));
-        generatePaymentCollectionReportPDF(enriched, filters, dateStr);
+        await generatePaymentCollectionReportPDF(enriched, filters, dateStr);
     };
 
     const handleExportExcel = () => {
@@ -593,54 +593,66 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [], customers = [
                         <div className="flex-1 overflow-y-auto p-4 sm:p-12 print:p-0 print:overflow-visible bg-white">
                             <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
 
-                                {/* Company Header */}
-                                <div className="text-center space-y-1">
-                                    <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
-                                    <p className="text-[12px] sm:text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                                    <p className="text-[12px] sm:text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                                {/* Header matching Stock Report layout */}
+                                <div className="flex justify-between items-center pb-1">
+                                    {/* Left: Logo & Company Name */}
+                                    <div className="flex items-center gap-3">
+                                        <img src="/logo.png" alt="ANI Enterprise Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
+                                        <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
+                                            ANI ENTERPRISE
+                                        </h1>
+                                    </div>
+
+                                    {/* Right: Address Info */}
+                                    <div className="text-right text-[11px] sm:text-[12px] text-gray-700 leading-tight">
+                                        <p className="font-semibold text-gray-800">766, H.M Tower, Level-06</p>
+                                        <p>Borogola, Bogura, Bangladesh</p>
+                                        <p>Tel: +8802588813057</p>
+                                        <p>Email: anienterprise051@gmail.com</p>
+                                    </div>
                                 </div>
 
-                                <div className="border-t-2 border-gray-900 w-full mt-4"></div>
+                                {/* Orange Divider Line */}
+                                <div className="border-t-2 border-[#f97316] w-full mt-3"></div>
 
-                                {/* Title */}
-                                <div className="flex flex-col items-center justify-center -mt-6 gap-1">
-                                    <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block text-center">
-                                        <h2 className="text-2xl font-bold text-gray-900 tracking-wide uppercase">
+                                {/* Centered Title Badge */}
+                                <div className="flex justify-center -mt-5">
+                                    <div className="bg-[#f97316] text-white px-8 py-1 rounded shadow-sm">
+                                        <h2 className="text-xs sm:text-sm font-bold tracking-wider uppercase">
                                             {filters.customerType && filters.customerType !== 'All Customer'
                                                 ? `${filters.customerType.toUpperCase()} COLLECTION REPORT`
-                                                : 'Payment Collection Report'}
+                                                : 'PAYMENT COLLECTION REPORT'}
                                         </h2>
                                     </div>
-                                    {filters.customerType && filters.customerType !== 'All Customer' && (
-                                        <span className="text-xs font-bold uppercase tracking-wider text-gray-600">
-                                            Customer Category: {filters.customerType}
-                                        </span>
-                                    )}
                                 </div>
 
                                 {/* Meta row */}
-                                <div className="flex justify-between items-end text-[12px] sm:text-[14px] text-gray-800 pt-6 px-2">
+                                <div className="flex justify-between items-end text-[12px] sm:text-[14px] text-gray-800 pt-4 px-2">
                                     <div className="flex flex-col gap-1">
                                         <div className="flex">
-                                            <span className="font-bold text-gray-900 w-24 sm:w-32">Total Records:</span>
+                                            <span className="font-bold text-gray-900 w-28 sm:w-32">Total Records:</span>
                                             <span className="text-gray-900">{filteredPayments.length}</span>
+                                        </div>
+                                        <div className="flex">
+                                            <span className="font-bold text-gray-900 w-28 sm:w-32">Date Range:</span>
+                                            <span className="text-gray-900">{formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to {formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}</span>
                                         </div>
                                         {filters.customerType && filters.customerType !== 'All Customer' && (
                                             <div className="flex">
-                                                <span className="font-bold text-gray-900 w-24 sm:w-32">Customer Type:</span>
-                                                <span className="text-gray-900 font-bold">{filters.customerType}</span>
+                                                <span className="font-bold text-gray-900 w-28 sm:w-32">Customer Type:</span>
+                                                <span className="text-blue-700 font-extrabold">{filters.customerType}</span>
                                             </div>
                                         )}
-                                        {filters.startDate && (
+                                        {filters.customer && (
                                             <div className="flex">
-                                                <span className="font-bold text-gray-900 w-24 sm:w-32">Start Date:</span>
-                                                <span className="text-gray-900">{formatDate(filters.startDate)}</span>
+                                                <span className="font-bold text-gray-900 w-28 sm:w-32">Customer:</span>
+                                                <span className="text-gray-900">{filters.customer}</span>
                                             </div>
                                         )}
-                                        {filters.endDate && (
+                                        {filters.method && (
                                             <div className="flex">
-                                                <span className="font-bold text-gray-900 w-24 sm:w-32">End Date:</span>
-                                                <span className="text-gray-900">{formatDate(filters.endDate)}</span>
+                                                <span className="font-bold text-gray-900 w-28 sm:w-32">Method:</span>
+                                                <span className="text-gray-900">{filters.method}</span>
                                             </div>
                                         )}
                                     </div>
@@ -656,16 +668,13 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [], customers = [
                                         No payments found.
                                     </div>
                                 ) : filters.customerType === 'All Customer' ? (
-                                    <div className="space-y-8">
+                                    <div className="space-y-3">
                                         {/* Table 1: General Customer Collections */}
                                         {generalGroups.length > 0 && (
                                             <div className="space-y-2">
-                                                <div className="bg-gray-100 border-2 border-gray-900 px-4 py-2 flex items-center justify-between">
-                                                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
-                                                        1. General Customer Collections ({generalPayments.length} {generalPayments.length === 1 ? 'Record' : 'Records'})
-                                                    </h3>
-                                                    <div className="text-xs font-bold text-gray-800">
-                                                        Subtotal: ৳{Number(generalTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                <div className="flex justify-center pb-1">
+                                                    <div className="inline-flex items-center px-4 py-1 rounded-md bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold uppercase tracking-wider shadow-sm">
+                                                        General Customer Collections ({generalPayments.length} {generalPayments.length === 1 ? 'Record' : 'Records'})
                                                     </div>
                                                 </div>
                                                 <div className="overflow-x-auto border border-gray-900">
@@ -706,12 +715,9 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [], customers = [
                                         {/* Table 2: Party Customer Collections (Separate Table!) */}
                                         {partyGroups.length > 0 && (
                                             <div className="space-y-2">
-                                                <div className="bg-gray-100 border-2 border-gray-900 px-4 py-2 flex items-center justify-between">
-                                                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
-                                                        2. Party Customer Collections ({partyPayments.length} {partyPayments.length === 1 ? 'Record' : 'Records'})
-                                                    </h3>
-                                                    <div className="text-xs font-bold text-gray-800">
-                                                        Subtotal: ৳{Number(partyTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                <div className="flex justify-center pb-1">
+                                                    <div className="inline-flex items-center px-4 py-1 rounded-md bg-slate-100 border border-slate-300 text-slate-800 text-xs font-bold uppercase tracking-wider shadow-sm">
+                                                        Party Customer Collections ({partyPayments.length} {partyPayments.length === 1 ? 'Record' : 'Records'})
                                                     </div>
                                                 </div>
                                                 <div className="overflow-x-auto border border-gray-900">
@@ -841,7 +847,7 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [], customers = [
                                 </div>
 
                                 {/* Signatures */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 pt-16 sm:pt-24 px-4 pb-12 print:grid print:grid-cols-3 print:pt-24 print:gap-8">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 pt-8 sm:pt-10 px-4 pb-6 print:grid print:grid-cols-3 print:pt-10 print:gap-8">
                                     <div className="text-center sm:text-left"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Prepared By</div></div>
                                     <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase text-center">Verified By</div></div>
                                     <div className="text-center sm:text-right"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Authorized Signature</div></div>
