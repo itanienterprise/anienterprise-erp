@@ -3209,6 +3209,7 @@ export const generatePaymentCollectionReportExcel = (payments = [], filters = {}
         ]);
 
         const filterBadges = [];
+        if (filters?.customerType && filters.customerType !== 'All Customer') filterBadges.push(`Customer Type: ${filters.customerType}`);
         if (filters?.method) filterBadges.push(`Method: ${filters.method}`);
         if (filters?.customer) filterBadges.push(`Customer: ${filters.customer}`);
         if (filters?.bankName) filterBadges.push(`Bank: ${filters.bankName}`);
@@ -3237,104 +3238,177 @@ export const generatePaymentCollectionReportExcel = (payments = [], filters = {}
             'Status',
             'Remark'
         ];
-        rows.push(headers);
+        const isSingleCustomerType = Boolean(filters?.customerType && filters.customerType !== 'All Customer');
+        if (isSingleCustomerType) {
+            rows.push(headers);
+        }
 
         // 4. Data Rows & Calculations
         let sumRawAmount = 0;
         let sumDiscount = 0;
         let sumTotalAmount = 0;
 
-        const sortedPayments = [...payments].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-        // Group payments by customer so that the same customer is not shown multiple times
-        const groupedPayments = [];
-        const customerGroupMap = new Map();
-
-        sortedPayments.forEach((p, idx) => {
-            const rawParty = p.companyName || p.customerName;
-            const partyName = rawParty ? rawParty.trim() : '-';
-            const key = rawParty ? partyName.toLowerCase() : `__unknown_${p._id || idx}`;
-
-            if (!customerGroupMap.has(key)) {
-                const group = {
-                    partyName,
-                    payments: []
-                };
-                customerGroupMap.set(key, group);
-                groupedPayments.push(group);
+        const getDateKey = (dateVal) => {
+            if (!dateVal) return 'no-date';
+            if (typeof dateVal === 'string') return dateVal.split('T')[0];
+            try {
+                const d = new Date(dateVal);
+                return isNaN(d.getTime()) ? 'invalid-date' : d.toISOString().split('T')[0];
+            } catch {
+                return String(dateVal);
             }
-            customerGroupMap.get(key).payments.push(p);
-        });
+        };
 
-        groupedPayments.forEach((group, groupIdx) => {
-            const sl = groupIdx + 1;
+        const buildExcelSectionRows = (sectionPayments, sectionTitle, startSl = 1) => {
+            const sectionRows = [];
+            let secRaw = 0;
+            let secDisc = 0;
+            let secTotal = 0;
 
-            // Pre-calculate date spans for consecutive payments with the same date
-            const paymentsWithDateSpans = [];
-            let i = 0;
-            while (i < group.payments.length) {
-                const curDateStr = p_date => p_date ? formatDate(p_date) : '-';
-                const curStr = curDateStr(group.payments[i].date);
-                let j = i + 1;
-                while (j < group.payments.length && curDateStr(group.payments[j].date) === curStr) {
-                    j++;
-                }
-                const dateSpan = j - i;
-                for (let k = i; k < j; k++) {
-                    paymentsWithDateSpans.push({
-                        payment: group.payments[k],
-                        pIdx: k,
-                        isFirstInDate: k === i,
-                        dateSpan: k === i ? dateSpan : 0,
-                        dateFormatted: curStr
-                    });
-                }
-                i = j;
-            }
+            const sorted = [...sectionPayments].sort((a, b) => {
+                const dateA = getDateKey(a.date);
+                const dateB = getDateKey(b.date);
+                if (dateA !== dateB) return dateA.localeCompare(dateB);
 
-            paymentsWithDateSpans.forEach(({ payment: p, pIdx, isFirstInDate, dateFormatted }) => {
-                const rawAmount = parseFloat(p.amount) || 0;
-                const discount = parseFloat(p.discount) || 0;
-                const totalAmount = rawAmount + discount;
+                const partyA = (a.companyName || a.customerName || '').trim().toLowerCase();
+                const partyB = (b.companyName || b.customerName || '').trim().toLowerCase();
+                if (partyA !== partyB) return partyA.localeCompare(partyB);
 
-                sumRawAmount += rawAmount;
-                sumDiscount += discount;
-                sumTotalAmount += totalAmount;
+                const timeA = new Date(a.createdAt || a.date || 0).getTime();
+                const timeB = new Date(b.createdAt || b.date || 0).getTime();
+                if (timeA !== timeB && timeA && timeB) return timeA - timeB;
 
-                let remark = (p.reference || p.remarks || p.note || '').trim();
-                if (discount > 0) {
-                    const discountText = `Discount (${Math.round(discount).toLocaleString('en-IN')})`;
-                    remark = remark ? `${remark}, ${discountText}` : discountText;
-                }
-
-                const bankOrReceiver = p.method === 'Cash'
-                    ? (p.receiveBy || '-')
-                    : (p.bankName || '-');
-                const branchOrPlace = p.method === 'Cash'
-                    ? (p.place || '-')
-                    : (p.branch || '-');
-
-                const isFirstRow = pIdx === 0;
-
-                rows.push([
-                    isFirstRow ? sl : '',
-                    isFirstInDate ? dateFormatted : '',
-                    p.receiptNo || '-',
-                    isFirstRow ? group.partyName : '',
-                    p.customerType || '-',
-                    p.place || p.customerAddress || '-',
-                    p.method || '-',
-                    bankOrReceiver,
-                    branchOrPlace,
-                    p.accountNo || '-',
-                    Math.round(rawAmount),
-                    Math.round(discount),
-                    Math.round(totalAmount),
-                    p.status || 'Accepted',
-                    remark || '-'
-                ]);
+                return String(a._id || '').localeCompare(String(b._id || ''));
             });
-        });
+
+            const grouped = [];
+            const groupMap = new Map();
+
+            sorted.forEach((p, idx) => {
+                const dateKey = getDateKey(p.date);
+                const rawParty = p.companyName || p.customerName;
+                const partyName = rawParty ? rawParty.trim() : '-';
+                const partyKey = rawParty ? partyName.toLowerCase() : `__unknown_${p._id || idx}`;
+                const key = `${dateKey}___${partyKey}`;
+
+                if (!groupMap.has(key)) {
+                    const group = {
+                        date: p.date,
+                        partyName,
+                        payments: []
+                    };
+                    groupMap.set(key, group);
+                    grouped.push(group);
+                }
+                groupMap.get(key).payments.push(p);
+            });
+
+            if (sectionTitle) {
+                sectionRows.push([
+                    `${sectionTitle.toUpperCase()} (${sectionPayments.length} ${sectionPayments.length === 1 ? 'Record' : 'Records'})`,
+                    '', '', '', '', '', '', '', '', '', '', '', '', '', ''
+                ]);
+                sectionRows.push(headers);
+            }
+
+            let slCount = startSl;
+            grouped.forEach((group) => {
+                const sl = slCount++;
+                const dateFormatted = group.date ? formatDate(group.date) : '-';
+
+                group.payments.forEach((p, pIdx) => {
+                    const rawAmount = parseFloat(p.amount) || 0;
+                    const discount = parseFloat(p.discount) || 0;
+                    const totalAmount = rawAmount + discount;
+
+                    secRaw += rawAmount;
+                    secDisc += discount;
+                    secTotal += totalAmount;
+
+                    let remark = (p.reference || p.remarks || p.note || '').trim();
+                    if (discount > 0) {
+                        const discountText = `Discount (${Math.round(discount).toLocaleString('en-IN')})`;
+                        remark = remark ? `${remark}, ${discountText}` : discountText;
+                    }
+
+                    const bankOrReceiver = p.method === 'Cash'
+                        ? (p.receiveBy || '-')
+                        : (p.bankName || '-');
+                    const branchOrPlace = p.method === 'Cash'
+                        ? (p.place || '-')
+                        : (p.branch || '-');
+
+                    const isFirstRow = pIdx === 0;
+
+                    sectionRows.push([
+                        isFirstRow ? sl : '',
+                        isFirstRow ? dateFormatted : '',
+                        p.receiptNo || '-',
+                        isFirstRow ? group.partyName : '',
+                        p.customerType || '-',
+                        p.place || p.customerAddress || '-',
+                        p.method || '-',
+                        bankOrReceiver,
+                        branchOrPlace,
+                        p.accountNo || '-',
+                        Math.round(rawAmount),
+                        Math.round(discount),
+                        Math.round(totalAmount),
+                        p.status || 'Accepted',
+                        remark || '-'
+                    ]);
+                });
+            });
+
+            if (sectionTitle) {
+                sectionRows.push([
+                    `Subtotal (${sectionTitle})`,
+                    '', '', '', '', '', '', '', '', '',
+                    Math.round(secRaw),
+                    Math.round(secDisc),
+                    Math.round(secTotal),
+                    '', ''
+                ]);
+                sectionRows.push([]); // blank row
+            }
+
+            return {
+                rows: sectionRows,
+                raw: secRaw,
+                disc: secDisc,
+                total: secTotal,
+                nextSl: slCount
+            };
+        };
+
+        if (isSingleCustomerType) {
+            const singleRes = buildExcelSectionRows(payments, null, 1);
+            rows.push(...singleRes.rows);
+            sumRawAmount = singleRes.raw;
+            sumDiscount = singleRes.disc;
+            sumTotalAmount = singleRes.total;
+        } else {
+            const generalList = payments.filter(p => !p.customerType || p.customerType === 'General Customer');
+            const partyList = payments.filter(p => p.customerType === 'Party Customer');
+
+            let currentSl = 1;
+            if (generalList.length > 0) {
+                const genRes = buildExcelSectionRows(generalList, 'General Customer Collections', currentSl);
+                rows.push(...genRes.rows);
+                sumRawAmount += genRes.raw;
+                sumDiscount += genRes.disc;
+                sumTotalAmount += genRes.total;
+                currentSl = genRes.nextSl;
+            }
+
+            if (partyList.length > 0) {
+                const partyRes = buildExcelSectionRows(partyList, 'Party Customer Collections', currentSl);
+                rows.push(...partyRes.rows);
+                sumRawAmount += partyRes.raw;
+                sumDiscount += partyRes.disc;
+                sumTotalAmount += partyRes.total;
+            }
+        }
 
         // 5. Grand Total Row
         rows.push([
@@ -4781,6 +4855,155 @@ export const generateProductHistoryExcel = (
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
         console.error('Error exporting Product History Excel report:', err);
+        alert(`Failed to generate Excel report: ${err.message}`);
+    }
+};
+
+export const generatePattyCashReportExcel = (records = [], filters = {}, summary = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['ANI ENTERPRISE']);
+        rows.push(['Head Office: Dhaka, Bangladesh | Email: anienterprise051@gmail.com']);
+        rows.push(['PETTY CASH TRANSACTIONS REPORT']);
+        rows.push([]);
+
+        // 2. Metadata & Filters
+        const printDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const start = filters?.startDate ? formatDate(filters.startDate) : 'Start';
+        const end = filters?.endDate ? formatDate(filters.endDate) : 'Present';
+
+        rows.push([
+            'Date Range:',
+            `${start} to ${end}`,
+            '',
+            '',
+            'Printed On:',
+            printDateStr
+        ]);
+
+        const totalIn = Number(summary?.totalIn || 0);
+        const totalOut = Number(summary?.totalOut || 0);
+        const netBal = totalIn - totalOut;
+
+        rows.push([
+            'Total Cash In:',
+            totalIn,
+            'Total Cash Out:',
+            totalOut,
+            'Net Balance:',
+            netBal
+        ]);
+        rows.push([]);
+
+        // 3. Table Header
+        rows.push([
+            'SL',
+            'Date',
+            'Voucher No',
+            'Type',
+            'Category',
+            'Paid To / Source',
+            'Payment Method',
+            'Bank',
+            'Branch',
+            'Account No',
+            'Ref / Bill No',
+            'Particulars',
+            'Remarks',
+            'Cash In (BDT)',
+            'Cash Out (BDT)',
+            'Balance (BDT)',
+            'Entry By'
+        ]);
+
+        const sortedRecords = [...records].sort((a, b) => {
+            const dateA = (a.date || '').split('T')[0];
+            const dateB = (b.date || '').split('T')[0];
+            if (dateA !== dateB) {
+                return dateA.localeCompare(dateB);
+            }
+            const timeA = new Date(a.createdAt || 0).getTime();
+            const timeB = new Date(b.createdAt || 0).getTime();
+            if (timeA !== timeB && timeA && timeB) {
+                return timeA - timeB;
+            }
+            return String(a._id || '').localeCompare(String(b._id || ''));
+        });
+
+        let running = 0;
+        const balMap = new Map();
+        sortedRecords.forEach(r => {
+            const amt = Number(r.amount) || 0;
+            if (r.type === 'inflow') running += amt;
+            else running -= amt;
+            balMap.set(r._id, running);
+        });
+
+        sortedRecords.forEach((r, idx) => {
+            const amt = Number(r.amount) || 0;
+            const bal = balMap.get(r._id) ?? 0;
+            rows.push([
+                idx + 1,
+                r.date ? formatDate(r.date) : '',
+                r.voucherNo || '',
+                r.type === 'inflow' ? 'Cash In' : 'Expense',
+                r.category || '',
+                r.partyName || '',
+                r.paymentMode || '',
+                r.bankName || '',
+                r.branch || '',
+                r.accountNo || '',
+                r.refNo || '',
+                r.particulars || '',
+                r.remarks || '',
+                r.type === 'inflow' ? amt : 0,
+                r.type === 'expense' ? amt : 0,
+                bal,
+                r.entryBy || 'Admin'
+            ]);
+        });
+
+        // Totals
+        rows.push([]);
+        rows.push([
+            'TOTAL',
+            '', '', '', '', '', '', '', '', '', '', '', '',
+            totalIn,
+            totalOut,
+            netBal,
+            ''
+        ]);
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        // Column widths
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 12 }, // Date
+            { wch: 18 }, // Voucher
+            { wch: 12 }, // Type
+            { wch: 25 }, // Category
+            { wch: 20 }, // Party
+            { wch: 14 }, // Method
+            { wch: 20 }, // Bank
+            { wch: 16 }, // Branch
+            { wch: 18 }, // Account No
+            { wch: 15 }, // Ref
+            { wch: 30 }, // Particulars
+            { wch: 20 }, // Remarks
+            { wch: 15 }, // In
+            { wch: 15 }, // Out
+            { wch: 15 }, // Bal
+            { wch: 14 }  // Entry By
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Patty Cash Report');
+        XLSX.writeFile(wb, `Patty_Cash_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (err) {
+        console.error('Error generating Patty Cash Excel report:', err);
         alert(`Failed to generate Excel report: ${err.message}`);
     }
 };

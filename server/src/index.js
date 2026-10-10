@@ -354,6 +354,7 @@ const Notification = require('./models/Notification');
 const Bank = require('./models/Bank');
 const Deposit = require('./models/Deposit');
 const Withdrawal = require('./models/Withdrawal');
+const PattyCash = require('./models/PattyCash');
 const Exporter = require('./models/Exporter');
 const Supplier = require('./models/Supplier');
 const CostOfGoods = require('./models/CostOfGoods');
@@ -3857,6 +3858,91 @@ apiRouter.get('/api/withdrawals', async (req, res) => {
   }
 });
 
+// Patty Cash APIs
+apiRouter.post('/api/patty-cash', async (req, res) => {
+  try {
+    const recordData = { ...req.body };
+    if (!recordData.voucherNo) {
+      const allDocs = await PattyCash.find({});
+      const isPrefixInflow = recordData.type === 'inflow';
+      const prefix = isPrefixInflow ? 'PCI' : 'PC';
+      let maxSeq = 0;
+      allDocs.forEach(d => {
+        try {
+          const dec = decryptData(d.data);
+          const v = String(dec?.voucherNo || '').trim().toUpperCase();
+          if (isPrefixInflow && v.startsWith('PCI')) {
+            const match = v.match(/(\d+)$/);
+            if (match) {
+              const parsed = parseInt(match[1], 10);
+              if (!isNaN(parsed) && parsed > maxSeq) maxSeq = parsed;
+            }
+          } else if (!isPrefixInflow && v.startsWith('PC') && !v.startsWith('PCI')) {
+            const match = v.match(/(\d+)$/);
+            if (match) {
+              const parsed = parseInt(match[1], 10);
+              if (!isNaN(parsed) && parsed > maxSeq) maxSeq = parsed;
+            }
+          }
+        } catch (_) {}
+      });
+      recordData.voucherNo = `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
+    }
+    const encryptedData = encryptData(recordData);
+    const newRecord = new PattyCash({ data: encryptedData });
+    const savedRecord = await newRecord.save();
+    const result = { ...recordData, _id: savedRecord._id, createdAt: savedRecord.createdAt };
+    broadcastUpdate('patty-cash', 'create', { id: savedRecord._id, record: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/patty-cash/:id', async (req, res) => {
+  try {
+    const userSession = req.session?.user;
+    if (userSession && ['data entry'].includes((userSession.role || '').toLowerCase())) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to delete patty cash records' });
+    }
+
+    const deletedRecord = await PattyCash.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'Patty cash record not found' });
+    broadcastUpdate('patty-cash', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
+    res.json({ message: 'Patty cash record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/patty-cash/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await PattyCash.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
+    if (!updatedRecord) return res.status(404).json({ message: 'Patty cash record not found' });
+    const result = { ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt };
+    broadcastUpdate('patty-cash', 'update', { id: req.params.id, record: result });
+    req._broadcastDone = true;
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/patty-cash', async (req, res) => {
+  try {
+    const records = await PattyCash.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 // Insurance APIs
 apiRouter.post('/api/insurance', async (req, res) => {
@@ -5439,6 +5525,7 @@ const ERP_MODULE_COLLECTIONS = {
   importerExporter: { label: 'Importers & Exporters', models: ['Importer', 'Exporter'], description: 'Registered Importers & Exporters' },
   product: { label: 'Products', models: ['Product'], description: 'Product catalog & categories' },
   bank: { label: 'Banks', models: ['Bank', 'Deposit', 'Withdrawal'], description: 'Bank accounts & configurations, deposits, withdrawals' },
+  pattyCash: { label: 'Patty Cash', models: ['PattyCash'], description: 'Patty cash vouchers, expenses & fund replenishments' },
   cnf: { label: 'C&F Management', models: ['CnF', 'CnFPayment'], description: 'C&F Agents & payment transactions' },
   insurance: { label: 'Insurance', models: ['Insurance', 'InsurancePayment'], description: 'Insurance policies & payments' },
   costOfGoods: { label: 'Cost of Goods', models: ['CostOfGoods'], description: 'COG sheets & cost calculations' },

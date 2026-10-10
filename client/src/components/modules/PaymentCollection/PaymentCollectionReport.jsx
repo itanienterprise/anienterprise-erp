@@ -7,7 +7,7 @@ import { generatePaymentCollectionReportExcel } from '../../../utils/excelGenera
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
-const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
+const PaymentCollectionReport = ({ isOpen, onClose, payments = [], customers = [] }) => {
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(null);
     const [filterSearchInputs, setFilterSearchInputs] = useState({
@@ -22,7 +22,8 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
         method: '',
         customer: '',
         bankName: '',
-        branch: ''
+        branch: '',
+        customerType: 'All Customer' // 'All Customer' | 'General Customer' | 'Party Customer'
     });
 
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
@@ -58,13 +59,34 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
             method: '',
             customer: '',
             bankName: '',
-            branch: ''
+            branch: '',
+            customerType: 'All Customer'
         });
         setFilterSearchInputs({
             customer: '',
             bankName: '',
             branch: ''
         });
+    };
+
+    // Helper to determine customer type ('General Customer' | 'Party Customer')
+    const getCustomerType = (payment) => {
+        const directType = (payment.customerType || payment.partyType || '').trim();
+        if (directType) {
+            return directType.toLowerCase().includes('party') ? 'Party Customer' : 'General Customer';
+        }
+        if (customers && customers.length > 0) {
+            const found = customers.find(c =>
+                c._id === payment.customerId ||
+                c.customerId === payment.readableCustomerId ||
+                (c.companyName && payment.companyName && c.companyName.trim().toLowerCase() === payment.companyName.trim().toLowerCase()) ||
+                (c.customerName && payment.customerName && c.customerName.trim().toLowerCase() === payment.customerName.trim().toLowerCase())
+            );
+            if (found?.customerType) {
+                return found.customerType.toLowerCase().includes('party') ? 'Party Customer' : 'General Customer';
+            }
+        }
+        return 'General Customer';
     };
 
     // Derive unique values for filters from the payments prop
@@ -74,6 +96,11 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
     const uniqueBranches = [...new Set(payments.map(p => p.method === 'Cash' ? p.place : p.branch).filter(Boolean))].sort();
 
     const filteredPayments = payments.filter(payment => {
+        // Customer Type filter
+        if (filters.customerType && filters.customerType !== 'All Customer') {
+            if (getCustomerType(payment) !== filters.customerType) return false;
+        }
+
         // Date range filter
         if (filters.startDate || filters.endDate) {
             const payDate = new Date(payment.date);
@@ -110,39 +137,156 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
         }
 
         return true;
-    }).sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    const grandTotal = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
-    const totalDiscount = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.discount) || 0), 0);
-
-    // Group filtered payments by customer so that the same customer is not shown multiple times
-    const groupedPayments = [];
-    const customerGroupMap = new Map();
-
-    filteredPayments.forEach((payment, idx) => {
-        const rawParty = payment.companyName || payment.customerName;
-        const partyName = rawParty ? rawParty.trim() : '-';
-        const key = rawParty ? partyName.toLowerCase() : `__unknown_${payment._id || idx}`;
-
-        if (!customerGroupMap.has(key)) {
-            const group = {
-                partyName,
-                payments: []
-            };
-            customerGroupMap.set(key, group);
-            groupedPayments.push(group);
-        }
-        customerGroupMap.get(key).payments.push(payment);
     });
+
+    // Partition into General Customer and Party Customer
+    const generalPayments = filteredPayments.filter(p => getCustomerType(p) === 'General Customer');
+    const partyPayments = filteredPayments.filter(p => getCustomerType(p) === 'Party Customer');
+
+    const generalTotal = generalPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const generalDiscount = generalPayments.reduce((sum, p) => sum + (parseFloat(p.discount) || 0), 0);
+
+    const partyTotal = partyPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const partyDiscount = partyPayments.reduce((sum, p) => sum + (parseFloat(p.discount) || 0), 0);
+
+    const grandTotal = generalTotal + partyTotal;
+    const totalDiscount = generalDiscount + partyDiscount;
+
+    // Helper to extract comparable date key (YYYY-MM-DD)
+    const getDateKey = (dateVal) => {
+        if (!dateVal) return 'no-date';
+        if (typeof dateVal === 'string') return dateVal.split('T')[0];
+        try {
+            const d = new Date(dateVal);
+            return isNaN(d.getTime()) ? 'invalid-date' : d.toISOString().split('T')[0];
+        } catch {
+            return String(dateVal);
+        }
+    };
+
+    // Helper to group payments by (date + customer) so that customer name is NOT merged across different dates
+    const groupPayments = (list) => {
+        const sorted = [...list].sort((a, b) => {
+            const dateA = getDateKey(a.date);
+            const dateB = getDateKey(b.date);
+            if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+            const partyA = (a.companyName || a.customerName || '').trim().toLowerCase();
+            const partyB = (b.companyName || b.customerName || '').trim().toLowerCase();
+            if (partyA !== partyB) return partyA.localeCompare(partyB);
+
+            const timeA = new Date(a.createdAt || a.date || 0).getTime();
+            const timeB = new Date(b.createdAt || b.date || 0).getTime();
+            if (timeA !== timeB && timeA && timeB) return timeA - timeB;
+
+            return String(a._id || '').localeCompare(String(b._id || ''));
+        });
+
+        const grouped = [];
+        const map = new Map();
+
+        sorted.forEach((p, idx) => {
+            const dateKey = getDateKey(p.date);
+            const rawParty = p.companyName || p.customerName;
+            const partyName = rawParty ? rawParty.trim() : '-';
+            const partyKey = rawParty ? partyName.toLowerCase() : `__unknown_${p._id || idx}`;
+            const key = `${dateKey}___${partyKey}`;
+
+            if (!map.has(key)) {
+                const group = {
+                    date: p.date,
+                    partyName,
+                    payments: []
+                };
+                map.set(key, group);
+                grouped.push(group);
+            }
+            map.get(key).payments.push(p);
+        });
+
+        return grouped;
+    };
+
+    const generalGroups = groupPayments(generalPayments);
+    const partyGroups = groupPayments(partyPayments);
+
+    const renderGroupRows = (groups, startSl = 1) => {
+        let currentSl = startSl;
+        return groups.flatMap((group) => {
+            const rowSpan = group.payments.length;
+            const sl = currentSl++;
+            const dateFormatted = formatDate(group.date);
+
+            return group.payments.map((p, pIdx) => {
+                const rawAmount = parseFloat(p.amount) || 0;
+                const discount = parseFloat(p.discount) || 0;
+                const amount = rawAmount;
+                const isFirstRow = pIdx === 0;
+
+                return (
+                    <tr key={p._id ? `${p._id}-${pIdx}` : `${sl}-${pIdx}`} className="border-b border-gray-200">
+                        {isFirstRow && (
+                            <td
+                                rowSpan={rowSpan}
+                                className="border-r border-gray-900 px-2 py-1.5 text-center font-bold align-middle bg-white"
+                            >
+                                {sl}
+                            </td>
+                        )}
+                        {isFirstRow && (
+                            <td
+                                rowSpan={rowSpan}
+                                className="border-r border-gray-900 px-2 py-1.5 align-middle bg-white"
+                            >
+                                {dateFormatted}
+                            </td>
+                        )}
+                        {isFirstRow && (
+                            <td
+                                rowSpan={rowSpan}
+                                className="border-r border-gray-900 px-2 py-1.5 font-bold align-middle bg-white"
+                            >
+                                {group.partyName}
+                            </td>
+                        )}
+                        <td className="border-r border-gray-900 px-2 py-1.5 align-middle">{p.method || '-'}</td>
+                        <td className="border-r border-gray-900 px-2 py-1.5 align-middle">
+                            {p.method === 'Cash' ? (p.receiveBy || '-') : (p.bankName || '-')}
+                        </td>
+                        <td className="border-r border-gray-900 px-2 py-1.5 align-middle">
+                            {p.method === 'Cash' ? (p.place || '-') : (p.branch || '-')}
+                        </td>
+                        <td className="border-r border-gray-900 px-2 py-1.5 align-middle">
+                            {p.accountNo || '-'}
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-bold text-gray-900 whitespace-nowrap align-middle">
+                            <div>৳{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            {discount > 0 && (
+                                <div className="text-[10px] text-rose-600 font-semibold">Discount: ৳{Number(discount).toLocaleString('en-IN')}</div>
+                            )}
+                        </td>
+                    </tr>
+                );
+            });
+        });
+    };
 
     const handlePrint = () => {
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        generatePaymentCollectionReportPDF(filteredPayments, filters, dateStr);
+        const enriched = filteredPayments.map(p => ({
+            ...p,
+            customerType: getCustomerType(p)
+        }));
+        generatePaymentCollectionReportPDF(enriched, filters, dateStr);
     };
 
     const handleExportExcel = () => {
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        generatePaymentCollectionReportExcel(filteredPayments, filters, dateStr);
+        const enriched = filteredPayments.map(p => ({
+            ...p,
+            customerType: getCustomerType(p)
+        }));
+        generatePaymentCollectionReportExcel(enriched, filters, dateStr);
     };
 
     if (!isOpen) return null;
@@ -160,6 +304,43 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                     <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                                 </div>
                                 <h3 className="text-base sm:text-lg font-black text-gray-800 truncate leading-none">Payment Collection Report</h3>
+                            </div>
+
+                            {/* Customer Type Quick Filter Tabs */}
+                            <div className="hidden md:flex items-center p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs">
+                                <button
+                                    type="button"
+                                    onClick={() => handleFilterChange('customerType', 'All Customer')}
+                                    className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
+                                        filters.customerType === 'All Customer'
+                                            ? 'bg-white text-blue-600 shadow-sm'
+                                            : 'text-gray-600 hover:text-gray-900'
+                                    }`}
+                                >
+                                    All ({payments.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleFilterChange('customerType', 'General Customer')}
+                                    className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
+                                        filters.customerType === 'General Customer'
+                                            ? 'bg-white text-blue-600 shadow-sm'
+                                            : 'text-gray-600 hover:text-gray-900'
+                                    }`}
+                                >
+                                    General Customer ({payments.filter(p => getCustomerType(p) === 'General Customer').length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleFilterChange('customerType', 'Party Customer')}
+                                    className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
+                                        filters.customerType === 'Party Customer'
+                                            ? 'bg-white text-blue-600 shadow-sm'
+                                            : 'text-gray-600 hover:text-gray-900'
+                                    }`}
+                                >
+                                    Party Customer ({payments.filter(p => getCustomerType(p) === 'Party Customer').length})
+                                </button>
                             </div>
 
                             <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0 relative">
@@ -221,6 +402,37 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                                     <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-0.5">End Date</label>
                                                     <CustomDatePicker value={filters.endDate} onChange={(e) => handleFilterChange('endDate', e.target.value)} compact />
                                                 </div>
+                                            </div>
+
+                                            {/* Customer Type Filter */}
+                                            <div className="space-y-1.5 sm:col-span-2 relative" data-filter-dropdown>
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-0.5">Customer Type</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFilterDropdownOpen(filterDropdownOpen === 'customerType' ? null : 'customerType')}
+                                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm hover:bg-gray-100 transition-colors"
+                                                >
+                                                    <span className={`truncate ${filters.customerType ? 'text-gray-900 font-bold' : 'text-gray-500'}`}>
+                                                        {filters.customerType || 'All Customer'}
+                                                    </span>
+                                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                                </button>
+
+                                                {filterDropdownOpen === 'customerType' && (
+                                                    <div className="absolute z-[10001] left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-48 overflow-y-auto w-full">
+                                                        {['All Customer', 'General Customer', 'Party Customer'].map(type => (
+                                                            <button
+                                                                type="button"
+                                                                key={type}
+                                                                onClick={() => { handleFilterChange('customerType', type); setFilterDropdownOpen(null); }}
+                                                                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center justify-between font-medium"
+                                                            >
+                                                                <span>{type}</span>
+                                                                {filters.customerType === type && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Method Filter */}
@@ -391,10 +603,19 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                 <div className="border-t-2 border-gray-900 w-full mt-4"></div>
 
                                 {/* Title */}
-                                <div className="flex justify-center -mt-6">
-                                    <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
-                                        <h2 className="text-2xl font-bold text-gray-900 tracking-wide uppercase">Payment Collection Report</h2>
+                                <div className="flex flex-col items-center justify-center -mt-6 gap-1">
+                                    <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block text-center">
+                                        <h2 className="text-2xl font-bold text-gray-900 tracking-wide uppercase">
+                                            {filters.customerType && filters.customerType !== 'All Customer'
+                                                ? `${filters.customerType.toUpperCase()} COLLECTION REPORT`
+                                                : 'Payment Collection Report'}
+                                        </h2>
                                     </div>
+                                    {filters.customerType && filters.customerType !== 'All Customer' && (
+                                        <span className="text-xs font-bold uppercase tracking-wider text-gray-600">
+                                            Customer Category: {filters.customerType}
+                                        </span>
+                                    )}
                                 </div>
 
                                 {/* Meta row */}
@@ -404,6 +625,12 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                             <span className="font-bold text-gray-900 w-24 sm:w-32">Total Records:</span>
                                             <span className="text-gray-900">{filteredPayments.length}</span>
                                         </div>
+                                        {filters.customerType && filters.customerType !== 'All Customer' && (
+                                            <div className="flex">
+                                                <span className="font-bold text-gray-900 w-24 sm:w-32">Customer Type:</span>
+                                                <span className="text-gray-900 font-bold">{filters.customerType}</span>
+                                            </div>
+                                        )}
                                         {filters.startDate && (
                                             <div className="flex">
                                                 <span className="font-bold text-gray-900 w-24 sm:w-32">Start Date:</span>
@@ -423,108 +650,145 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                     </div>
                                 </div>
 
-                                {/* Desktop / Print Table */}
-                                <div className="hidden md:block print:block overflow-x-auto border border-gray-900">
-                                    <table className="w-full border-collapse">
-                                        <thead>
-                                            <tr className="bg-gray-50 border-b border-gray-900">
-                                                <th className="border-r border-gray-900 px-2 py-2 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[5%] whitespace-nowrap">SL</th>
-                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Date</th>
-                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Party Name</th>
-                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Method</th>
-                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Bank/Receiver</th>
-                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Branch</th>
-                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">A/C No</th>
-                                                <th className="px-2 py-2 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[11%] whitespace-nowrap">Amount</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-900 text-[13px] sm:text-[14px]">
-                                            {groupedPayments.length > 0 ? (
-                                                groupedPayments.flatMap((group, groupIdx) => {
-                                                    const rowSpan = group.payments.length;
-                                                    const sl = groupIdx + 1;
-
-                                                    // Pre-calculate date spans for consecutive payments with the same date
-                                                    const paymentsWithDateSpans = [];
-                                                    let i = 0;
-                                                    while (i < group.payments.length) {
-                                                        const curDateStr = formatDate(group.payments[i].date);
-                                                        let j = i + 1;
-                                                        while (j < group.payments.length && formatDate(group.payments[j].date) === curDateStr) {
-                                                            j++;
-                                                        }
-                                                        const dateSpan = j - i;
-                                                        for (let k = i; k < j; k++) {
-                                                            paymentsWithDateSpans.push({
-                                                                payment: group.payments[k],
-                                                                pIdx: k,
-                                                                isFirstInDate: k === i,
-                                                                dateSpan: k === i ? dateSpan : 0,
-                                                                dateFormatted: curDateStr
-                                                            });
-                                                        }
-                                                        i = j;
-                                                    }
-
-                                                    return paymentsWithDateSpans.map(({ payment: p, pIdx, isFirstInDate, dateSpan, dateFormatted }) => {
-                                                        const rawAmount = parseFloat(p.amount) || 0;
-                                                        const discount = parseFloat(p.discount) || 0;
-                                                        const amount = rawAmount;
-                                                        const isFirstRow = pIdx === 0;
-
-                                                        return (
-                                                            <tr key={p._id ? `${p._id}-${pIdx}` : `${groupIdx}-${pIdx}`} className="border-b border-gray-200">
-                                                                {isFirstRow && (
-                                                                    <td
-                                                                        rowSpan={rowSpan}
-                                                                        className="border-r border-gray-900 px-2 py-1.5 text-center font-bold align-middle bg-white"
-                                                                    >
-                                                                        {sl}
-                                                                    </td>
-                                                                )}
-                                                                {isFirstInDate && (
-                                                                    <td
-                                                                        rowSpan={dateSpan}
-                                                                        className="border-r border-gray-900 px-2 py-1.5 align-middle bg-white"
-                                                                    >
-                                                                        {dateFormatted}
-                                                                    </td>
-                                                                )}
-                                                                {isFirstRow && (
-                                                                    <td
-                                                                        rowSpan={rowSpan}
-                                                                        className="border-r border-gray-900 px-2 py-1.5 font-bold align-middle bg-white"
-                                                                    >
-                                                                        {group.partyName}
-                                                                    </td>
-                                                                )}
-                                                                <td className="border-r border-gray-900 px-2 py-1.5 align-middle">{p.method || '-'}</td>
-                                                                <td className="border-r border-gray-900 px-2 py-1.5 align-middle">
-                                                                    {p.method === 'Cash' ? (p.receiveBy || '-') : (p.bankName || '-')}
+                                {/* Desktop / Print Table Section */}
+                                {filteredPayments.length === 0 ? (
+                                    <div className="border border-gray-900 p-8 text-center text-gray-500 italic">
+                                        No payments found.
+                                    </div>
+                                ) : filters.customerType === 'All Customer' ? (
+                                    <div className="space-y-8">
+                                        {/* Table 1: General Customer Collections */}
+                                        {generalGroups.length > 0 && (
+                                            <div className="space-y-2">
+                                                <div className="bg-gray-100 border-2 border-gray-900 px-4 py-2 flex items-center justify-between">
+                                                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
+                                                        1. General Customer Collections ({generalPayments.length} {generalPayments.length === 1 ? 'Record' : 'Records'})
+                                                    </h3>
+                                                    <div className="text-xs font-bold text-gray-800">
+                                                        Subtotal: ৳{Number(generalTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </div>
+                                                </div>
+                                                <div className="overflow-x-auto border border-gray-900">
+                                                    <table className="w-full border-collapse">
+                                                        <thead>
+                                                            <tr className="bg-gray-50 border-b border-gray-900">
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[5%] whitespace-nowrap">SL</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Date</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Party Name</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Method</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Bank/Receiver</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Branch</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">A/C No</th>
+                                                                <th className="px-2 py-2 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[11%] whitespace-nowrap">Amount</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-900 text-[13px] sm:text-[14px]">
+                                                            {renderGroupRows(generalGroups, 1)}
+                                                        </tbody>
+                                                        <tfoot>
+                                                            <tr className="bg-gray-100 border-t-2 border-gray-900">
+                                                                <td colSpan="7" className="px-2 py-2 text-[13px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900 whitespace-nowrap">
+                                                                    Subtotal (General Customer)
                                                                 </td>
-                                                                <td className="border-r border-gray-900 px-2 py-1.5 align-middle">
-                                                                    {p.method === 'Cash' ? (p.place || '-') : (p.branch || '-')}
-                                                                </td>
-                                                                <td className="border-r border-gray-900 px-2 py-1.5 align-middle">
-                                                                    {p.accountNo || '-'}
-                                                                </td>
-                                                                <td className="px-2 py-1.5 text-right font-bold text-gray-900 whitespace-nowrap align-middle">
-                                                                    <div>৳{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                                    {discount > 0 && (
-                                                                        <div className="text-[10px] text-rose-600 font-semibold">Discount: ৳{Number(discount).toLocaleString('en-IN')}</div>
+                                                                <td className="px-2 py-2 text-[13px] text-right font-black text-gray-900 whitespace-nowrap">
+                                                                    <div>৳{Number(generalTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                                    {generalDiscount > 0 && (
+                                                                        <div className="text-[10px] text-rose-600 font-semibold font-normal">Discount: ৳{Number(generalDiscount).toLocaleString('en-IN')}</div>
                                                                     )}
                                                                 </td>
                                                             </tr>
-                                                        );
-                                                    });
-                                                })
-                                            ) : (
-                                                <tr>
-                                                    <td colSpan="8" className="px-4 py-8 text-center text-gray-500 italic">No payments found.</td>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Table 2: Party Customer Collections (Separate Table!) */}
+                                        {partyGroups.length > 0 && (
+                                            <div className="space-y-2">
+                                                <div className="bg-gray-100 border-2 border-gray-900 px-4 py-2 flex items-center justify-between">
+                                                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
+                                                        2. Party Customer Collections ({partyPayments.length} {partyPayments.length === 1 ? 'Record' : 'Records'})
+                                                    </h3>
+                                                    <div className="text-xs font-bold text-gray-800">
+                                                        Subtotal: ৳{Number(partyTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </div>
+                                                </div>
+                                                <div className="overflow-x-auto border border-gray-900">
+                                                    <table className="w-full border-collapse">
+                                                        <thead>
+                                                            <tr className="bg-gray-50 border-b border-gray-900">
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[5%] whitespace-nowrap">SL</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Date</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Party Name</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Method</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Bank/Receiver</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Branch</th>
+                                                                <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">A/C No</th>
+                                                                <th className="px-2 py-2 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[11%] whitespace-nowrap">Amount</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-900 text-[13px] sm:text-[14px]">
+                                                            {renderGroupRows(partyGroups, generalGroups.length + 1)}
+                                                        </tbody>
+                                                        <tfoot>
+                                                            <tr className="bg-gray-100 border-t-2 border-gray-900">
+                                                                <td colSpan="7" className="px-2 py-2 text-[13px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900 whitespace-nowrap">
+                                                                    Subtotal (Party Customer)
+                                                                </td>
+                                                                <td className="px-2 py-2 text-[13px] text-right font-black text-gray-900 whitespace-nowrap">
+                                                                    <div>৳{Number(partyTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                                    {partyDiscount > 0 && (
+                                                                        <div className="text-[10px] text-rose-600 font-semibold font-normal">Discount: ৳{Number(partyDiscount).toLocaleString('en-IN')}</div>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Grand Total Summary Table */}
+                                        <div className="overflow-x-auto border-2 border-gray-900 bg-gray-100">
+                                            <table className="w-full border-collapse">
+                                                <tfoot>
+                                                    <tr>
+                                                        <td className="px-4 py-2.5 text-[14px] font-black text-gray-900 uppercase tracking-wider">
+                                                            Grand Total (All Customers)
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-[14px] text-right font-black text-gray-900 whitespace-nowrap">
+                                                            <div>৳{Number(grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                            {totalDiscount > 0 && (
+                                                                <div className="text-[11px] text-rose-600 font-semibold font-normal">
+                                                                    Total Discount: ৳{Number(totalDiscount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    /* Single Customer Type Table */
+                                    <div className="overflow-x-auto border border-gray-900">
+                                        <table className="w-full border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-50 border-b border-gray-900">
+                                                    <th className="border-r border-gray-900 px-2 py-2 text-center text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[5%] whitespace-nowrap">SL</th>
+                                                    <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Date</th>
+                                                    <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Party Name</th>
+                                                    <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Method</th>
+                                                    <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[18%] whitespace-nowrap">Bank/Receiver</th>
+                                                    <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Branch</th>
+                                                    <th className="border-r border-gray-900 px-2 py-2 text-left text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">A/C No</th>
+                                                    <th className="px-2 py-2 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[11%] whitespace-nowrap">Amount</th>
                                                 </tr>
-                                            )}
-                                        </tbody>
-                                        {filteredPayments.length > 0 && (
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-900 text-[13px] sm:text-[14px]">
+                                                {renderGroupRows(filters.customerType === 'General Customer' ? generalGroups : partyGroups, 1)}
+                                            </tbody>
                                             <tfoot>
                                                 <tr className="bg-gray-100 border-t-2 border-gray-900">
                                                     <td colSpan="7" className="px-2 py-2 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900 whitespace-nowrap">Grand Total</td>
@@ -536,30 +800,44 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                                     </td>
                                                 </tr>
                                             </tfoot>
-                                        )}
-                                    </table>
-                                </div>
+                                        </table>
+                                    </div>
+                                )}
 
                                 {/* Summary Cards */}
-                                <div className={`grid grid-cols-1 ${totalDiscount > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4 pt-6 px-2 print:grid ${totalDiscount > 0 ? 'print:grid-cols-3' : 'print:grid-cols-2'}`}>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-6 px-2 print:grid print:grid-cols-4">
                                     <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm text-center">
                                         <div className="text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-2">Total Collections</div>
                                         <div className="text-2xl sm:text-3xl font-black text-gray-900">{filteredPayments.length}</div>
+                                        {filters.customerType === 'All Customer' && (
+                                            <div className="text-[11px] text-gray-500 font-semibold mt-1">
+                                                {generalPayments.length} General • {partyPayments.length} Party
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-white shadow-sm text-center">
-                                        <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">Grand Total Collected</div>
+                                        <div className="text-[12px] font-bold text-emerald-600 uppercase tracking-wider mb-2">General Customer Total</div>
                                         <div className="text-xl sm:text-2xl font-black text-gray-900">
-                                            ৳{Number(grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            ৳{Number(generalTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </div>
                                     </div>
-                                    {totalDiscount > 0 && (
-                                        <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-rose-50/50 shadow-sm text-center">
-                                            <div className="text-[12px] font-bold text-rose-500 uppercase tracking-wider mb-2">Total Discount</div>
-                                            <div className="text-xl sm:text-2xl font-black text-rose-700">
-                                                ৳{Number(totalDiscount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </div>
+                                    <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-white shadow-sm text-center">
+                                        <div className="text-[12px] font-bold text-purple-600 uppercase tracking-wider mb-2">Party Customer Total</div>
+                                        <div className="text-xl sm:text-2xl font-black text-gray-900">
+                                            ৳{Number(partyTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </div>
-                                    )}
+                                    </div>
+                                    <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-blue-50/50 shadow-sm text-center">
+                                        <div className="text-[12px] font-bold text-blue-600 uppercase tracking-wider mb-2">Grand Total Collected</div>
+                                        <div className="text-xl sm:text-2xl font-black text-blue-900">
+                                            ৳{Number(grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </div>
+                                        {totalDiscount > 0 && (
+                                            <div className="text-[11px] text-rose-600 font-semibold mt-1">
+                                                Discount: ৳{Number(totalDiscount).toLocaleString('en-IN')}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Signatures */}

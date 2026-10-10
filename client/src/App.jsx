@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon, TruckIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon, ActivityLogIcon, TicketIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon, ActivityLogIcon, TicketIcon, WalletIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -68,6 +68,7 @@ import PayToCustomer from './components/modules/PayToCustomer/PayToCustomer';
 import Bank from './components/modules/Bank/Bank';
 import Deposit from './components/modules/Bank/Deposit';
 import Withdrawal from './components/modules/Bank/Withdrawal';
+import PattyCash from './components/modules/PattyCash/PattyCash';
 import Insurance from './components/modules/Insurance/Insurance';
 import InsurancePayment from './components/modules/Insurance/InsurancePayment';
 import LCManagement from './components/modules/LCManagement/LCManagement';
@@ -1274,6 +1275,7 @@ function App() {
                         type === 'bank' ? 'banks' :
                           type === 'deposit' ? 'deposits' :
                           type === 'withdrawal' ? 'withdrawals' :
+                          type === 'patty-cash' ? 'patty-cash' :
                             type === 'indian-bank' ? 'indian-banks' :
                             type === 'cnf' ? 'cnfs' :
                               type === 'pi' ? 'pi' :
@@ -1419,6 +1421,7 @@ function App() {
           type === 'warehouse' ? QUERY_KEYS.warehouses :
           type === 'customer' ? ['customers'] :
           type === 'bank' ? ['banks'] :
+          type === 'patty-cash' ? ['pattyCash'] :
           type === 'indian-bank' ? ['indianBanks'] :
           type === 'insurance' ? ['insurance'] :
           type === 'damage' ? QUERY_KEYS.damages :
@@ -1450,7 +1453,7 @@ function App() {
         else if (type === 'sales') fetchSales();
         else if (type === 'cnf') fetchCnFs();
 
-        if (['insurance', 'employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'deposit', 'withdrawal', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
+        if (['insurance', 'employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'deposit', 'withdrawal', 'patty-cash', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
 
@@ -1469,6 +1472,7 @@ function App() {
           'bank': 'Bank',
           'deposit': 'Deposit',
           'withdrawal': 'Withdrawal',
+          'patty-cash': 'Patty Cash Record',
           'indian-bank': 'Indian Bank',
           'cnf': 'C&F Agent',
           'pi': 'Proforma Invoice',
@@ -2049,6 +2053,14 @@ function App() {
       }
 
       try {
+        if (module === 'patty-cash' || module === 'pattycash' || module === 'all') {
+          queryClient.invalidateQueries({ queryKey: ['pattyCash'] });
+        }
+      } catch (err) {
+        console.warn('Error syncing patty cash in handleDataUpdate:', err);
+      }
+
+      try {
         if (module === 'cnfs' || module === 'cnf' || module === 'cnf-payments' || module === 'cnf-payment' || module === 'all') {
           if (typeof fetchCnFs === 'function') fetchCnFs();
           queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cnfs });
@@ -2464,6 +2476,21 @@ function App() {
         }
         return (
           <Withdrawal
+            key={refreshKey}
+            currentUser={currentUser}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+          />
+        );
+      case 'patty-cash-section':
+        if (!hasPermission(currentUser, 'pattyCash', 'view')) {
+          return (
+            <div className="p-8 text-center text-gray-500 font-medium">
+              You do not have permission to access Patty Cash.
+            </div>
+          );
+        }
+        return (
+          <PattyCash
             key={refreshKey}
             currentUser={currentUser}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
@@ -3130,6 +3157,20 @@ function App() {
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* Patty Cash */}
+              {(currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase().trim() === 'admin' || hasPermission(currentUser, 'pattyCash', 'view')) && (
+                <button
+                  onClick={() => { handleViewChange('patty-cash-section'); }}
+                  title={isMini ? 'Patty Cash' : undefined}
+                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'patty-cash-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                >
+                  <WalletIcon className="w-5 h-5 flex-shrink-0" />
+                  <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                    Patty Cash
+                  </span>
+                </button>
               )}
 
               {/* C&F */}

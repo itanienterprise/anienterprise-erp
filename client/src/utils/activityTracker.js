@@ -38,6 +38,8 @@ const VIEW_MODULE_MAP = {
     'bank': 'Bank',
     'deposit-section': 'Deposit',
     'deposit': 'Deposit',
+    'patty-cash-section': 'Patty Cash',
+    'patty-cash': 'Patty Cash',
     'port-section': 'Port',
     'port': 'Port',
     'products-section': 'Product',

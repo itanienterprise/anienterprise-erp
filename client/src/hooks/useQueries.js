@@ -19,6 +19,7 @@ export const QUERY_KEYS = {
     cnfs: ['cnfs'],
     notifications: ['notifications'],
     profile: ['profile'],
+    pattyCash: ['pattyCash'],
 };
 
 // ================= EMPLOYEES =================

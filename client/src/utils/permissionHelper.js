@@ -197,6 +197,13 @@ export const MODULES_LIST = [
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
+    {
+        key: 'pattyCash',
+        label: 'Patty Cash',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     { key: 'insurance', label: 'Insurance Management' },
     {
         key: 'insurancePayment',
@@ -324,8 +331,8 @@ export const getDefaultPermissionsForRole = (role) => {
             defaults[key] = permsObj;
         });
     } else if (roleLower === 'sales manager') {
-        // Sales Manager can access products, customers, sales, borderSale, order, purchase, payment, bank, deposit, withdrawal, insurance, insurancePayment, returnProduct, transfer
-        const salesModules = ['product', 'customer', 'sales', 'borderSale', 'order', 'purchase', 'purchaseReceive', 'transfer', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'insurance', 'insurancePayment', 'returnProduct'];
+        // Sales Manager can access products, customers, sales, borderSale, order, purchase, payment, bank, deposit, withdrawal, pattyCash, insurance, insurancePayment, returnProduct, transfer
+        const salesModules = ['product', 'customer', 'sales', 'borderSale', 'order', 'purchase', 'purchaseReceive', 'transfer', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'pattyCash', 'insurance', 'insurancePayment', 'returnProduct'];
         salesModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -352,8 +359,8 @@ export const getDefaultPermissionsForRole = (role) => {
             }
         });
     } else if (roleLower === 'accounts manager') {
-        // Accounts Manager can access paymentCollection, payToCustomer, bank, deposit, withdrawal, insurance, insurancePayment, cnfPayment, returnProduct, purchase
-        const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'insurance', 'insurancePayment', 'cnfPayment', 'returnProduct', 'costOfGoods', 'purchase', 'purchaseReceive'];
+        // Accounts Manager can access paymentCollection, payToCustomer, bank, deposit, withdrawal, pattyCash, insurance, insurancePayment, cnfPayment, returnProduct, purchase
+        const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'pattyCash', 'insurance', 'insurancePayment', 'cnfPayment', 'returnProduct', 'costOfGoods', 'purchase', 'purchaseReceive'];
         accModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };

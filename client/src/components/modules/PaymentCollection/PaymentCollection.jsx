@@ -3756,6 +3756,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 isOpen={showReport}
                 onClose={() => setShowReport(false)}
                 payments={filteredPayments}
+                customers={rawCustomers}
             />
 
             {/* Premium Delete Confirmation Modal */}
