@@ -21,11 +21,18 @@ const EyeIcon = ({ className }) => (
     </svg>
 );
 
+const BanknotesIcon = ({ className }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+);
+
 const Bank = ({ onDeleteConfirm }) => {
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const canAdd = hasPermission(currentUser, 'bank', 'add');
     const canEdit = hasPermission(currentUser, 'bank', 'edit');
     const canDelete = hasPermission(currentUser, 'bank', 'delete');
+    const canManageOpeningBalance = hasPermission(currentUser, 'bank', 'openingBalance') || hasPermission(currentUser, 'bankStatement', 'openingBalance');
     const cannotDelete = !canDelete;
     const cannotAddEdit = !canAdd && !canEdit;
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
@@ -39,6 +46,112 @@ const Bank = ({ onDeleteConfirm }) => {
     const [expandedRowKey, setExpandedRowKey] = useState(null);
     const [expandedBranchKey, setExpandedBranchKey] = useState(null);
     const [expandedHistoryRowIdx, setExpandedHistoryRowIdx] = useState(null);
+
+    // Opening Balance activation modal state
+    const [openingBalanceModal, setOpeningBalanceModal] = useState({
+        isOpen: false,
+        item: null,
+        isActive: false,
+        date: new Date().toISOString().split('T')[0],
+        amount: '',
+        isSaving: false
+    });
+
+    const handleOpenOpeningBalanceModal = (item) => {
+        if (!canManageOpeningBalance) {
+            alert('You do not have permission to manage Opening Balance Activation.');
+            return;
+        }
+        setOpeningBalanceModal({
+            isOpen: true,
+            item: item,
+            isActive: !!item.isOpeningBalanceActive,
+            date: item.openingBalanceDate || new Date().toISOString().split('T')[0],
+            amount: item.openingBalance !== undefined && item.openingBalance !== null && item.openingBalance !== '' ? item.openingBalance : '',
+            isSaving: false
+        });
+    };
+
+    const handleSaveOpeningBalance = async (e, forceDeactivate = false) => {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        if (!openingBalanceModal.item) return;
+        if (!canManageOpeningBalance) {
+            alert('You do not have permission to manage Opening Balance Activation.');
+            return;
+        }
+
+        const willBeActive = forceDeactivate ? false : openingBalanceModal.isActive;
+
+        if (willBeActive) {
+            if (!openingBalanceModal.date) {
+                alert('Please select an effective opening date.');
+                return;
+            }
+            if (openingBalanceModal.amount === '' || isNaN(Number(openingBalanceModal.amount))) {
+                alert('Please enter a valid opening balance amount.');
+                return;
+            }
+        }
+
+        setOpeningBalanceModal(prev => ({ ...prev, isSaving: true }));
+
+        try {
+            const item = openingBalanceModal.item;
+            const targetBank = banks.find(b => b._id === item._id);
+            if (!targetBank) throw new Error('Bank not found');
+
+            const rawBranches = Array.isArray(targetBank.branches) && targetBank.branches.length > 0
+                ? [...targetBank.branches]
+                : [{
+                    branch: targetBank.branch || '',
+                    accountName: targetBank.accountName || '',
+                    accountNo: targetBank.accountNo || ''
+                }];
+
+            let targetIdx = item.branchIndex !== undefined ? item.branchIndex : -1;
+            if (targetIdx === -1 || !rawBranches[targetIdx]) {
+                targetIdx = rawBranches.findIndex(b =>
+                    (b.accountNo || '').trim().toLowerCase() === (item.accountNo || '').trim().toLowerCase() &&
+                    (b.branch || '').trim().toLowerCase() === (item.branch || '').trim().toLowerCase()
+                );
+            }
+            if (targetIdx === -1) targetIdx = 0;
+
+            const updatedBranch = {
+                ...rawBranches[targetIdx],
+                isOpeningBalanceActive: willBeActive,
+                openingBalance: willBeActive ? (Number(openingBalanceModal.amount) || 0) : (Number(rawBranches[targetIdx].openingBalance) || 0),
+                openingBalanceDate: willBeActive ? openingBalanceModal.date : (rawBranches[targetIdx].openingBalanceDate || '')
+            };
+
+            const updatedBranches = [...rawBranches];
+            updatedBranches[targetIdx] = updatedBranch;
+
+            const payload = {
+                ...targetBank,
+                branches: updatedBranches,
+                isOpeningBalanceActive: willBeActive,
+                openingBalance: willBeActive ? (Number(openingBalanceModal.amount) || 0) : (Number(targetBank.openingBalance) || 0),
+                openingBalanceDate: willBeActive ? openingBalanceModal.date : (targetBank.openingBalanceDate || '')
+            };
+
+            queryClient.setQueryData(['banks'], (old = []) => {
+                return (old || []).map(b => b._id === targetBank._id ? payload : b);
+            });
+            setBanks(prev => prev.map(b => b._id === targetBank._id ? payload : b));
+
+            await axios.put(`${API_BASE_URL}/api/banks/${targetBank._id}`, payload);
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
+            fetchBanks(true);
+
+            setOpeningBalanceModal({ isOpen: false, item: null, isActive: false, date: '', amount: '', isSaving: false });
+        } catch (err) {
+            console.error('Error saving opening balance:', err);
+            alert('Failed to save opening balance. ' + (err.response?.data?.message || err.message));
+            setOpeningBalanceModal(prev => ({ ...prev, isSaving: false }));
+        }
+    };
+
     // LC Bill History modal state
     const [lcBillHistoryBank, setLcBillHistoryBank] = useState(null); // bank name being viewed
     const [lcBillHistoryRows, setLcBillHistoryRows] = useState([]);
@@ -785,6 +898,9 @@ const Bank = ({ onDeleteConfirm }) => {
             branch: b.branch || '',
             accountName: b.accountName || '',
             accountNo: b.accountNo || '',
+            openingBalance: b.openingBalance !== undefined ? b.openingBalance : (bank.openingBalance !== undefined ? bank.openingBalance : ''),
+            openingBalanceDate: b.openingBalanceDate || bank.openingBalanceDate || '',
+            isOpeningBalanceActive: b.isOpeningBalanceActive !== undefined ? !!b.isOpeningBalanceActive : !!bank.isOpeningBalanceActive,
             lcCommission: b.lcCommission !== undefined ? b.lcCommission : '',
             vatOnCommission: b.vatOnCommission !== undefined ? b.vatOnCommission : '',
             swiftCharge: b.swiftCharge !== undefined ? b.swiftCharge : '',
@@ -837,6 +953,10 @@ const Bank = ({ onDeleteConfirm }) => {
             return branches.map((branch, idx) => ({
                 ...bank,
                 ...branch,
+                branchIndex: idx,
+                openingBalance: branch.openingBalance !== undefined ? branch.openingBalance : bank.openingBalance,
+                openingBalanceDate: branch.openingBalanceDate || bank.openingBalanceDate || '',
+                isOpeningBalanceActive: branch.isOpeningBalanceActive !== undefined ? !!branch.isOpeningBalanceActive : !!bank.isOpeningBalanceActive,
                 uniqueRowKey: `${bank._id}-${idx}`
             }));
         })
@@ -1344,9 +1464,38 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                 </td>
                                                                 <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.branch}</td>
                                                                 <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.accountName}</td>
-                                                                <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.accountNo}</td>
+                                                                <td className="px-6 py-4 text-[13px] font-medium text-gray-600">
+                                                                    <div className="font-semibold text-gray-800">{item.accountNo}</div>
+                                                                    {item.isOpeningBalanceActive && (
+                                                                        <div className="flex items-center gap-1 mt-1">
+                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                                OB: ৳{(Number(item.openingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({item.openingBalanceDate ? formatDate(item.openingBalanceDate) : 'Active'})
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </td>
                                                                 <td className="px-6 py-4 text-center">
                                                                     <div className="flex justify-center items-center gap-2">
+                                                                        {canManageOpeningBalance && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleOpenOpeningBalanceModal(item)}
+                                                                                data-action={`Manage Opening Balance (${item.accountNo || ''})`}
+                                                                                className={`p-1.5 rounded-lg transition-all ${
+                                                                                    item.isOpeningBalanceActive
+                                                                                        ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 shadow-xs'
+                                                                                        : 'hover:bg-amber-50 text-gray-400 hover:text-amber-600'
+                                                                                }`}
+                                                                                title={
+                                                                                    item.isOpeningBalanceActive
+                                                                                        ? `Opening Balance Active: ৳${(Number(item.openingBalance) || 0).toLocaleString()} on ${item.openingBalanceDate ? formatDate(item.openingBalanceDate) : 'Active'} (Click to manage)`
+                                                                                        : 'Set / Activate Opening Balance'
+                                                                                }
+                                                                            >
+                                                                                <BanknotesIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
                                                                         <button
                                                                             onClick={() => openLcBillHistory(group.bankName)}
                                                                             className="p-1.5 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded-lg transition-all"
@@ -1571,6 +1720,15 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                          <span className="w-32 text-[11px] font-bold text-blue-400 uppercase tracking-wider shrink-0">Account No -</span>
                                                                          <span className="font-black text-blue-600 select-all tracking-tight">{item.accountNo}</span>
                                                                      </div>
+                                                                     {item.isOpeningBalanceActive && (
+                                                                         <div className="flex items-center text-[13px]">
+                                                                             <span className="w-32 text-[11px] font-bold text-emerald-500 uppercase tracking-wider shrink-0">Opening Balance -</span>
+                                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                                 OB: ৳{(Number(item.openingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({item.openingBalanceDate ? formatDate(item.openingBalanceDate) : 'Active'})
+                                                                             </span>
+                                                                         </div>
+                                                                     )}
 
                                                                      {(hasNewLcCharges || hasAmendmentCharges) && (
                                                                          <>
@@ -1640,6 +1798,16 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                          </>
                                                                      )}
                                                                  </div>
+                                                                 {canManageOpeningBalance && (
+                                                                     <button
+                                                                         type="button"
+                                                                         onClick={(e) => { e.stopPropagation(); handleOpenOpeningBalanceModal(item); }}
+                                                                         className={`p-2 rounded-xl transition-all shrink-0 self-start ${item.isOpeningBalanceActive ? "bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-xs" : "bg-white text-gray-400 hover:text-amber-600 hover:bg-amber-50 border border-gray-200"}`}
+                                                                         title="Manage Opening Balance"
+                                                                     >
+                                                                         <BanknotesIcon className="w-4 h-4" />
+                                                                     </button>
+                                                                 )}
                                                              </div>
                                                          </div>
                                                      );
@@ -2325,6 +2493,185 @@ const Bank = ({ onDeleteConfirm }) => {
                                     </div>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Account Opening Balance Activation Modal */}
+            {openingBalanceModal.isOpen && openingBalanceModal.item && createPortal(
+                <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 app-modal-overlay">
+                    <div
+                        className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity"
+                        onClick={() => {
+                            if (!openingBalanceModal.isSaving) {
+                                setOpeningBalanceModal(prev => ({ ...prev, isOpen: false }));
+                            }
+                        }}
+                    />
+                    <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-50 border-b border-gray-100 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100/60 shadow-xs">
+                                    <BanknotesIcon className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-gray-900">Opening Balance Activation</h3>
+                                    <p className="text-xs font-semibold text-gray-400">Set opening balance & statement starting date</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={openingBalanceModal.isSaving}
+                                onClick={() => setOpeningBalanceModal(prev => ({ ...prev, isOpen: false }))}
+                                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+                            >
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Account Info Pill */}
+                        <div className="p-6 space-y-5">
+                            <div className="bg-gray-50/80 rounded-2xl p-4 border border-gray-150/60 space-y-2 text-xs">
+                                <div className="flex items-center justify-between pb-2 border-b border-gray-200/50">
+                                    <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Bank</span>
+                                    <span className="font-black text-gray-900">{openingBalanceModal.item.bankName}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Branch</span>
+                                    <span className="font-bold text-gray-800">{openingBalanceModal.item.branch}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Account Name</span>
+                                    <span className="font-bold text-gray-800">{openingBalanceModal.item.accountName}</span>
+                                </div>
+                                <div className="flex items-center justify-between pt-2 border-t border-gray-200/50">
+                                    <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Account No</span>
+                                    <span className="font-black font-mono text-blue-600 text-sm select-all">{openingBalanceModal.item.accountNo}</span>
+                                </div>
+                            </div>
+
+                            {/* Activation Toggle Card */}
+                            <div className={`p-4 rounded-2xl border transition-all ${openingBalanceModal.isActive ? 'bg-emerald-50/60 border-emerald-200 ring-2 ring-emerald-500/10' : 'bg-gray-50/50 border-gray-200'}`}>
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-black text-gray-900">Activate Opening Balance</span>
+                                            {openingBalanceModal.isActive ? (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                    Active
+                                                </span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-gray-600">
+                                                    Inactive
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-gray-500 leading-relaxed">
+                                            {openingBalanceModal.isActive
+                                                ? 'Statement will start strictly from this date and opening balance. Prior transactions are excluded.'
+                                                : 'Statement calculates with all historical transactions without cutoff.'}
+                                        </p>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={openingBalanceModal.isActive}
+                                            onChange={(e) => setOpeningBalanceModal(prev => ({ ...prev, isActive: e.target.checked }))}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Inputs (visible when active) */}
+                            {openingBalanceModal.isActive && (
+                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">
+                                            Effective Opening Date <span className="text-rose-500">*</span>
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={openingBalanceModal.date}
+                                            onChange={(e) => setOpeningBalanceModal(prev => ({ ...prev, date: e.target.value }))}
+                                            required
+                                            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-semibold text-gray-800 outline-none transition-all shadow-xs"
+                                        />
+                                        <p className="text-[11px] text-gray-400 ml-1">The date from which the account statement starts.</p>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">
+                                            Opening Balance Amount (TK) <span className="text-rose-500">*</span>
+                                        </label>
+                                        <div className="relative">
+                                            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-sm font-bold text-gray-400 pointer-events-none">
+                                                ৳
+                                            </span>
+                                            <input
+                                                type="number"
+                                                step="any"
+                                                value={openingBalanceModal.amount}
+                                                onChange={(e) => setOpeningBalanceModal(prev => ({ ...prev, amount: e.target.value }))}
+                                                required
+                                                placeholder="0.00"
+                                                className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-bold text-gray-900 outline-none transition-all shadow-xs"
+                                            />
+                                        </div>
+                                        <p className="text-[11px] text-gray-400 ml-1">The starting balance on the effective date forward.</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer Buttons */}
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                            <div>
+                                {openingBalanceModal.item.isOpeningBalanceActive && (
+                                    <button
+                                        type="button"
+                                        disabled={openingBalanceModal.isSaving}
+                                        onClick={(e) => {
+                                            if (window.confirm('Are you sure you want to deactivate opening balance for this account?')) {
+                                                handleSaveOpeningBalance(e, true);
+                                            }
+                                        }}
+                                        className="px-4 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl transition-all"
+                                    >
+                                        Deactivate
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex items-center gap-2.5">
+                                <button
+                                    type="button"
+                                    disabled={openingBalanceModal.isSaving}
+                                    onClick={() => setOpeningBalanceModal(prev => ({ ...prev, isOpen: false }))}
+                                    className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-700 text-xs font-bold rounded-xl border border-gray-200 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={openingBalanceModal.isSaving}
+                                    onClick={handleSaveOpeningBalance}
+                                    className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center gap-1.5"
+                                >
+                                    {openingBalanceModal.isSaving ? (
+                                        <>
+                                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        'Save & Apply'
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>,

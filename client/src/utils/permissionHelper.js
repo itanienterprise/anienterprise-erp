@@ -182,7 +182,13 @@ export const MODULES_LIST = [
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
-    { key: 'bank', label: 'Bank Management' },
+    {
+        key: 'bank',
+        label: 'Bank Management',
+        specialLabels: [
+            { key: 'openingBalance', label: 'Opening Balance Activation' }
+        ]
+    },
     {
         key: 'deposit',
         label: 'Bank Deposit',
@@ -201,6 +207,7 @@ export const MODULES_LIST = [
         key: 'bankStatement',
         label: 'Bank Statement',
         specialLabels: [
+            { key: 'openingBalance', label: 'Opening Balance Activation' },
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
@@ -318,7 +325,7 @@ export const getDefaultPermissionsForRole = (role) => {
                 };
                 if (mod.specialLabels) {
                     mod.specialLabels.forEach(sItem => {
-                        permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
+                        permsObj[sItem.key] = sItem.key === 'openingBalance' ? false : !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
                     });
                 }
                 defaults[mod.key] = permsObj;
@@ -332,7 +339,7 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
+                    permsObj[sItem.key] = sItem.key === 'openingBalance' ? false : !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
                 });
             }
             defaults[key] = permsObj;
@@ -345,7 +352,8 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    if (sItem.key === 'firstApprove') permsObj[sItem.key] = true;
+                    if (sItem.key === 'openingBalance') permsObj[sItem.key] = false;
+                    else if (sItem.key === 'firstApprove') permsObj[sItem.key] = true;
                     else if (sItem.key === 'secondApprove') permsObj[sItem.key] = false;
                     else permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
                 });
@@ -359,7 +367,7 @@ export const getDefaultPermissionsForRole = (role) => {
                 const permsObj = { view: true, add: true, edit: true, delete: false, special: true };
                 if (mod.specialLabels) {
                     mod.specialLabels.forEach(sItem => {
-                        permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
+                        permsObj[sItem.key] = sItem.key === 'openingBalance' ? false : !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
                     });
                 }
                 defaults[mod.key] = permsObj;
@@ -373,7 +381,8 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    if (sItem.key === 'firstApprove') permsObj[sItem.key] = false;
+                    if (sItem.key === 'openingBalance') permsObj[sItem.key] = false;
+                    else if (sItem.key === 'firstApprove') permsObj[sItem.key] = false;
                     else if (sItem.key === 'secondApprove') permsObj[sItem.key] = true;
                     else permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
                 });
@@ -389,7 +398,7 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
+                    permsObj[sItem.key] = sItem.key === 'openingBalance' ? false : !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
                 });
             }
             defaults[key] = permsObj;
@@ -433,6 +442,26 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
     // 1. Admin bypass
     if (username === 'admin' || roleLower === 'admin') {
         return true;
+    }
+
+    // Special check for openingBalance activation permission
+    if (checkAction === 'openingBalance') {
+        if (currentUser.permissions) {
+            if (currentUser.permissions[moduleName] && currentUser.permissions[moduleName].openingBalance !== undefined) {
+                return !!currentUser.permissions[moduleName].openingBalance;
+            }
+            if (currentUser.permissions.bank && currentUser.permissions.bank.openingBalance !== undefined) {
+                return !!currentUser.permissions.bank.openingBalance;
+            }
+            if (currentUser.permissions.bankStatement && currentUser.permissions.bankStatement.openingBalance !== undefined) {
+                return !!currentUser.permissions.bankStatement.openingBalance;
+            }
+        }
+        const defaults = getDefaultPermissionsForRole(currentUser.role);
+        if (defaults[moduleName] && defaults[moduleName].openingBalance !== undefined) {
+            return !!defaults[moduleName].openingBalance;
+        }
+        return !!(defaults.bank?.openingBalance || defaults.bankStatement?.openingBalance);
     }
 
     // Special alias check for showPrice <-> showRate

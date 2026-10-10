@@ -1212,12 +1212,12 @@ const getDefaultPermissionsForRole = (role) => {
   ];
 
   modules.forEach(m => {
-    defaults[m] = { view: false, add: false, edit: false, delete: false, special: false, showRate: false, approveLeave: false, editLeave: false };
+    defaults[m] = { view: false, add: false, edit: false, delete: false, special: false, showRate: false, approveLeave: false, editLeave: false, openingBalance: false };
   });
 
   if (roleLower === 'admin') {
     modules.forEach(m => {
-      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: true, approveLeave: true, editLeave: true };
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: true, approveLeave: true, editLeave: true, openingBalance: true };
     });
   } else if (roleLower === 'incharge') {
     modules.forEach(m => {

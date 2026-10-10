@@ -27,6 +27,12 @@ const EyeIcon = ({ className }) => (
   </svg>
 );
 
+const BanknotesIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+  </svg>
+);
+
 const toDateStr = (dateVal) => {
   if (!dateVal) return '';
   if (dateVal instanceof Date) {
@@ -297,6 +303,7 @@ const MODULE_TAG_STYLES = {
 const Statement = ({ currentUser, onDeleteConfirm }) => {
   const user = currentUser || JSON.parse(localStorage.getItem('currentUser') || '{}');
   const canShowEntryBy = hasPermission(user, 'bankStatement', 'showEntryBy') || hasPermission(user, 'bank', 'view');
+  const canManageOpeningBalance = hasPermission(user, 'bankStatement', 'openingBalance') || hasPermission(user, 'bank', 'openingBalance');
 
   // Main Data States across all modules
   const [banks, setBanks] = useState([]);
@@ -339,6 +346,179 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
 
   // Sort State
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
+
+  // Opening Balance Modal State
+  const [openingBalanceModal, setOpeningBalanceModal] = useState({
+    isOpen: false,
+    item: null,
+    isActive: false,
+    date: '',
+    amount: '',
+    isSaving: false
+  });
+
+  const handleOpenOpeningBalance = (accountOrBank) => {
+    if (!canManageOpeningBalance) {
+      alert('You do not have permission to manage Opening Balance Activation.');
+      return;
+    }
+    if (!accountOrBank) return;
+    const bName = accountOrBank.bankName;
+    const targetBank = banks.find(b => (b.bankName || '').trim().toLowerCase() === (bName || '').trim().toLowerCase());
+    if (!targetBank) return;
+
+    const rawBranches = Array.isArray(targetBank.branches) && targetBank.branches.length > 0
+      ? targetBank.branches
+      : [{
+          branch: targetBank.branch || '',
+          accountName: targetBank.accountName || '',
+          accountNo: targetBank.accountNo || ''
+        }];
+
+    let targetIdx = -1;
+    if (accountOrBank.accountNo && accountOrBank.accountNo !== 'N/A') {
+      targetIdx = rawBranches.findIndex(br => 
+        (br.accountNo || '').trim().toLowerCase() === accountOrBank.accountNo.trim().toLowerCase()
+      );
+    }
+    if (targetIdx === -1 && accountOrBank.branch && accountOrBank.branch !== 'Main Branch') {
+      targetIdx = rawBranches.findIndex(br => 
+        (br.branch || '').trim().toLowerCase() === accountOrBank.branch.trim().toLowerCase()
+      );
+    }
+    if (targetIdx === -1) targetIdx = 0;
+
+    const targetBranch = rawBranches[targetIdx] || rawBranches[0];
+    const isAct = targetBranch.isOpeningBalanceActive !== undefined 
+      ? !!targetBranch.isOpeningBalanceActive 
+      : !!targetBank.isOpeningBalanceActive;
+    const currDate = targetBranch.openingBalanceDate || targetBank.openingBalanceDate || new Date().toISOString().split('T')[0];
+    const currAmt = targetBranch.openingBalance !== undefined 
+      ? targetBranch.openingBalance 
+      : (targetBank.openingBalance !== undefined ? targetBank.openingBalance : '');
+
+    setOpeningBalanceModal({
+      isOpen: true,
+      item: {
+        _id: targetBank._id,
+        bankName: targetBank.bankName,
+        branch: targetBranch.branch || targetBank.branch || 'Main Branch',
+        accountName: targetBranch.accountName || targetBank.accountName || '',
+        accountNo: targetBranch.accountNo || targetBank.accountNo || 'N/A',
+        branchIndex: targetIdx,
+        isOpeningBalanceActive: isAct
+      },
+      isActive: isAct,
+      date: currDate ? toDateStr(currDate) : new Date().toISOString().split('T')[0],
+      amount: currAmt !== '' ? currAmt : '',
+      isSaving: false
+    });
+  };
+
+  const handleOpenOpeningBalanceFromFilter = () => {
+    if (!canManageOpeningBalance) {
+      alert('You do not have permission to manage Opening Balance Activation.');
+      return;
+    }
+    if (filters.bankName) {
+      handleOpenOpeningBalance({
+        bankName: filters.bankName,
+        branch: filters.branch,
+        accountNo: filters.accountNo
+      });
+    } else if (banks.length > 0) {
+      handleOpenOpeningBalance({
+        bankName: banks[0].bankName,
+        branch: banks[0].branches?.[0]?.branch || '',
+        accountNo: banks[0].branches?.[0]?.accountNo || ''
+      });
+    }
+  };
+
+  const handleSaveOpeningBalance = async (e, forceDeactivate = false) => {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if (!openingBalanceModal.item) return;
+    if (!canManageOpeningBalance) {
+      alert('You do not have permission to manage Opening Balance Activation.');
+      return;
+    }
+
+    const willBeActive = forceDeactivate ? false : openingBalanceModal.isActive;
+
+    if (willBeActive) {
+      if (!openingBalanceModal.date) {
+        alert('Please select an effective opening date.');
+        return;
+      }
+      if (openingBalanceModal.amount === '' || isNaN(Number(openingBalanceModal.amount))) {
+        alert('Please enter a valid opening balance amount.');
+        return;
+      }
+    }
+
+    setOpeningBalanceModal(prev => ({ ...prev, isSaving: true }));
+
+    try {
+      const item = openingBalanceModal.item;
+      const targetBank = banks.find(b => b._id === item._id);
+      if (!targetBank) throw new Error('Bank not found');
+
+      const rawBranches = Array.isArray(targetBank.branches) && targetBank.branches.length > 0
+        ? [...targetBank.branches]
+        : [{
+            branch: targetBank.branch || '',
+            accountName: targetBank.accountName || '',
+            accountNo: targetBank.accountNo || ''
+          }];
+
+      let targetIdx = item.branchIndex !== undefined ? item.branchIndex : -1;
+      if (targetIdx === -1 || !rawBranches[targetIdx]) {
+        targetIdx = rawBranches.findIndex(b =>
+          (b.accountNo || '').trim().toLowerCase() === (item.accountNo || '').trim().toLowerCase() &&
+          (b.branch || '').trim().toLowerCase() === (item.branch || '').trim().toLowerCase()
+        );
+      }
+      if (targetIdx === -1) {
+        targetIdx = rawBranches.findIndex(b =>
+          (b.accountNo || '').trim().toLowerCase() === (item.accountNo || '').trim().toLowerCase()
+        );
+      }
+      if (targetIdx === -1) targetIdx = 0;
+
+      const updatedBranch = {
+        ...rawBranches[targetIdx],
+        isOpeningBalanceActive: willBeActive,
+        openingBalance: willBeActive ? (Number(openingBalanceModal.amount) || 0) : (Number(rawBranches[targetIdx].openingBalance) || 0),
+        openingBalanceDate: willBeActive ? openingBalanceModal.date : (rawBranches[targetIdx].openingBalanceDate || '')
+      };
+
+      const updatedBranches = [...rawBranches];
+      updatedBranches[targetIdx] = updatedBranch;
+
+      const payload = {
+        ...targetBank,
+        branches: updatedBranches,
+        isOpeningBalanceActive: willBeActive,
+        openingBalance: willBeActive ? (Number(openingBalanceModal.amount) || 0) : (Number(targetBank.openingBalance) || 0),
+        openingBalanceDate: willBeActive ? openingBalanceModal.date : (targetBank.openingBalanceDate || '')
+      };
+
+      queryClient.setQueryData(['banks'], (old = []) => {
+        return (old || []).map(b => b._id === targetBank._id ? payload : b);
+      });
+      setBanks(prev => prev.map(b => b._id === targetBank._id ? payload : b));
+
+      await axios.put(`${API_BASE_URL}/api/banks/${targetBank._id}`, payload);
+      queryClient.invalidateQueries({ queryKey: ['banks'] });
+      fetchAllModuleData(true);
+
+      setOpeningBalanceModal({ isOpen: false, item: null, isActive: false, date: '', amount: '', isSaving: false });
+    } catch (err) {
+      console.error('Error saving opening balance in Statement:', err);
+      alert('Failed to update opening balance. Please try again.');
+      setOpeningBalanceModal(prev => ({ ...prev, isSaving: false }));
+    }
+  };
 
   // Refs for outside click
   const filterPanelRef = useRef(null);
@@ -511,9 +691,9 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     };
 
     // 1. Direct Bank Deposits
-    deposits.forEach(d => {
+    deposits.forEach((d, dIdx) => {
       list.push({
-        id: `dep-${d._id || d.id || Math.random()}`,
+        id: `dep-${d._id || d.id || dIdx}`,
         sourceModule: 'Bank Deposit',
         moduleKey: 'deposit',
         type: 'deposit', // Inflow (+)
@@ -534,9 +714,9 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     });
 
     // 2. Direct Bank Withdrawals
-    withdrawals.forEach(w => {
+    withdrawals.forEach((w, wIdx) => {
       list.push({
-        id: `with-${w._id || w.id || Math.random()}`,
+        id: `with-${w._id || w.id || wIdx}`,
         sourceModule: 'Bank Withdrawal',
         moduleKey: 'withdrawal',
         type: 'withdrawal', // Outflow (-)
@@ -559,7 +739,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     // 3. Customer Payment Collections (Inflow into Bank)
     customers.forEach(customer => {
       const history = customer.paymentHistory || [];
-      history.forEach(p => {
+      history.forEach((p, pIdx) => {
         const pStatus = (p.status || '').toLowerCase();
         if (pStatus === 'requested' || pStatus === 'rejected') return;
 
@@ -576,7 +756,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
             if (amt <= 0) return;
 
             list.push({
-              id: `pc-${customer._id}-${p.id || p._id || p.receiptNo || Math.random()}-${itemIdx}`,
+              id: `pc-${customer._id}-${p.id || p._id || p.receiptNo || pIdx}-${itemIdx}`,
               sourceModule: 'Payment Collection',
               moduleKey: 'paymentCollection',
               type: 'deposit', // Inflow (+)
@@ -603,7 +783,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
           if (amt <= 0) return;
 
           list.push({
-            id: `pc-${customer._id}-${p.id || p._id || p.receiptNo || Math.random()}`,
+            id: `pc-${customer._id}-${p.id || p._id || p.receiptNo || pIdx}`,
             sourceModule: 'Payment Collection',
             moduleKey: 'paymentCollection',
             type: 'deposit', // Inflow (+)
@@ -628,7 +808,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     // 4. Pay To Customer (Refunds / Outflow from Bank)
     customers.forEach(customer => {
       const history = customer.payToCustomerHistory || [];
-      history.forEach(p => {
+      history.forEach((p, pIdx) => {
         const pStatus = (p.status || '').toLowerCase();
         if (pStatus === 'requested' || pStatus === 'rejected') return;
 
@@ -644,7 +824,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
             if (amt <= 0) return;
 
             list.push({
-              id: `ptc-${customer._id}-${p.id || p._id || p.receiptNo || Math.random()}-${itemIdx}`,
+              id: `ptc-${customer._id}-${p.id || p._id || p.receiptNo || pIdx}-${itemIdx}`,
               sourceModule: 'Pay to Customer',
               moduleKey: 'payToCustomer',
               type: 'withdrawal', // Outflow (-)
@@ -671,7 +851,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
           if (amt <= 0) return;
 
           list.push({
-            id: `ptc-${customer._id}-${p.id || p._id || p.receiptNo || Math.random()}`,
+            id: `ptc-${customer._id}-${p.id || p._id || p.receiptNo || pIdx}`,
             sourceModule: 'Pay to Customer',
             moduleKey: 'payToCustomer',
             type: 'withdrawal', // Outflow (-)
@@ -694,7 +874,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     });
 
     // 5. C&F Payments (Outflow from Bank)
-    cnfPayments.forEach(p => {
+    cnfPayments.forEach((p, pIdx) => {
       const pStatus = (p.status || '').toLowerCase();
       if (pStatus === 'requested' || pStatus === 'rejected') return;
 
@@ -705,7 +885,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       if (amt <= 0) return;
 
       list.push({
-        id: `cnf-${p._id || p.id || Math.random()}`,
+        id: `cnf-${p._id || p.id || pIdx}`,
         sourceModule: 'C&F Payment',
         moduleKey: 'cnfPayment',
         type: 'withdrawal', // Outflow (-)
@@ -726,7 +906,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     });
 
     // 6. Insurance Payments (Outflow from Bank)
-    insurancePayments.forEach(p => {
+    insurancePayments.forEach((p, pIdx) => {
       const pStatus = (p.status || '').toLowerCase();
       if (pStatus === 'requested' || pStatus === 'rejected') return;
 
@@ -737,7 +917,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       if (amt <= 0) return;
 
       list.push({
-        id: `ins-${p._id || p.id || Math.random()}`,
+        id: `ins-${p._id || p.id || pIdx}`,
         sourceModule: 'Insurance Payment',
         moduleKey: 'insurancePayment',
         type: 'withdrawal', // Outflow (-)
@@ -758,7 +938,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     });
 
     // 7. Patty Cash Transactions (Inflows / Outflows involving Bank)
-    pattyCashRecords.forEach(p => {
+    pattyCashRecords.forEach((p, pIdx) => {
       const hasBank = (p.bankName && p.bankName.trim()) || isBankMethod(p.paymentMode);
       if (!hasBank) return;
 
@@ -769,7 +949,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       const isBankWithdrawalToPatty = p.type === 'inflow' || (p.category || '').toLowerCase().includes('withdrawal');
 
       list.push({
-        id: `patty-${p._id || p.id || Math.random()}`,
+        id: `patty-${p._id || p.id || pIdx}`,
         sourceModule: 'Patty Cash',
         moduleKey: 'pattyCash',
         type: isDepositToBank ? 'deposit' : 'withdrawal',
@@ -790,12 +970,12 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     });
 
     // 8. Margin Returns (Inflow / Refund into Bank)
-    marginReturns.forEach(p => {
+    marginReturns.forEach((p, pIdx) => {
       const amt = Number(p.returnAmount || p.amount) || 0;
       if (amt <= 0) return;
 
       list.push({
-        id: `mr-${p._id || p.id || Math.random()}`,
+        id: `mr-${p._id || p.id || pIdx}`,
         sourceModule: 'Margin Return',
         moduleKey: 'marginReturn',
         type: 'deposit', // Inflow (+)
@@ -824,12 +1004,29 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     });
 
     // 9a. LC Opening Margin Paid & Bank Charges directly from LC Management
-    lcRecords.forEach(lc => {
+    lcRecords.forEach((lc, lcIdx) => {
       const bName = (lc.bankName || lc.bank || '').trim();
       if (!bName) return;
 
       const importer = (lc.importerName || lc.importer || 'LC Opening').trim();
       const openDate = toDateStr(lc.openingDate || lc.date || lc.createdAt);
+      const lcBranch = (lc.bankBranch || lc.branch || '').trim();
+
+      // Resolve accountNo if not explicitly saved on LC
+      let lcAccountNo = (lc.accountNo || '').trim();
+      if (!lcAccountNo && bName) {
+        const foundBank = banks.find(b => (b.bankName || '').trim().toLowerCase() === bName.toLowerCase());
+        if (foundBank && Array.isArray(foundBank.branches)) {
+          const brMatch = foundBank.branches.find(br => 
+            lcBranch && (br.branch || '').trim().toLowerCase() === lcBranch.toLowerCase()
+          );
+          if (brMatch && brMatch.accountNo) {
+            lcAccountNo = brMatch.accountNo;
+          } else if (foundBank.branches.length === 1 && foundBank.branches[0].accountNo) {
+            lcAccountNo = foundBank.branches[0].accountNo;
+          }
+        }
+      }
 
       // Opening Margin Paid (Outflow from bank)
       const isAdj = !!lc.enableValueQtyAdjustment;
@@ -842,15 +1039,15 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
 
       if (marginPaidAmt > 0) {
         list.push({
-          id: `lc-open-margin-${lc._id || lc.id || Math.random()}`,
+          id: `lc-open-margin-${lc._id || lc.id || lcIdx}`,
           sourceModule: 'LC Margin & Bill',
           moduleKey: 'lcExpense',
           type: 'withdrawal', // Outflow (-)
           typeName: 'LC Margin Paid (Opening)',
           date: openDate,
           bankName: bName,
-          branch: (lc.branch || '').trim(),
-          accountNo: (lc.accountNo || '').trim(),
+          branch: lcBranch,
+          accountNo: lcAccountNo,
           accountName: '',
           amount: marginPaidAmt,
           referenceNo: (lc.lcNo ? `LC: ${lc.lcNo}` : '').trim(),
@@ -871,15 +1068,15 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
 
       if (bankPaidAmt > 0) {
         list.push({
-          id: `lc-open-charge-${lc._id || lc.id || Math.random()}`,
+          id: `lc-open-charge-${lc._id || lc.id || lcIdx}`,
           sourceModule: 'LC Margin & Bill',
           moduleKey: 'lcExpense',
           type: 'withdrawal', // Outflow (-)
           typeName: 'LC Bank Charges (Opening)',
           date: openDate,
           bankName: bName,
-          branch: (lc.branch || '').trim(),
-          accountNo: (lc.accountNo || '').trim(),
+          branch: lcBranch,
+          accountNo: lcAccountNo,
           accountName: '',
           amount: bankPaidAmt,
           referenceNo: (lc.lcNo ? `LC: ${lc.lcNo}` : '').trim(),
@@ -911,8 +1108,8 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
             typeName: `Amendment Margin Paid (${amndLabel})`,
             date: amndDate,
             bankName: bName,
-            branch: (lc.branch || '').trim(),
-            accountNo: (lc.accountNo || '').trim(),
+            branch: lcBranch,
+            accountNo: lcAccountNo,
             accountName: '',
             amount: amndMarginPaid,
             referenceNo: (lc.lcNo ? `LC: ${lc.lcNo}` : '').trim(),
@@ -939,8 +1136,8 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
             typeName: `Amendment Bank Charges (${amndLabel})`,
             date: amndDate,
             bankName: bName,
-            branch: (lc.branch || '').trim(),
-            accountNo: (lc.accountNo || '').trim(),
+            branch: lcBranch,
+            accountNo: lcAccountNo,
             accountName: '',
             amount: amndBankPaid,
             referenceNo: (lc.lcNo ? `LC: ${lc.lcNo}` : '').trim(),
@@ -955,7 +1152,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     });
 
     // 9b. LC Expenses & Custom Bills from /api/lc-expenses
-    lcExpenses.forEach(p => {
+    lcExpenses.forEach((p, pIdx) => {
       if (p.type === 'bill') return; // Exclude pending/unpaid bills
       const matchedLc = p.lcNo ? lcMap.get(cleanLc(p.lcNo)) : null;
       const bName = (p.bankName || matchedLc?.bankName || matchedLc?.bank || '').trim();
@@ -966,14 +1163,14 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       if (amt <= 0) return;
 
       list.push({
-        id: `lc-exp-${p._id || p.id || Math.random()}`,
+        id: `lc-exp-${p._id || p.id || pIdx}`,
         sourceModule: 'LC Margin & Bill',
         moduleKey: 'lcExpense',
         type: 'withdrawal', // Outflow (-)
         typeName: p.expenseHead || 'LC Bank Charge',
         date: toDateStr(p.date || p.createdAt),
         bankName: bName,
-        branch: (p.branch || matchedLc?.branch || '').trim(),
+        branch: (p.branch || matchedLc?.bankBranch || matchedLc?.branch || '').trim(),
         accountNo: (p.accountNo || matchedLc?.accountNo || '').trim(),
         accountName: '',
         amount: amt,
@@ -987,7 +1184,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     });
 
     return list;
-  }, [deposits, withdrawals, customers, cnfPayments, insurancePayments, pattyCashRecords, marginReturns, lcExpenses, lcRecords]);
+  }, [deposits, withdrawals, customers, cnfPayments, insurancePayments, pattyCashRecords, marginReturns, lcExpenses, lcRecords, banks]);
 
   // Unique BD bank names across all sources
   const uniqueBankNames = useMemo(() => {
@@ -1158,7 +1355,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     );
   }, [filters]);
 
-  const activeFilterCount = useMemo(() => {
+  const _activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.bankName) count++;
     if (filters.branch) count++;
@@ -1169,60 +1366,237 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     return count;
   }, [filters]);
 
-  // Base Opening Balance from Bank Master
-  const baseMasterOpeningBalance = useMemo(() => {
-    let sum = 0;
-    const targetBank = filters.bankName ? filters.bankName.trim().toLowerCase() : null;
-    const targetBranch = filters.branch ? filters.branch.trim().toLowerCase() : null;
-    const targetAcc = filters.accountNo ? filters.accountNo.trim().toLowerCase() : null;
+  // Map of active baselines by account & bank
+  const accountBaselineMap = useMemo(() => {
+    const map = new Map();
+    const norm = (v) => (v || '').trim().toLowerCase();
 
     banks.filter(b => !b.isIndian).forEach(b => {
-      const bNameMatch = !targetBank || (b.bankName || '').trim().toLowerCase() === targetBank;
-      if (!bNameMatch) return;
+      const bName = norm(b.bankName);
+      if (!bName) return;
 
-      if (Array.isArray(b.branches) && b.branches.length > 0) {
-        b.branches.forEach(br => {
-          const brMatch = !targetBranch || (br.branch || '').trim().toLowerCase() === targetBranch;
-          const accMatch = !targetAcc || (br.accountNo || '').trim().toLowerCase() === targetAcc;
-          if (brMatch && accMatch) {
-            sum += (Number(br.openingBalance) || 0);
+      const rawBranches = Array.isArray(b.branches) && b.branches.length > 0
+        ? b.branches
+        : [{
+            branch: b.branch || '',
+            accountName: b.accountName || '',
+            accountNo: b.accountNo || '',
+            openingBalance: b.openingBalance,
+            openingBalanceDate: b.openingBalanceDate,
+            isOpeningBalanceActive: b.isOpeningBalanceActive
+          }];
+
+      let bankEarliestActiveDate = null;
+      let bankTotalActiveBalance = 0;
+      let bankHasAnyActive = false;
+
+      rawBranches.forEach(br => {
+        const brName = norm(br.branch);
+        const accNo = norm(br.accountNo);
+        const isAct = br.isOpeningBalanceActive !== undefined ? !!br.isOpeningBalanceActive : !!b.isOpeningBalanceActive;
+        const rawDate = br.openingBalanceDate || b.openingBalanceDate;
+        const openDate = rawDate ? toDateStr(rawDate) : null;
+        const rawBal = br.openingBalance !== undefined ? br.openingBalance : b.openingBalance;
+        const openBal = Number(rawBal) || 0;
+
+        const info = {
+          isActive: isAct && !!openDate,
+          date: openDate,
+          openingBalance: openBal,
+          bankName: b.bankName,
+          branch: br.branch,
+          accountNo: br.accountNo,
+          bankId: b._id
+        };
+
+        if (info.isActive) {
+          bankHasAnyActive = true;
+          bankTotalActiveBalance += openBal;
+          if (!bankEarliestActiveDate || (openDate && openDate < bankEarliestActiveDate)) {
+            bankEarliestActiveDate = openDate;
           }
-        });
-      }
+        }
 
-      if (!targetBranch && !targetAcc && b.openingBalance !== undefined) {
-        sum += (Number(b.openingBalance) || 0);
+        if (accNo) {
+          if (brName) map.set(bName + "__" + brName + "__" + accNo, info);
+          map.set(bName + "__" + accNo, info);
+          map.set(accNo, info);
+        }
+        if (brName) {
+          if (!map.has(bName + "__" + brName) || info.isActive) {
+            map.set(bName + "__" + brName, info);
+          }
+        }
+      });
+
+      // Bank-level active baseline entry
+      const bankLevelAct = !!b.isOpeningBalanceActive && !!b.openingBalanceDate;
+      const bankDate = bankLevelAct ? toDateStr(b.openingBalanceDate) : bankEarliestActiveDate;
+      const bankBal = bankLevelAct ? (Number(b.openingBalance) || 0) : bankTotalActiveBalance;
+
+      const bankInfo = {
+        isActive: bankLevelAct || bankHasAnyActive,
+        date: bankDate,
+        openingBalance: bankBal,
+        bankName: b.bankName,
+        branch: '',
+        accountNo: '',
+        bankId: b._id
+      };
+
+      if (!map.has(bName) || bankInfo.isActive) {
+        map.set(bName, bankInfo);
       }
     });
 
-    return sum;
-  }, [banks, filters.bankName, filters.branch, filters.accountNo]);
+    return map;
+  }, [banks]);
 
   // Account, Module & Date filtering + Running Balance Calculation
-  const { periodOpeningBalance, ledgerRows, periodTotals } = useMemo(() => {
-    const targetBank = filters.bankName ? filters.bankName.trim().toLowerCase() : null;
-    const targetBranch = filters.branch ? filters.branch.trim().toLowerCase() : null;
-    const targetAcc = filters.accountNo ? filters.accountNo.trim().toLowerCase() : null;
+  const { periodOpeningBalance, ledgerRows, periodTotals, effectiveOpeningDate, scopeBaseline } = useMemo(() => {
+    const norm = (v) => (v || '').trim().toLowerCase();
+    const targetBank = filters.bankName ? norm(filters.bankName) : null;
+    const targetBranch = filters.branch ? norm(filters.branch) : null;
+    const targetAcc = filters.accountNo ? norm(filters.accountNo) : null;
     const targetModule = filters.sourceModule && filters.sourceModule !== 'all' ? filters.sourceModule : null;
 
-    // 1. Filter by Account criteria and Module
-    const matchedTx = unifiedTransactions.filter(tx => {
-      if (targetBank && tx.bankName.toLowerCase() !== targetBank) return false;
-      if (targetBranch && tx.branch && tx.branch.toLowerCase() !== targetBranch) return false;
-      if (targetAcc && tx.accountNo && tx.accountNo.toLowerCase() !== targetAcc) return false;
-      if (targetModule && tx.moduleKey !== targetModule) return false;
-      return true;
+    // Helper to get baseline for a specific bank + branch + account
+    const getTxBaseline = (bName, brName, accNo) => {
+      const bKey = norm(bName);
+      const brKey = norm(brName);
+      const accKey = norm(accNo);
+
+      if (bKey && brKey && accKey) {
+        const val = accountBaselineMap.get(bKey + "__" + brKey + "__" + accKey);
+        if (val) return val;
+      }
+      if (bKey && accKey) {
+        const val = accountBaselineMap.get(bKey + "__" + accKey);
+        if (val) return val;
+      }
+      if (accKey) {
+        const val = accountBaselineMap.get(accKey);
+        if (val) return val;
+      }
+      if (bKey && brKey) {
+        const val = accountBaselineMap.get(bKey + "__" + brKey);
+        if (val) return val;
+      }
+      if (bKey) {
+        const val = accountBaselineMap.get(bKey);
+        if (val) return val;
+      }
+      return null;
+    };
+
+    // 1. Identify targeted accounts in scope
+    const targetedAccounts = [];
+    banks.filter(b => !b.isIndian).forEach(b => {
+      const bNameMatch = !targetBank || norm(b.bankName) === targetBank;
+      if (!bNameMatch) return;
+
+      const rawBranches = Array.isArray(b.branches) && b.branches.length > 0
+        ? b.branches
+        : [{
+            branch: b.branch || '',
+            accountName: b.accountName || '',
+            accountNo: b.accountNo || '',
+            openingBalance: b.openingBalance,
+            openingBalanceDate: b.openingBalanceDate,
+            isOpeningBalanceActive: b.isOpeningBalanceActive
+          }];
+
+      rawBranches.forEach(br => {
+        const brMatch = !targetBranch || norm(br.branch) === targetBranch;
+        const accMatch = !targetAcc || norm(br.accountNo) === targetAcc;
+        if (brMatch && accMatch) {
+          const baseline = getTxBaseline(b.bankName, br.branch, br.accountNo);
+          targetedAccounts.push({
+            bankName: b.bankName,
+            branch: br.branch,
+            accountNo: br.accountNo,
+            accountName: br.accountName,
+            baseline
+          });
+        }
+      });
     });
 
-    // 2. Separate prior vs in-period transactions
-    let openingBal = baseMasterOpeningBalance;
-    const inPeriodTx = [];
+    // 2. Active baseline for current filtered scope
+    let currentScopeBaseline = null;
+    if (targetAcc) {
+      currentScopeBaseline = getTxBaseline(filters.bankName, filters.branch, filters.accountNo);
+    } else if (targetBranch && targetBank) {
+      currentScopeBaseline = getTxBaseline(filters.bankName, filters.branch, '');
+    } else if (targetBank) {
+      currentScopeBaseline = getTxBaseline(filters.bankName, '', '');
+    }
 
+    const scopeCutoffDate = (currentScopeBaseline?.isActive && currentScopeBaseline.date) ? currentScopeBaseline.date : null;
+
+    // 3. Compute base starting balance sum across targeted accounts
+    let baseStartingBal = 0;
+    let effectiveActiveBaselineDate = null;
+
+    if (currentScopeBaseline?.isActive) {
+      baseStartingBal = currentScopeBaseline.openingBalance;
+      effectiveActiveBaselineDate = currentScopeBaseline.date;
+    } else if (targetedAccounts.length === 1 && targetedAccounts[0].baseline?.isActive) {
+      baseStartingBal = targetedAccounts[0].baseline.openingBalance;
+      effectiveActiveBaselineDate = targetedAccounts[0].baseline.date;
+    } else {
+      targetedAccounts.forEach(acc => {
+        if (acc.baseline?.isActive) {
+          baseStartingBal += acc.baseline.openingBalance;
+          if (!effectiveActiveBaselineDate || (acc.baseline.date && acc.baseline.date < effectiveActiveBaselineDate)) {
+            effectiveActiveBaselineDate = acc.baseline.date;
+          }
+        } else {
+          const rawBal = banks.find(b => norm(b.bankName) === norm(acc.bankName))?.branches?.find(br => norm(br.accountNo) === norm(acc.accountNo))?.openingBalance;
+          baseStartingBal += (Number(rawBal) || 0);
+        }
+      });
+    }
+
+    if (baseStartingBal === 0 && currentScopeBaseline?.openingBalance) {
+      baseStartingBal = currentScopeBaseline.openingBalance;
+    }
+
+    // 4. Filter transactions
     const startFilter = filters.startDate ? toDateStr(filters.startDate) : null;
     const endFilter = filters.endDate ? toDateStr(filters.endDate) : null;
 
+    const matchedTx = unifiedTransactions.filter(tx => {
+      if (targetBank && norm(tx.bankName) !== targetBank) return false;
+      if (targetBranch && tx.branch && norm(tx.branch) !== targetBranch) return false;
+      if (targetAcc && tx.accountNo && norm(tx.accountNo) !== targetAcc) return false;
+      if (targetModule && tx.moduleKey !== targetModule) return false;
+
+      // Rule A: If current filter view has an active opening balance cutoff date,
+      // strictly suppress ANY transaction before that date!
+      if (scopeCutoffDate && tx.date < scopeCutoffDate) {
+        return false;
+      }
+
+      // Rule B: If the transaction's specific bank/account has an active baseline,
+      // strictly suppress if before its active opening date!
+      const txBaseline = getTxBaseline(tx.bankName, tx.branch, tx.accountNo);
+      if (txBaseline && txBaseline.isActive && txBaseline.date) {
+        if (tx.date < txBaseline.date) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // 5. Separate prior vs in-period transactions
+    let openingBal = baseStartingBal;
+    const inPeriodTx = [];
+
     matchedTx.forEach(tx => {
       const txDate = tx.date;
+
       if (startFilter && txDate < startFilter) {
         if (tx.type === 'deposit') {
           openingBal += tx.amount;
@@ -1230,20 +1604,20 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
           openingBal -= tx.amount;
         }
       } else if (endFilter && txDate > endFilter) {
-        // Ignored for current period
+        // After end date
       } else {
         inPeriodTx.push(tx);
       }
     });
 
-    // 3. Chronological sorting
+    // 6. Chronological sorting
     inPeriodTx.sort((a, b) => {
       const cmpDate = a.date.localeCompare(b.date);
       if (cmpDate !== 0) return cmpDate;
       return String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id));
     });
 
-    // 4. Running Balance
+    // 7. Running Balance Calculation
     let currentBal = openingBal;
     let sumDeposits = 0;
     let sumWithdrawals = 0;
@@ -1263,6 +1637,11 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       };
     });
 
+    // Determine effective opening date to show on baseline forward row
+    const effectiveOpDate = filters.startDate
+      ? filters.startDate
+      : (effectiveActiveBaselineDate || scopeCutoffDate || null);
+
     return {
       periodOpeningBalance: openingBal,
       ledgerRows: computedRows,
@@ -1272,9 +1651,11 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
         netMovement: sumDeposits - sumWithdrawals,
         closingBalance: currentBal,
         count: computedRows.length
-      }
+      },
+      effectiveOpeningDate: effectiveOpDate,
+      scopeBaseline: currentScopeBaseline
     };
-  }, [unifiedTransactions, baseMasterOpeningBalance, filters.bankName, filters.branch, filters.accountNo, filters.sourceModule, filters.startDate, filters.endDate]);
+  }, [unifiedTransactions, banks, accountBaselineMap, filters.bankName, filters.branch, filters.accountNo, filters.sourceModule, filters.startDate, filters.endDate]);
 
   // Search query & Transaction Type filtering
   const filteredLedger = useMemo(() => {
@@ -1335,6 +1716,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
   // Bank Accounts Overview (Aggregated Multi-Module Summary of each BD bank account, sorted alphabetically ascending)
   const bankAccountsOverview = useMemo(() => {
     const accounts = [];
+    const norm = (v) => (v || '').trim().toLowerCase();
     const bdBanks = banks.filter(b => !b.isIndian);
 
     bdBanks.forEach(b => {
@@ -1346,24 +1728,39 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
           const brName = (br.branch || '').trim();
           const accNo = (br.accountNo || '').trim();
           const accName = (br.accountName || b.accountName || '').trim();
-          const openBal = Number(br.openingBalance) || 0;
+          const baseline = (
+            accountBaselineMap.get(norm(bName) + "__" + norm(brName) + "__" + norm(accNo)) ||
+            accountBaselineMap.get(norm(bName) + "__" + norm(accNo)) ||
+            accountBaselineMap.get(norm(accNo)) ||
+            accountBaselineMap.get(norm(bName) + "__" + norm(brName)) ||
+            accountBaselineMap.get(norm(bName))
+          );
+          const isAct = baseline?.isActive;
+          const openBal = isAct ? baseline.openingBalance : (Number(br.openingBalance) || 0);
+          const baselineDate = isAct ? baseline.date : null;
 
           // Compute matching transactions across ALL modules
           const matchingTx = unifiedTransactions.filter(tx => {
             const matchBank = tx.bankName.toLowerCase() === bName.toLowerCase();
             const matchAcc = !accNo || !tx.accountNo || tx.accountNo.toLowerCase() === accNo.toLowerCase();
-            return matchBank && matchAcc;
+            if (!matchBank || !matchAcc) return false;
+            if (baselineDate && tx.date < baselineDate) return false;
+            return true;
           });
 
           const totalDep = matchingTx.filter(t => t.type === 'deposit').reduce((sum, t) => sum + t.amount, 0);
           const totalWith = matchingTx.filter(t => t.type === 'withdrawal').reduce((sum, t) => sum + t.amount, 0);
 
           accounts.push({
+            _id: b._id,
+            bankId: b._id,
             bankName: bName,
             branch: brName || 'Main Branch',
             accountNo: accNo || 'N/A',
             accountName: accName || bName,
             openingBalance: openBal,
+            isOpeningBalanceActive: isAct,
+            openingBalanceDate: baselineDate,
             totalDeposits: totalDep,
             totalWithdrawals: totalWith,
             netBalance: openBal + totalDep - totalWith,
@@ -1375,23 +1772,37 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
         const brName = (b.branch || '').trim();
         const accNo = (b.accountNo || '').trim();
         const accName = (b.accountName || '').trim();
-        const openBal = Number(b.openingBalance) || 0;
+        const baseline = (
+          accountBaselineMap.get(norm(bName) + "__" + norm(brName) + "__" + norm(accNo)) ||
+          accountBaselineMap.get(norm(bName) + "__" + norm(accNo)) ||
+          accountBaselineMap.get(norm(accNo)) ||
+          accountBaselineMap.get(norm(bName))
+        );
+        const isAct = baseline?.isActive;
+        const openBal = isAct ? baseline.openingBalance : (Number(b.openingBalance) || 0);
+        const baselineDate = isAct ? baseline.date : null;
 
         const matchingTx = unifiedTransactions.filter(tx => {
           const matchBank = tx.bankName.toLowerCase() === bName.toLowerCase();
           const matchAcc = !accNo || !tx.accountNo || tx.accountNo.toLowerCase() === accNo.toLowerCase();
-          return matchBank && matchAcc;
+          if (!matchBank || !matchAcc) return false;
+          if (baselineDate && tx.date < baselineDate) return false;
+          return true;
         });
 
         const totalDep = matchingTx.filter(t => t.type === 'deposit').reduce((sum, t) => sum + t.amount, 0);
         const totalWith = matchingTx.filter(t => t.type === 'withdrawal').reduce((sum, t) => sum + t.amount, 0);
 
         accounts.push({
+          _id: b._id,
+          bankId: b._id,
           bankName: bName,
           branch: brName || 'Main Branch',
           accountNo: accNo || 'N/A',
           accountName: accName || bName,
           openingBalance: openBal,
+          isOpeningBalanceActive: isAct,
+          openingBalanceDate: baselineDate,
           totalDeposits: totalDep,
           totalWithdrawals: totalWith,
           netBalance: openBal + totalDep - totalWith,
@@ -1421,7 +1832,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     }
 
     return accounts;
-  }, [banks, unifiedTransactions, searchQuery]);
+  }, [banks, unifiedTransactions, searchQuery, accountBaselineMap]);
 
   const handleSelectAccountForStatement = (acc) => {
     setFilters({
@@ -1438,20 +1849,21 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
   };
 
   // Export handlers
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     const meta = {
       bankName: filters.bankName,
       branch: filters.branch,
       accountNo: filters.accountNo,
       accountName: filterAccountsList.find(a => a.accountNo === filters.accountNo)?.accountName || '',
-      startDate: filters.startDate,
+      startDate: effectiveOpeningDate || filters.startDate,
+      openingBalanceDate: effectiveOpeningDate,
       endDate: filters.endDate,
       openingBalance: periodOpeningBalance,
       closingBalance: periodTotals.closingBalance,
       totalDeposits: periodTotals.totalDeposits,
       totalWithdrawals: periodTotals.totalWithdrawals
     };
-    generateBankStatementPDF(displayLedger, meta);
+    await generateBankStatementPDF(displayLedger, meta);
   };
 
   const handleExportExcel = () => {
@@ -1460,7 +1872,8 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       branch: filters.branch,
       accountNo: filters.accountNo,
       accountName: filterAccountsList.find(a => a.accountNo === filters.accountNo)?.accountName || '',
-      startDate: filters.startDate,
+      startDate: effectiveOpeningDate || filters.startDate,
+      openingBalanceDate: effectiveOpeningDate,
       endDate: filters.endDate,
       openingBalance: periodOpeningBalance,
       closingBalance: periodTotals.closingBalance,
@@ -1762,16 +2175,49 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 {filters.startDate || filters.endDate
-                  ? `Period: ${filters.startDate ? formatDate(filters.startDate) : 'Start'} to ${filters.endDate ? formatDate(filters.endDate) : 'Present'}`
-                  : 'All time historical ledger across all modules'}
+                  ? `Period: ${filters.startDate ? formatDate(filters.startDate) : (effectiveOpeningDate ? formatDate(effectiveOpeningDate) : 'Start')} to ${filters.endDate ? formatDate(filters.endDate) : 'Present'}`
+                  : (effectiveOpeningDate ? `Statement starting strictly from Opening Balance (${formatDate(effectiveOpeningDate)} forward)` : 'All time historical ledger across all modules')}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+            {canManageOpeningBalance ? (
+              <button
+                type="button"
+                onClick={handleOpenOpeningBalanceFromFilter}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border shadow-2xs cursor-pointer ${
+                  scopeBaseline?.isActive
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+                title={scopeBaseline?.isActive ? 'Edit Opening Balance' : 'Activate Opening Balance'}
+              >
+                <BanknotesIcon className="w-4 h-4 text-emerald-600" />
+                {scopeBaseline?.isActive ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>OB: ৳{Number(scopeBaseline.openingBalance || 0).toLocaleString()} ({formatDate(scopeBaseline.date)})</span>
+                  </>
+                ) : (
+                  <span>Activate Opening Balance</span>
+                )}
+              </button>
+            ) : (
+              scopeBaseline?.isActive ? (
+                <div
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border shadow-2xs bg-emerald-50 text-emerald-800 border-emerald-300"
+                  title={`Opening Balance Active (${formatDate(scopeBaseline.date)})`}
+                >
+                  <BanknotesIcon className="w-4 h-4 text-emerald-600" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>OB: ৳{Number(scopeBaseline.openingBalance || 0).toLocaleString()} ({formatDate(scopeBaseline.date)})</span>
+                </div>
+              ) : null
+            )}
             <button
               type="button"
               onClick={resetFilters}
-              className="text-xs text-gray-500 hover:text-gray-800 underline cursor-pointer"
+              className="text-xs text-gray-500 hover:text-gray-800 underline cursor-pointer ml-1"
             >
               Clear Account Filter
             </button>
@@ -1910,7 +2356,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                 <tr className="bg-blue-50/40 font-semibold text-xs text-gray-800">
                   <td className="py-3 px-3 text-center text-gray-400">-</td>
                   <td className="py-3 px-3 text-gray-600">
-                    {filters.startDate ? formatDate(filters.startDate) : '-'}
+                    {effectiveOpeningDate ? formatDate(effectiveOpeningDate) : (filters.startDate ? formatDate(filters.startDate) : '-')}
                   </td>
                   <td className="py-3 px-3">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-800">
@@ -1971,15 +2417,10 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                           </span>
                         </td>
                         <td className="py-3 px-3 text-xs text-gray-900 font-medium">
-                          <div className="flex items-center gap-2">
-                            <BankLogo bankName={row.bankName} className="w-5 h-5 rounded-md" />
-                            <div className="min-w-0">
-                              <div className="truncate max-w-[130px] font-semibold" title={row.bankName}>{row.bankName}</div>
-                              {row.branch && (
-                                <div className="text-[11px] text-gray-400 truncate max-w-[130px]">{row.branch}</div>
-                              )}
-                            </div>
-                          </div>
+                          <div className="truncate max-w-[130px] font-semibold" title={row.bankName}>{row.bankName}</div>
+                          {row.branch && (
+                            <div className="text-[11px] text-gray-400 truncate max-w-[130px]">{row.branch}</div>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-xs text-gray-600 font-mono">
                           {row.accountNo || '-'}
@@ -2028,8 +2469,16 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                   <tr>
                     <td colSpan="12" className="py-12 text-center text-gray-400 text-sm">
                       <FileTextIcon className="w-10 h-10 mx-auto text-gray-300 mb-2" />
-                      <p className="font-medium text-gray-500">No bank transactions found</p>
-                      <p className="text-xs text-gray-400 mt-1">Try resetting your date, module or filter options</p>
+                      <p className="font-bold text-gray-700">
+                        {effectiveOpeningDate
+                          ? `No transactions recorded after opening activation (${formatDate(effectiveOpeningDate)} forward)`
+                          : 'No bank transactions found'}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
+                        {effectiveOpeningDate
+                          ? 'Prior historical transactions are excluded. The statement starts strictly from the opening balance forward.'
+                          : 'Try resetting your date, module or filter options'}
+                      </p>
                     </td>
                   </tr>
                 )}
@@ -2057,7 +2506,9 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
             <div className="md:hidden divide-y divide-gray-100 p-3 space-y-3">
               <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-blue-900">Opening Balance Forward</span>
+                  <span className="font-bold text-blue-900">
+                    Opening Balance Forward {effectiveOpeningDate ? `(${formatDate(effectiveOpeningDate)})` : ''}
+                  </span>
                   <span className="font-extrabold text-blue-900">
                     ৳{(periodOpeningBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
@@ -2090,12 +2541,9 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <BankLogo bankName={row.bankName} className="w-8 h-8 rounded-lg" />
-                        <div>
-                          <div className="font-bold text-sm text-gray-900">{row.bankName}</div>
-                          <div className="text-xs text-gray-500">{row.branch} {row.accountNo ? `• ${row.accountNo}` : ''}</div>
-                        </div>
+                      <div>
+                        <div className="font-bold text-sm text-gray-900">{row.bankName}</div>
+                        <div className="text-xs text-gray-500">{row.branch} {row.accountNo ? `• ${row.accountNo}` : ''}</div>
                       </div>
                       <div className="text-right">
                         <div className={`font-extrabold text-sm ${isDeposit ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -2141,8 +2589,12 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                       <p className="text-xs text-gray-500">{acc.branch}</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100">
-                    Active
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                    acc.isOpeningBalanceActive
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-100'
+                  }`}>
+                    {acc.isOpeningBalanceActive && acc.openingBalanceDate ? `OB Active: ${formatDate(acc.openingBalanceDate)}` : 'Active'}
                   </span>
                 </div>
 
@@ -2183,13 +2635,29 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                     ৳{acc.netBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleSelectAccountForStatement(acc)}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm shadow-blue-500/20 active:scale-95"
-                >
-                  View Statement
-                </button>
+                <div className="flex items-center gap-2">
+                  {canManageOpeningBalance && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenOpeningBalance(acc)}
+                      className={`p-2 rounded-xl transition-all cursor-pointer ${
+                        acc.isOpeningBalanceActive
+                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 shadow-2xs'
+                          : 'bg-gray-100 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 border border-gray-200'
+                      }`}
+                      title={acc.isOpeningBalanceActive ? 'Edit Opening Balance' : 'Activate Opening Balance'}
+                    >
+                      <BanknotesIcon className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectAccountForStatement(acc)}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm shadow-blue-500/20 active:scale-95"
+                  >
+                    View Statement
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -2261,10 +2729,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                 </div>
                 <div>
                   <span className="text-gray-400 font-medium block">Bank Name</span>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <BankLogo bankName={viewingTransaction.bankName} className="w-5 h-5 rounded-md" />
-                    <span className="font-bold text-gray-800 text-sm">{viewingTransaction.bankName || '-'}</span>
-                  </div>
+                  <span className="font-bold text-gray-800 text-sm">{viewingTransaction.bankName || '-'}</span>
                 </div>
                 <div>
                   <span className="text-gray-400 font-medium block">Branch</span>
@@ -2309,6 +2774,185 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Opening Balance Activation Modal */}
+      {openingBalanceModal.isOpen && openingBalanceModal.item && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={() => {
+              if (!openingBalanceModal.isSaving) {
+                setOpeningBalanceModal(prev => ({ ...prev, isOpen: false }));
+              }
+            }}
+          />
+          <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-50 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100/60 shadow-xs">
+                  <BanknotesIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900">Opening Balance Activation</h3>
+                  <p className="text-xs font-semibold text-gray-400">Set opening balance & statement starting date</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={openingBalanceModal.isSaving}
+                onClick={() => setOpeningBalanceModal(prev => ({ ...prev, isOpen: false }))}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all cursor-pointer"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Account Info Pill */}
+            <div className="p-6 space-y-5">
+              <div className="bg-gray-50/80 rounded-2xl p-4 border border-gray-150/60 space-y-2 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-200/50">
+                  <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Bank</span>
+                  <span className="font-black text-gray-900">{openingBalanceModal.item.bankName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Branch</span>
+                  <span className="font-bold text-gray-800">{openingBalanceModal.item.branch}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Account Name</span>
+                  <span className="font-bold text-gray-800">{openingBalanceModal.item.accountName}</span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-gray-200/50">
+                  <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Account No</span>
+                  <span className="font-black font-mono text-blue-600 text-sm select-all">{openingBalanceModal.item.accountNo}</span>
+                </div>
+              </div>
+
+              {/* Activation Toggle Card */}
+              <div className={`p-4 rounded-2xl border transition-all ${openingBalanceModal.isActive ? 'bg-emerald-50/60 border-emerald-200 ring-2 ring-emerald-500/10' : 'bg-gray-50/50 border-gray-200'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-black text-gray-900">Activate Opening Balance</span>
+                      {openingBalanceModal.isActive ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-gray-600">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      {openingBalanceModal.isActive
+                        ? 'Statement will start strictly from this date and opening balance. Prior historical transactions are excluded.'
+                        : 'Statement calculates with all historical transactions without cutoff.'}
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                    <input
+                      type="checkbox"
+                      checked={openingBalanceModal.isActive}
+                      onChange={(e) => setOpeningBalanceModal(prev => ({ ...prev, isActive: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Inputs (visible when active) */}
+              {openingBalanceModal.isActive && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">
+                      Effective Opening Date <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={openingBalanceModal.date}
+                      onChange={(e) => setOpeningBalanceModal(prev => ({ ...prev, date: e.target.value }))}
+                      required
+                      className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-semibold text-gray-800 outline-none transition-all shadow-xs"
+                    />
+                    <p className="text-[11px] text-gray-400 ml-1">The date from which the account statement starts forward.</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">
+                      Opening Balance Amount (TK) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-sm font-bold text-gray-400 pointer-events-none">
+                        ৳
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        value={openingBalanceModal.amount}
+                        onChange={(e) => setOpeningBalanceModal(prev => ({ ...prev, amount: e.target.value }))}
+                        required
+                        placeholder="0.00"
+                        className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-bold text-gray-900 outline-none transition-all shadow-xs"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-400 ml-1">The starting balance on the effective date forward.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+              <div>
+                {openingBalanceModal.item.isOpeningBalanceActive && (
+                  <button
+                    type="button"
+                    disabled={openingBalanceModal.isSaving}
+                    onClick={(e) => {
+                      if (window.confirm('Are you sure you want to deactivate opening balance for this account?')) {
+                        handleSaveOpeningBalance(e, true);
+                      }
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl transition-all cursor-pointer"
+                  >
+                    Deactivate
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  disabled={openingBalanceModal.isSaving}
+                  onClick={() => setOpeningBalanceModal(prev => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-700 text-xs font-bold rounded-xl border border-gray-200 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={openingBalanceModal.isSaving}
+                  onClick={handleSaveOpeningBalance}
+                  className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  {openingBalanceModal.isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    'Save & Apply'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>,

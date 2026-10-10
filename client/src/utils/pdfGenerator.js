@@ -11048,7 +11048,7 @@ export const generatePattyCashReportPDF = async (records = [], filters = {}, sum
  * @param {Array} statementData - List of transaction records with runningBalance
  * @param {Object} meta - Account and report metadata (bankName, branch, accountNo, dates, openingBalance, closingBalance, etc.)
  */
-export const generateBankStatementPDF = (statementData = [], meta = {}) => {
+export const generateBankStatementPDF = async (statementData = [], meta = {}) => {
     try {
         const doc = new jsPDF({
             orientation: 'portrait',
@@ -11060,33 +11060,91 @@ export const generateBankStatementPDF = (statementData = [], meta = {}) => {
         const pageHeight = doc.internal.pageSize.height;
         const margin = 10;
 
-        // --- Company Header ---
-        doc.setFontSize(20);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(17, 24, 39);
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 13, { align: 'center' });
+        // Load company logo (same as Stock Report / P&L)
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
 
+        // --- Header (identical to Stock Report) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill (no black border)
+        doc.setTextColor(249, 115, 22); // Orange (#f97316)
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(75, 85, 99);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 18, { align: 'center' });
-        doc.text("+8802588813057 | anienterprise051@gmail.com | www.anienterprises.com.bd", pageWidth / 2, 22.5, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
 
-        // Decorative separator line
-        doc.setDrawColor(209, 213, 219);
-        doc.setLineWidth(0.4);
-        doc.line(margin, 26, pageWidth - margin, 26);
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
 
-        // Statement Title Badge
-        doc.setFillColor(30, 58, 138); // Deep Blue / Indigo
-        doc.roundedRect(pageWidth / 2 - 42, 28, 84, 7.5, 1.5, 1.5, 'F');
-        doc.setFontSize(10.5);
+        // Title badge (matching Stock Report)
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        const titleText = "BANK ACCOUNT STATEMENT";
+        const titleW = Math.max(84, doc.getTextWidth(titleText) + 20);
+        doc.roundedRect((pageWidth / 2) - (titleW / 2), y, titleW, 7, 2, 2, 'F');
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
-        doc.text("BANK ACCOUNT STATEMENT", pageWidth / 2, 33, { align: 'center' });
+        doc.text(titleText, pageWidth / 2, y + 5, { align: 'center' });
 
         // --- Metadata Box (Account & Statement Details) ---
-        let infoY = 39.5;
+        let infoY = y + 8.5;
         const infoBoxWidth = pageWidth - (margin * 2);
         const infoBoxHeight = 19;
         
@@ -11217,14 +11275,14 @@ export const generateBankStatementPDF = (statementData = [], meta = {}) => {
 
         // Baseline Opening Balance Row
         tableRows.push([
-            { content: '-', styles: { halign: 'center', textColor: [100, 116, 139] } },
-            { content: meta.startDate ? formatDate(meta.startDate) : '-', styles: { halign: 'center', textColor: [100, 116, 139] } },
-            { content: 'OPENING BALANCE FORWARD', colSpan: 3, styles: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [30, 58, 138] } },
-            { content: '-', styles: { halign: 'right', textColor: [148, 163, 184] } },
-            { content: '-', styles: { halign: 'right', textColor: [148, 163, 184] } },
+            { content: '-', styles: { halign: 'center', textColor: [0, 0, 0], fillColor: [245, 245, 245] } },
+            { content: meta.startDate ? formatDate(meta.startDate) : (meta.openingBalanceDate ? formatDate(meta.openingBalanceDate) : '-'), styles: { halign: 'center', textColor: [0, 0, 0], fillColor: [245, 245, 245] } },
+            { content: 'OPENING BALANCE FORWARD', colSpan: 3, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } },
+            { content: '-', styles: { halign: 'right', textColor: [0, 0, 0], fillColor: [245, 245, 245] } },
+            { content: '-', styles: { halign: 'right', textColor: [0, 0, 0], fillColor: [245, 245, 245] } },
             { 
                 content: (Number(meta.openingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
-                styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [15, 23, 42] } 
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } 
             }
         ]);
 
@@ -11251,26 +11309,26 @@ export const generateBankStatementPDF = (statementData = [], meta = {}) => {
                 { content: tx.typeName || (isDeposit ? 'Deposit' : 'Withdrawal'), styles: { halign: 'left', fontStyle: 'bold' } },
                 { content: tx.referenceNo || '-', styles: { halign: 'center' } },
                 { content: particulars, styles: { halign: 'left' } },
-                { content: depStr, styles: { halign: 'right', fontStyle: isDeposit ? 'bold' : 'normal', textColor: isDeposit ? [22, 101, 52] : [100, 116, 139] } },
-                { content: withStr, styles: { halign: 'right', fontStyle: !isDeposit ? 'bold' : 'normal', textColor: !isDeposit ? [159, 18, 57] : [100, 116, 139] } },
-                { content: balStr, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] } }
+                { content: depStr, styles: { halign: 'right', fontStyle: isDeposit ? 'bold' : 'normal' } },
+                { content: withStr, styles: { halign: 'right', fontStyle: !isDeposit ? 'bold' : 'normal' } },
+                { content: balStr, styles: { halign: 'right', fontStyle: 'bold' } }
             ]);
         });
 
         // Grand Total Summary Row
         tableRows.push([
-            { content: 'TOTALS / CLOSING', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
+            { content: 'TOTALS / CLOSING', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } },
             { 
                 content: (Number(meta.totalDeposits) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
-                styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 253, 244], textColor: [22, 101, 52] } 
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } 
             },
             { 
                 content: (Number(meta.totalWithdrawals) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
-                styles: { halign: 'right', fontStyle: 'bold', fillColor: [255, 241, 242], textColor: [159, 18, 57] } 
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } 
             },
             { 
                 content: (Number(meta.closingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
-                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 243, 255], textColor: [91, 33, 182] } 
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } 
             }
         ]);
 
@@ -11280,18 +11338,20 @@ export const generateBankStatementPDF = (statementData = [], meta = {}) => {
             body: tableRows,
             theme: 'grid',
             styles: {
-                fontSize: 8,
+                fontSize: 8.5,
                 cellPadding: 1.5,
-                lineColor: [226, 232, 240],
+                lineColor: [0, 0, 0],
                 lineWidth: 0.1,
-                textColor: [30, 41, 59]
+                textColor: [0, 0, 0]
             },
             headStyles: {
-                fillColor: [30, 58, 138],
-                textColor: [255, 255, 255],
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
                 fontStyle: 'bold',
                 halign: 'center',
-                fontSize: 8.5
+                fontSize: 8.5,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1
             },
             columnStyles: {
                 0: { cellWidth: 9, halign: 'center' },   // SL
