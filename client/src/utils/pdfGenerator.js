@@ -5162,13 +5162,22 @@ export const generateInsurancePaymentReportPDF = (payments, filters, dateStr, lc
                 ? (p.amendmentNo ? `${p.lcNo}\n(${p.amendmentNo})` : p.lcNo)
                 : '-';
 
+            let bankDetails = p.bankName || '';
+            if (bankDetails) {
+                if (p.branch) bankDetails += ` (${p.branch})`;
+                if (p.accountNo) bankDetails += ` [A/C: ${p.accountNo}]`;
+            }
+            const refDisplay = bankDetails
+                ? (p.reference ? `${bankDetails} - Ref: ${p.reference}` : bankDetails)
+                : ((p.reference || '').trim() || '-');
+
             tableRows.push([
                 idx + 1,
                 formatDate(p.date),
                 p.companyName || '-',
                 lcDisplay,
                 p.method || '-',
-                (p.reference || '').trim() || '-',
+                refDisplay,
                 grossPremStr,
                 returnAmtStr,
                 paidVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -5208,15 +5217,15 @@ export const generateInsurancePaymentReportPDF = (payments, filters, dateStr, lc
             columnStyles: {
                 0: { cellWidth: 8, halign: 'center' },
                 1: { cellWidth: 20, halign: 'center' },
-                2: { cellWidth: 50, halign: 'left', overflow: 'hidden' },
+                2: { cellWidth: 48, halign: 'left', overflow: 'hidden' },
                 3: { cellWidth: 28, halign: 'left' },
                 4: { cellWidth: 18, halign: 'center' },
-                5: { cellWidth: 22, halign: 'left' },
-                6: { cellWidth: 32, halign: 'right' },
-                7: { cellWidth: 32, halign: 'right' },
+                5: { cellWidth: 26, halign: 'left' },
+                6: { cellWidth: 30, halign: 'right' },
+                7: { cellWidth: 30, halign: 'right' },
                 8: { cellWidth: 26, halign: 'right' },
                 9: { cellWidth: 26, halign: 'right' },
-                10: { cellWidth: 15, halign: 'center' }
+                10: { cellWidth: 17, halign: 'center' }
             },
             margin: { left: margin, right: margin }
         });

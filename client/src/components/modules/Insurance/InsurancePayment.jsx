@@ -133,6 +133,11 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     const [lcSearchQuery, setLcSearchQuery] = useState('');
     const insuranceDropdownRef = useRef(null);
     const methodDropdownRef = useRef(null);
+    const bankDropdownRef = useRef(null);
+    const branchDropdownRef = useRef(null);
+    const accountDropdownRef = useRef(null);
+    const [bankSearchQuery, setBankSearchQuery] = useState('');
+    const [banks, setBanks] = useState([]);
     const lcDropdownRef = useRef(null);
     const amendmentDropdownRef = useRef(null);
     const [highlightedLcIndex, setHighlightedLcIndex] = useState(-1);
@@ -214,6 +219,9 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
         method: 'Cash',
         amount: '',
         reference: '',
+        bankName: '',
+        branch: '',
+        accountNo: '',
         remarks: ''
     });
 
@@ -388,7 +396,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
 
     const fetchInsurances = async () => {
         try {
-            const [insData, lcData, paymentsData] = await Promise.all([
+            const [insData, lcData, paymentsData, banksData] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['insurance'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/insurance`).then(r => Array.isArray(r.data) ? r.data : [])
@@ -400,12 +408,19 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 queryClient.fetchQuery({
                     queryKey: ['insurance-payments'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['banks'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
                 })
             ]);
 
             const allInsurances = Array.isArray(insData) ? insData : [];
             const allLc = Array.isArray(lcData) ? lcData : [];
             const allPayments = Array.isArray(paymentsData) ? paymentsData : [];
+            const allBanks = Array.isArray(banksData) ? banksData : [];
+
+            setBanks(allBanks);
 
             const insurancesWithBalance = allInsurances.map(ins => {
                 const targetName = (ins.companyName || '').toLowerCase().trim();
@@ -528,6 +543,15 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             if (activeDropdown === 'method' && methodDropdownRef.current && !methodDropdownRef.current.contains(event.target)) {
                 setActiveDropdown(null);
             }
+            if (activeDropdown === 'bank' && bankDropdownRef.current && !bankDropdownRef.current.contains(event.target)) {
+                setActiveDropdown(null);
+            }
+            if (activeDropdown === 'branch' && branchDropdownRef.current && !branchDropdownRef.current.contains(event.target)) {
+                setActiveDropdown(null);
+            }
+            if (activeDropdown === 'account' && accountDropdownRef.current && !accountDropdownRef.current.contains(event.target)) {
+                setActiveDropdown(null);
+            }
             if (activeDropdown === 'lc' && lcDropdownRef.current && !lcDropdownRef.current.contains(event.target)) {
                 setActiveDropdown(null);
                 setLcSearchQuery(newPayment.lcNo || '');
@@ -572,6 +596,146 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
 
     const uniqueMethods = ["Cash", "Bank Transfer", "Online Banking", "Mobile Banking", "Cheque", "Other"];
     const uniqueInsuranceNames = [...new Set(insurances.map(i => i.companyName).filter(Boolean))].sort();
+
+    const uniqueBankNames = React.useMemo(() => {
+        return [...new Set((banks || []).map(b => (b.bankName || '').trim()).filter(Boolean))].sort();
+    }, [banks]);
+
+    const filteredBankNames = React.useMemo(() => {
+        if (!bankSearchQuery.trim()) return uniqueBankNames;
+        return uniqueBankNames.filter(b => b.toLowerCase().includes(bankSearchQuery.toLowerCase().trim()));
+    }, [uniqueBankNames, bankSearchQuery]);
+
+    // Available branches for selected bank (from banks master + historical payments)
+    const availableBranches = React.useMemo(() => {
+        if (!newPayment.bankName) return [];
+        const targetName = newPayment.bankName.trim().toLowerCase();
+        const matchingDocs = (banks || []).filter(b => (b.bankName || '').trim().toLowerCase() === targetName);
+        const list = [];
+        matchingDocs.forEach(b => {
+            if (Array.isArray(b.branches) && b.branches.length > 0) {
+                b.branches.forEach(br => {
+                    if (br && br.branch) {
+                        list.push({
+                            branch: br.branch.trim(),
+                            accountName: (br.accountName || b.accountName || '').trim(),
+                            accountNo: (br.accountNo || b.accountNo || '').trim()
+                        });
+                    }
+                });
+            } else if (b.branch) {
+                list.push({
+                    branch: b.branch.trim(),
+                    accountName: (b.accountName || '').trim(),
+                    accountNo: (b.accountNo || '').trim()
+                });
+            }
+        });
+
+        (payments || [])
+            .filter(p => (p.bankName || '').trim().toLowerCase() === targetName && p.branch)
+            .forEach(p => {
+                list.push({
+                    branch: p.branch.trim(),
+                    accountName: (p.accountName || '').trim(),
+                    accountNo: (p.accountNo || '').trim()
+                });
+            });
+
+        const seen = new Set();
+        return list.filter(item => {
+            const key = `${(item.branch || '').toLowerCase()}|${(item.accountNo || '').toLowerCase()}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }, [banks, payments, newPayment.bankName]);
+
+    // Available accounts for selected bank & branch
+    const availableAccounts = React.useMemo(() => {
+        if (!newPayment.bankName) return [];
+        const filtered = newPayment.branch
+            ? availableBranches.filter(b => (b.branch || '').toLowerCase() === newPayment.branch.toLowerCase())
+            : availableBranches;
+        const candidateList = filtered.length > 0 ? filtered : availableBranches;
+        const seen = new Set();
+        const opts = [];
+        candidateList.forEach(item => {
+            const acc = (item.accountNo || '').trim();
+            if (acc && !seen.has(acc.toLowerCase())) {
+                seen.add(acc.toLowerCase());
+                opts.push({
+                    accountNo: acc,
+                    accountName: item.accountName,
+                    branch: item.branch
+                });
+            }
+        });
+        return opts;
+    }, [availableBranches, newPayment.bankName, newPayment.branch]);
+
+    const filteredBranchList = React.useMemo(() => {
+        const q = (newPayment.branch || '').trim().toLowerCase();
+        if (!q) return availableBranches;
+        return availableBranches.filter(b => (b.branch || '').toLowerCase().includes(q));
+    }, [availableBranches, newPayment.branch]);
+
+    const filteredAccountList = React.useMemo(() => {
+        const q = (newPayment.accountNo || '').trim().toLowerCase();
+        if (!q) return availableAccounts;
+        return availableAccounts.filter(a => (a.accountNo || '').toLowerCase().includes(q));
+    }, [availableAccounts, newPayment.accountNo]);
+
+    const handleBankSelect = (bName) => {
+        setNewPayment(prev => ({
+            ...prev,
+            bankName: bName,
+            branch: '',
+            accountNo: ''
+        }));
+        setActiveDropdown(null);
+    };
+
+    const handleBranchSelect = (br) => {
+        const branchName = typeof br === 'string' ? br : (br?.branch || '');
+        let linkedAccount = (typeof br === 'object' && br?.accountNo) ? br.accountNo : '';
+        if (!linkedAccount && branchName) {
+            const match = availableBranches.find(b => (b.branch || '').toLowerCase() === branchName.toLowerCase() && b.accountNo);
+            if (match) linkedAccount = match.accountNo;
+        }
+        setNewPayment(prev => ({
+            ...prev,
+            branch: branchName,
+            accountNo: linkedAccount || prev.accountNo || ''
+        }));
+        setActiveDropdown(null);
+    };
+
+    const handleAccountSelect = (acc) => {
+        setNewPayment(prev => ({
+            ...prev,
+            accountNo: typeof acc === 'string' ? acc : (acc.accountNo || '')
+        }));
+        setActiveDropdown(null);
+    };
+
+    const handleMethodSelect = (m) => {
+        if (!['Bank Transfer', 'Online Banking', 'Cheque'].includes(m)) {
+            setNewPayment(prev => ({
+                ...prev,
+                method: m,
+                bankName: '',
+                branch: '',
+                accountNo: ''
+            }));
+        } else {
+            setNewPayment(prev => ({
+                ...prev,
+                method: m
+            }));
+        }
+        setActiveDropdown(null);
+    };
 
     const handleAddPayment = async (e) => {
         e.preventDefault();
@@ -716,10 +880,14 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             method: 'Cash',
             amount: '',
             reference: '',
+            bankName: '',
+            branch: '',
+            accountNo: '',
             remarks: ''
         });
         setInsuranceSearchQuery('');
         setLcSearchQuery('');
+        setBankSearchQuery('');
         setIsEditMode(false);
         setIsRequestMode(false);
         setEditingPayment(null);
@@ -739,11 +907,15 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             method: payment.method,
             amount: payment.amount.toString(),
             reference: payment.reference || '',
+            bankName: payment.bankName || '',
+            branch: payment.branch || '',
+            accountNo: payment.accountNo || '',
             remarks: payment.remarks || ''
         });
         const ins = insurances.find(i => i._id === payment.insuranceId);
         setInsuranceSearchQuery(ins?.companyName || '');
         setLcSearchQuery(payment.lcNo || '');
+        setBankSearchQuery('');
         setShowAddModal(true);
     };
 
@@ -801,6 +973,9 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
         const matchSearch = !searchQuery ||
             (p.companyName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.method || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (p.bankName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (p.branch || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (p.accountNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.reference || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.lcNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.amendmentNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -825,6 +1000,9 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
 
     const totalPaid = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
     const transactionCount = filteredPayments.length;
+
+    // Bank method selection helper
+    const isBankMethod = ['Bank Transfer', 'Online Banking', 'Cheque'].includes(newPayment.method);
 
     // Amendment state for current selection in form
     const selectedLc = React.useMemo(() => {
@@ -1162,7 +1340,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                 </div>
                             </div>
 
-                            <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 ${hasAmendments ? 'xl:grid-cols-6' : 'xl:grid-cols-5'} gap-4 md:gap-5`}>
+                            <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 ${isBankMethod ? (hasAmendments ? 'xl:grid-cols-5' : 'xl:grid-cols-4') : (hasAmendments ? 'xl:grid-cols-6' : 'xl:grid-cols-5')} gap-4 md:gap-5`}>
                                 {/* Row 1: Primary Info */}
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Payment Date</label>
@@ -1409,7 +1587,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                     <button
                                                         key={m}
                                                         type="button"
-                                                        onClick={() => { setNewPayment({ ...newPayment, method: m }); setActiveDropdown(null); }}
+                                                        onClick={() => handleMethodSelect(m)}
                                                         className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
                                                     >
                                                         <span className={newPayment.method === m ? 'font-bold text-blue-600' : 'text-gray-700'}>{m}</span>
@@ -1421,17 +1599,197 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                     </div>
                                 </div>
 
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Reference / Note</label>
-                                    <input
-                                        type="text"
-                                        value={newPayment.reference}
-                                        onChange={(e) => setNewPayment({ ...newPayment, reference: e.target.value })}
-                                        placeholder="Ref No, Note..."
-                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                    />
-                                </div>
+                                {!isBankMethod && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Reference / Note</label>
+                                        <input
+                                            type="text"
+                                            value={newPayment.reference}
+                                            onChange={(e) => setNewPayment({ ...newPayment, reference: e.target.value })}
+                                            placeholder="Ref No, Note..."
+                                            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        />
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Row 1b: Bank Details (When Bank Transfer, Online Banking, or Cheque is selected) */}
+                            {isBankMethod && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-5 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    {/* Select Bank */}
+                                    <div className="space-y-1.5 relative">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Select Bank</label>
+                                        <div ref={bankDropdownRef} className="relative">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'bank' ? null : 'bank')}
+                                                className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                            >
+                                                <span className="truncate">{newPayment.bankName || 'Select Bank'}</span>
+                                                <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                            </button>
+                                            {activeDropdown === 'bank' && (
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] py-1 animate-in fade-in slide-in-from-top-2 duration-200 max-h-56 overflow-y-auto">
+                                                    <div className="p-1.5 sticky top-0 bg-white border-b border-gray-100">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Search bank..."
+                                                            value={bankSearchQuery}
+                                                            onChange={(e) => setBankSearchQuery(e.target.value)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="w-full px-2.5 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                                                        />
+                                                    </div>
+                                                    {filteredBankNames.map(bName => (
+                                                        <button
+                                                            key={bName}
+                                                            type="button"
+                                                            onClick={() => handleBankSelect(bName)}
+                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                        >
+                                                            <span className={newPayment.bankName === bName ? 'font-bold text-blue-600' : 'text-gray-700'}>{bName}</span>
+                                                            {newPayment.bankName === bName && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
+                                                        </button>
+                                                    ))}
+                                                    {filteredBankNames.length === 0 && (
+                                                        <div className="px-4 py-2 text-xs text-gray-400">No banks found</div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Branch */}
+                                    <div className="space-y-1.5 relative">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Branch</label>
+                                        <div ref={branchDropdownRef} className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder={!newPayment.bankName ? "Select Bank first" : (availableBranches.length > 0 ? "Select or type branch..." : "Type branch name...")}
+                                                value={newPayment.branch || ''}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    const match = availableBranches.find(b => (b.branch || '').toLowerCase() === val.trim().toLowerCase() && b.accountNo);
+                                                    setNewPayment(prev => ({
+                                                        ...prev,
+                                                        branch: val,
+                                                        ...(match ? { accountNo: match.accountNo } : {})
+                                                    }));
+                                                }}
+                                                onFocus={() => {
+                                                    if (newPayment.bankName) setActiveDropdown('branch');
+                                                }}
+                                                className="w-full px-4 pr-9 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (newPayment.bankName) {
+                                                        setActiveDropdown(activeDropdown === 'branch' ? null : 'branch');
+                                                    }
+                                                }}
+                                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'branch' ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            {activeDropdown === 'branch' && (
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] py-1 animate-in fade-in slide-in-from-top-2 duration-200 max-h-48 overflow-y-auto">
+                                                    {filteredBranchList.map((br, idx) => (
+                                                        <button
+                                                            key={`${br.branch}-${idx}`}
+                                                            type="button"
+                                                            onClick={() => handleBranchSelect(br)}
+                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                        >
+                                                            <div>
+                                                                <span className={newPayment.branch === br.branch ? 'font-bold text-blue-600' : 'text-gray-700'}>{br.branch}</span>
+                                                                {br.accountNo && (
+                                                                    <span className="block text-[11px] text-gray-400 font-mono">A/C: {br.accountNo}{br.accountName ? ` (${br.accountName})` : ''}</span>
+                                                                )}
+                                                            </div>
+                                                            {newPayment.branch === br.branch && <CheckIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                                                        </button>
+                                                    ))}
+                                                    {filteredBranchList.length === 0 && (
+                                                        <div className="px-4 py-2.5 text-xs text-gray-400 font-medium">
+                                                            {availableBranches.length === 0 ? "No preset branches. Type branch name." : "No matching branch. Type to use custom."}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Account No */}
+                                    <div className="space-y-1.5 relative">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Account No</label>
+                                        <div ref={accountDropdownRef} className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder={!newPayment.bankName ? "Select Bank first" : (availableAccounts.length > 0 ? "Select or type account..." : "Type account no...")}
+                                                value={newPayment.accountNo || ''}
+                                                onChange={(e) => setNewPayment(prev => ({ ...prev, accountNo: e.target.value }))}
+                                                onFocus={() => {
+                                                    if (newPayment.bankName) setActiveDropdown('account');
+                                                }}
+                                                className="w-full px-4 pr-9 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-mono shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (newPayment.bankName) {
+                                                        setActiveDropdown(activeDropdown === 'account' ? null : 'account');
+                                                    }
+                                                }}
+                                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'account' ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            {activeDropdown === 'account' && (
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] py-1 animate-in fade-in slide-in-from-top-2 duration-200 max-h-48 overflow-y-auto">
+                                                    {filteredAccountList.map((acc, idx) => (
+                                                        <button
+                                                            key={`${acc.accountNo}-${idx}`}
+                                                            type="button"
+                                                            onClick={() => handleAccountSelect(acc)}
+                                                            className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                        >
+                                                            <div>
+                                                                <span className={`font-mono ${newPayment.accountNo === acc.accountNo ? 'font-bold text-blue-600' : 'text-gray-700'}`}>{acc.accountNo}</span>
+                                                                {(acc.branch || acc.accountName) && (
+                                                                    <span className="block text-[11px] text-gray-400">
+                                                                        {[acc.branch, acc.accountName].filter(Boolean).join(' • ')}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {newPayment.accountNo === acc.accountNo && <CheckIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                                                        </button>
+                                                    ))}
+                                                    {filteredAccountList.length === 0 && (
+                                                        <div className="px-4 py-2.5 text-xs text-gray-400 font-medium">
+                                                            {availableAccounts.length === 0 ? "No preset accounts. Type account no." : "No matching account. Type to use custom."}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Reference / Cheque No */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">
+                                            {newPayment.method === 'Cheque' ? 'Cheque No / Reference' : 'Reference / Txn ID'}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newPayment.reference}
+                                            onChange={(e) => setNewPayment({ ...newPayment, reference: e.target.value })}
+                                            placeholder={newPayment.method === 'Cheque' ? 'Enter Cheque No...' : 'Txn ID / Ref...'}
+                                            className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
 
 
@@ -1694,7 +2052,32 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                         )}
                                                     </td>
                                                     <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500 truncate max-w-[150px]" title={p.reference}>{p.reference || '-'}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        {p.bankName || p.reference || p.branch || p.accountNo ? (
+                                                            <div className="flex flex-col">
+                                                                {p.bankName && (
+                                                                    <div className="font-semibold text-gray-900 text-xs flex items-center gap-1">
+                                                                        <span>{p.bankName}</span>
+                                                                        {p.branch && (
+                                                                            <span className="text-[10px] font-normal text-gray-500">({p.branch})</span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                                {p.accountNo && (
+                                                                    <div className="text-[10px] font-mono text-gray-400">
+                                                                        A/C: {p.accountNo}
+                                                                    </div>
+                                                                )}
+                                                                {p.reference && (
+                                                                    <div className={`${p.bankName ? 'text-[11px] text-gray-500' : 'text-gray-900 font-medium'}`} title={p.reference}>
+                                                                        {p.bankName ? `Ref: ${p.reference}` : p.reference}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-400">-</span>
+                                                        )}
+                                                    </td>
                                                     {(() => {
                                                         const { grossPrem, expReturn } = getLcMilestoneFinances(lc, p.amendmentNo);
                                                         return (
@@ -1856,9 +2239,36 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                         )}
                                                     </span>
 
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reference</span>
-                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[150px]" title={p.reference}>{p.reference || '-'}</span>
+                                                    {p.bankName ? (
+                                                        <>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank</span>
+                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                            <span className="font-semibold text-gray-700 text-[11px] truncate">
+                                                                {p.bankName}
+                                                                {p.branch && <span className="text-gray-500 font-normal ml-1">({p.branch})</span>}
+                                                            </span>
+
+                                                            {p.accountNo && (
+                                                                <>
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">A/C No</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-mono text-gray-700 text-[11px] truncate">{p.accountNo}</span>
+                                                                </>
+                                                            )}
+
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                                {p.method === 'Cheque' ? 'Cheque No' : 'Reference'}
+                                                            </span>
+                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                            <span className="font-semibold text-gray-700 text-[11px] truncate" title={p.reference}>{p.reference || '-'}</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reference</span>
+                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                            <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[150px]" title={p.reference}>{p.reference || '-'}</span>
+                                                        </>
+                                                    )}
 
                                                     {(() => {
                                                         const { grossPrem, expReturn } = getLcMilestoneFinances(lc, p.amendmentNo);

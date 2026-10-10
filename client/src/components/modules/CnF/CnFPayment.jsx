@@ -1052,35 +1052,26 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
     }, [availableAccounts, newPayment.accountNo]);
 
     const handleBankSelect = (bName) => {
-        const targetName = (bName || '').trim().toLowerCase();
-        const matchingDocs = (banks || []).filter(b => (b.bankName || '').trim().toLowerCase() === targetName);
-        let defaultBranch = '';
-        let defaultAccount = '';
-        for (const b of matchingDocs) {
-            if (Array.isArray(b.branches) && b.branches.length > 0) {
-                defaultBranch = b.branches[0].branch || '';
-                defaultAccount = b.branches[0].accountNo || '';
-                break;
-            } else if (b.branch) {
-                defaultBranch = b.branch;
-                defaultAccount = b.accountNo || '';
-                break;
-            }
-        }
         setNewPayment(prev => ({
             ...prev,
             bankName: bName,
-            branch: defaultBranch,
-            accountNo: defaultAccount
+            branch: '',
+            accountNo: ''
         }));
         setActiveDropdown(null);
     };
 
     const handleBranchSelect = (br) => {
+        const branchName = typeof br === 'string' ? br : (br?.branch || '');
+        let linkedAccount = (typeof br === 'object' && br?.accountNo) ? br.accountNo : '';
+        if (!linkedAccount && branchName) {
+            const match = availableBranches.find(b => (b.branch || '').toLowerCase() === branchName.toLowerCase() && b.accountNo);
+            if (match) linkedAccount = match.accountNo;
+        }
         setNewPayment(prev => ({
             ...prev,
-            branch: typeof br === 'string' ? br : (br.branch || ''),
-            accountNo: (br && br.accountNo) ? br.accountNo : prev.accountNo
+            branch: branchName,
+            accountNo: linkedAccount || prev.accountNo || ''
         }));
         setActiveDropdown(null);
     };
@@ -1088,8 +1079,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
     const handleAccountSelect = (acc) => {
         setNewPayment(prev => ({
             ...prev,
-            accountNo: typeof acc === 'string' ? acc : (acc.accountNo || ''),
-            branch: (acc && acc.branch && !prev.branch) ? acc.branch : prev.branch
+            accountNo: typeof acc === 'string' ? acc : (acc.accountNo || '')
         }));
         setActiveDropdown(null);
     };
@@ -1777,7 +1767,15 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                                                     type="text"
                                                     placeholder={!newPayment.bankName ? "Select Bank first" : (availableBranches.length > 0 ? "Select or type branch..." : "Type branch name...")}
                                                     value={newPayment.branch || ''}
-                                                    onChange={(e) => setNewPayment(prev => ({ ...prev, branch: e.target.value }))}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        const match = availableBranches.find(b => (b.branch || '').toLowerCase() === val.trim().toLowerCase() && b.accountNo);
+                                                        setNewPayment(prev => ({
+                                                            ...prev,
+                                                            branch: val,
+                                                            ...(match ? { accountNo: match.accountNo } : {})
+                                                        }));
+                                                    }}
                                                     onFocus={() => {
                                                         if (newPayment.bankName) setActiveDropdown('branch');
                                                     }}

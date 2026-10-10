@@ -1200,13 +1200,22 @@ export const generateInsurancePaymentReportExcel = (payments = [], filters = {},
                 ? (p.amendmentNo ? `${p.lcNo} (${p.amendmentNo})` : p.lcNo)
                 : '-';
 
+            let bankDetails = p.bankName || '';
+            if (bankDetails) {
+                if (p.branch) bankDetails += ` (${p.branch})`;
+                if (p.accountNo) bankDetails += ` [A/C: ${p.accountNo}]`;
+            }
+            const refDisplay = bankDetails
+                ? (p.reference ? `${bankDetails} - Ref: ${p.reference}` : bankDetails)
+                : ((p.reference || '').trim() || '-');
+
             rows.push([
                 idx + 1,
                 formatDate(p.date),
                 p.companyName || '-',
                 lcDisplay,
                 p.method || '-',
-                (p.reference || '').trim() || '-',
+                refDisplay,
                 grossPrem > 0 ? grossPrem : '-',
                 returnAmt > 0 ? returnAmt : 0,
                 paidVal > 0 ? paidVal : 0,
@@ -1239,7 +1248,7 @@ export const generateInsurancePaymentReportExcel = (payments = [], filters = {},
             { wch: 28 }, // Insurance Company
             { wch: 18 }, // LC No
             { wch: 14 }, // Method
-            { wch: 18 }, // Reference
+            { wch: 26 }, // Reference
             { wch: 20 }, // Gross Premium
             { wch: 20 }, // Return Amount
             { wch: 18 }, // Paid
