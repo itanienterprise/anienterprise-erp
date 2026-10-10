@@ -9,14 +9,15 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import {
   SearchIcon, XIcon, ChevronDownIcon, DollarSignIcon, BuildingIcon,
   CalendarIcon, ArrowDownLeftIcon, ArrowUpRightIcon, FileTextIcon,
-  UserIcon, CheckCircle2Icon, FunnelIcon, CheckIcon, PrinterIcon,
-  DownloadIcon, RefreshCwIcon, WalletIcon
+  UserIcon, CheckCircle2Icon, FunnelIcon, CheckIcon,
+  DownloadIcon, RefreshCwIcon, WalletIcon, BarChartIcon
 } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import { generateBankStatementPDF } from '../../../utils/pdfGenerator';
 import { generateBankStatementExcel } from '../../../utils/excelGenerator';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import BankLogo, { BankWatermark } from './BankLogo';
 import '../PaymentCollection/PaymentCollection.css';
 
 const EyeIcon = ({ className }) => (
@@ -988,11 +989,11 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     return list;
   }, [deposits, withdrawals, customers, cnfPayments, insurancePayments, pattyCashRecords, marginReturns, lcExpenses, lcRecords]);
 
-  // Unique bank names across all sources
+  // Unique BD bank names across all sources
   const uniqueBankNames = useMemo(() => {
     const seen = new Map();
     [
-      ...banks.map(b => b.bankName),
+      ...banks.filter(b => !b.isIndian).map(b => b.bankName),
       ...unifiedTransactions.map(tx => tx.bankName)
     ].forEach(name => {
       if (!name) return;
@@ -1010,7 +1011,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     const list = [];
     const targetBank = filters.bankName ? filters.bankName.trim().toLowerCase() : null;
 
-    banks.forEach(b => {
+    banks.filter(b => !b.isIndian).forEach(b => {
       if (targetBank && (b.bankName || '').trim().toLowerCase() !== targetBank) return;
       if (Array.isArray(b.branches) && b.branches.length > 0) {
         b.branches.forEach(br => {
@@ -1041,7 +1042,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     const targetBranch = filters.branch ? filters.branch.trim().toLowerCase() : null;
     const map = new Map();
 
-    banks.forEach(b => {
+    banks.filter(b => !b.isIndian).forEach(b => {
       if (targetBank && (b.bankName || '').trim().toLowerCase() !== targetBank) return;
       if (Array.isArray(b.branches) && b.branches.length > 0) {
         b.branches.forEach(br => {
@@ -1175,7 +1176,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     const targetBranch = filters.branch ? filters.branch.trim().toLowerCase() : null;
     const targetAcc = filters.accountNo ? filters.accountNo.trim().toLowerCase() : null;
 
-    banks.forEach(b => {
+    banks.filter(b => !b.isIndian).forEach(b => {
       const bNameMatch = !targetBank || (b.bankName || '').trim().toLowerCase() === targetBank;
       if (!bNameMatch) return;
 
@@ -1331,11 +1332,12 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     }));
   };
 
-  // Bank Accounts Overview (Aggregated Multi-Module Summary of each bank account)
+  // Bank Accounts Overview (Aggregated Multi-Module Summary of each BD bank account, sorted alphabetically ascending)
   const bankAccountsOverview = useMemo(() => {
     const accounts = [];
+    const bdBanks = banks.filter(b => !b.isIndian);
 
-    banks.forEach(b => {
+    bdBanks.forEach(b => {
       const bName = (b.bankName || '').trim();
       if (!bName) return;
 
@@ -1399,6 +1401,15 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       }
     });
 
+    // Sort in alphabetical ascending order (A to Z) by bank name, then branch, then account number
+    accounts.sort((a, b) => {
+      const cmpBank = a.bankName.localeCompare(b.bankName, undefined, { sensitivity: 'base' });
+      if (cmpBank !== 0) return cmpBank;
+      const cmpBranch = (a.branch || '').localeCompare(b.branch || '', undefined, { sensitivity: 'base' });
+      if (cmpBranch !== 0) return cmpBranch;
+      return (a.accountNo || '').localeCompare(b.accountNo || '', undefined, { sensitivity: 'base' });
+    });
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       return accounts.filter(acc =>
@@ -1459,73 +1470,44 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     generateBankStatementExcel(displayLedger, meta);
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Top Header & Search Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="w-full md:w-1/4 text-center md:text-left">
-          <h2 className="text-2xl font-bold text-gray-800">Bank Statement</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Unified financial ledger across all ERP modules & real-time bank balances
-          </p>
-        </div>
-
-        {/* Search Input - CENTERED */}
-        <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
-          <div className="absolute inset-y-0 left-0 pl-5.5 md:pl-3.5 flex items-center pointer-events-none">
-            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+      <div className="space-y-3">
+        {/* Row 1: Title (Left), Search Input (Center), Actions (Right) */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="w-full md:w-72 text-center md:text-left shrink-0">
+            <h2 className="text-2xl font-bold text-gray-800">Bank Statement</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Unified financial ledger & real-time bank balances
+            </p>
           </div>
-          <input
-            type="text"
-            placeholder="Search statement by module, ref #, party, notes, account..."
-            autoComplete="off"
-            className="h-10 block w-full pl-10 pr-4 bg-white/70 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
-            >
-              <XIcon className="w-4 h-4" />
-            </button>
-          )}
-        </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto shrink-0 flex-wrap">
-          {/* Tab Switcher Pills */}
-          <div className="flex items-center bg-gray-100/90 p-1 rounded-xl border border-gray-200">
-            <button
-              type="button"
-              onClick={() => setActiveTab('ledger')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'ledger'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              <FileTextIcon className="w-3.5 h-3.5" />
-              <span>Statement ({displayLedger.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('accounts')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'accounts'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              <BuildingIcon className="w-3.5 h-3.5" />
-              <span>All Accounts ({bankAccountsOverview.length})</span>
-            </button>
+          {/* Search Input - CENTERED */}
+          <div className="w-full md:flex-1 md:max-w-md mx-auto relative group px-2 md:px-0">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search statement by module, ref #, party, notes, account..."
+              autoComplete="off"
+              className="h-10 block w-full pl-10 pr-4 bg-white/70 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            )}
           </div>
+
+          {/* Action Controls */}
+          <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-72 shrink-0 flex-wrap">
 
           {/* Filter Dropdown */}
           <div className="relative">
@@ -1707,35 +1689,63 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
             )}
           </div>
 
-          {/* Export Button */}
+          {/* Report Button */}
           <button
             type="button"
             onClick={() => setShowExportModal(true)}
             className="h-10 flex items-center justify-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 text-xs transition-all active:scale-95 cursor-pointer"
           >
-            <DownloadIcon className="w-4 h-4" />
-            <span>Export</span>
+            <BarChartIcon className="w-4 h-4" />
+            <span>Report</span>
           </button>
+          </div>
+        </div>
 
-          {/* Print Button */}
-          <button
-            type="button"
-            onClick={handlePrint}
-            title="Print Statement"
-            className="h-10 w-10 flex items-center justify-center bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl shadow-sm text-xs transition-all active:scale-95 cursor-pointer"
-          >
-            <PrinterIcon className="w-4 h-4" />
-          </button>
+        {/* Row 2: Tab Switcher Pills - Perfectly Centered under the Search Bar */}
+        <div className="flex justify-center items-center w-full">
+          <div className="inline-flex items-center bg-gray-100/90 p-1 rounded-xl border border-gray-200 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab('ledger')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'ledger'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <FileTextIcon className="w-3.5 h-3.5" />
+              <span>Statement ({displayLedger.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('accounts');
+                setFilters(prev => ({
+                  ...prev,
+                  bankName: '',
+                  branch: '',
+                  accountNo: ''
+                }));
+              }}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'accounts'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <BuildingIcon className="w-3.5 h-3.5" />
+              <span>All Accounts ({bankAccountsOverview.length})</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Selected Account / Filter Banner */}
-      {filters.bankName && (
-        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/50 to-white border border-blue-200/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
-              <BuildingIcon className="w-5 h-5" />
-            </div>
+      {/* Selected Account / Filter Banner - ONLY for Statement Ledger View */}
+      {activeTab === 'ledger' && filters.bankName && (
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/50 to-white border border-blue-200/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs relative overflow-hidden group">
+          <BankWatermark bankName={filters.bankName} className="w-64 h-64" opacity={0.08} />
+          <div className="flex items-center gap-3.5 relative z-10">
+            <BankLogo bankName={filters.bankName} className="w-16 h-16 rounded-2xl shadow-xs" imgClassName="w-full h-full object-contain p-1" />
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-bold text-gray-900 text-base">{filters.bankName}</h3>
@@ -1858,66 +1868,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
         </div>
       </div>
 
-      {/* Active Filter Badges */}
-      {isFilterActive && (
-        <div className="flex items-center gap-2 flex-wrap text-xs">
-          <span className="text-gray-400 font-medium">Active filters:</span>
-          {filters.sourceModule !== 'all' && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg font-medium border border-purple-100">
-              Module: {filters.sourceModule}
-              <button onClick={() => setFilters(p => ({ ...p, sourceModule: 'all' }))} className="hover:text-purple-900">
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {filters.bankName && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-medium border border-blue-100">
-              Bank: {filters.bankName}
-              <button onClick={() => setFilters(p => ({ ...p, bankName: '', branch: '', accountNo: '' }))} className="hover:text-blue-900">
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {filters.branch && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-medium border border-blue-100">
-              Branch: {filters.branch}
-              <button onClick={() => setFilters(p => ({ ...p, branch: '', accountNo: '' }))} className="hover:text-blue-900">
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {filters.accountNo && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-medium border border-blue-100">
-              A/C: {filters.accountNo}
-              <button onClick={() => setFilters(p => ({ ...p, accountNo: '' }))} className="hover:text-blue-900">
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {(filters.startDate || filters.endDate) && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-700 rounded-lg font-medium border border-gray-200">
-              Date: {filters.startDate || 'Start'} to {filters.endDate || 'Present'}
-              <button onClick={() => setFilters(p => ({ ...p, startDate: '', endDate: '', quickRange: 'all' }))} className="hover:text-gray-900">
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {filters.transactionType !== 'all' && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-700 rounded-lg font-medium border border-gray-200">
-              Nature: {filters.transactionType === 'deposit' ? 'Inflows Only' : 'Outflows Only'}
-              <button onClick={() => setFilters(p => ({ ...p, transactionType: 'all' }))} className="hover:text-gray-900">
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          <button
-            onClick={resetFilters}
-            className="text-xs text-blue-600 hover:text-blue-800 font-bold ml-1 cursor-pointer"
-          >
-            Clear All
-          </button>
-        </div>
-      )}
+
 
       {/* MAIN VIEW: Statement Ledger Tab */}
       {activeTab === 'ledger' && (
@@ -2020,10 +1971,15 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                           </span>
                         </td>
                         <td className="py-3 px-3 text-xs text-gray-900 font-medium">
-                          <div className="truncate max-w-[130px]" title={row.bankName}>{row.bankName}</div>
-                          {row.branch && (
-                            <div className="text-[11px] text-gray-400 truncate max-w-[130px]">{row.branch}</div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <BankLogo bankName={row.bankName} className="w-5 h-5 rounded-md" />
+                            <div className="min-w-0">
+                              <div className="truncate max-w-[130px] font-semibold" title={row.bankName}>{row.bankName}</div>
+                              {row.branch && (
+                                <div className="text-[11px] text-gray-400 truncate max-w-[130px]">{row.branch}</div>
+                              )}
+                            </div>
+                          </div>
                         </td>
                         <td className="py-3 px-3 text-xs text-gray-600 font-mono">
                           {row.accountNo || '-'}
@@ -2134,9 +2090,12 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-bold text-sm text-gray-900">{row.bankName}</div>
-                        <div className="text-xs text-gray-500">{row.branch} {row.accountNo ? `• ${row.accountNo}` : ''}</div>
+                      <div className="flex items-center gap-2.5">
+                        <BankLogo bankName={row.bankName} className="w-8 h-8 rounded-lg" />
+                        <div>
+                          <div className="font-bold text-sm text-gray-900">{row.bankName}</div>
+                          <div className="text-xs text-gray-500">{row.branch} {row.accountNo ? `• ${row.accountNo}` : ''}</div>
+                        </div>
                       </div>
                       <div className="text-right">
                         <div className={`font-extrabold text-sm ${isDeposit ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -2168,14 +2127,15 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
           {bankAccountsOverview.map((acc, idx) => (
             <div
               key={`${acc.bankName}-${acc.accountNo}-${idx}`}
-              className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+              className="group bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col justify-between relative overflow-hidden"
             >
-              <div>
+              {/* Centered Bank Logo Watermark */}
+              <BankWatermark bankName={acc.bankName} className="w-52 h-52 sm:w-60 sm:h-60" opacity={0.09} />
+
+              <div className="relative z-10">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
-                      <BuildingIcon className="w-5 h-5" />
-                    </div>
+                  <div className="flex items-center gap-3.5">
+                    <BankLogo bankName={acc.bankName} className="w-16 h-16 rounded-2xl shadow-xs" imgClassName="w-full h-full object-contain p-1" />
                     <div>
                       <h4 className="font-bold text-base text-gray-900">{acc.bankName}</h4>
                       <p className="text-xs text-gray-500">{acc.branch}</p>
@@ -2216,7 +2176,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                 </div>
               </div>
 
-              <div className="mt-5 pt-3 border-t border-gray-100 flex items-center justify-between">
+              <div className="relative z-10 mt-5 pt-3 border-t border-gray-100 flex items-center justify-between">
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Net Balance</span>
                   <span className="text-lg font-black text-gray-900">
@@ -2301,7 +2261,10 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                 </div>
                 <div>
                   <span className="text-gray-400 font-medium block">Bank Name</span>
-                  <span className="font-bold text-gray-800 text-sm">{viewingTransaction.bankName || '-'}</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <BankLogo bankName={viewingTransaction.bankName} className="w-5 h-5 rounded-md" />
+                    <span className="font-bold text-gray-800 text-sm">{viewingTransaction.bankName || '-'}</span>
+                  </div>
                 </div>
                 <div>
                   <span className="text-gray-400 font-medium block">Branch</span>
@@ -2356,8 +2319,8 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       <ReportFormatModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
-        title="Export Bank Statement"
-        subtitle="Select format to download bank statement ledger"
+        title="Bank Statement Report"
+        subtitle="Select format to generate bank statement ledger report (PDF / Excel)"
         onExportPdf={handleExportPdf}
         onExportExcel={handleExportExcel}
       />

@@ -11,6 +11,7 @@ import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getSocket } from '../../../utils/socket';
+import BankLogo, { BankWatermark } from './BankLogo';
 
 
 const EyeIcon = ({ className }) => (
@@ -1331,7 +1332,12 @@ const Bank = ({ onDeleteConfirm }) => {
                                                         <React.Fragment key={item.uniqueRowKey}>
                                                             <tr className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100 last:border-b-0">
                                                                 <td className="px-6 py-4 text-[13px] font-bold text-gray-700">
-                                                                    {idx === 0 ? group.bankName : ''}
+                                                                    {idx === 0 ? (
+                                                                        <div className="flex items-center gap-2.5">
+                                                                            <BankLogo bankName={group.bankName} className="w-6 h-6 rounded-lg" />
+                                                                            <span>{group.bankName}</span>
+                                                                        </div>
+                                                                    ) : ''}
                                                                 </td>
                                                                 <td className="px-6 py-4 text-[13px] font-medium text-gray-600">
                                                                     {idx === 0 ? (item.binNo || '-') : ''}
@@ -1479,20 +1485,24 @@ const Bank = ({ onDeleteConfirm }) => {
                                     <div
                                         key={group.bankName}
                                         onClick={() => toggleRowExpansion(group.bankName)}
-                                        className={`bg-white rounded-2xl border ${isExpanded ? 'border-blue-100 ring-4 ring-blue-500/5 shadow-lg' : 'border-gray-100 shadow-sm'} p-5 transition-all duration-500 cursor-pointer overflow-hidden`}
+                                        className={`bg-white rounded-2xl border ${isExpanded ? 'border-blue-100 ring-4 ring-blue-500/5 shadow-lg' : 'border-gray-100 shadow-sm'} p-5 transition-all duration-500 cursor-pointer overflow-hidden relative group`}
                                     >
-                                        <div className="flex justify-between items-center group">
-                                            <div className="space-y-1">
-                                                <h3 className={`text-base md:text-lg font-black transition-colors duration-300 ${isExpanded ? 'text-blue-600' : 'text-gray-800'}`}>
-                                                    {group.bankName}
-                                                </h3>
-                                                {group.items[0]?.binNo && (
-                                                    <p className="text-xs font-semibold text-blue-600">BIN: {group.items[0].binNo}</p>
-                                                )}
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
-                                                    <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isExpanded ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'}`}></span>
-                                                    {group.items.length} {group.items.length > 1 ? 'Accounts' : 'Account'}
-                                                </p>
+                                        <BankWatermark bankName={group.bankName} className="w-48 h-48 sm:w-56 sm:h-56" opacity={0.08} />
+                                        <div className="flex justify-between items-center relative z-10">
+                                            <div className="flex items-center gap-3.5">
+                                                <BankLogo bankName={group.bankName} className="w-16 h-16 rounded-2xl shadow-xs" imgClassName="w-full h-full object-contain p-1" />
+                                                <div className="space-y-1">
+                                                    <h3 className={`text-base md:text-lg font-black transition-colors duration-300 ${isExpanded ? 'text-blue-600' : 'text-gray-800'}`}>
+                                                        {group.bankName}
+                                                    </h3>
+                                                    {group.items[0]?.binNo && (
+                                                        <p className="text-xs font-semibold text-blue-600">BIN: {group.items[0].binNo}</p>
+                                                    )}
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
+                                                        <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isExpanded ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'}`}></span>
+                                                        {group.items.length} {group.items.length > 1 ? 'Accounts' : 'Account'}
+                                                    </p>
+                                                </div>
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <div className="flex items-center bg-gray-50/80 p-0.5 rounded-lg border border-gray-100 divide-x divide-gray-100">
