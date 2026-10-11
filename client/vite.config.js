@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => ({
     }),
     tailwindcss(),
     legacy({
-      targets: ['defaults', 'not IE 11', 'chrome 30', 'safari 7', 'ios 7', 'bb 10'],
+      targets: ['defaults', 'not IE 11'],
       renderLegacyChunks: true,
       modernPolyfills: false,
     }),
