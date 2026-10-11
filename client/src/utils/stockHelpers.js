@@ -65,90 +65,65 @@ export const getGroupedBrandList = (brandList) => {
         groups[key]._entries.push(b);
     });
 
-    const result = [];
-
-    Object.values(groups).forEach(g => {
+    return Object.values(groups).map(g => {
         const entries = g._entries || [];
-        const positiveEntries = entries.filter(b => {
-            const closing = (b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0));
-            return closing > 0.001 || (b.openingQuantity || 0) > 0.001;
-        });
-        const preSoldEntries = entries.filter(b => {
-            const closing = (b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0));
-            return closing < -0.001;
-        });
 
-        const buildAggEntry = (subEntries, isPreSold) => {
-            const openingQuantity = subEntries.reduce((sum, b) => sum + (b.openingQuantity || 0), 0);
-            const openingPacket = subEntries.reduce((sum, b) => sum + (b.openingPacket || 0), 0);
-            const periodArrivalQuantity = subEntries.reduce((sum, b) => sum + (b.periodArrivalQuantity || 0), 0);
-            const periodArrivalPacket = subEntries.reduce((sum, b) => sum + (b.periodArrivalPacket || 0), 0);
-            const saleQuantity = subEntries.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
-            const salePacket = subEntries.reduce((sum, b) => sum + (b.salePacket || 0), 0);
-            const orderQuantity = isPreSold ? 0 : subEntries.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
-            const orderPacket = isPreSold ? 0 : subEntries.reduce((sum, b) => sum + (b.orderPacket || 0), 0);
-            const sweepedQuantity = subEntries.reduce((sum, b) => sum + (b.sweepedQuantity || 0), 0);
-            const sweepedPacket = subEntries.reduce((sum, b) => sum + (b.sweepedPacket || 0), 0);
-            const damageQuantity = subEntries.reduce((sum, b) => sum + (b.damageQuantity || 0), 0);
-            const damagePacket = subEntries.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
+        const openingQuantity = entries.reduce((sum, b) => sum + (b.openingQuantity || 0), 0);
+        const openingPacket = entries.reduce((sum, b) => sum + (b.openingPacket || 0), 0);
+        const periodArrivalQuantity = entries.reduce((sum, b) => sum + (b.periodArrivalQuantity || 0), 0);
+        const periodArrivalPacket = entries.reduce((sum, b) => sum + (b.periodArrivalPacket || 0), 0);
+        const saleQuantity = entries.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
+        const salePacket = entries.reduce((sum, b) => sum + (b.salePacket || 0), 0);
+        const orderQuantity = entries.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
+        const orderPacket = entries.reduce((sum, b) => sum + (b.orderPacket || 0), 0);
+        const sweepedQuantity = entries.reduce((sum, b) => sum + (b.sweepedQuantity || 0), 0);
+        const sweepedPacket = entries.reduce((sum, b) => sum + (b.sweepedPacket || 0), 0);
+        const damageQuantity = entries.reduce((sum, b) => sum + (b.damageQuantity || 0), 0);
+        const damagePacket = entries.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
 
-            const inHouseQuantity = subEntries.reduce((sum, b) => sum + (b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0)), 0);
-            const closingQuantity = inHouseQuantity;
-            const totalInHouseQuantity = isPreSold ? 0 : openingQuantity;
+        const inHouseQuantity = entries.reduce((sum, b) => sum + (b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0)), 0);
+        const closingQuantity = inHouseQuantity;
+        const totalInHouseQuantity = openingQuantity;
 
-            const pktSize = g.packetSize || subEntries.find(e => (e.packetSize || 0) > 0)?.packetSize || 30;
-            const inHousePktObj = calculatePktRemainder(inHouseQuantity, pktSize);
-            const inHousePacket = inHousePktObj.whole + (inHousePktObj.remainder / pktSize);
-            const closingPacket = inHousePacket;
-            const totalInHousePacket = isPreSold ? 0 : calculatePktRemainder(totalInHouseQuantity, pktSize).whole;
+        const pktSize = g.packetSize || entries.find(e => (e.packetSize || 0) > 0)?.packetSize || 30;
+        const inHousePktObj = calculatePktRemainder(inHouseQuantity, pktSize);
+        const inHousePacket = inHousePktObj.whole + (inHousePktObj.remainder / pktSize);
+        const closingPacket = inHousePacket;
+        const totalInHousePacket = calculatePktRemainder(totalInHouseQuantity, pktSize).whole;
 
-            const saleableQuantity = isPreSold ? 0 : Math.max(0, inHouseQuantity - orderQuantity);
-            const saleablePktObj = calculatePktRemainder(saleableQuantity, pktSize);
-            const saleablePacket = saleablePktObj.whole + (saleablePktObj.remainder / pktSize);
+        const saleableQuantity = Math.max(0, inHouseQuantity - orderQuantity);
+        const saleablePktObj = calculatePktRemainder(saleableQuantity, pktSize);
+        const saleablePacket = saleablePktObj.whole + (saleablePktObj.remainder / pktSize);
 
-            const repEntry = subEntries[0] || {};
-            const { _entries, ...cleanG } = g;
-            return {
-                ...cleanG,
-                lcNo: repEntry.lcNo || cleanG.lcNo || '',
-                lcNos: Array.from(new Set(subEntries.flatMap(e => e.lcNos || [e.lcNo]).filter(Boolean))),
-                packetSize: pktSize,
-                openingQuantity,
-                openingPacket,
-                periodArrivalQuantity,
-                periodArrivalPacket,
-                saleQuantity,
-                salePacket,
-                orderQuantity,
-                orderPacket,
-                sweepedQuantity,
-                sweepedPacket,
-                damageQuantity,
-                damagePacket,
-                inHouseQuantity,
-                inHousePacket,
-                totalInHouseQuantity,
-                totalInHousePacket,
-                closingQuantity,
-                closingPacket,
-                saleableQuantity,
-                saleablePacket
-            };
+        const repEntry = entries[0] || {};
+        const { _entries, ...cleanG } = g;
+        return {
+            ...cleanG,
+            lcNo: repEntry.lcNo || cleanG.lcNo || '',
+            lcNos: Array.from(new Set(entries.flatMap(e => e.lcNos || [e.lcNo]).filter(Boolean))),
+            packetSize: pktSize,
+            openingQuantity,
+            openingPacket,
+            periodArrivalQuantity,
+            periodArrivalPacket,
+            saleQuantity,
+            salePacket,
+            orderQuantity,
+            orderPacket,
+            sweepedQuantity,
+            sweepedPacket,
+            damageQuantity,
+            damagePacket,
+            inHouseQuantity,
+            inHousePacket,
+            totalInHouseQuantity,
+            totalInHousePacket,
+            closingQuantity,
+            closingPacket,
+            saleableQuantity,
+            saleablePacket
         };
-
-        if (positiveEntries.length > 0 && preSoldEntries.length > 0) {
-            result.push(buildAggEntry(positiveEntries, false));
-            result.push(buildAggEntry(preSoldEntries, true));
-        } else if (positiveEntries.length > 0) {
-            result.push(buildAggEntry(positiveEntries, false));
-        } else if (preSoldEntries.length > 0) {
-            result.push(buildAggEntry(preSoldEntries, true));
-        } else if (entries.length > 0) {
-            result.push(buildAggEntry(entries, false));
-        }
-    });
-
-    return result.sort((a, b) => (a.brand || '').localeCompare(b.brand || ''));
+    }).sort((a, b) => (a.brand || '').localeCompare(b.brand || ''));
 };
 
 

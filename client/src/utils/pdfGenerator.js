@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
 import { preloadBengaliFont, ensureBengaliFont } from './bengaliFontLoader';
-import { computeCustomerBalance, compareTransactions, getIsoDateString } from './helpers';
+import { computeCustomerBalance, compareTransactions, getIsoDateString, calculatePurchaseRemainingQty } from './helpers';
 import { api } from './api';
 import { getAdjustedLcValues, getRecCostingKg, getLcMilestoneFinances, calculateLcConclusion } from './lcValueUtils';
 
@@ -11147,7 +11147,7 @@ export const generateBankStatementPDF = async (statementData = [], meta = {}) =>
         let infoY = y + 8.5;
         const infoBoxWidth = pageWidth - (margin * 2);
         const infoBoxHeight = 19;
-        
+
         doc.setFillColor(248, 250, 252);
         doc.setDrawColor(226, 232, 240);
         doc.setLineWidth(0.3);
@@ -11201,7 +11201,7 @@ export const generateBankStatementPDF = async (statementData = [], meta = {}) =>
         doc.text("Account No:", col1LabelX, infoY + 15);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(15, 23, 42);
-        const accInfo = meta.accountNo 
+        const accInfo = meta.accountNo
             ? `${meta.accountNo}${meta.accountName ? ` (${meta.accountName})` : ''}`
             : 'All Accounts';
         doc.text(accInfo, col1ValX, infoY + 15);
@@ -11280,20 +11280,20 @@ export const generateBankStatementPDF = async (statementData = [], meta = {}) =>
             { content: 'OPENING BALANCE FORWARD', colSpan: 3, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } },
             { content: '-', styles: { halign: 'right', textColor: [0, 0, 0], fillColor: [245, 245, 245] } },
             { content: '-', styles: { halign: 'right', textColor: [0, 0, 0], fillColor: [245, 245, 245] } },
-            { 
-                content: (Number(meta.openingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
-                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } 
+            {
+                content: (Number(meta.openingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] }
             }
         ]);
 
         // Transaction Rows
         statementData.forEach((tx, index) => {
             const isDeposit = tx.type === 'deposit';
-            const depStr = isDeposit && tx.amount > 0 
-                ? tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) 
+            const depStr = isDeposit && tx.amount > 0
+                ? tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 : '-';
-            const withStr = !isDeposit && tx.amount > 0 
-                ? tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) 
+            const withStr = !isDeposit && tx.amount > 0
+                ? tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 : '-';
             const balStr = (Number(tx.runningBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -11318,17 +11318,17 @@ export const generateBankStatementPDF = async (statementData = [], meta = {}) =>
         // Grand Total Summary Row
         tableRows.push([
             { content: 'TOTALS / CLOSING', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } },
-            { 
-                content: (Number(meta.totalDeposits) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
-                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } 
+            {
+                content: (Number(meta.totalDeposits) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] }
             },
-            { 
-                content: (Number(meta.totalWithdrawals) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
-                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } 
+            {
+                content: (Number(meta.totalWithdrawals) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] }
             },
-            { 
-                content: (Number(meta.closingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
-                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } 
+            {
+                content: (Number(meta.closingBalance) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] }
             }
         ]);
 
@@ -11414,6 +11414,400 @@ export const generateBankStatementPDF = async (statementData = [], meta = {}) =>
         alert("Failed to generate PDF statement: " + err.message);
     }
 };
+
+export const generatePurchaseReportPDF = async (purchases = [], filters = {}, dateStr = '', purchaseReceivesList = []) => {
+    try {
+        const doc = new jsPDF('l', 'mm', 'a4');
+
+        const formatDateStr = (d) => {
+            if (!d) return '-';
+            const parts = d.split('-');
+            if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            const dt = new Date(d);
+            if (isNaN(dt.getTime())) return '-';
+            return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 9;
+
+        // Load company logo (identical to Stock Report)
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        // --- Header (identical to Stock Report & P&L) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill (#f97316)
+        doc.setTextColor(249, 115, 22);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
+
+        // Title badge (identical to Stock Report)
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - 45, y, 90, 7, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text("PURCHASE REPORT", pageWidth / 2, y + 5, { align: 'center' });
+
+        y += 9;
+
+        // Filter info pill in center
+        const printDate = dateStr || formatDateStr(new Date().toISOString().split('T')[0]);
+        const dateRange = `${formatDate(filters?.startDate) === '-' ? 'Start' : formatDate(filters?.startDate)} — ${formatDate(filters?.endDate) === '-' ? 'Present' : formatDate(filters?.endDate)}`;
+        const filterParts = [`Date: ${dateRange}`];
+        if (filters?.companyName || filters?.supplierName) filterParts.push(`Supplier: ${filters.companyName || filters.supplierName}`);
+        if (filters?.warehouse && filters.warehouse !== 'All') filterParts.push(`Warehouse: ${filters.warehouse}`);
+        if (filters?.productName) filterParts.push(`Product: ${filters.productName}`);
+        if (filters?.brand) filterParts.push(`Brand: ${filters.brand}`);
+        const filterText = filterParts.join('   |   ');
+
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        const filterTW = doc.getTextWidth(filterText);
+        const pillW = Math.min(filterTW + 12, pageWidth - margin * 2 - 40);
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth / 2) - (pillW / 2), y, pillW, 6, 1.5, 1.5, 'FD');
+        doc.setTextColor(30, 41, 59);
+        doc.text(filterText, pageWidth / 2, y + 4.2, { align: 'center' });
+
+        // Right Side: Printed on
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed: ${printDate}`, pageWidth - margin, y + 4.2, { align: 'right' });
+
+        // Left Side: Total Records
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text(`Total Records: ${purchases.length}`, margin, y + 4.2);
+
+        let yPos = y + 8;
+
+        const tableRows = [];
+        let grandTotalQty = 0;
+        let grandTotalRemainingQty = 0;
+        let grandTotalAmount = 0;
+        let grandTotalPaid = 0;
+        let grandTotalDue = 0;
+
+        const sorted = [...purchases].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+        sorted.forEach((p, idx) => {
+            const items = p.items || [];
+            let pQty = 0;
+            const prodList = [];
+            const brandList = [];
+            const rateLines = [];
+
+            items.forEach(item => {
+                const pName = item.productName || item.product || '';
+                if (pName && !prodList.includes(pName)) {
+                    prodList.push(pName);
+                }
+                const bEntries = (item.brandEntries && item.brandEntries.length > 0)
+                    ? item.brandEntries
+                    : [{ brand: item.brand || '', qty: item.qty || 0, rate: item.rate || 0 }];
+
+                bEntries.forEach(be => {
+                    const q = parseFloat(be.qty) || 0;
+                    pQty += q;
+                    if (be.brand && !brandList.includes(be.brand)) {
+                        brandList.push(be.brand);
+                    }
+                    if (be.rate) {
+                        const rFormatted = (parseFloat(be.rate) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        if (!rateLines.includes(rFormatted)) {
+                            rateLines.push(rFormatted);
+                        }
+                    }
+                });
+            });
+
+            const tot = parseFloat(p.totalAmount) || 0;
+            const paid = parseFloat(p.paidAmount) || 0;
+            const due = parseFloat(p.dueAmount) || 0;
+            const rem = calculatePurchaseRemainingQty(p, purchaseReceivesList).remainingQty;
+
+            grandTotalQty += pQty;
+            grandTotalRemainingQty += rem;
+            grandTotalAmount += tot;
+            grandTotalPaid += paid;
+            grandTotalDue += due;
+
+            tableRows.push([
+                idx + 1,
+                formatDateStr(p.date),
+                p.purchaseNo || '—',
+                p.companyName || p.supplierName || '—',
+                p.warehouse || 'HILI',
+                prodList.length > 0 ? prodList.join(', ') : '—',
+                brandList.length > 0 ? brandList.join(', ') : '—',
+                pQty > 0 ? `${Math.round(pQty).toLocaleString('en-US')} kg` : '—',
+                rem > 0 ? `${Math.round(rem).toLocaleString('en-US')} kg` : '0 kg',
+                rateLines.length > 0 ? rateLines.join(', ') : '—',
+                tot > 0 ? Math.round(tot).toLocaleString('en-IN') : '0'
+            ]);
+        });
+
+        tableRows.push([
+            { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `${Math.round(grandTotalQty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `${Math.round(grandTotalRemainingQty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: '', styles: { fillColor: [240, 240, 240] } },
+            { content: Math.round(grandTotalAmount).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+        ]);
+
+        // --- Purchase Details Table (starts right under filter info, matching Stock Report) ---
+        autoTable(doc, {
+            startY: yPos,
+            head: [['SL', 'DATE', 'PURCHASE NO', 'SUPPLIER / COMPANY', 'WAREHOUSE', 'PRODUCT', 'BRAND', 'QTY (KG)', 'REMAIN QTY', 'PRICE', 'TOTAL AMOUNT']],
+            body: tableRows,
+            theme: 'plain',
+            styles: {
+                fontSize: 9,
+                cellPadding: { top: 1.8, bottom: 1.8, left: 1.2, right: 1.2 },
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0],
+                valign: 'middle',
+                overflow: 'linebreak'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                lineWidth: 0.1,
+                fontSize: 8.5,
+                cellPadding: { top: 2, bottom: 2, left: 0.8, right: 0.8 },
+                overflow: 'visible'
+            },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 9 },
+                1: { halign: 'center', cellWidth: 20 },
+                2: { halign: 'center', cellWidth: 26 },
+                3: { halign: 'left', cellWidth: 46 },
+                4: { halign: 'center', cellWidth: 22 },
+                5: { halign: 'left', cellWidth: 32 },
+                6: { halign: 'left', cellWidth: 24 },
+                7: { halign: 'right', cellWidth: 23 },
+                8: { halign: 'right', cellWidth: 23 },
+                9: { halign: 'right', cellWidth: 16 },
+                10: { halign: 'right', cellWidth: 38 }
+            },
+            margin: { left: margin, right: margin },
+            didParseCell: (data) => {
+                if (data.row.section === 'body') {
+                    if (data.row.index === tableRows.length - 1) {
+                        data.row.pageBreak = 'avoid';
+                    }
+                }
+            }
+        });
+
+        // --- Summary Cards Section below the table (matching Stock Report 2-tier design) ---
+        let cardY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : yPos) + 6;
+        const numCards = 4;
+        const cardGap = 4;
+        const totalCardGaps = cardGap * (numCards - 1);
+        const cardWidth = (pageWidth - (margin * 2) - totalCardGaps) / numCards;
+        const cardHeight = 15;
+
+        // If not enough room for cards + signature, push to new page
+        if (cardY + cardHeight + 25 > pageHeight - 10) {
+            doc.addPage();
+            cardY = 20;
+        }
+
+        const pdfSummaryCards = [
+            {
+                title: 'TOTAL PURCHASES',
+                sub: `RECORDS: ${purchases.length}`,
+                value: `TK ${Math.round(grandTotalAmount).toLocaleString('en-IN')}`,
+                bg: [248, 250, 252],
+                border: [203, 213, 225],
+                titleColor: [100, 116, 139],
+                subColor: [71, 85, 105],
+                valColor: [15, 23, 42]
+            },
+            {
+                title: 'TOTAL QUANTITY',
+                sub: 'TOTAL WEIGHT',
+                value: `${Math.round(grandTotalQty).toLocaleString('en-US')} kg`,
+                bg: [248, 250, 252],
+                border: [203, 213, 225],
+                titleColor: [100, 116, 139],
+                subColor: [71, 85, 105],
+                valColor: [15, 23, 42]
+            },
+            {
+                title: 'RECEIVED QUANTITY',
+                sub: 'IN-HOUSE RECEIVED',
+                value: `${Math.round(Math.max(0, grandTotalQty - grandTotalRemainingQty)).toLocaleString('en-US')} kg`,
+                bg: [248, 250, 252],
+                border: [203, 213, 225],
+                titleColor: [22, 101, 52],
+                subColor: [71, 85, 105],
+                valColor: [22, 101, 52]
+            },
+            {
+                title: 'REMAINING QUANTITY',
+                sub: 'PENDING IN-HOUSE',
+                value: `${Math.round(grandTotalRemainingQty).toLocaleString('en-US')} kg`,
+                bg: [255, 255, 255],
+                border: [249, 115, 22],
+                titleColor: [234, 88, 12],
+                subColor: [71, 85, 105],
+                valColor: [234, 88, 12]
+            }
+        ];
+
+        pdfSummaryCards.forEach((c, i) => {
+            const cx = margin + i * (cardWidth + cardGap);
+            doc.setFillColor(...c.bg);
+            doc.setDrawColor(...c.border);
+            doc.setLineWidth(c.border[0] === 249 ? 0.5 : 0.2);
+            doc.roundedRect(cx, cardY, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+            // Title
+            doc.setFontSize(6.8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...c.titleColor);
+            doc.text(c.title, cx + (cardWidth / 2), cardY + 3.8, { align: 'center' });
+
+            // Subtext
+            doc.setFontSize(6.2);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...c.subColor);
+            doc.text(c.sub, cx + (cardWidth / 2), cardY + 7.0, { align: 'center' });
+
+            // Divider inside card
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.1);
+            doc.line(cx + 4, cardY + 8.5, cx + cardWidth - 4, cardY + 8.5);
+
+            // Primary Value
+            doc.setFontSize(9.0);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...c.valColor);
+            doc.text(c.value, cx + (cardWidth / 2), cardY + 13.0, { align: 'center' });
+        });
+
+        // --- Signature Section (identical to Stock Report) ---
+        let sigY = cardY + cardHeight + 14;
+        if (sigY + 12 > pageHeight - 10) {
+            doc.addPage();
+            sigY = 25;
+        }
+        const sigWidth = 50;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.2);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, sigY, margin + sigWidth + sigGap + sigWidth, sigY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
+
+        // Page Numbers Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - PURCHASE REPORT', margin, pageHeight - 5);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        const newTab = window.open(blobURL, '_blank');
+        if (!newTab) {
+            const fileName = `Purchase_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(fileName);
+        }
+    } catch (err) {
+        console.error("Error generating Purchase Report PDF:", err);
+        alert("Failed to generate Purchase Report PDF: " + err.message);
+    }
+};
+
 
 
 

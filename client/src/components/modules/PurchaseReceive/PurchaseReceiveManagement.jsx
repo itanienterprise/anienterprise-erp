@@ -11,6 +11,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import '../Sale/SaleManagement.css';
 
 const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRecords, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
 
@@ -1449,19 +1450,23 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                 </div>
             </div>
 
-            {/* Summary Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white border border-blue-100 p-4 rounded-2xl shadow-sm">
-                    <div className="text-xs font-bold text-blue-600 uppercase tracking-wider">Total Purchase Receives</div>
-                    <div className="text-xl font-black text-gray-900 mt-1">৳ {stats.totalPurchases.toLocaleString('en-IN')}</div>
+            {/* Summary Cards matching Stock Management card style */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                <div className="bg-white border bg-blue-50/50 border-blue-100 p-3 md:p-4 rounded-2xl shadow-sm transition-all hover:shadow-md hover:scale-[1.02] flex flex-col justify-between h-full">
+                    <div className="text-[10px] md:text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1 whitespace-nowrap">Total Purchase Receives</div>
+                    <div className="text-sm md:text-lg font-black text-blue-700 truncate leading-tight">৳ {stats.totalPurchases.toLocaleString('en-IN')}</div>
                 </div>
-                <div className="bg-white border border-emerald-100 p-4 rounded-2xl shadow-sm">
-                    <div className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Total Paid</div>
-                    <div className="text-xl font-black text-emerald-600 mt-1">৳ {stats.totalPaid.toLocaleString('en-IN')}</div>
+                <div className="bg-white border bg-rose-50/50 border-rose-100 p-3 md:p-4 rounded-2xl shadow-sm transition-all hover:shadow-md hover:scale-[1.02] flex flex-col justify-between h-full">
+                    <div className="text-[10px] md:text-[11px] font-bold text-rose-600 uppercase tracking-wider mb-1 whitespace-nowrap">Total Disc.</div>
+                    <div className="text-sm md:text-lg font-black text-rose-700 truncate leading-tight">৳ {stats.totalDiscount.toLocaleString('en-IN')}</div>
                 </div>
-                <div className="bg-white border border-orange-100 p-4 rounded-2xl shadow-sm">
-                    <div className="text-xs font-bold text-orange-600 uppercase tracking-wider">Total Balance</div>
-                    <div className="text-xl font-black text-orange-600 mt-1">৳ {stats.totalDue.toLocaleString('en-IN')}</div>
+                <div className="bg-white border bg-emerald-50/50 border-emerald-100 p-3 md:p-4 rounded-2xl shadow-sm transition-all hover:shadow-md hover:scale-[1.02] flex flex-col justify-between h-full">
+                    <div className="text-[10px] md:text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1 whitespace-nowrap">Total Paid</div>
+                    <div className="text-sm md:text-lg font-black text-emerald-700 truncate leading-tight">৳ {stats.totalPaid.toLocaleString('en-IN')}</div>
+                </div>
+                <div className="bg-white border bg-orange-50/50 border-orange-100 p-3 md:p-4 rounded-2xl shadow-sm transition-all hover:shadow-md hover:scale-[1.02] flex flex-col justify-between h-full">
+                    <div className="text-[10px] md:text-[11px] font-bold text-orange-600 uppercase tracking-wider mb-1 whitespace-nowrap">Total Balance</div>
+                    <div className="text-sm md:text-lg font-black text-orange-700 truncate leading-tight">৳ {stats.totalDue.toLocaleString('en-IN')}</div>
                 </div>
             </div>
 

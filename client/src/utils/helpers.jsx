@@ -683,4 +683,56 @@ export const compareTransactions = (a, b) => {
     return aTime - bTime;
 };
 
+// Calculate remaining quantity for a purchase based on accepted purchase receives
+export const calculatePurchaseRemainingQty = (purchase, purchaseReceivesList = []) => {
+    let totalPurchased = 0;
+    let totalInHouse = 0;
+    const pNo = (purchase?.purchaseNo || purchase?.purchaseReceiveNo || '').trim().toLowerCase();
+
+    (purchase?.items || []).forEach(item => {
+        const normPName = (item.productName || item.product || '').trim().toLowerCase();
+        const bEntries = (item.brandEntries && item.brandEntries.length > 0)
+            ? item.brandEntries
+            : [{ brand: item.brand || '', qty: item.qty || 0 }];
+
+        bEntries.forEach(be => {
+            const purchasedQty = parseFloat(be.qty) || 0;
+            totalPurchased += purchasedQty;
+            const normBName = (be.brand || '').trim().toLowerCase();
+
+            let inHouseQty = 0;
+            if (pNo && Array.isArray(purchaseReceivesList) && purchaseReceivesList.length > 0) {
+                purchaseReceivesList.forEach(pr => {
+                    const prNo = (pr.purchaseNo || pr.purchaseReceiveNo || '').trim().toLowerCase();
+                    const prStatus = (pr.status || 'accepted').toLowerCase();
+                    if (prNo === pNo && (prStatus === 'accepted' || prStatus === 'approved')) {
+                        (pr.items || []).forEach(prItem => {
+                            const prPName = (prItem.productName || prItem.product || '').trim().toLowerCase();
+                            if (prPName === normPName) {
+                                (prItem.brandEntries || []).forEach(prBe => {
+                                    const prBName = (prBe.brand || '').trim().toLowerCase();
+                                    if (!normBName || !prBName || prBName === normBName) {
+                                        const ih = prBe.inHouseQuantity !== undefined && prBe.inHouseQuantity !== ''
+                                            ? parseFloat(prBe.inHouseQuantity)
+                                            : (parseFloat(prBe.qty) || 0);
+                                        inHouseQty += (parseFloat(ih) || 0);
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+            totalInHouse += inHouseQty;
+        });
+    });
+
+    const remainingQty = Math.max(0, totalPurchased - totalInHouse);
+    return {
+        purchasedQty: totalPurchased,
+        inHouseQty: totalInHouse,
+        remainingQty
+    };
+};
+
 
