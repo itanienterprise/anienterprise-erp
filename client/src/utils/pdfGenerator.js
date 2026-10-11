@@ -11808,6 +11808,396 @@ export const generatePurchaseReportPDF = async (purchases = [], filters = {}, da
     }
 };
 
+export const generatePurchaseReceiveReportPDF = async (purchaseReceives = [], filters = {}, dateStr = '') => {
+    try {
+        const doc = new jsPDF('l', 'mm', 'a4');
+
+        const formatDateStr = (d) => {
+            if (!d) return '-';
+            const parts = d.split('-');
+            if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            const dt = new Date(d);
+            if (isNaN(dt.getTime())) return '-';
+            return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 9;
+
+        // Load company logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        // --- Header ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        doc.setTextColor(249, 115, 22);
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(51, 51, 51);
+        const contactX = pageWidth - margin;
+        doc.text("766, H.M Tower, Level-06", contactX, margin + 4, { align: 'right' });
+        doc.text("Borogola, Bogura-5800, Bangladesh", contactX, margin + 8, { align: 'right' });
+        doc.text("Tel: +8802588813057", contactX, margin + 12, { align: 'right' });
+        doc.text("Email: anienterprise051@gmail.com", contactX, margin + 16, { align: 'right' });
+
+        // Decorative dividing line
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.8);
+        doc.line(margin, margin + 20, pageWidth - margin, margin + 20);
+
+        // Center Title Badge
+        const titleText = "PURCHASE RECEIVE REPORT";
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10.5);
+        const badgeW = doc.getTextWidth(titleText) + 20;
+        const badgeH = 7;
+        const badgeX = (pageWidth / 2) - (badgeW / 2);
+        const badgeY = margin + 20 - (badgeH / 2);
+
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.5, 1.5, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.text(titleText, pageWidth / 2, badgeY + 4.8, { align: 'center' });
+
+        // Metadata / Active Filter info bar
+        const y = margin + 27;
+        const printDate = dateStr || formatDate(new Date().toISOString().split('T')[0]);
+        const dateRange = `${formatDate(filters?.startDate) === '-' ? 'Start' : formatDate(filters?.startDate)} — ${formatDate(filters?.endDate) === '-' ? 'Present' : formatDate(filters?.endDate)}`;
+        const filterParts = [`Date: ${dateRange}`];
+        if (filters?.companyName || filters?.supplierName) filterParts.push(`Supplier: ${filters.companyName || filters.supplierName}`);
+        if (filters?.warehouse && filters.warehouse !== 'All' && filters.warehouse !== 'All Warehouses') filterParts.push(`Warehouse: ${filters.warehouse}`);
+        if (filters?.productName) filterParts.push(`Product: ${filters.productName}`);
+        if (filters?.brand) filterParts.push(`Brand: ${filters.brand}`);
+        const filterText = filterParts.join('   |   ');
+
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        const filterTW = doc.getTextWidth(filterText);
+        const pillW = Math.min(filterTW + 12, pageWidth - margin * 2 - 40);
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth / 2) - (pillW / 2), y, pillW, 6, 1.5, 1.5, 'FD');
+        doc.setTextColor(30, 41, 59);
+        doc.text(filterText, pageWidth / 2, y + 4.2, { align: 'center' });
+
+        // Right Side: Printed on
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed: ${printDate}`, pageWidth - margin, y + 4.2, { align: 'right' });
+
+        // Left Side: Total Records
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text(`Total Records: ${purchaseReceives.length}`, margin, y + 4.2);
+
+        let yPos = y + 8;
+
+        const tableRows = [];
+        let grandTotalArrivalQty = 0;
+        let grandTotalSwpQty = 0;
+        let grandTotalInHouseQty = 0;
+        let grandTotalAmount = 0;
+
+        const sorted = [...purchaseReceives].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+        sorted.forEach((p, idx) => {
+            const items = p.items || [];
+            let pArrivalQty = 0;
+            let pSwpQty = 0;
+            let pInHouseQty = 0;
+            const prodList = [];
+            const brandList = [];
+            const rateLines = [];
+
+            items.forEach(item => {
+                const pName = item.productName || item.product || '';
+                if (pName && !prodList.includes(pName)) {
+                    prodList.push(pName);
+                }
+                const bEntries = (item.brandEntries && item.brandEntries.length > 0)
+                    ? item.brandEntries
+                    : [{ brand: item.brand || '', qty: item.qty || 0, rate: item.rate || 0, sweepedQuantity: item.sweepedQuantity || item.swpQty || 0, inHouseQuantity: item.inHouseQuantity }];
+
+                bEntries.forEach(be => {
+                    const arrQty = parseFloat(be.qty) || 0;
+                    const swpQty = parseFloat(be.sweepedQuantity || be.swpQty) || 0;
+                    const ihQty = be.inHouseQuantity !== undefined && be.inHouseQuantity !== '' ? parseFloat(be.inHouseQuantity) : Math.max(0, arrQty - swpQty);
+
+                    pArrivalQty += arrQty;
+                    pSwpQty += swpQty;
+                    pInHouseQty += ihQty;
+
+                    if (be.brand && !brandList.includes(be.brand)) {
+                        brandList.push(be.brand);
+                    }
+                    if (be.rate) {
+                        const rFormatted = (parseFloat(be.rate) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        if (!rateLines.includes(rFormatted)) {
+                            rateLines.push(rFormatted);
+                        }
+                    }
+                });
+            });
+
+            let calculatedTotal = 0;
+            items.forEach(item => {
+                const bEntries = (item.brandEntries && item.brandEntries.length > 0)
+                    ? item.brandEntries
+                    : [{ brand: item.brand || '', qty: item.qty || 0, rate: item.rate || 0, sweepedQuantity: item.sweepedQuantity || item.swpQty || 0, inHouseQuantity: item.inHouseQuantity, total: item.total }];
+                bEntries.forEach(be => {
+                    const arrQty = parseFloat(be.qty) || 0;
+                    const swpQty = parseFloat(be.sweepedQuantity || be.swpQty) || 0;
+                    const ihQty = be.inHouseQuantity !== undefined && be.inHouseQuantity !== '' ? parseFloat(be.inHouseQuantity) : Math.max(0, arrQty - swpQty);
+                    const rate = parseFloat(be.rate) || 0;
+                    calculatedTotal += (be.total !== undefined ? parseFloat(be.total) : (ihQty * rate));
+                });
+            });
+
+            const tot = (p.totalAmount !== undefined && p.totalAmount !== null && parseFloat(p.totalAmount) > 0)
+                ? parseFloat(p.totalAmount)
+                : calculatedTotal;
+
+            grandTotalArrivalQty += pArrivalQty;
+            grandTotalSwpQty += pSwpQty;
+            grandTotalInHouseQty += pInHouseQty;
+            grandTotalAmount += tot;
+
+            tableRows.push([
+                idx + 1,
+                formatDateStr(p.date),
+                p.purchaseReceiveNo || p.purchaseNo || '—',
+                p.companyName || p.supplierName || '—',
+                p.warehouse || 'HILI',
+                prodList.length > 0 ? prodList.join(', ') : '—',
+                brandList.length > 0 ? brandList.join(', ') : '—',
+                pArrivalQty > 0 ? `${Math.round(pArrivalQty).toLocaleString('en-US')} kg` : '—',
+                pSwpQty > 0 ? `${Math.round(pSwpQty).toLocaleString('en-US')} kg` : '0 kg',
+                pInHouseQty > 0 ? `${Math.round(pInHouseQty).toLocaleString('en-US')} kg` : '0 kg',
+                rateLines.length > 0 ? rateLines.join(', ') : '—',
+                tot > 0 ? Math.round(tot).toLocaleString('en-IN') : '0'
+            ]);
+        });
+
+        tableRows.push([
+            { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `${Math.round(grandTotalArrivalQty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `${Math.round(grandTotalSwpQty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `${Math.round(grandTotalInHouseQty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: '—', styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: Math.round(grandTotalAmount).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+        ]);
+
+        autoTable(doc, {
+            startY: yPos,
+            head: [[
+                'SL', 'DATE', 'RECEIPT NO', 'SUPPLIER / COMPANY', 'WAREHOUSE', 'PRODUCT', 'BRAND',
+                'ARRIVAL QTY', 'SWP QTY', 'INHOUSE QTY', 'PRICE', 'TOTAL AMOUNT'
+            ]],
+            body: tableRows,
+            theme: 'plain',
+            styles: {
+                font: 'helvetica',
+                fontSize: 9,
+                cellPadding: 1.5,
+                textColor: [30, 41, 59],
+                lineWidth: 0.2,
+                lineColor: [51, 65, 85],
+                valign: 'middle',
+                overflow: 'ellipsize'
+            },
+            headStyles: {
+                fillColor: [248, 250, 252],
+                textColor: [15, 23, 42],
+                fontStyle: 'bold',
+                fontSize: 8.5,
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.2,
+                lineColor: [51, 65, 85],
+                overflow: 'visible'
+            },
+            columnStyles: {
+                0: { cellWidth: 9, halign: 'center' },
+                1: { cellWidth: 20, halign: 'center' },
+                2: { cellWidth: 26, halign: 'center', fontStyle: 'bold', textColor: [37, 99, 235] },
+                3: { cellWidth: 44, halign: 'left', fontStyle: 'bold' },
+                4: { cellWidth: 22, halign: 'center' },
+                5: { cellWidth: 30, halign: 'left' },
+                6: { cellWidth: 22, halign: 'left' },
+                7: { cellWidth: 23, halign: 'right', fontStyle: 'bold', textColor: [37, 99, 235] },
+                8: { cellWidth: 21, halign: 'right', fontStyle: 'bold', textColor: [225, 29, 72] },
+                9: { cellWidth: 23, halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] },
+                10: { cellWidth: 15, halign: 'right' },
+                11: { cellWidth: 24, halign: 'right', fontStyle: 'bold' }
+            },
+            margin: { left: margin, right: margin, bottom: 28 },
+            pageBreak: 'auto',
+            showHead: 'everyPage'
+        });
+
+        let finalY = doc.lastAutoTable.finalY + 6;
+
+        // Bottom Summary Cards
+        if (finalY + 45 > pageHeight - margin) {
+            doc.addPage();
+            finalY = margin + 10;
+        }
+
+        const cardGap = 4;
+        const totalCardsWidth = pageWidth - (margin * 2);
+        const cardWidth = (totalCardsWidth - (cardGap * 3)) / 4;
+        const cardHeight = 22;
+
+        const summaryCardsData = [
+            {
+                title: 'TOTAL PURCHASE RECEIVES',
+                sub: `RECORDS: ${purchaseReceives.length}`,
+                val: `TK ${Math.round(grandTotalAmount).toLocaleString('en-IN')}`,
+                color: [30, 41, 59]
+            },
+            {
+                title: 'ARRIVAL QUANTITY',
+                sub: 'TOTAL ARRIVAL',
+                val: `${Math.round(grandTotalArrivalQty).toLocaleString('en-US')} kg`,
+                color: [37, 99, 235]
+            },
+            {
+                title: 'SWEEPED QUANTITY',
+                sub: 'TOTAL SWEEPED',
+                val: `${Math.round(grandTotalSwpQty).toLocaleString('en-US')} kg`,
+                color: [225, 29, 72]
+            },
+            {
+                title: 'IN-HOUSE QUANTITY',
+                sub: 'TOTAL IN-HOUSE',
+                val: `${Math.round(grandTotalInHouseQty).toLocaleString('en-US')} kg`,
+                color: [5, 150, 105]
+            }
+        ];
+
+        summaryCardsData.forEach((c, i) => {
+            const cx = margin + (i * (cardWidth + cardGap));
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(203, 213, 225);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(cx, finalY, cardWidth, cardHeight, 2, 2, 'FD');
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(6.5);
+            doc.setTextColor(100, 116, 139);
+            doc.text(c.title, cx + (cardWidth / 2), finalY + 4.5, { align: 'center' });
+
+            doc.setFontSize(6.5);
+            doc.setTextColor(71, 85, 105);
+            doc.text(c.sub, cx + (cardWidth / 2), finalY + 8.5, { align: 'center' });
+
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.2);
+            doc.line(cx + 4, finalY + 11, cx + cardWidth - 4, finalY + 11);
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9.5);
+            doc.setTextColor(c.color[0], c.color[1], c.color[2]);
+            doc.text(c.val, cx + (cardWidth / 2), finalY + 17.5, { align: 'center' });
+        });
+
+        // Signatures
+        let sigY = finalY + cardHeight + 14;
+        if (sigY + 15 > pageHeight - margin) {
+            doc.addPage();
+            sigY = margin + 25;
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(51, 65, 85);
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - margin * 2 - sigWidth * 3) / 2;
+
+        doc.setDrawColor(15, 23, 42);
+        doc.setLineWidth(0.3);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, sigY, margin + sigWidth + sigGap + sigWidth, sigY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
+
+        // Page Numbers Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - PURCHASE RECEIVE REPORT', margin, pageHeight - 5);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        const newTab = window.open(blobURL, '_blank');
+        if (!newTab) {
+            const fileName = `Purchase_Receive_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(fileName);
+        }
+    } catch (err) {
+        console.error("Error generating Purchase Receive Report PDF:", err);
+        alert("Failed to generate Purchase Receive Report PDF: " + err.message);
+    }
+};
+
 
 
 

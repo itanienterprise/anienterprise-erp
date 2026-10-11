@@ -5326,6 +5326,188 @@ export const generatePurchaseReportExcel = (purchases = [], filters = {}, dateSt
     }
 };
 
+export const generatePurchaseReceiveReportExcel = (purchaseReceives = [], filters = {}, dateStr = '') => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['PURCHASE RECEIVE REPORT']);
+        rows.push([]);
+
+        // 2. Metadata & Active Filters
+        const printDate = dateStr || formatDate(new Date().toISOString().split('T')[0]);
+        const startStr = filters?.startDate ? formatDate(filters.startDate) : 'Start';
+        const endStr = filters?.endDate ? formatDate(filters.endDate) : 'Present';
+
+        rows.push([
+            'Total Records:',
+            purchaseReceives.length,
+            '',
+            'Date Range:',
+            filters?.startDate || filters?.endDate ? `${startStr} to ${endStr}` : 'All Dates',
+            '',
+            'Printed On:',
+            printDate
+        ]);
+
+        const filterBadges = [];
+        if (filters?.warehouse && filters.warehouse !== 'All' && filters.warehouse !== 'All Warehouses') filterBadges.push(`Warehouse: ${filters.warehouse}`);
+        if (filters?.companyName) filterBadges.push(`Supplier: ${filters.companyName}`);
+        if (filters?.productName) filterBadges.push(`Product: ${filters.productName}`);
+        if (filters?.brand) filterBadges.push(`Brand: ${filters.brand}`);
+
+        if (filterBadges.length > 0) {
+            rows.push(['Filters Applied:', filterBadges.join('  |  ')]);
+        }
+        rows.push([]); // Blank separator
+
+        // 3. Table Headers
+        const headers = [
+            'SL',
+            'Date',
+            'Receipt No',
+            'Supplier / Company',
+            'Warehouse',
+            'Product',
+            'Brand',
+            'Arrival Qty (KG)',
+            'SWP Qty (KG)',
+            'InHouse Qty (KG)',
+            'Price (৳)',
+            'Total Amount (৳)'
+        ];
+        rows.push(headers);
+
+        let grandTotalArrivalQty = 0;
+        let grandTotalSwpQty = 0;
+        let grandTotalInHouseQty = 0;
+        let grandTotalAmount = 0;
+
+        const sorted = [...purchaseReceives].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+        sorted.forEach((p, idx) => {
+            const items = p.items || [];
+            let pArrivalQty = 0;
+            let pSwpQty = 0;
+            let pInHouseQty = 0;
+            const prodList = [];
+            const brandList = [];
+            const rateLines = [];
+
+            items.forEach(item => {
+                const pName = item.productName || item.product || '';
+                if (pName && !prodList.includes(pName)) {
+                    prodList.push(pName);
+                }
+                const bEntries = (item.brandEntries && item.brandEntries.length > 0)
+                    ? item.brandEntries
+                    : [{ brand: item.brand || '', qty: item.qty || 0, rate: item.rate || 0, sweepedQuantity: item.sweepedQuantity || item.swpQty || 0, inHouseQuantity: item.inHouseQuantity }];
+
+                bEntries.forEach(be => {
+                    const arrQty = parseFloat(be.qty) || 0;
+                    const swpQty = parseFloat(be.sweepedQuantity || be.swpQty) || 0;
+                    const ihQty = be.inHouseQuantity !== undefined && be.inHouseQuantity !== '' ? parseFloat(be.inHouseQuantity) : Math.max(0, arrQty - swpQty);
+
+                    pArrivalQty += arrQty;
+                    pSwpQty += swpQty;
+                    pInHouseQty += ihQty;
+
+                    if (be.brand && !brandList.includes(be.brand)) {
+                        brandList.push(be.brand);
+                    }
+                    if (be.rate) {
+                        const rFormatted = (parseFloat(be.rate) || 0).toFixed(2);
+                        if (!rateLines.includes(rFormatted)) {
+                            rateLines.push(rFormatted);
+                        }
+                    }
+                });
+            });
+
+            let calculatedTotal = 0;
+            items.forEach(item => {
+                const bEntries = (item.brandEntries && item.brandEntries.length > 0)
+                    ? item.brandEntries
+                    : [{ brand: item.brand || '', qty: item.qty || 0, rate: item.rate || 0, sweepedQuantity: item.sweepedQuantity || item.swpQty || 0, inHouseQuantity: item.inHouseQuantity, total: item.total }];
+                bEntries.forEach(be => {
+                    const arrQty = parseFloat(be.qty) || 0;
+                    const swpQty = parseFloat(be.sweepedQuantity || be.swpQty) || 0;
+                    const ihQty = be.inHouseQuantity !== undefined && be.inHouseQuantity !== '' ? parseFloat(be.inHouseQuantity) : Math.max(0, arrQty - swpQty);
+                    const rate = parseFloat(be.rate) || 0;
+                    calculatedTotal += (be.total !== undefined ? parseFloat(be.total) : (ihQty * rate));
+                });
+            });
+
+            const tot = (p.totalAmount !== undefined && p.totalAmount !== null && parseFloat(p.totalAmount) > 0)
+                ? parseFloat(p.totalAmount)
+                : calculatedTotal;
+
+            grandTotalArrivalQty += pArrivalQty;
+            grandTotalSwpQty += pSwpQty;
+            grandTotalInHouseQty += pInHouseQty;
+            grandTotalAmount += tot;
+
+            rows.push([
+                idx + 1,
+                p.date ? formatDate(p.date) : '—',
+                p.purchaseReceiveNo || p.purchaseNo || '—',
+                p.companyName || p.supplierName || '—',
+                p.warehouse || 'HILI',
+                prodList.length > 0 ? prodList.join(', ') : '—',
+                brandList.length > 0 ? brandList.join(', ') : '—',
+                pArrivalQty,
+                pSwpQty,
+                pInHouseQty,
+                rateLines.length > 0 ? rateLines.join(', ') : '—',
+                tot
+            ]);
+        });
+
+        // 4. Grand Total Row
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            grandTotalArrivalQty,
+            grandTotalSwpQty,
+            grandTotalInHouseQty,
+            '',
+            grandTotalAmount
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 14 }, // Date
+            { wch: 18 }, // Receipt No
+            { wch: 28 }, // Supplier / Company
+            { wch: 15 }, // Warehouse
+            { wch: 25 }, // Product
+            { wch: 20 }, // Brand
+            { wch: 16 }, // Arrival Qty
+            { wch: 15 }, // SWP Qty
+            { wch: 16 }, // InHouse Qty
+            { wch: 15 }, // Price
+            { wch: 20 }  // Total Amount
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Purchase Receive Report');
+        const fileName = `Purchase_Receive_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    } catch (err) {
+        console.error('Error generating Purchase Receive Report Excel:', err);
+        alert(`Failed to generate Excel report: ${err.message}`);
+    }
+};
+
 
 
 

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { queryClient } from '../../../utils/queryClient';
-import { XIcon, BarChartIcon, PrinterIcon, FunnelIcon, SearchIcon, ChevronDownIcon } from '../../Icons';
+import { XIcon, BarChartIcon, PrinterIcon, FunnelIcon, SearchIcon, ChevronDownIcon, CheckIcon } from '../../Icons';
 import { formatDate, calculatePurchaseRemainingQty } from '../../../utils/helpers';
 import { generatePurchaseReportPDF } from '../../../utils/pdfGenerator';
 import { generatePurchaseReportExcel } from '../../../utils/excelGenerator';
@@ -32,6 +32,16 @@ const PurchaseReport = ({
         status: initialFilters.status || 'All'
     });
 
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState(null);
+    const [filterSearchInputs, setFilterSearchInputs] = useState({
+        companyName: '',
+        warehouse: '',
+        productName: '',
+        brand: ''
+    });
+
+    const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+    const statusDropdownRef = useRef(null);
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
 
@@ -54,7 +64,7 @@ const PurchaseReport = ({
         }
     }, [isOpen, initialFilters]);
 
-    // Close on click outside filter panel
+    // Close on click outside filter panel and status dropdown
     useEffect(() => {
         if (!isOpen) return;
         const handleClickOutside = (e) => {
@@ -63,6 +73,12 @@ const PurchaseReport = ({
                 filterButtonRef.current && !filterButtonRef.current.contains(e.target)
             ) {
                 setShowFilterPanel(false);
+                setFilterDropdownOpen(null);
+            }
+            if (
+                statusDropdownRef.current && !statusDropdownRef.current.contains(e.target)
+            ) {
+                setStatusDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -125,6 +141,14 @@ const PurchaseReport = ({
             brand: '',
             status: 'All'
         });
+        setFilterSearchInputs({
+            companyName: '',
+            warehouse: '',
+            productName: '',
+            brand: ''
+        });
+        setFilterDropdownOpen(null);
+        setStatusDropdownOpen(false);
         setSearchQuery('');
     };
 
@@ -472,22 +496,47 @@ const PurchaseReport = ({
                     </div>
 
                     <div className="flex items-center justify-end gap-1 sm:gap-3 flex-shrink-0">
-                        {/* Status Dropdown */}
-                        <div className="relative group no-print">
-                            <select
-                                value={filters.status}
-                                onChange={(e) => handleFilterChange('status', e.target.value)}
-                                className="appearance-none bg-white border border-gray-200 text-gray-700 py-1.5 sm:py-2.5 pl-2.5 sm:pl-4 pr-6 sm:pr-10 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all cursor-pointer hover:border-gray-300"
+                        {/* Status Custom Dropdown */}
+                        <div className="relative no-print" ref={statusDropdownRef}>
+                            <button
+                                type="button"
+                                onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                                className="h-7 sm:h-10 bg-white border border-gray-200 text-gray-700 px-2.5 sm:px-4 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold flex items-center justify-between gap-1.5 sm:gap-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 shadow-sm"
                             >
-                                <option value="All">All Purchases</option>
-                                <option value="Accepted">Accepted</option>
-                                <option value="Requested">Requested</option>
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 sm:px-3 text-gray-400">
-                                <svg className="fill-current h-3.5 w-3.5 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                                </svg>
-                            </div>
+                                <span>
+                                    {filters.status === 'Accepted' ? 'Accepted' : filters.status === 'Requested' ? 'Requested' : 'All Purchases'}
+                                </span>
+                                <ChevronDownIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 transition-transform duration-200 ${statusDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {statusDropdownOpen && (
+                                <div className="absolute right-0 mt-1.5 w-36 sm:w-44 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                                    {[
+                                        { value: 'All', label: 'All Purchases' },
+                                        { value: 'Accepted', label: 'Accepted' },
+                                        { value: 'Requested', label: 'Requested' }
+                                    ].map((opt) => (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            onClick={() => {
+                                                handleFilterChange('status', opt.value);
+                                                setStatusDropdownOpen(false);
+                                            }}
+                                            className={`w-full px-3 sm:px-4 py-2 text-left text-xs sm:text-sm flex items-center justify-between transition-colors ${
+                                                filters.status === opt.value
+                                                    ? 'bg-blue-50 text-blue-700 font-bold'
+                                                    : 'text-gray-700 hover:bg-gray-50 font-medium'
+                                            }`}
+                                        >
+                                            <span>{opt.label}</span>
+                                            {filters.status === opt.value && (
+                                                <CheckIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 flex-shrink-0" />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Filter Toggle Button */}
@@ -510,7 +559,7 @@ const PurchaseReport = ({
                                     <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[2005] md:hidden" onClick={() => setShowFilterPanel(false)} />
                                     <div
                                         ref={filterPanelRef}
-                                        className="fixed inset-x-4 top-24 md:absolute md:top-full md:left-auto md:right-0 md:mt-2 w-auto md:w-[22rem] bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col mb-4 animate-in fade-in zoom-in-95 duration-200"
+                                        className="fixed inset-x-4 top-24 md:absolute md:top-full md:left-auto md:right-0 md:mt-2 w-auto md:w-[24rem] bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.18)] z-[2010] p-4 flex flex-col mb-4 animate-in fade-in zoom-in-95 duration-200 overflow-visible text-left"
                                     >
                                         <div className="flex items-center justify-between pb-2 border-b border-gray-100 mb-3 flex-shrink-0">
                                             <span className="text-xs font-bold uppercase tracking-wider text-gray-900 flex items-center gap-1.5">
@@ -524,7 +573,7 @@ const PurchaseReport = ({
                                             </button>
                                         </div>
 
-                                        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                                        <div className="space-y-3">
                                             {/* Quick Range */}
                                             <div>
                                                 <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Quick Range</label>
@@ -553,8 +602,8 @@ const PurchaseReport = ({
                                                     <CustomDatePicker
                                                         value={filters.startDate}
                                                         onChange={(e) => {
-                                                            handleFilterChange('startDate', e.target.value);
-                                                            handleFilterChange('quickRange', 'custom');
+                                                             handleFilterChange('startDate', e.target.value);
+                                                             handleFilterChange('quickRange', 'custom');
                                                         }}
                                                         compact={true}
                                                     />
@@ -564,8 +613,8 @@ const PurchaseReport = ({
                                                     <CustomDatePicker
                                                         value={filters.endDate}
                                                         onChange={(e) => {
-                                                            handleFilterChange('endDate', e.target.value);
-                                                            handleFilterChange('quickRange', 'custom');
+                                                             handleFilterChange('endDate', e.target.value);
+                                                             handleFilterChange('quickRange', 'custom');
                                                         }}
                                                         compact={true}
                                                         rightAlign={true}
@@ -573,73 +622,251 @@ const PurchaseReport = ({
                                                 </div>
                                             </div>
 
-                                            {/* Warehouse */}
-                                            <div>
-                                                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Warehouse</label>
-                                                <select
-                                                    value={filters.warehouse}
-                                                    onChange={(e) => handleFilterChange('warehouse', e.target.value)}
-                                                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl p-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold text-gray-800"
+                                            {/* Warehouse Custom Dropdown */}
+                                            <div className={`space-y-1 relative ${filterDropdownOpen === 'warehouse' ? 'z-50' : 'z-40'}`}>
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Warehouse</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFilterDropdownOpen(filterDropdownOpen === 'warehouse' ? null : 'warehouse')}
+                                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-gray-50"
                                                 >
-                                                    <option value="">All Warehouses</option>
-                                                    {uniqueWarehouses.map(w => (
-                                                        <option key={w} value={w}>{w}</option>
-                                                    ))}
-                                                </select>
+                                                    <span className={`truncate ${filters.warehouse ? 'text-gray-900 font-semibold' : 'text-gray-500'}`}>
+                                                        {filters.warehouse || 'All Warehouses'}
+                                                    </span>
+                                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${filterDropdownOpen === 'warehouse' ? 'rotate-180' : ''}`} />
+                                                </button>
+                                                {filterDropdownOpen === 'warehouse' && (
+                                                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 flex flex-col w-full overflow-hidden">
+                                                        <div className="p-2 border-b border-gray-100 bg-white sticky top-0">
+                                                            <div className="relative">
+                                                                <SearchIcon className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Search warehouse..."
+                                                                    value={filterSearchInputs.warehouse}
+                                                                    onChange={(e) => setFilterSearchInputs(p => ({ ...p, warehouse: e.target.value }))}
+                                                                    className="w-full pl-8 pr-2 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="overflow-y-auto max-h-44">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleFilterChange('warehouse', '');
+                                                                    setFilterDropdownOpen(null);
+                                                                }}
+                                                                className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center justify-between ${!filters.warehouse ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}
+                                                            >
+                                                                <span>All Warehouses</span>
+                                                                {!filters.warehouse && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
+                                                            </button>
+                                                            {uniqueWarehouses.filter(wh => wh.toLowerCase().includes((filterSearchInputs.warehouse || '').toLowerCase())).map(wh => (
+                                                                <button
+                                                                    key={wh}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        handleFilterChange('warehouse', wh);
+                                                                        setFilterDropdownOpen(null);
+                                                                    }}
+                                                                    className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center justify-between ${filters.warehouse === wh ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}
+                                                                >
+                                                                    <span className="truncate">{wh}</span>
+                                                                    {filters.warehouse === wh && <CheckIcon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
 
-                                            {/* Supplier / Company */}
-                                            <div>
-                                                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Supplier / Company</label>
-                                                <select
-                                                    value={filters.companyName}
-                                                    onChange={(e) => handleFilterChange('companyName', e.target.value)}
-                                                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl p-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold text-gray-800"
+                                            {/* Supplier / Company Custom Dropdown */}
+                                            <div className={`space-y-1 relative ${filterDropdownOpen === 'company' ? 'z-50' : 'z-30'}`}>
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Supplier / Company</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFilterDropdownOpen(filterDropdownOpen === 'company' ? null : 'company')}
+                                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-gray-50"
                                                 >
-                                                    <option value="">All Suppliers / Companies</option>
-                                                    {uniqueSuppliers.map(s => (
-                                                        <option key={s} value={s}>{s}</option>
-                                                    ))}
-                                                </select>
+                                                    <span className={`truncate ${filters.companyName ? 'text-gray-900 font-semibold' : 'text-gray-500'}`}>
+                                                        {filters.companyName || 'All Suppliers / Companies'}
+                                                    </span>
+                                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${filterDropdownOpen === 'company' ? 'rotate-180' : ''}`} />
+                                                </button>
+                                                {filterDropdownOpen === 'company' && (
+                                                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 flex flex-col w-full overflow-hidden">
+                                                        <div className="p-2 border-b border-gray-100 bg-white sticky top-0">
+                                                            <div className="relative">
+                                                                <SearchIcon className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Search supplier..."
+                                                                    value={filterSearchInputs.companyName}
+                                                                    onChange={(e) => setFilterSearchInputs(p => ({ ...p, companyName: e.target.value }))}
+                                                                    className="w-full pl-8 pr-2 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="overflow-y-auto max-h-44">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleFilterChange('companyName', '');
+                                                                    setFilterDropdownOpen(null);
+                                                                }}
+                                                                className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center justify-between ${!filters.companyName ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}
+                                                            >
+                                                                <span>All Suppliers / Companies</span>
+                                                                {!filters.companyName && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
+                                                            </button>
+                                                            {uniqueSuppliers.filter(s => s.toLowerCase().includes((filterSearchInputs.companyName || '').toLowerCase())).map(s => (
+                                                                <button
+                                                                    key={s}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        handleFilterChange('companyName', s);
+                                                                        setFilterDropdownOpen(null);
+                                                                    }}
+                                                                    className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center justify-between ${filters.companyName === s ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}
+                                                                >
+                                                                    <span className="truncate">{s}</span>
+                                                                    {filters.companyName === s && <CheckIcon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
 
-                                            {/* Product */}
-                                            <div>
-                                                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Product</label>
-                                                <select
-                                                    value={filters.productName}
-                                                    onChange={(e) => {
-                                                        handleFilterChange('productName', e.target.value);
-                                                        handleFilterChange('brand', '');
-                                                    }}
-                                                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl p-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold text-gray-800"
+                                            {/* Product Custom Dropdown */}
+                                            <div className={`space-y-1 relative ${filterDropdownOpen === 'product' ? 'z-50' : 'z-20'}`}>
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Product</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFilterDropdownOpen(filterDropdownOpen === 'product' ? null : 'product')}
+                                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-gray-50"
                                                 >
-                                                    <option value="">All Products</option>
-                                                    {uniqueProducts.map(p => (
-                                                        <option key={p} value={p}>{p}</option>
-                                                    ))}
-                                                </select>
+                                                    <span className={`truncate ${filters.productName ? 'text-gray-900 font-semibold' : 'text-gray-500'}`}>
+                                                        {filters.productName || 'All Products'}
+                                                    </span>
+                                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${filterDropdownOpen === 'product' ? 'rotate-180' : ''}`} />
+                                                </button>
+                                                {filterDropdownOpen === 'product' && (
+                                                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 flex flex-col w-full overflow-hidden">
+                                                        <div className="p-2 border-b border-gray-100 bg-white sticky top-0">
+                                                            <div className="relative">
+                                                                <SearchIcon className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Search product..."
+                                                                    value={filterSearchInputs.productName}
+                                                                    onChange={(e) => setFilterSearchInputs(p => ({ ...p, productName: e.target.value }))}
+                                                                    className="w-full pl-8 pr-2 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="overflow-y-auto max-h-44">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleFilterChange('productName', '');
+                                                                    handleFilterChange('brand', '');
+                                                                    setFilterDropdownOpen(null);
+                                                                }}
+                                                                className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center justify-between ${!filters.productName ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}
+                                                            >
+                                                                <span>All Products</span>
+                                                                {!filters.productName && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
+                                                            </button>
+                                                            {uniqueProducts.filter(p => p.toLowerCase().includes((filterSearchInputs.productName || '').toLowerCase())).map(p => (
+                                                                <button
+                                                                    key={p}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        handleFilterChange('productName', p);
+                                                                        handleFilterChange('brand', '');
+                                                                        setFilterDropdownOpen(null);
+                                                                    }}
+                                                                    className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center justify-between ${filters.productName === p ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}
+                                                                >
+                                                                    <span className="truncate">{p}</span>
+                                                                    {filters.productName === p && <CheckIcon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
 
-                                            {/* Brand */}
-                                            <div>
-                                                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Brand</label>
-                                                <select
-                                                    value={filters.brand}
-                                                    onChange={(e) => handleFilterChange('brand', e.target.value)}
-                                                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl p-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold text-gray-800"
+                                            {/* Brand Custom Dropdown */}
+                                            <div className={`space-y-1 relative ${filterDropdownOpen === 'brand' ? 'z-50' : 'z-10'}`}>
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Brand</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFilterDropdownOpen(filterDropdownOpen === 'brand' ? null : 'brand')}
+                                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-gray-50"
                                                 >
-                                                    <option value="">All Brands</option>
-                                                    {uniqueBrands.map(b => (
-                                                        <option key={b} value={b}>{b}</option>
-                                                    ))}
-                                                </select>
+                                                    <span className={`truncate ${filters.brand ? 'text-gray-900 font-semibold' : 'text-gray-500'}`}>
+                                                        {filters.brand || 'All Brands'}
+                                                    </span>
+                                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${filterDropdownOpen === 'brand' ? 'rotate-180' : ''}`} />
+                                                </button>
+                                                {filterDropdownOpen === 'brand' && (
+                                                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 flex flex-col w-full overflow-hidden">
+                                                        <div className="p-2 border-b border-gray-100 bg-white sticky top-0">
+                                                            <div className="relative">
+                                                                <SearchIcon className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Search brand..."
+                                                                    value={filterSearchInputs.brand}
+                                                                    onChange={(e) => setFilterSearchInputs(p => ({ ...p, brand: e.target.value }))}
+                                                                    className="w-full pl-8 pr-2 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="overflow-y-auto max-h-44">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleFilterChange('brand', '');
+                                                                    setFilterDropdownOpen(null);
+                                                                }}
+                                                                className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center justify-between ${!filters.brand ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}
+                                                            >
+                                                                <span>All Brands</span>
+                                                                {!filters.brand && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
+                                                            </button>
+                                                            {uniqueBrands.filter(b => b.toLowerCase().includes((filterSearchInputs.brand || '').toLowerCase())).map(b => (
+                                                                <button
+                                                                    key={b}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        handleFilterChange('brand', b);
+                                                                        setFilterDropdownOpen(null);
+                                                                    }}
+                                                                    className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center justify-between ${filters.brand === b ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}
+                                                                >
+                                                                    <span className="truncate">{b}</span>
+                                                                    {filters.brand === b && <CheckIcon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
                                         <button
-                                            onClick={() => setShowFilterPanel(false)}
-                                            className="w-full py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-3 flex-shrink-0 active:scale-[0.98]"
+                                            onClick={() => {
+                                                setShowFilterPanel(false);
+                                                setFilterDropdownOpen(null);
+                                            }}
+                                            className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-4 flex-shrink-0 active:scale-[0.98] shadow-md"
                                         >
                                             APPLY FILTERS
                                         </button>
