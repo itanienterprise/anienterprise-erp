@@ -916,117 +916,8 @@ const SaleManagement = ({
     }, [saleType]);
 
 
-    const processSaleEffects = async (saleData, isEditing = false) => {
-        // Exclude Order bookings (saleType === 'Order' or ORD...) from customer sales history
-        if (saleData.saleType === 'Order' || (saleData.invoiceNo || '').startsWith('ORD')) {
-            return;
-        }
-        // Resolve Customer ID if missing or match directly by Customer ID
-        let targetCustomerId = saleData.customerId;
-        let matchedCustomer = null;
-
-        if (targetCustomerId) {
-            matchedCustomer = customers.find(c =>
-                c._id === targetCustomerId || c.customerId === targetCustomerId
-            );
-        }
-
-        if (!matchedCustomer && (saleData.companyName || saleData.customerName)) {
-            const cleanComp = (saleData.companyName || '').trim().toLowerCase();
-            const cleanCust = (saleData.customerName || '').trim().toLowerCase();
-
-            matchedCustomer = customers.find(c => {
-                const compMatch = cleanComp && (c.companyName || '').trim().toLowerCase() === cleanComp;
-                const custMatch = cleanCust && (c.customerName || '').trim().toLowerCase() === cleanCust;
-                return compMatch && custMatch;
-            }) || customers.find(c =>
-                cleanComp && (c.companyName || '').trim().toLowerCase() === cleanComp
-            );
-        }
-
-        if (matchedCustomer) {
-            targetCustomerId = matchedCustomer._id;
-        }
-
-        // Update Customer History
-        if (targetCustomerId) {
-            try {
-                const custRes = await axios.get(`${API_BASE_URL}/api/customers/${targetCustomerId}`);
-                const customer = custRes.data;
-
-                const newSaleEntries = [];
-                (saleData.items || []).forEach((product, pIdx) => {
-                    (product.brandEntries || []).forEach((entry, eIdx) => {
-                        const isFirstEntry = pIdx === 0 && eIdx === 0;
-                        newSaleEntries.push({
-                            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                            date: saleData.date,
-                            invoiceNo: saleData.invoiceNo,
-                            lcNo: saleData.lcNo || '',
-                            product: product.productName || '',
-                            brand: entry.brand || '',
-                            quantity: entry.quantity || 0,
-                            rate: entry.unitPrice || 0,
-                            truck: entry.truck || '',
-                            amount: entry.totalAmount || 0,
-                            paid: isFirstEntry ? (parseFloat(saleData.paidAmount) || 0) : 0,
-                            due: isFirstEntry ? (parseFloat(saleData.dueAmount) || 0) : (entry.totalAmount || 0),
-                            discount: isFirstEntry ? (parseFloat(saleData.discount) || 0) : 0,
-                            warehouse: entry.warehouseName || '',
-                            requestedBy: saleData.requestedBy || '',
-                            requestedByUsername: saleData.requestedByUsername || '',
-                            acceptedBy: saleData.acceptedBy || '',
-                            status: 'Pending'
-                        });
-                    });
-                });
-
-                let baseHistory = customer.salesHistory || [];
-                // Always filter out any existing entries with matching invoiceNo or orderNo to prevent duplicates on edit/acceptance
-                const targetInv = (saleData.invoiceNo || '').trim().toLowerCase();
-                const targetOrd = (saleData.orderNo || '').trim().toLowerCase();
-
-                baseHistory = baseHistory.filter(item => {
-                    const itemInv = (item.invoiceNo || '').trim().toLowerCase();
-                    const itemOrd = (item.orderNo || '').trim().toLowerCase();
-                    if (targetInv && itemInv === targetInv) return false;
-                    if (targetOrd && itemOrd && itemOrd === targetOrd) return false;
-                    if (targetOrd && itemInv && itemInv === targetOrd) return false;
-                    return true;
-                });
-
-                const updatedCustomer = {
-                    ...customer,
-                    salesHistory: [...newSaleEntries, ...baseHistory],
-                    _skipActivityLog: true
-                };
-
-                await axios.put(`${API_BASE_URL}/api/customers/${targetCustomerId}`, updatedCustomer);
-
-                // Clean up old entries from other customers if customer was changed during edit
-                if (targetInv) {
-                    for (const c of (customers || [])) {
-                        if (c._id !== targetCustomerId && c.salesHistory && Array.isArray(c.salesHistory)) {
-                            const hasInv = c.salesHistory.some(h => (h.invoiceNo || '').trim().toLowerCase() === targetInv);
-                            if (hasInv) {
-                                const cleanedHistory = c.salesHistory.filter(h => (h.invoiceNo || '').trim().toLowerCase() !== targetInv);
-                                try {
-                                    await axios.put(`${API_BASE_URL}/api/customers/${c._id}`, {
-                                        ...c,
-                                        salesHistory: cleanedHistory,
-                                        _skipActivityLog: true
-                                    });
-                                } catch (e) { }
-                            }
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('Error updating customer history:', err);
-            }
-        }
-
-
+    const processSaleEffects = async () => {
+        // Customer sales history is synchronized automatically & authoritatively by the backend syncSaleOnSave service
     };
 
     const handleStatusUpdate = async (sale, newStatus) => {
@@ -1083,11 +974,7 @@ const SaleManagement = ({
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
 
-                if ((newStatus || '').toLowerCase() === 'accepted') {
-                    processSaleEffects(updatedData, false).catch(err => {
-                        console.warn('processSaleEffects warning:', err);
-                    });
-                }
+                // Note: Customer synchronization is authoritatively handled by the backend syncSaleOnSave service
 
                 if (addNotification) {
                     try {
@@ -1335,15 +1222,32 @@ const SaleManagement = ({
     // Real-time synchronization: listen for database mutations via Socket.IO & erp_data_updated
     useEffect(() => {
         const socket = getSocket();
+        let salesTimer = null;
+        let custTimer = null;
+
+        const debouncedFetchSales = () => {
+            if (salesTimer) clearTimeout(salesTimer);
+            salesTimer = setTimeout(() => {
+                fetchSales();
+                if (refreshPendingIndicators) refreshPendingIndicators();
+            }, 300);
+        };
+
+        const debouncedFetchCustomers = () => {
+            if (custTimer) clearTimeout(custTimer);
+            custTimer = setTimeout(() => {
+                fetchCustomers();
+            }, 300);
+        };
+
         const handleRealtimeUpdate = (data) => {
             const mod = data?.module;
             console.log('[SaleManagement] Real-time event received:', data);
             if (!mod || mod === 'sales' || mod === 'orders' || mod === 'all' || mod === 'notifications') {
-                fetchSales();
-                if (refreshPendingIndicators) refreshPendingIndicators();
+                debouncedFetchSales();
             }
             if (mod === 'customers' || mod === 'all') {
-                fetchCustomers();
+                debouncedFetchCustomers();
             }
             if (mod === 'stock' || mod === 'warehouses' || mod === 'stock-baseline' || mod === 'all') {
                 fetchStockRecords();
@@ -1376,6 +1280,8 @@ const SaleManagement = ({
                 socket.off('data_updated', handleRealtimeUpdate);
             }
             window.removeEventListener('erp_data_updated', onCustomEvent);
+            if (salesTimer) clearTimeout(salesTimer);
+            if (custTimer) clearTimeout(custTimer);
             clearInterval(pollTimer);
         };
     }, [saleType]);
@@ -2500,11 +2406,6 @@ const SaleManagement = ({
                 resetForm();
                 fetchSales();
 
-                if (!isRequested) {
-                    processSaleEffects(formData, !!editingId).catch(err => {
-                        console.error('Background processSaleEffects error:', err);
-                    });
-                }
 
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sales });
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });

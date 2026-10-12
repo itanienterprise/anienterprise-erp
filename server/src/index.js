@@ -2785,154 +2785,177 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
     const updatedRecord = await Customer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Customer not found' });
 
-    // Propagate companyName, customerName, phone, address, and customerType to related sales
-    const sales = await Sale.find();
-    for (const s of sales) {
-      let d = decryptData(s.data);
-      if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
-        try { d = decryptData(d.data); } catch (e) { }
+    const profileInfoChanged = Boolean(
+      (newCompanyName && newCompanyName !== (oldData.companyName || '').trim()) ||
+      (newCustomerName && newCustomerName !== (oldData.customerName || '').trim()) ||
+      (newPhone && newPhone !== (oldData.phone || '').trim()) ||
+      (newAddress && newAddress !== (oldData.address || oldData.location || '').trim()) ||
+      (newCustomerType && newCustomerType !== (oldData.customerType || '').trim())
+    );
+
+    if (profileInfoChanged) {
+      // Propagate companyName, customerName, phone, address, and customerType to related sales
+      const sales = await Sale.find();
+      for (const s of sales) {
+        let d = decryptData(s.data);
+        if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
+          try { d = decryptData(d.data); } catch (e) { }
+        }
+        if (!d) continue;
+
+        const saleCustId = (d.customerId || (d.customer && d.customer._id) || '').toString().trim();
+        const isIdMatch =
+          saleCustId === req.params.id ||
+          (oldData && oldData.customerId && saleCustId === oldData.customerId) ||
+          (newCustomerId && saleCustId === newCustomerId) ||
+          (d.customer && (
+            d.customer._id === req.params.id ||
+            (oldData && oldData.customerId && d.customer.customerId === oldData.customerId) ||
+            (newCustomerId && d.customer.customerId === newCustomerId)
+          ));
+
+        // Only match by company name if the sale has no explicit customerId or if its customerId already matches this customer.
+        // NEVER match by customerName (contact person name) alone, as different companies often share contact names!
+        const isCompanyMatch =
+          (!saleCustId || saleCustId === req.params.id) &&
+          Boolean(oldData && oldData.companyName && d.companyName && d.companyName.trim().toLowerCase() === oldData.companyName.trim().toLowerCase());
+
+        const isMatch = isIdMatch || isCompanyMatch;
+
+        if (isMatch) {
+          let changed = false;
+          if (newCompanyName && d.companyName !== newCompanyName) {
+            d.companyName = newCompanyName;
+            changed = true;
+          }
+          if (newCustomerName && d.customerName !== newCustomerName) {
+            d.customerName = newCustomerName;
+            changed = true;
+          }
+          if (newPhone && (d.phone !== newPhone || d.customerPhone !== newPhone)) {
+            d.phone = newPhone;
+            d.customerPhone = newPhone;
+            changed = true;
+          }
+          if (newAddress && (d.address !== newAddress || d.customerAddress !== newAddress || d.location !== newAddress)) {
+            d.address = newAddress;
+            d.customerAddress = newAddress;
+            d.location = newAddress;
+            changed = true;
+          }
+          if (newCustomerType && d.customerType !== newCustomerType) {
+            d.customerType = newCustomerType;
+            changed = true;
+          }
+          if (req.body.uom && d.uom !== req.body.uom) {
+            d.uom = req.body.uom;
+            changed = true;
+          }
+          if (d.customer) {
+            d.customer = {
+              ...d.customer,
+              _id: req.params.id,
+              customerId: newCustomerId || d.customer.customerId,
+              companyName: newCompanyName || d.customer.companyName,
+              customerName: newCustomerName || d.customer.customerName,
+              phone: newPhone || d.customer.phone,
+              address: newAddress || d.customer.address,
+              location: newAddress || d.customer.location,
+              customerType: newCustomerType || d.customer.customerType
+            };
+            changed = true;
+          }
+          if (d.customerId !== req.params.id) {
+            d.customerId = req.params.id;
+            changed = true;
+          }
+
+          if (changed) {
+            s.data = encryptData(d);
+            await s.save();
+          }
+        }
       }
-      if (!d) continue;
 
-      const saleCustId = (d.customerId || (d.customer && d.customer._id) || '').toString().trim();
-      const isIdMatch =
-        saleCustId === req.params.id ||
-        (oldData && oldData.customerId && saleCustId === oldData.customerId) ||
-        (newCustomerId && saleCustId === newCustomerId) ||
-        (d.customer && (
-          d.customer._id === req.params.id ||
-          (oldData && oldData.customerId && d.customer.customerId === oldData.customerId) ||
-          (newCustomerId && d.customer.customerId === newCustomerId)
-        ));
+      // Propagate changes to related returns
+      const returns = await Return.find();
+      for (const r of returns) {
+        let d = decryptData(r.data);
+        if (d && d.data && typeof d.data === 'string') {
+          try { d = decryptData(d.data); } catch (e) { }
+        }
+        if (!d) continue;
 
-      // Only match by company name if the sale has no explicit customerId or if its customerId already matches this customer.
-      // NEVER match by customerName (contact person name) alone, as different companies often share contact names!
-      const isCompanyMatch =
-        (!saleCustId || saleCustId === req.params.id) &&
-        Boolean(oldData && oldData.companyName && d.companyName && d.companyName.trim().toLowerCase() === oldData.companyName.trim().toLowerCase());
+        const returnCustId = (d.customerId || '').toString().trim();
+        const isIdMatch =
+          returnCustId === req.params.id ||
+          (oldData && oldData.customerId && returnCustId === oldData.customerId) ||
+          (newCustomerId && returnCustId === newCustomerId);
 
-      const isMatch = isIdMatch || isCompanyMatch;
+        const isCompanyMatch =
+          (!returnCustId || returnCustId === req.params.id) &&
+          Boolean(oldData && oldData.companyName && d.companyName && d.companyName.trim().toLowerCase() === oldData.companyName.trim().toLowerCase());
 
-      if (isMatch) {
-        let changed = false;
-        if (newCompanyName && d.companyName !== newCompanyName) {
-          d.companyName = newCompanyName;
-          changed = true;
-        }
-        if (newCustomerName && d.customerName !== newCustomerName) {
-          d.customerName = newCustomerName;
-          changed = true;
-        }
-        if (newPhone && (d.phone !== newPhone || d.customerPhone !== newPhone)) {
-          d.phone = newPhone;
-          d.customerPhone = newPhone;
-          changed = true;
-        }
-        if (newAddress && (d.address !== newAddress || d.customerAddress !== newAddress || d.location !== newAddress)) {
-          d.address = newAddress;
-          d.customerAddress = newAddress;
-          d.location = newAddress;
-          changed = true;
-        }
-        if (newCustomerType && d.customerType !== newCustomerType) {
-          d.customerType = newCustomerType;
-          changed = true;
-        }
-        if (req.body.uom && d.uom !== req.body.uom) {
-          d.uom = req.body.uom;
-          changed = true;
-        }
-        if (d.customer) {
-          d.customer = {
-            ...d.customer,
-            _id: req.params.id,
-            customerId: newCustomerId || d.customer.customerId,
-            companyName: newCompanyName || d.customer.companyName,
-            customerName: newCustomerName || d.customer.customerName,
-            phone: newPhone || d.customer.phone,
-            address: newAddress || d.customer.address,
-            location: newAddress || d.customer.location,
-            customerType: newCustomerType || d.customer.customerType
-          };
-          changed = true;
-        }
-        if (d.customerId !== req.params.id) {
-          d.customerId = req.params.id;
-          changed = true;
-        }
+        const isMatch = isIdMatch || isCompanyMatch;
 
-        if (changed) {
-          s.data = encryptData(d);
-          await s.save();
+        if (isMatch) {
+          let changed = false;
+          if (newCompanyName && d.companyName !== newCompanyName) {
+            d.companyName = newCompanyName;
+            changed = true;
+          }
+          if (newCustomerName && d.customerName !== newCustomerName) {
+            d.customerName = newCustomerName;
+            changed = true;
+          }
+          if (newPhone && (d.phone !== newPhone || d.customerPhone !== newPhone)) {
+            d.phone = newPhone;
+            d.customerPhone = newPhone;
+            changed = true;
+          }
+          if (newAddress && (d.address !== newAddress || d.customerAddress !== newAddress)) {
+            d.address = newAddress;
+            d.customerAddress = newAddress;
+            changed = true;
+          }
+          if (d.customerId !== req.params.id) {
+            d.customerId = req.params.id;
+            changed = true;
+          }
+          if (changed) {
+            r.data = encryptData(d);
+            await r.save();
+          }
+        }
+      }
+
+      // Propagate to LCGatePass
+      const gatePasses = await LCGatePass.find();
+      for (const gp of gatePasses) {
+        let d = decryptData(gp.data);
+        if (!d) continue;
+        const isMatch =
+          d.customerId === req.params.id ||
+          (oldData && oldData.companyName && d.party && d.party.trim().toLowerCase() === oldData.companyName.trim().toLowerCase());
+
+        if (isMatch && newCompanyName && d.party !== newCompanyName) {
+          d.party = newCompanyName;
+          gp.data = encryptData(d);
+          await gp.save();
         }
       }
     }
 
-    // Propagate changes to related returns
-    const returns = await Return.find();
-    for (const r of returns) {
-      let d = decryptData(r.data);
-      if (d && d.data && typeof d.data === 'string') {
-        try { d = decryptData(d.data); } catch (e) { }
-      }
-      if (!d) continue;
-
-      const returnCustId = (d.customerId || '').toString().trim();
-      const isIdMatch =
-        returnCustId === req.params.id ||
-        (oldData && oldData.customerId && returnCustId === oldData.customerId) ||
-        (newCustomerId && returnCustId === newCustomerId);
-
-      const isCompanyMatch =
-        (!returnCustId || returnCustId === req.params.id) &&
-        Boolean(oldData && oldData.companyName && d.companyName && d.companyName.trim().toLowerCase() === oldData.companyName.trim().toLowerCase());
-
-      const isMatch = isIdMatch || isCompanyMatch;
-
-      if (isMatch) {
-        let changed = false;
-        if (newCompanyName && d.companyName !== newCompanyName) {
-          d.companyName = newCompanyName;
-          changed = true;
-        }
-        if (newCustomerName && d.customerName !== newCustomerName) {
-          d.customerName = newCustomerName;
-          changed = true;
-        }
-        if (newPhone && (d.phone !== newPhone || d.customerPhone !== newPhone)) {
-          d.phone = newPhone;
-          d.customerPhone = newPhone;
-          changed = true;
-        }
-        if (newAddress && (d.address !== newAddress || d.customerAddress !== newAddress)) {
-          d.address = newAddress;
-          d.customerAddress = newAddress;
-          changed = true;
-        }
-        if (d.customerId !== req.params.id) {
-          d.customerId = req.params.id;
-          changed = true;
-        }
-        if (changed) {
-          r.data = encryptData(d);
-          await r.save();
-        }
-      }
-    }
-
-    // Propagate to LCGatePass
-    const gatePasses = await LCGatePass.find();
-    for (const gp of gatePasses) {
-      let d = decryptData(gp.data);
-      if (!d) continue;
-      const isMatch =
-        d.customerId === req.params.id ||
-        (oldData && oldData.companyName && d.party && d.party.trim().toLowerCase() === oldData.companyName.trim().toLowerCase());
-
-      if (isMatch && newCompanyName && d.party !== newCompanyName) {
-        d.party = newCompanyName;
-        gp.data = encryptData(d);
-        await gp.save();
+    // Update memoryCache.customers in-place
+    if (Array.isArray(memoryCache.customers)) {
+      const cIdx = memoryCache.customers.findIndex(c => c._id?.toString() === req.params.id);
+      if (cIdx !== -1) {
+        memoryCache.customers[cIdx] = {
+          ...memoryCache.customers[cIdx],
+          ...req.body,
+          _id: updatedRecord._id,
+          createdAt: updatedRecord.createdAt
+        };
       }
     }
 
@@ -3153,26 +3176,33 @@ apiRouter.post('/api/sales', async (req, res) => {
       const prefix = (sType === 'Border' || sType === 'Border Sale') ? 'BS' : 'GS';
 
       if (!newInvoiceNo || !newInvoiceNo.startsWith(prefix)) {
-        const allSales = await Sale.find();
         const numbers = [];
         let maxDigits = 4;
-        for (const s of allSales) {
-          let d;
-          try {
-            d = decryptData(s.data);
-            if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
-              try { d = decryptData(d.data); } catch (e) { }
-            }
-          } catch (e) {
-            console.error('Error decrypting sale during invoice generation:', e);
-          }
 
-          const invNo = s.invoiceNo || (d ? d.invoiceNo : '');
-          if (invNo && invNo.toUpperCase().startsWith(prefix)) {
-            const match = invNo.match(/\d+/);
-            if (match) {
-              numbers.push(parseInt(match[0], 10));
-              if (match[0].length > maxDigits) maxDigits = match[0].length;
+        if (Array.isArray(memoryCache.sales) && memoryCache.sales.length > 0) {
+          for (const s of memoryCache.sales) {
+            const invNo = s.invoiceNo || s.orderNo || '';
+            if (invNo && invNo.toUpperCase().startsWith(prefix)) {
+              const match = invNo.match(/\d+/);
+              if (match) {
+                numbers.push(parseInt(match[0], 10));
+                if (match[0].length > maxDigits) maxDigits = match[0].length;
+              }
+            }
+          }
+        } else {
+          const matchingSales = await Sale.find(
+            { invoiceNo: new RegExp('^' + prefix, 'i') },
+            { invoiceNo: 1 }
+          ).lean();
+          for (const s of matchingSales) {
+            const invNo = s.invoiceNo || '';
+            if (invNo) {
+              const match = invNo.match(/\d+/);
+              if (match) {
+                numbers.push(parseInt(match[0], 10));
+                if (match[0].length > maxDigits) maxDigits = match[0].length;
+              }
             }
           }
         }
@@ -3183,27 +3213,37 @@ apiRouter.post('/api/sales', async (req, res) => {
       saleData.invoiceNo = newInvoiceNo;
     } else {
       if (!newInvoiceNo) {
-        const allSales = await Sale.find();
         const numbers = [];
         let maxDigits = 4;
-        for (const s of allSales) {
-          let d;
-          try {
-            d = decryptData(s.data);
-            if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
-              try { d = decryptData(d.data); } catch (e) { }
-            }
-          } catch (e) { }
 
-          const invNo = s.invoiceNo || (d ? d.invoiceNo : '');
-          if (invNo && invNo.toUpperCase().startsWith('ORD')) {
-            const match = invNo.match(/\d+/);
-            if (match) {
-              numbers.push(parseInt(match[0], 10));
-              if (match[0].length > maxDigits) maxDigits = match[0].length;
+        if (Array.isArray(memoryCache.sales) && memoryCache.sales.length > 0) {
+          for (const s of memoryCache.sales) {
+            const invNo = s.invoiceNo || s.orderNo || '';
+            if (invNo && invNo.toUpperCase().startsWith('ORD')) {
+              const match = invNo.match(/\d+/);
+              if (match) {
+                numbers.push(parseInt(match[0], 10));
+                if (match[0].length > maxDigits) maxDigits = match[0].length;
+              }
+            }
+          }
+        } else {
+          const matchingOrders = await Sale.find(
+            { invoiceNo: /^ORD/i },
+            { invoiceNo: 1 }
+          ).lean();
+          for (const s of matchingOrders) {
+            const invNo = s.invoiceNo || '';
+            if (invNo) {
+              const match = invNo.match(/\d+/);
+              if (match) {
+                numbers.push(parseInt(match[0], 10));
+                if (match[0].length > maxDigits) maxDigits = match[0].length;
+              }
             }
           }
         }
+
         const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
         newInvoiceNo = `ORD${nextNum.toString().padStart(maxDigits, '0')}`;
       }
@@ -3234,6 +3274,7 @@ apiRouter.post('/api/sales', async (req, res) => {
     const encryptedData = encryptData(saleData);
     const newSale = new Sale({
       invoiceNo: newInvoiceNo,
+      orderNo: isOrderEntry ? newInvoiceNo : (saleData.orderNo || undefined),
       saleType: sType,
       data: encryptedData
     });
@@ -3243,6 +3284,18 @@ apiRouter.post('/api/sales', async (req, res) => {
     } catch (syncErr) {
       console.error('Error synchronizing customer sales history on sale create:', syncErr);
     }
+
+    // Update memoryCache.sales in-place
+    if (Array.isArray(memoryCache.sales)) {
+      memoryCache.sales.unshift({
+        ...saleData,
+        _id: savedSale._id,
+        createdAt: savedSale.createdAt,
+        saleType: sType,
+        invoiceNo: newInvoiceNo
+      });
+    }
+
     res.status(201).json({ ...saleData, _id: savedSale._id, createdAt: savedSale.createdAt });
   } catch (err) {
     if (err.code === 11000) {
@@ -3290,6 +3343,9 @@ apiRouter.delete('/api/sales/:id', async (req, res) => {
     }
 
     await Sale.findByIdAndDelete(req.params.id);
+    if (Array.isArray(memoryCache.sales)) {
+      memoryCache.sales = memoryCache.sales.filter(s => s._id?.toString() !== req.params.id);
+    }
     res.json({ message: 'Sale deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3364,6 +3420,7 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedSale = await Sale.findByIdAndUpdate(req.params.id, {
       invoiceNo: req.body.invoiceNo,
+      orderNo: req.body.orderNo || (req.body.isOrderEntry || (req.body.saleType || '').toLowerCase() === 'order' ? req.body.invoiceNo : undefined),
       saleType: req.body.saleType,
       data: encryptedData
     }, { returnDocument: 'after' });
@@ -3375,6 +3432,19 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
       console.error('Error auto-updating customer sales history on sale/order update:', cascadeErr);
     }
 
+    // Update memoryCache.sales in-place
+    if (Array.isArray(memoryCache.sales)) {
+      const sIdx = memoryCache.sales.findIndex(s => s._id?.toString() === req.params.id);
+      if (sIdx !== -1) {
+        memoryCache.sales[sIdx] = {
+          ...memoryCache.sales[sIdx],
+          ...req.body,
+          _id: updatedSale._id,
+          updatedAt: updatedSale.updatedAt
+        };
+      }
+    }
+
     res.json({ ...req.body, _id: updatedSale._id, createdAt: updatedSale.createdAt });
   } catch (err) {
     if (err.code === 11000) {
@@ -3384,22 +3454,32 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
   }
 });
 
+let inFlightSalesFetch = null;
+
 apiRouter.get('/api/sales', async (req, res) => {
   try {
     if (memoryCache.sales) {
       return res.json(memoryCache.sales);
     }
-    const records = await Sale.find().sort({ createdAt: -1 });
-    const decrypted = records.map(r => {
-      let d = decryptData(r.data);
-      // Auto-fallback for testing records that were double-encrypted by the bug
-      if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
-        try { d = decryptData(d.data); } catch (e) { /* ignore */ }
-      }
-      return { ...d, _id: r._id, createdAt: r.createdAt, saleType: d.saleType || r.saleType, invoiceNo: d.invoiceNo || r.invoiceNo };
-    });
-    memoryCache.sales = decrypted;
-    res.json(decrypted);
+    if (!inFlightSalesFetch) {
+      inFlightSalesFetch = (async () => {
+        const records = await Sale.find().sort({ createdAt: -1 }).lean();
+        const decrypted = records.map(r => {
+          let d = decryptData(r.data);
+          // Auto-fallback for testing records that were double-encrypted by the bug
+          if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
+            try { d = decryptData(d.data); } catch (e) { /* ignore */ }
+          }
+          return { ...d, _id: r._id, createdAt: r.createdAt, saleType: d.saleType || r.saleType, invoiceNo: d.invoiceNo || r.invoiceNo };
+        });
+        memoryCache.sales = decrypted;
+        return decrypted;
+      })().finally(() => {
+        inFlightSalesFetch = null;
+      });
+    }
+    const data = await inFlightSalesFetch;
+    res.json(data);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -6489,12 +6569,19 @@ apiRouter.get('/api/logs/user-history', adminOnly, async (req, res) => {
 apiRouter.post('/api/logs/client-action', async (req, res) => {
   try {
     const user = req.session?.user;
-    if (!user || user.username === 'anonymous') {
+    if (!user || !user.username || user.username === 'anonymous') {
       return res.json({ success: true, count: 0 });
     }
 
-    const rawActions = Array.isArray(req.body.actions) ? req.body.actions : [req.body];
-    const actions = rawActions.slice(0, 10);
+    const body = req.body || {};
+    const rawActions = Array.isArray(body.actions)
+      ? body.actions
+      : (body && typeof body === 'object' && Object.keys(body).length > 0 ? [body] : []);
+    const actions = rawActions.filter(a => a && typeof a === 'object').slice(0, 10);
+    if (actions.length === 0) {
+      return res.json({ success: true, count: 0 });
+    }
+
     const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
     const rawUserAgent = req.headers['user-agent'] || '';
 
@@ -6519,7 +6606,12 @@ apiRouter.post('/api/logs/client-action', async (req, res) => {
     }
 
     const logsToInsert = actions.map(act => {
-      let cleanDetails = sanitizePayload(act.details || {});
+      let cleanDetails = {};
+      try {
+        cleanDetails = sanitizePayload(act.details || {});
+      } catch (e) {
+        cleanDetails = {};
+      }
       const pruned = {};
       if (cleanDetails && typeof cleanDetails === 'object') {
         if (cleanDetails.view) pruned.view = cleanDetails.view;
@@ -6537,48 +6629,60 @@ apiRouter.post('/api/logs/client-action', async (req, res) => {
       const validCategories = ['MUTATION', 'APPROVAL', 'AUTH', 'UI_CLICK', 'UI_INTERACTION', 'SYSTEM'];
       const actionCategory = validCategories.includes(act.actionCategory) ? act.actionCategory : 'UI_CLICK';
 
+      const rawDate = act.timestamp ? new Date(act.timestamp) : new Date();
+      const safeTimestamp = (rawDate instanceof Date && !isNaN(rawDate.getTime())) ? rawDate : new Date();
+
+      const description = String(act.description || act.actionName || `User action in ${act.module || 'System'}`).trim() || 'User Action';
+
       const doc = {
-        timestamp: act.timestamp ? new Date(act.timestamp) : new Date(),
+        timestamp: safeTimestamp,
         username: user?.username || 'System',
-        module: act.module || 'System',
-        action: act.action || 'CLICK',
+        module: String(act.module || 'System'),
+        action: String(act.action || 'CLICK'),
         actionCategory,
-        description: act.description || `User clicked "${act.actionName || 'Button'}" in ${act.module || 'System'}`
+        description,
+        status: 'SUCCESS'
       };
 
-      if (user?.id) doc.userId = user.id;
-      if (user?.role) doc.userRole = user.role;
-      if (user?.name && user.name !== user.username) doc.displayName = user.name;
+      if (user?.id) doc.userId = String(user.id);
+      if (user?.role) doc.userRole = String(user.role);
+      if (user?.name && user.name !== user.username) doc.displayName = String(user.name);
       if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') doc.ip = clientIp;
       if (compactUserAgent) doc.userAgent = compactUserAgent;
-      if (act.path && act.path !== '/') doc.path = act.path;
+      if (act.path && act.path !== '/') doc.path = String(act.path);
       if (Object.keys(pruned).length > 0) doc.details = pruned;
 
       return doc;
     });
 
     if (logsToInsert.length > 0) {
-      await ActivityLog.insertMany(logsToInsert, { ordered: false });
+      try {
+        await ActivityLog.insertMany(logsToInsert, { ordered: false });
+      } catch (insertErr) {
+        // Silently tolerate write issues without throwing 500
+      }
 
       // Update UserDailyActivity action count
-      const todayStr = new Intl.DateTimeFormat('en-CA', {
-        timeZone: '+06:00'
-      }).format(new Date());
-      await UserDailyActivity.findOneAndUpdate(
-        { username: user.username, date: todayStr },
-        {
-          $inc: { actionCount: logsToInsert.length },
-          $set: { lastActive: new Date() },
-          $setOnInsert: { firstActive: new Date() }
-        },
-        { upsert: true }
-      ).catch(() => { });
+      try {
+        const todayStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: '+06:00'
+        }).format(new Date());
+        await UserDailyActivity.findOneAndUpdate(
+          { username: user.username, date: todayStr },
+          {
+            $inc: { actionCount: logsToInsert.length },
+            $set: { lastActive: new Date() },
+            $setOnInsert: { firstActive: new Date() }
+          },
+          { upsert: true }
+        );
+      } catch (_uaErr) { }
     }
 
     res.json({ success: true, count: logsToInsert.length });
   } catch (err) {
-    console.error('Error logging client actions:', err);
-    res.status(500).json({ message: 'Failed to record action log' });
+    console.warn('[ActivityTracker] Telemetry intake warning:', err.message);
+    res.json({ success: false, message: 'Telemetry absorbed' });
   }
 });
 
@@ -6699,11 +6803,7 @@ const cleanupOldActivityLogs = async () => {
 
     const totalCleaned = (clickRes.deletedCount || 0) + (generalRes.deletedCount || 0) + (notifRes.deletedCount || 0);
     if (totalCleaned > 0) {
-      console.log(`[LogHousekeeping] Pruned ${totalCleaned} old records (${clickRes.deletedCount || 0} UI clicks, ${generalRes.deletedCount || 0} audit logs, ${notifRes.deletedCount || 0} notifications). Reclaiming storage...`);
-      try {
-        await mongoose.connection.db.command({ compact: 'activitylogs' });
-        await mongoose.connection.db.command({ compact: 'notifications' });
-      } catch (ce) { }
+      console.log(`[LogHousekeeping] Pruned ${totalCleaned} old records (${clickRes.deletedCount || 0} UI clicks, ${generalRes.deletedCount || 0} audit logs, ${notifRes.deletedCount || 0} notifications).`);
     }
   } catch (e) {
     console.warn('[LogHousekeeping] Retention run failed:', e.message);

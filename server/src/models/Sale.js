@@ -6,6 +6,10 @@ const saleSchema = new mongoose.Schema({
         unique: true,
         sparse: true
     },
+    orderNo: {
+        type: String,
+        index: true
+    },
     saleType: {
         type: String
     },

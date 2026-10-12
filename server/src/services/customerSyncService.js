@@ -209,11 +209,6 @@ async function syncSaleOnSave(saleDoc, reqBody, existingData = null) {
     const invUpper = (reqBody.invoiceNo || saleDoc.invoiceNo || '').trim().toUpperCase();
     const isOrderEntry = sType === 'order' || invUpper.startsWith('ORD') || reqBody.isOrderEntry === true;
 
-    // Load and decrypt all customers
-    const allCustomerDocs = await Customer.find({});
-    for (const cDoc of allCustomerDocs) {
-      cDoc.decryptedData = decryptDocData(cDoc.data);
-    }
 
     if (isOrderEntry) {
       const orderNo = (reqBody.orderNo || reqBody.invoiceNo || existingData?.orderNo || existingData?.invoiceNo || '').trim().toUpperCase();
@@ -262,6 +257,10 @@ async function syncSaleOnSave(saleDoc, reqBody, existingData = null) {
       const hasPriceChanges = Object.keys(orderPriceMap).length > 0;
 
       // Find target customer for this order
+      const allCustomerDocs = await Customer.find({});
+      for (const cDoc of allCustomerDocs) {
+        cDoc.decryptedData = decryptDocData(cDoc.data);
+      }
       const targetCustomerDoc = findCustomerForSale(allCustomerDocs, reqBody);
       const targetCustId = targetCustomerDoc ? targetCustomerDoc._id.toString() : newCustId;
 
@@ -444,28 +443,48 @@ async function syncSaleOnSave(saleDoc, reqBody, existingData = null) {
 
     } else {
       // General Sale or Border Sale
-      const targetCustomerDoc = findCustomerForSale(allCustomerDocs, reqBody);
-      const targetCustId = targetCustomerDoc ? targetCustomerDoc._id.toString() : (reqBody.customerId || '').toString().trim();
+      const targetCustId = (reqBody.customerId || (reqBody.customer && reqBody.customer._id) || '').toString().trim();
+      let targetCustomerDoc = null;
+      if (targetCustId && mongoose.Types.ObjectId.isValid(targetCustId)) {
+        targetCustomerDoc = await Customer.findById(targetCustId);
+        if (targetCustomerDoc) {
+          targetCustomerDoc.decryptedData = decryptDocData(targetCustomerDoc.data);
+        }
+      }
+      if (!targetCustomerDoc) {
+        const allCustomerDocs = await Customer.find({});
+        for (const cDoc of allCustomerDocs) {
+          cDoc.decryptedData = decryptDocData(cDoc.data);
+        }
+        targetCustomerDoc = findCustomerForSale(allCustomerDocs, reqBody);
+      }
+
       const saleInv = (reqBody.invoiceNo || saleDoc.invoiceNo || '').trim().toUpperCase();
       const saleOrd = (reqBody.orderNo || '').trim().toUpperCase();
 
-      // 1. Remove this sale's invoice from all non-target customers
-      for (const cDoc of allCustomerDocs) {
-        if (targetCustomerDoc && cDoc._id.toString() === targetCustomerDoc._id.toString()) continue;
-        let cData = cDoc.decryptedData;
-        if (!cData || !Array.isArray(cData.salesHistory)) continue;
-
-        const initialLen = cData.salesHistory.length;
-        cData.salesHistory = cData.salesHistory.filter(h => {
-          const hInv = (h.invoiceNo || '').trim().toUpperCase();
-          const hOrd = (h.orderNo || '').trim().toUpperCase();
-          if (saleInv && hInv === saleInv) return false;
-          if (saleOrd && (hOrd === saleOrd || hInv === saleOrd)) return false;
-          return true;
-        });
-
-        if (cData.salesHistory.length !== initialLen) {
-          await Customer.findByIdAndUpdate(cDoc._id, { data: encryptData(cData) });
+      // 1. If this was an EDIT where customer changed, remove this sale's invoice from the previous customer
+      const oldCustId = (existingData?.customerId || (existingData?.customer && existingData?.customer._id) || '').toString().trim();
+      if (oldCustId && targetCustomerDoc && oldCustId !== targetCustomerDoc._id.toString() && mongoose.Types.ObjectId.isValid(oldCustId)) {
+        try {
+          const oldDoc = await Customer.findById(oldCustId);
+          if (oldDoc) {
+            let oldData = decryptDocData(oldDoc.data);
+            if (oldData && Array.isArray(oldData.salesHistory)) {
+              const initialLen = oldData.salesHistory.length;
+              oldData.salesHistory = oldData.salesHistory.filter(h => {
+                const hInv = (h.invoiceNo || '').trim().toUpperCase();
+                const hOrd = (h.orderNo || '').trim().toUpperCase();
+                if (saleInv && hInv === saleInv) return false;
+                if (saleOrd && (hOrd === saleOrd || hInv === saleOrd)) return false;
+                return true;
+              });
+              if (oldData.salesHistory.length !== initialLen) {
+                await Customer.findByIdAndUpdate(oldDoc._id, { data: encryptData(oldData) });
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error removing invoice from previous customer:', err);
         }
       }
 

@@ -427,9 +427,8 @@ const flushQueue = async () => {
 
     try {
         await axios.post('/api/logs/client-action', { actions: payload });
-    } catch (err) {
-        // Silently fail to never disrupt user experience
-        console.warn('[ActivityTracker] Failed to record actions:', err.message);
+    } catch (_err) {
+        // Silently fail to never disrupt user experience or log warnings to console
     }
 };
 
