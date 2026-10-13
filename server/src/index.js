@@ -317,10 +317,12 @@ app.use(session({
   saveUninitialized: false,
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db',
-    collectionName: 'sessions'
+    collectionName: 'sessions',
+    touchAfter: 24 * 3600 // touch session once every 24h
   }),
+  rolling: true, // Automatically refreshes cookie maxAge on user activity so active sessions never drop
   cookie: {
-    // maxAge removed for session-only cookies
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days active sliding window
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE === 'true',
     sameSite: 'lax'
@@ -5225,11 +5227,8 @@ apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
     // Store user data in session
     req.session.user = userData;
 
-    if (rememberMe) {
-      req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
-    } else {
-      req.session.cookie.maxAge = null; // Session-only cookie
-    }
+    // Ensure cookie maxAge is set (30 days default with rolling refresh)
+    req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
 
     res.json({
       success: true,
@@ -5249,9 +5248,19 @@ apiRouter.get('/api/auth/check', async (req, res) => {
       if (userRecord) {
         req.session.user.profilePhoto = userRecord.profilePhoto || null;
         req.session.user.avatarPhoto = userRecord.avatarPhoto || null;
+      } else {
+        // User explicitly deleted from database
+        req.session.destroy();
+        return res.status(401).json({ authenticated: false, message: 'User no longer exists' });
       }
 
-      if (req.session.user.username === 'admin') {
+      // Check if user has admin privileges (either by username, user record role, or session role)
+      const isAdmin = req.session.user.username === 'admin' ||
+        (userRecord && (userRecord.role || '').toLowerCase() === 'admin') ||
+        (req.session.user.role || '').toLowerCase() === 'admin';
+
+      if (isAdmin) {
+        req.session.user.role = 'Admin';
         return res.json({
           authenticated: true,
           user: req.session.user
@@ -5268,7 +5277,7 @@ apiRouter.get('/api/auth/check', async (req, res) => {
           if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
             try { decrypted = decryptData(decrypted.data); } catch (e) { }
           }
-          if (decrypted.employeeId === req.session.user.username) {
+          if (decrypted && decrypted.employeeId === req.session.user.username) {
             matchedEmployee = emp;
             decryptedEmp = decrypted;
             break;
@@ -5278,21 +5287,18 @@ apiRouter.get('/api/auth/check', async (req, res) => {
         }
       }
 
-      if (!matchedEmployee) {
-        req.session.destroy();
-        return res.status(401).json({ authenticated: false, message: 'User no longer exists' });
-      }
-
       // If employee is deactivated, destroy session
-      if (decryptedEmp.status === 'Inactive') {
+      if (matchedEmployee && decryptedEmp && decryptedEmp.status === 'Inactive') {
         req.session.destroy();
         return res.status(403).json({ authenticated: false, message: 'Account deactivated' });
       }
 
-      // Update session with fresh details
-      const displayRole = await resolveRoleToDisplay(decryptedEmp.role);
-      req.session.user.role = displayRole;
-      req.session.user.permissions = await resolveUserPermissions(decryptedEmp.role, decryptedEmp.permissions);
+      // Update session with fresh details if employee record was matched
+      if (matchedEmployee && decryptedEmp) {
+        const displayRole = await resolveRoleToDisplay(decryptedEmp.role);
+        req.session.user.role = displayRole;
+        req.session.user.permissions = await resolveUserPermissions(decryptedEmp.role, decryptedEmp.permissions);
+      }
 
       res.json({
         authenticated: true,

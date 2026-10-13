@@ -573,7 +573,14 @@ function App() {
           setCurrentUser(null);
           localStorage.removeItem('currentUser');
         }
-      } catch (e) { /* silent */ }
+      } catch (e) {
+        if (e.response && (e.response.status === 401 || e.response.status === 403)) {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          localStorage.removeItem('currentUser');
+          localStorage.setItem('isAuthenticated', 'false');
+        }
+      }
     }, 60000);
 
     return () => clearInterval(sessionPollInterval);

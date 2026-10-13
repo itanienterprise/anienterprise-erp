@@ -183,7 +183,21 @@ const CnF = ({
         if (viewData && cnfs.length > 0) {
             const freshViewData = cnfs.find(c => c._id === viewData._id);
             if (freshViewData) {
-                setViewData(freshViewData);
+                setViewData(prev => {
+                    if (!prev) return null;
+                    const isSame =
+                        prev._id === freshViewData._id &&
+                        prev.name === freshViewData.name &&
+                        prev.commission === freshViewData.commission &&
+                        prev.uom === freshViewData.uom &&
+                        prev.commissionType === freshViewData.commissionType &&
+                        prev.balance === freshViewData.balance &&
+                        prev.totalEarned === freshViewData.totalEarned &&
+                        prev.totalPaid === freshViewData.totalPaid &&
+                        prev.phone === freshViewData.phone &&
+                        prev.cnfId === freshViewData.cnfId;
+                    return isSame ? prev : freshViewData;
+                });
             }
         }
     }, [cnfs]);
@@ -218,7 +232,7 @@ const CnF = ({
     }, [showHistoryFilterPanel, historyFilterDropdownOpen]);
 
     useEffect(() => {
-        if (viewData) {
+        if (viewData?._id) {
             document.body.style.overflow = 'hidden';
             fetchCnFHistory(viewData.name);
             fetchCnFPayments(viewData._id);
@@ -236,7 +250,7 @@ const CnF = ({
         return () => {
             document.body.style.overflow = 'auto';
         };
-    }, [viewData]);
+    }, [viewData?._id]);
 
     const fetchCnFPayments = async (cnfId) => {
         setPaymentLoading(true);
