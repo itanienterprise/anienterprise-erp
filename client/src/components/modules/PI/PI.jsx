@@ -889,7 +889,7 @@ function PI({
             });
             setNotificationsMap(notifsMap);
 
-            const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
+            const rawStock = Array.isArray(stockData) ? stockData : (Array.isArray(stockData?.data) ? stockData.data : []);
             const decryptedStock = rawStock.map(item => {
                 try {
                     let d = item.data ? decryptData(item.data) : item;
@@ -900,7 +900,7 @@ function PI({
             });
             setAllStockRecords(decryptedStock);
 
-            const rawSales = Array.isArray(saleRes.data) ? saleRes.data : [];
+            const rawSales = Array.isArray(saleData) ? saleData : (Array.isArray(saleData?.data) ? saleData.data : []);
             const decryptedSales = rawSales.map(item => {
                 try {
                     let d = item.data ? decryptData(item.data) : item;
