@@ -41,40 +41,56 @@ const TableScrollNav = ({ containerRef, count, className = '' }) => {
         return null;
     }, [containerRef]);
 
-    // Measure horizontal bounds ONLY on mount/resize (NEVER during scroll)
+    // Measure horizontal bounds ONLY when floating and ONLY after resize settles
     const updateBounds = useCallback(() => {
         const tableEl = getTargetElement();
         if (!tableEl) return;
         const rect = tableEl.getBoundingClientRect();
         if (rect.width > 50) {
             const inModal = Boolean(tableEl.closest('.fixed.inset-0, [role="dialog"]'));
-            setFloatBounds({
-                left: rect.left,
-                width: rect.width,
-                inModal
+            setFloatBounds((prev) => {
+                if (
+                    Math.abs(prev.left - rect.left) < 1 &&
+                    Math.abs(prev.width - rect.width) < 1 &&
+                    prev.inModal === inModal
+                ) {
+                    return prev; // BAIL OUT: No layout reflow or React re-render
+                }
+                return { left: rect.left, width: rect.width, inModal };
             });
         }
     }, [getTargetElement]);
 
-    // 1. Observe resize ONLY (no scroll listeners for bounds)
+    // Observe resize ONLY when floating, debouncing by 200ms to keep sidebar expand/collapse at 60/120fps
     useEffect(() => {
+        if (!isFloating) return;
+
         const tableEl = getTargetElement();
         if (!tableEl) return;
 
         updateBounds();
 
+        let resizeTimer = null;
+        const debouncedUpdate = () => {
+            if (resizeTimer) clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                updateBounds();
+            }, 180);
+        };
+
         let ro;
         if (window.ResizeObserver) {
-            ro = new ResizeObserver(() => updateBounds());
+            ro = new ResizeObserver(() => debouncedUpdate());
             ro.observe(tableEl);
         }
 
-        window.addEventListener('resize', updateBounds);
+        window.addEventListener('resize', debouncedUpdate);
         return () => {
             if (ro) ro.disconnect();
-            window.removeEventListener('resize', updateBounds);
+            if (resizeTimer) clearTimeout(resizeTimer);
+            window.removeEventListener('resize', debouncedUpdate);
         };
-    }, [getTargetElement, updateBounds, count]);
+    }, [getTargetElement, updateBounds, isFloating, count]);
 
     // 2. High-performance IntersectionObserver for visibility (zero CPU during scrolling)
     useEffect(() => {
@@ -90,6 +106,9 @@ const TableScrollNav = ({ containerRef, count, className = '' }) => {
             const maxScroll = tableEl.scrollWidth - tableEl.clientWidth;
             const hasHScroll = maxScroll > 2;
             const shouldDock = hasHScroll && tableVisible && !anchorVisible && anchorTop > 0;
+            if (shouldDock) {
+                updateBounds();
+            }
             setIsFloating(shouldDock);
         };
 
@@ -285,7 +304,7 @@ const TableScrollNav = ({ containerRef, count, className = '' }) => {
                         bottom: 0,
                         zIndex: floatBounds.inModal ? 60 : 25,
                     }}
-                    className={`border-t border-gray-200 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.06)] px-4 py-1.5 flex items-center justify-between select-none rounded-t-lg md:rounded-b-2xl transition-all duration-150 ${className}`}
+                    className={`border-t border-gray-200 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.06)] px-4 py-1.5 flex items-center justify-between select-none rounded-t-lg md:rounded-b-2xl transition-[left,width] duration-300 ease-in-out ${className}`}
                 >
                     {renderInnerContent()}
                 </div>,
