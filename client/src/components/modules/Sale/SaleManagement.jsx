@@ -6890,7 +6890,7 @@ const SaleManagement = ({
 
                 <div className="sale-mgmt-table-container">
                     {/* Desktop Table View */}
-                    <div className="hidden md:block overflow-x-auto" ref={tableContainerRef} onScroll={handleTableScroll}>
+                    <div className="hidden md:block overflow-x-auto" ref={tableContainerRef}>
                         <table className="sale-mgmt-table">
                             <thead>
                                 {saleType === 'Border' ? (

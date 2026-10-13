@@ -1241,7 +1241,7 @@ const CostOfGoods = ({
                     </div>
                 ) : sortedRecords.length > 0 ? (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="overflow-x-auto pb-1 cog-table-scroll-container" ref={tableContainerRef} onScroll={handleTableScroll}>
+                        <div className="overflow-x-auto pb-1 cog-table-scroll-container" ref={tableContainerRef}>
                             <table className="w-full border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-100">
