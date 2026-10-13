@@ -56,11 +56,22 @@ export const renderNonIslamiBankApplication = (doc, record) => {
     currentY += 4;
 
     // Margin determination (defaults to 100%)
-    let marginVal = (record.bankMargin !== undefined && record.bankMargin !== null && String(record.bankMargin).trim() !== '')
-        ? String(record.bankMargin).trim()
-        : '100%';
-    if (marginVal && !marginVal.endsWith('%')) {
-        marginVal += '%';
+    const isMtdr = record.mtdr === true || record.mtdr === 'true';
+    let marginVal = '';
+    if (isMtdr) {
+        const marginNum = parseFloat(record.bankMargin);
+        const validMargin = !isNaN(marginNum) ? marginNum : 0;
+        const mtdrNum = (record.mtdrValue !== undefined && record.mtdrValue !== null && record.mtdrValue !== '')
+            ? parseFloat(record.mtdrValue)
+            : Math.max(0, +(100 - validMargin).toFixed(2));
+        marginVal = `100% (${validMargin}% Cash + ${mtdrNum}% MTDR)`;
+    } else {
+        marginVal = (record.bankMargin !== undefined && record.bankMargin !== null && String(record.bankMargin).trim() !== '')
+            ? String(record.bankMargin).trim()
+            : '100%';
+        if (marginVal && !marginVal.endsWith('%')) {
+            marginVal += '%';
+        }
     }
 
     // Subject Line (Bold)

@@ -254,6 +254,8 @@ function PI({
         bankAccount: '',
         bankBin: '',
         bankMargin: '',
+        mtdr: false,
+        mtdrValue: '',
         lcBillEnabled: true,
         bankLcCommission: '',
         bankVatOnCommission: '',
@@ -1222,9 +1224,10 @@ function PI({
     };
 
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
+        const { name, value, type, checked } = e.target;
+        const fieldValue = (type === 'checkbox' || type === 'radio') ? checked : value;
         setFormData(prev => {
-            const updated = { ...prev, [name]: value };
+            const updated = { ...prev, [name]: fieldValue };
             if (name === 'quantity' || name === 'rate' || name === 'freight') {
                 const q = parseFloat(updated.quantity) || 0;
                 const r = parseFloat(updated.rate) || 0;
@@ -1966,8 +1969,12 @@ function PI({
         setIsSubmitting(true);
         setSubmitStatus(null);
 
+        const marginNumForMtdr = parseFloat(formData.bankMargin);
+        const mtdrCalculated = !isNaN(marginNumForMtdr) ? Math.max(0, +(100 - marginNumForMtdr).toFixed(2)) : 100;
+
         const submissionData = {
             ...formData,
+            mtdrValue: formData.mtdr ? mtdrCalculated : '',
             piNumbers: finalPiNumbers,
             piNumber: finalPiNumbers.join(', '),
             showIndHsCode: formData.showIndHsCode !== undefined ? formData.showIndHsCode === true : (formData.productsList?.[0]?.showIndHsCode === true),
@@ -2212,6 +2219,8 @@ function PI({
             bankAccount: '',
             bankBin: '',
             bankMargin: '',
+            mtdr: false,
+            mtdrValue: '',
             lcBillEnabled: true,
             bankLcCommission: '',
             bankVatOnCommission: '',
@@ -2311,6 +2320,8 @@ function PI({
             bankAccount: record.bankAccount || record.accountNo || '',
             bankBin: record.bankBin || '',
             bankMargin: record.bankMargin || '',
+            mtdr: record.mtdr || false,
+            mtdrValue: record.mtdrValue !== undefined ? record.mtdrValue : '',
             lcBillEnabled: record.lcBillEnabled !== undefined ? record.lcBillEnabled : true,
             bankLcCommission: record.bankLcCommission || '',
             bankVatOnCommission: record.bankVatOnCommission || '',
@@ -5490,7 +5501,7 @@ function PI({
                             <h3 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Bank Details</h3>
                         </div>
 
-                        <div className="col-span-1 md:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="col-span-1 md:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                             {/* Issuing Bank Dropdown Input */}
                             <div className="space-y-1.5 text-left relative dropdown-container" ref={issuingBankRef}>
                                 <label className="text-sm font-semibold text-gray-600 ml-1">Issuing Bank</label>
@@ -5673,6 +5684,34 @@ function PI({
                                         className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                                     />
                                     <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                </div>
+                            </div>
+
+                            {/* MTDR Radio */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">MTDR</label>
+                                <div className="flex items-center justify-between h-[46px] px-4 bg-white/50 border border-gray-200/60 rounded-xl hover:border-blue-400 transition-colors">
+                                    <label className="inline-flex items-center gap-2.5 cursor-pointer select-none h-full flex-1">
+                                        <input
+                                            type="radio"
+                                            name="mtdr"
+                                            checked={Boolean(formData.mtdr)}
+                                            onClick={() => setFormData(prev => ({ ...prev, mtdr: !prev.mtdr }))}
+                                            onChange={() => {}}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                        />
+                                        <span className="text-sm font-semibold text-gray-700">MTDR</span>
+                                    </label>
+                                    {Boolean(formData.mtdr) && (() => {
+                                        const marginNum = parseFloat(formData.bankMargin);
+                                        const mtdrCalculated = !isNaN(marginNum) ? Math.max(0, +(100 - marginNum).toFixed(2)) : 100;
+                                        return (
+                                            <div className="flex items-center gap-1 font-bold text-blue-600 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-200/70 text-xs tracking-wide shrink-0 animate-in fade-in duration-200">
+                                                <span>{mtdrCalculated}</span>
+                                                <span className="text-[11px] text-blue-500 font-semibold">%</span>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
