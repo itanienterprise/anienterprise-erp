@@ -7,6 +7,7 @@ import axios from '../../../utils/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEmployees, useCustomRoles, QUERY_KEYS } from '../../../hooks/useQueries';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { compressImage } from '../../../utils/imageCompressor';
 import '../Profile/Profile.css';
 import './EmployeeManagement.css';
@@ -905,6 +906,7 @@ const EmployeeManagement = ({
                                     </tbody>
                                 </table>
                             </div>
+                            <TableScrollNav className="hidden md:flex" count={getFilteredAndSortedData().length} />
 
                             {/* Mobile Grid Layout */}
                             <div className="md:hidden space-y-4">

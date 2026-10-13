@@ -12,6 +12,7 @@ import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { generateLCReceiveReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
+import TableScrollNav from '../../shared/TableScrollNav';
 import './LCReceive.css';
 
 const formatRequestedBy = (requestedBy, requestedByUsername, employeesMap = {}) => {
@@ -4928,6 +4929,7 @@ function LCReceive({
                                 </tbody>
                             </table>
                         </div>
+                        <TableScrollNav className="hidden md:flex" count={groupedRecordsList.length} />
 
                         {/* Mobile List View */}
                         <div className="md:hidden divide-y divide-gray-100">

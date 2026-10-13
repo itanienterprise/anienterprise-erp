@@ -11,6 +11,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import PurchaseReceiveReport from './PurchaseReceiveReport';
 import '../Sale/SaleManagement.css';
 
@@ -2187,9 +2188,11 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                             )}
                         </tbody>
                     </table>
+                </div>
+                <TableScrollNav className="hidden md:flex" count={filteredPurchaseReceives.length} />
 
-                    {/* Mobile View Cards */}
-                    <div className="block md:hidden divide-y divide-gray-100">
+                {/* Mobile View Cards */}
+                <div className="block md:hidden divide-y divide-gray-100">
                         {filteredPurchaseReceives.map(p => (
                             <div key={p._id} className="p-4 space-y-3">
                                 <div className="flex items-center justify-between">
@@ -2274,7 +2277,6 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                             </div>
                         ))}
                     </div>
-                </div>
             </div>
 
             {/* Modal for Create/Edit */}

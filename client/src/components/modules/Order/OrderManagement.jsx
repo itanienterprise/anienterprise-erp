@@ -10,6 +10,7 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { getSocket } from '../../../utils/socket';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
@@ -3287,6 +3288,7 @@ const OrderManagement = ({
                             </tbody>
                         </table>
                     </div>
+                    <TableScrollNav count={getFilteredData.length} />
                 </div>
             )}
 

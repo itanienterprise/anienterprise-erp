@@ -14,6 +14,7 @@ import {
 } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import ReportFormatModal from '../../shared/ReportFormatModal';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { generateBankStatementPDF } from '../../../utils/pdfGenerator';
 import { generateBankStatementExcel } from '../../../utils/excelGenerator';
 import { formatFirstName } from '../IPManagement/IPManagement';
@@ -2501,6 +2502,8 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                 </tr>
               </tfoot>
             </table>
+          </div>
+          <TableScrollNav className="hidden md:flex" count={displayLedger.length} />
 
             {/* Mobile Card Layout */}
             <div className="md:hidden divide-y divide-gray-100 p-3 space-y-3">
@@ -2565,7 +2568,6 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                 );
               })}
             </div>
-          </div>
         </div>
       )}
 

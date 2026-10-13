@@ -9,6 +9,7 @@ import { generateLcBillHistoryReportPDF } from '../../../utils/pdfGenerator';
 import { generateLcBillHistoryReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getSocket } from '../../../utils/socket';
 import BankLogo, { BankWatermark } from './BankLogo';
@@ -1615,6 +1616,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                 </tbody>
                             </table>
                         </div>
+                        <TableScrollNav className="hidden md:flex" count={displayBanks.reduce((sum, g) => sum + g.items.length, 0)} />
                     </div>
 
                     {/* Mobile View */}

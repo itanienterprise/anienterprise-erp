@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { DatabaseIcon, DownloadIcon, UploadIcon, RotateCcwIcon, TrashIcon, XIcon, SearchIcon, CheckIcon, BoxIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import TableScrollNav from '../../shared/TableScrollNav';
 
 const dbName = 'erp_backup_db';
 const storeName = 'settings';
@@ -1081,6 +1082,7 @@ const BackupRestore = ({ addNotification }) => {
                         </table>
                     )}
                 </div>
+                <TableScrollNav count={savedFiles.length} />
             </div>
 
             {/* Warn Alert Box */}

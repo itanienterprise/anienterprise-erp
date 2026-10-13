@@ -5,6 +5,7 @@ import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
 import { getSocket } from '../../../utils/socket';
+import TableScrollNav from '../../shared/TableScrollNav';
 import './Port.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 
@@ -383,6 +384,7 @@ const Port = ({
                                 </tbody>
                             </table>
                         </div>
+                        <TableScrollNav className="hidden md:flex" count={displayPorts.length} />
                     </div>
 
                     {/* Mobile Card View */}

@@ -6,6 +6,7 @@ import { generatePayToCustomerVoucherPDF } from '../../../utils/pdfGenerator';
 import { decryptData, encryptData } from '../../../utils/encryption';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import axios, { api } from '../../../utils/api';
 import PayToCustomerReport from './PayToCustomerReport';
 import './PayToCustomer.css';
@@ -2301,7 +2302,8 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                     )}
 
                     <div className="sale-mgmt-table-container">
-                        <table className="sale-mgmt-table hidden md:table">
+                        <div className="overflow-x-auto">
+                            <table className="sale-mgmt-table hidden md:table">
                             <thead>
                                 <tr>
                                     {selectedItems.size > 0 && (
@@ -2615,6 +2617,8 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                 )}
                             </tbody>
                         </table>
+                        </div>
+                        <TableScrollNav className="hidden md:flex" count={displayedGroups.length} />
                     </div>
                 </div>
             )}

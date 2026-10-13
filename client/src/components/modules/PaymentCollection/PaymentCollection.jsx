@@ -6,6 +6,7 @@ import { generateMoneyReceiptPDF } from '../../../utils/pdfGenerator';
 import { decryptData, encryptData } from '../../../utils/encryption';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import axios, { api } from '../../../utils/api';
 import PaymentCollectionReport from './PaymentCollectionReport';
 import './PaymentCollection.css';
@@ -2998,8 +2999,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                     )}
                             </tbody>
                         </table>
+                    </div>
+                    <TableScrollNav className="hidden md:flex" count={displayedGroups.length} />
 
-                        {/* Mobile Card View */}
+                    {/* Mobile Card View */}
                         <div className="block md:hidden px-1 py-4 space-y-3">
                             {isLoading ? (
                                 Array(3).fill(0).map((_, i) => (
@@ -3223,7 +3226,6 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         </div>
                     </div>
                 </div>
-            </div>
         )}
             {/* Add Collection Card (Style Match with Add Customer) */}
             {showAddModal && (

@@ -11,6 +11,7 @@ import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
 import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import './PI.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { IPDetailsModal } from '../IPManagement/IPDetailsModal';
@@ -7166,6 +7167,7 @@ function PI({
                                 </tbody>
                             </table>
                         </div>
+                        <TableScrollNav count={sortedRecords.length} />
                     </div>
 
                     {/* Mobile Card View */}

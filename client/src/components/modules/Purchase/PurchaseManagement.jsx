@@ -11,6 +11,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { getSocket } from '../../../utils/socket';
 import PurchaseReport from './PurchaseReport';
 import '../Sale/SaleManagement.css';
@@ -1802,6 +1803,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                         </tbody>
                     </table>
                 </div>
+                <TableScrollNav count={filteredPurchases.length} />
             </div>
 
             {/* Modal for Add / Edit Purchase */}

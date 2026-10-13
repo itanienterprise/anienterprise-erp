@@ -9,6 +9,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { generateInsuranceHistoryReportPDF } from '../../../utils/pdfGenerator';
 import { generateInsuranceHistoryReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { ViewDetailsModal } from '../LCManagement/LCManagement';
 import { getLcMilestoneFinances, getLcMilestonesBreakdown } from '../../../utils/lcValueUtils';
 import { getSocket } from '../../../utils/socket';
@@ -946,8 +947,9 @@ const Insurance = ({ onDeleteConfirm }) => {
             {!showForm && (
                 <div className="space-y-4">
                     {/* Desktop View */}
-                    <div className="hidden md:block overflow-x-auto bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-xl">
-                        <table className="w-full text-left border-collapse">
+                    <div className="hidden md:block bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-xl overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Company</th>
@@ -1030,6 +1032,8 @@ const Insurance = ({ onDeleteConfirm }) => {
                                 )}
                             </tbody>
                         </table>
+                        </div>
+                        <TableScrollNav count={displayRecords.length} />
                     </div>
 
                     {/* Mobile View */}

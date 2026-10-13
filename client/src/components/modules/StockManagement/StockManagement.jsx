@@ -20,6 +20,7 @@ import {
     FileTextIcon,
 } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import StockReport from './StockReport';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { calculateStockData, calculatePktRemainder, getGroupedBrandList, safeParse, isLcMatch } from '../../../utils/stockHelpers';
@@ -4087,6 +4088,7 @@ const StockManagement = ({
                             </tbody>
                         </table>
                     </div >
+                    <TableScrollNav className="hidden md:flex" count={stockData.displayRecords?.length} />
                 </div >
             )}
 
@@ -4545,6 +4547,7 @@ const StockManagement = ({
                                                         </tbody>
                                                     </table>
                                                 </div>
+                                                <TableScrollNav className="hidden md:flex" count={visibleHistory.length} />
 
                                                 {/* Mobile Card View */}
                                                 <div className="md:hidden space-y-4">
@@ -4767,6 +4770,7 @@ const StockManagement = ({
                                                         </tbody>
                                                     </table>
                                                 </div>
+                                                <TableScrollNav className="hidden md:flex" count={flattenedSaleHistory.length} />
 
                                                 {/* Mobile Card View for Sale History */}
                                                 <div className="md:hidden space-y-4 p-4 bg-gray-50/30">

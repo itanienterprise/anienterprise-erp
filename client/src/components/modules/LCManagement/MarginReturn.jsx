@@ -20,6 +20,7 @@ import {
 } from '../../Icons';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { formatDate } from '../../../utils/helpers';
 import { getLCHistoryTimeline, getMilestoneTotalDollar } from './LCManagement';
 import { generateMarginReturnReportPDF } from '../../../utils/pdfGenerator';
@@ -1283,8 +1284,9 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
             </div>
 
             {/* Desktop Table View */}
-            <div className="hidden md:block bg-white/70 backdrop-blur-sm rounded-3xl border border-white/60 shadow-sm overflow-hidden overflow-x-auto transition-all duration-500">
-                <table className="w-full text-left min-w-[1000px]">
+            <div className="hidden md:block bg-white/70 backdrop-blur-sm rounded-3xl border border-white/60 shadow-sm overflow-hidden transition-all duration-500">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[1000px]">
                     <thead>
                         <tr className="bg-gray-50/50 border-b border-gray-100">
                             <th className="px-4 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
@@ -1393,6 +1395,8 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                         )}
                     </tbody>
                 </table>
+                </div>
+                <TableScrollNav className="hidden md:flex" count={filteredRecords.length} />
             </div>
 
             {/* Mobile View */}

@@ -10,6 +10,7 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import './PackingList.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { PIDetailsModal } from '../PI/PIDetailsModal';
@@ -3061,9 +3062,10 @@ function PackingList({
                             </p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
+                        <>
                             {/* Desktop Table View */}
-                            <table className="hidden md:table w-full text-left border-collapse">
+                            <div className="overflow-x-auto">
+                                <table className="hidden md:table w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                                         <th className="px-6 py-4">Invoice No</th>
@@ -3218,6 +3220,8 @@ function PackingList({
                                     })}
                                 </tbody>
                             </table>
+                            </div>
+                            <TableScrollNav className="hidden md:flex" count={filteredRecords.length} />
 
                             {/* Mobile Card Layout */}
                             <div className="md:hidden grid grid-cols-1 gap-4 p-4">
@@ -3362,7 +3366,7 @@ function PackingList({
                                     );
                                 })}
                             </div>
-                        </div>
+                        </>
                     )}
                 </div>
             )}

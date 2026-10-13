@@ -11,6 +11,7 @@ import { generateSupplierProfileReportPDF } from '../../../utils/pdfGenerator';
 import { generateSupplierProfileReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import './Supplier.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 const SearchableFilterSelect = ({ label, value, onChange, options = [], placeholder = 'Search...' }) => {
@@ -1046,6 +1047,7 @@ const Supplier = ({
                                     </tbody>
                                 </table>
                             </div>
+                            <TableScrollNav className="hidden md:flex" count={sortedSuppliers.length} />
 
                             {/* Mobile View */}
                             <div className="block md:hidden space-y-4 px-2">

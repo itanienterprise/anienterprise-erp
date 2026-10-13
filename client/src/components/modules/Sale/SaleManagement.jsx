@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon, CheckIcon } from '../../Icons';
+import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon } from '../../Icons';
 import { generateSaleInvoicePDF, generateSaleChallanPDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
@@ -250,6 +251,39 @@ const SaleManagement = ({
     };
 
     const rowRefs = useRef({});
+    const tableContainerRef = useRef(null);
+    const [scrollProgress, setScrollProgress] = useState(0);
+
+    const updateScrollProgress = () => {
+        if (!tableContainerRef.current) return;
+        const { scrollLeft, scrollWidth, clientWidth } = tableContainerRef.current;
+        const maxScroll = scrollWidth - clientWidth;
+        if (maxScroll > 0) {
+            setScrollProgress(Math.min(100, Math.max(0, (scrollLeft / maxScroll) * 100)));
+        } else {
+            setScrollProgress(0);
+        }
+    };
+
+    useEffect(() => {
+        updateScrollProgress();
+        const handleResize = () => updateScrollProgress();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [sales, saleType]);
+
+    const handleTableScroll = () => {
+        updateScrollProgress();
+    };
+
+    const handleScrollStep = (direction) => {
+        if (!tableContainerRef.current) return;
+        const step = 350;
+        tableContainerRef.current.scrollBy({
+            left: direction === 'left' ? -step : step,
+            behavior: 'smooth'
+        });
+    };
     useEffect(() => {
         if (isRequestedNotif) {
             setIsRequestedOnly(true);
@@ -6856,7 +6890,7 @@ const SaleManagement = ({
 
                 <div className="sale-mgmt-table-container">
                     {/* Desktop Table View */}
-                    <div className="hidden md:block overflow-x-auto">
+                    <div className="hidden md:block overflow-x-auto" ref={tableContainerRef} onScroll={handleTableScroll}>
                         <table className="sale-mgmt-table">
                             <thead>
                                 {saleType === 'Border' ? (
@@ -7742,6 +7776,9 @@ const SaleManagement = ({
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Table Bottom Navigation Bar */}
+                    <TableScrollNav className="hidden md:flex" containerRef={tableContainerRef} count={getFilteredData().length} />
 
                     {/* Mobile Card View */}
                     <div className="md:hidden space-y-4 px-1">

@@ -5,6 +5,7 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
@@ -1629,6 +1630,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                             </tbody>
                         </table>
                     </div>
+                    <TableScrollNav count={displayLogs.length} />
                 </div>
             )}
 

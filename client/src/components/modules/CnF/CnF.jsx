@@ -5,6 +5,7 @@ import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateCnFHistoryReportPDF, generateCnFAgentListReportPDF, generateCnFExpenseReportPDF, generateCnFPaymentReportPDF, generateCnFAllReportPDF } from '../../../utils/pdfGenerator';
 import { generateCnFHistoryExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
@@ -1567,6 +1568,7 @@ const CnF = ({
                                         </tbody>
                                     </table>
                                 </div>
+                                <TableScrollNav className="hidden md:flex" count={cnfs.length} />
                                 <div className="block md:hidden px-2 py-3 space-y-3">
                                     {sortData(filteredCnfs).map((cnf) => {
                                         const isExpanded = expandedCnFId === cnf._id;

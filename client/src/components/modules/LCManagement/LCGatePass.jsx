@@ -8,6 +8,7 @@ import {
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
@@ -555,8 +556,9 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
             {!showForm && (
                 <>
                     {/* Desktop View */}
-                    <div className="hidden md:block bg-white/70 backdrop-blur-sm rounded-3xl border border-white/60 shadow-sm overflow-hidden overflow-x-auto transition-all duration-500">
-                        <table className="w-full text-left min-w-[1000px]">
+                    <div className="hidden md:block bg-white/70 backdrop-blur-sm rounded-3xl border border-white/60 shadow-sm overflow-hidden transition-all duration-500">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left min-w-[1000px]">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
@@ -733,6 +735,8 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                                 )}
                             </tbody>
                         </table>
+                        </div>
+                        <TableScrollNav className="hidden md:flex" count={filteredRecords.length} />
                     </div>
 
                     {/* Mobile View */}

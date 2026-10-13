@@ -11,6 +11,7 @@ import { getSocket } from '../../../utils/socket';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import ReportFormatModal from '../../shared/ReportFormatModal';
+import TableScrollNav from '../../shared/TableScrollNav';
 import CustomerReport from './CustomerReport';
 import './Customer.css';
 
@@ -2169,7 +2170,8 @@ const Customer = ({
                                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                                 </div>
                             ) : (
-                                <div className="overflow-x-auto min-w-full">
+                                <>
+                                    <div className="overflow-x-auto min-w-full">
                                     {/* Desktop Table View */}
                                     <table className="w-full text-left hidden md:table">
                                         <thead className="bg-gray-50 border-b border-gray-100">
@@ -2255,9 +2257,11 @@ const Customer = ({
                                             })}
                                         </tbody>
                                     </table>
+                                </div>
+                                <TableScrollNav className="hidden md:flex" count={getFilteredAndSortedData().length} />
 
-                                    {/* Mobile Card View */}
-                                    <div className="block md:hidden px-1 py-4 space-y-3">
+                                {/* Mobile Card View */}
+                                <div className="block md:hidden px-1 py-4 space-y-3">
                                         {getFilteredAndSortedData().map(c => {
                                             const custTotalDue = getCustomerFinalBalance(c);
                                             const isExpanded = expandedMobileCards === c._id;
@@ -2349,7 +2353,7 @@ const Customer = ({
                                             );
                                         })}
                                     </div>
-                                </div>
+                                </>
                             )}
                         </div>
                     )

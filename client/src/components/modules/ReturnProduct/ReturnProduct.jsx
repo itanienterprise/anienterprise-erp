@@ -16,6 +16,7 @@ import {
 } from '../../Icons';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import './ReturnProduct.css';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -1487,6 +1488,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                                 </tbody>
                             </table>
                         </div>
+                        <TableScrollNav count={filteredReturns.length} />
                     </div>
 
                     {/* Mobile Card List */}

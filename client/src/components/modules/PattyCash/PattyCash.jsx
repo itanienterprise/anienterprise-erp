@@ -16,6 +16,7 @@ import ReportFormatModal from '../../shared/ReportFormatModal';
 import { generatePattyCashReportPDF } from '../../../utils/pdfGenerator';
 import { generatePattyCashReportExcel } from '../../../utils/excelGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import '../PaymentCollection/PaymentCollection.css';
 import './PattyCash.css';
 
@@ -1695,6 +1696,7 @@ const PattyCash = ({ currentUser = {}, onDeleteConfirm }) => {
                                     </tbody>
                                 </table>
                             </div>
+                            <TableScrollNav count={recordsWithBalance.length} />
                         </div>
                     )}
                 </div>

@@ -11,6 +11,7 @@ import { generateExporterProfileReportPDF } from '../../../utils/pdfGenerator';
 import { generateExporterProfileReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import './Exporter.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 
@@ -972,6 +973,7 @@ const Exporter = ({
                                     </tbody>
                                 </table>
                             </div>
+                            <TableScrollNav className="hidden md:flex" count={filteredExporters.length} />
 
                             {/* Mobile Card List - hidden on desktop */}
                             <div className="block md:hidden px-2 py-3 space-y-3">

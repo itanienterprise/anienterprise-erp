@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
@@ -1220,6 +1221,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                             </tbody>
                         </table>
                     </div>
+                    <TableScrollNav className="hidden md:flex" count={displayDamages.length} />
 
                     {/* Mobile Cards */}
                     <div className="md:hidden divide-y divide-gray-100">

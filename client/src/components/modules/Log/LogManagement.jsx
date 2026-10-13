@@ -21,6 +21,7 @@ import {
     ClipboardIcon,
     FileTextIcon
 } from '../../Icons';
+import TableScrollNav from '../../shared/TableScrollNav';
 
 const IGNORED_KEYS = new Set([
     '_id', '__v', 'id', 'password', 'confirmPassword', 'token', 'secret',
@@ -2844,6 +2845,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             </tbody>
                         </table>
                     </div>
+                    <TableScrollNav count={logs.length} />
 
                     {/* Pagination Footer */}
                     <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">

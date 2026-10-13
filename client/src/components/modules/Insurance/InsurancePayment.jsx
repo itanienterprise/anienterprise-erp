@@ -9,6 +9,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { generateInsurancePaymentReportPDF } from '../../../utils/pdfGenerator';
 import { generateInsurancePaymentReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { getSocket } from '../../../utils/socket';
@@ -2160,6 +2161,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                 </tbody>
                             </table>
                         </div>
+                        <TableScrollNav className="hidden md:flex" count={filteredPayments.length} />
                     </div>
 
                     {/* Mobile View */}

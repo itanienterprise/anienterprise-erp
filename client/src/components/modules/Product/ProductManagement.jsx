@@ -6,6 +6,7 @@ import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
 import StockHistoryModal from '../../shared/StockHistoryModal';
+import TableScrollNav from '../../shared/TableScrollNav';
 import './ProductManagement.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 
@@ -621,6 +622,7 @@ const ProductManagement = ({
                                 </tbody>
                             </table>
                         </div>
+                        <TableScrollNav className="hidden md:flex" count={filteredProducts.length} />
 
                         {/* ─── Mobile Cards (below md) ─── */}
                         <div className="md:hidden divide-y divide-gray-100">

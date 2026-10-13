@@ -14,6 +14,7 @@ import { generateLCManagementReportPDF, generateLCBillReportPDF } from '../../..
 import { generateLCManagementReportExcel, generateLCBillReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getCogNetBillBdt, isProductMatch } from '../../../utils/lcValueUtils';
 import { formatFirstName } from '../IPManagement/IPManagement';
@@ -11550,8 +11551,9 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             {!showForm && !showAmendmentForm && (
                 <>
                     {/* Desktop View */}
-                    <div className="hidden md:block overflow-x-auto bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-xl">
-                        <table className="w-full text-left border-collapse">
+                    <div className="hidden md:block bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-xl overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
                                     <th className="px-2 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-left text-nowrap select-none">SL</th>
@@ -12372,6 +12374,8 @@ style={
                                 )}
                             </tbody>
                         </table>
+                        </div>
+                        <TableScrollNav count={sortedRecords.length} />
                     </div>
 
                     {/* Mobile View */}

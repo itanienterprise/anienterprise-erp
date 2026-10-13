@@ -8,6 +8,7 @@ import { generateCnFPaymentsListReportPDF } from '../../../utils/pdfGenerator';
 import { generateCnFPaymentsListReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { getSocket } from '../../../utils/socket';
@@ -2280,6 +2281,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                                 </tbody>
                             </table>
                         </div>
+                        <TableScrollNav className="hidden md:flex" count={filteredPayments.length} />
 
                         {/* ─── Mobile Cards (below md) ─── */}
                         <div className="md:hidden divide-y divide-gray-100">

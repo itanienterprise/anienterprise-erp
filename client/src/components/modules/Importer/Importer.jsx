@@ -7,6 +7,7 @@ import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
 import { getSocket } from '../../../utils/socket';
 import './Importer.css';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { hasPermission } from '../../../utils/permissionHelper';
 
 const Importer = ({
@@ -649,6 +650,7 @@ const Importer = ({
                                     </tbody>
                                 </table>
                             </div>
+                            <TableScrollNav className="hidden md:flex" count={filteredImporters.length} />
 
                             {/* Mobile Card List - hidden on desktop */}
                             <div className="block md:hidden px-2 py-3 space-y-3">

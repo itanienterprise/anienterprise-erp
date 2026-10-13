@@ -7,6 +7,7 @@ import {
 import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Token.css';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { getSocket } from '../../../utils/socket';
@@ -1196,6 +1197,7 @@ const Token = ({ currentUser, addNotification }) => {
                                 </tbody>
                             </table>
                         </div>
+                        <TableScrollNav count={filteredTokens.length} />
                     </div>
 
                     {/* Mobile Card List */}

@@ -20,6 +20,7 @@ import {
     EyeIcon,
 } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import WarehouseReport from './WarehouseReport';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
@@ -1456,6 +1457,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                 </tbody>
                                             </table>
                                         </div>
+                                        <TableScrollNav className="hidden md:flex" count={groupedStockData.length} />
                                     </div>
 
                                     {/* Mobile View */}
@@ -1650,6 +1652,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                             </tbody>
                                         </table>
                                     </div>
+                                    <TableScrollNav className="hidden md:flex" count={uniqueWarehouses.length} />
                                 </div>
 
                                 {/* Mobile View */}

@@ -13,6 +13,7 @@ import {
   FunnelIcon, CheckIcon
 } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import TableScrollNav from '../../shared/TableScrollNav';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import '../PaymentCollection/PaymentCollection.css';
 
@@ -1801,6 +1802,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                 </tbody>
               </table>
             </div>
+            <TableScrollNav count={filteredWithdrawals.length} />
           </div>
         </div>
       )}
