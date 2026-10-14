@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
     TicketIcon, SearchIcon, PlusIcon, EditIcon, TrashIcon, 
     XIcon, CheckIcon, ChevronDownIcon, ClockIcon, AlertCircleIcon,
@@ -8,6 +8,7 @@ import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Token.css';
 import TableScrollNav from '../../shared/TableScrollNav';
+import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { getSocket } from '../../../utils/socket';
@@ -187,7 +188,7 @@ const generateTokenNo = (existingTokens = []) => {
 const Token = ({ currentUser, addNotification }) => {
     const [tokens, setTokens] = useState([]);
     const [employees, setEmployees] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedStatusTab, setSelectedStatusTab] = useState('All');
     const [selectedModuleFilter, setSelectedModuleFilter] = useState('All');
@@ -200,11 +201,11 @@ const Token = ({ currentUser, addNotification }) => {
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
 
-    const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase().trim() === 'admin';
-    const isIncharge = (currentUser?.role || '').toLowerCase().trim() === 'incharge';
-    const canManageAll = isAdmin || isIncharge || hasPermission(currentUser, 'token', 'special');
-    const canDelete = isAdmin || hasPermission(currentUser, 'token', 'delete');
-    const canEdit = isAdmin || hasPermission(currentUser, 'token', 'edit');
+    const isAdmin = useMemo(() => currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase().trim() === 'admin', [currentUser]);
+    const isIncharge = useMemo(() => (currentUser?.role || '').toLowerCase().trim() === 'incharge', [currentUser]);
+    const canManageAll = useMemo(() => isAdmin || isIncharge || hasPermission(currentUser, 'token', 'special'), [isAdmin, isIncharge, currentUser]);
+    const canDelete = useMemo(() => isAdmin || hasPermission(currentUser, 'token', 'delete'), [isAdmin, currentUser]);
+    const canEdit = useMemo(() => isAdmin || hasPermission(currentUser, 'token', 'edit'), [isAdmin, currentUser]);
 
     const emptyForm = {
         tokenNo: '',
@@ -229,41 +230,7 @@ const Token = ({ currentUser, addNotification }) => {
 
     const [formData, setFormData] = useState(emptyForm);
 
-    useEffect(() => {
-        fetchTokens();
-        fetchEmployees();
-
-        const socket = getSocket();
-        const handleRealtimeUpdate = (data) => {
-            const mod = (data?.module || '').toLowerCase().trim();
-            if (!mod || ['tokens', 'token', 'all'].includes(mod)) {
-                fetchTokens(true);
-            }
-            if (['employees', 'employee', 'all'].includes(mod)) {
-                fetchEmployees();
-            }
-        };
-
-        if (socket) {
-            socket.on('data_updated', handleRealtimeUpdate);
-        }
-        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
-        window.addEventListener('erp_data_updated', onCustomEvent);
-
-        const pollTimer = setInterval(() => {
-            fetchTokens(true);
-        }, 30000);
-
-        return () => {
-            if (socket) {
-                socket.off('data_updated', handleRealtimeUpdate);
-            }
-            window.removeEventListener('erp_data_updated', onCustomEvent);
-            clearInterval(pollTimer);
-        };
-    }, []);
-
-    const fetchTokens = async (silent = false) => {
+    const fetchTokens = useCallback(async (silent = false) => {
         if (!silent) {
             setIsLoading(true);
         }
@@ -276,11 +243,13 @@ const Token = ({ currentUser, addNotification }) => {
                 addNotification('Failed to load tokens', 'error');
             }
         } finally {
-            setIsLoading(false);
+            if (!silent) {
+                setIsLoading(false);
+            }
         }
-    };
+    }, [addNotification]);
 
-    const fetchEmployees = async () => {
+    const fetchEmployees = useCallback(async () => {
         try {
             const res = await axios.get(`${API_BASE_URL}/api/employees?_t=${Date.now()}`);
             const rawData = Array.isArray(res.data) ? res.data : [];
@@ -309,7 +278,51 @@ const Token = ({ currentUser, addNotification }) => {
         } catch (error) {
             console.error('Error fetching employees in Token:', error);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+        const loadInitialData = async () => {
+            try {
+                await Promise.all([fetchTokens(true), fetchEmployees()]);
+            } finally {
+                if (isMounted) {
+                    setIsLoading(false);
+                }
+            }
+        };
+        loadInitialData();
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['tokens', 'token', 'all'].includes(mod)) {
+                fetchTokens(true);
+            }
+            if (['employees', 'employee', 'all'].includes(mod)) {
+                fetchEmployees();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchTokens(true);
+        }, 30000);
+
+        return () => {
+            isMounted = false;
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
+    }, [fetchTokens, fetchEmployees]);
 
     const handleOpenNew = () => {
         setFormData({
@@ -473,7 +486,7 @@ const Token = ({ currentUser, addNotification }) => {
     };
 
     // Check if token was created by / belongs to the current user
-    const checkIsOwnToken = (t) => {
+    const checkIsOwnToken = useCallback((t) => {
         if (!t || !currentUser) return false;
         const currentUserId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
         const currentUserName = (currentUser?.name || '').toLowerCase().trim();
@@ -487,10 +500,10 @@ const Token = ({ currentUser, addNotification }) => {
             (currentUserName && (tEmpName === currentUserName || tEmpName.includes(currentUserName))) ||
             (currentUserLogin && (tEmpName === currentUserLogin || tEmpId === currentUserLogin))
         );
-    };
+    }, [currentUser]);
 
     // Check if current user is the designated approver or assigned handler for this token
-    const checkIsApprover = (t) => {
+    const checkIsApprover = useCallback((t) => {
         if (!t || !currentUser) return false;
         const currentUserId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
         const currentUserName = (currentUser?.name || '').toLowerCase().trim();
@@ -507,10 +520,10 @@ const Token = ({ currentUser, addNotification }) => {
             (currentUserLogin && (tAssigned === currentUserLogin || tAssigned.includes(currentUserLogin))) ||
             (currentUserId && tAssigned === currentUserId)
         );
-    };
+    }, [currentUser]);
 
     const canEditToken = (t) => {
-        return canManageAll || checkIsOwnToken(t) || checkIsApprover(t);
+        return canManageAll || canEdit || checkIsOwnToken(t) || checkIsApprover(t);
     };
 
     const canApproveToken = (t) => {
@@ -522,7 +535,7 @@ const Token = ({ currentUser, addNotification }) => {
     const accessibleTokens = useMemo(() => {
         if (canManageAll) return tokens;
         return tokens.filter(t => checkIsOwnToken(t) || checkIsApprover(t));
-    }, [tokens, canManageAll, currentUser]);
+    }, [tokens, canManageAll, checkIsOwnToken, checkIsApprover]);
 
     // Statistics
     const stats = useMemo(() => {

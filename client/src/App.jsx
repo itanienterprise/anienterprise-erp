@@ -86,6 +86,7 @@ import CostOfGoods from './components/modules/CostOfGoods/CostOfGoods';
 import Token from './components/modules/Token/Token';
 import LogManagement from './components/modules/Log/LogManagement';
 import Attendance from './components/modules/Attendance/Attendance';
+import ErrorBoundary from './components/shared/ErrorBoundary';
 
 import { initActivityTracker } from './utils/activityTracker';
 import { hasPermission } from './utils/permissionHelper';
@@ -173,13 +174,14 @@ function App() {
         setNotifications(filtered);
       }
     } catch (err) {
+      if (err?.response?.status === 401) return;
       console.error('Error fetching notifications:', err);
     }
   };
 
   useEffect(() => {
     let interval;
-    if (isAuthenticated && currentUser) {
+    if (!isCheckingSession && isAuthenticated && currentUser) {
       fetchNotifications();
       // Socket.IO receives real-time 'data_updated' for 'notifications'. Polling at 30s is a fallback.
       interval = setInterval(fetchNotifications, 30000);
@@ -187,7 +189,7 @@ function App() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isAuthenticated, currentUser?.username, currentUser?.role]);
+  }, [isCheckingSession, isAuthenticated, currentUser?.username, currentUser?.role]);
 
   const handleLogin = (user) => {
     setIsAuthenticated(true);
@@ -495,6 +497,7 @@ function App() {
         cnf: hasRequestedCnfPayment
       });
     } catch (err) {
+      if (err?.response?.status === 401) return;
       console.error('Error checking pending entries:', err);
     } finally {
       isFetchingPendingRef.current = false;
@@ -513,7 +516,7 @@ function App() {
 
   useEffect(() => {
     let interval;
-    if (isAuthenticated && currentUser) {
+    if (!isCheckingSession && isAuthenticated && currentUser) {
       fetchPendingEntriesImmediate();
       interval = setInterval(fetchPendingEntriesImmediate, 60000);
     }
@@ -521,7 +524,7 @@ function App() {
       if (interval) clearInterval(interval);
       if (pendingDebounceTimerRef.current) clearTimeout(pendingDebounceTimerRef.current);
     };
-  }, [isAuthenticated, currentUser?.username]);
+  }, [isCheckingSession, isAuthenticated, currentUser?.username]);
 
   // Check session on mount + poll every 60s to pick up permission changes
   useEffect(() => {
@@ -584,6 +587,18 @@ function App() {
     }, 60000);
 
     return () => clearInterval(sessionPollInterval);
+  }, []);
+
+  // Listen for unauthorized session expiration events from API interceptor
+  useEffect(() => {
+    const handleAuthUnauthorized = () => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      localStorage.removeItem('currentUser');
+      localStorage.setItem('isAuthenticated', 'false');
+    };
+    window.addEventListener('erp:auth_unauthorized', handleAuthUnauthorized);
+    return () => window.removeEventListener('erp:auth_unauthorized', handleAuthUnauthorized);
   }, []);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -3953,7 +3968,9 @@ function App() {
         {/* Dashboard Content */}
         <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
           <div key={currentView} data-current-view={currentView} className="page-transition-enter h-full">
-            {renderContent()}
+            <ErrorBoundary key={currentView}>
+              {renderContent()}
+            </ErrorBoundary>
           </div>
         </main>
       </div>

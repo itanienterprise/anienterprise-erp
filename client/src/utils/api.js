@@ -96,6 +96,14 @@ axios.interceptors.response.use((response) => {
     if (error.response && error.response.status === 403) {
         console.error('Security verification failed:', error.response.data?.message || error.response.data);
     }
+    if (error.response && error.response.status === 401) {
+        const reqUrl = error.config?.url || '';
+        if (!reqUrl.includes('/api/auth/login') && !reqUrl.includes('/api/auth/check')) {
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('erp:auth_unauthorized'));
+            }
+        }
+    }
     return Promise.reject(error);
 });
 
