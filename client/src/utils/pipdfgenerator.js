@@ -68,6 +68,47 @@ const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fon
     return minSize;
 };
 
+const parseBuyerOrder = (str, fallbackDate) => {
+    let raw = (str || '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!raw) return null;
+
+    let validityNote = '';
+    let mainStr = raw;
+
+    const validityMatch = mainStr.match(/(?:\(([^)]+)\)|(This\s+Proforma\s+is\s+valid[^\n]*))/i);
+    if (validityMatch) {
+        validityNote = (validityMatch[1] || validityMatch[2] || '').trim();
+        mainStr = mainStr.replace(validityMatch[0], '').trim();
+    }
+    if (validityNote) {
+        validityNote = validityNote.replace(/^[\s(]+|[\s)]+$/g, '').trim();
+        validityNote = validityNote.replace(/\bvalid\b/i, 'Valid');
+    }
+
+    let datePart = '';
+    const dateMatch = mainStr.match(/\b(?:DATE|DT)\s*:\s*([^\s,()]+)/i);
+    if (dateMatch) {
+        datePart = 'DATE: ' + dateMatch[1].trim();
+        mainStr = mainStr.replace(dateMatch[0], '').trim();
+    } else if (fallbackDate) {
+        datePart = 'DATE: ' + fallbackDate;
+    }
+
+    let prefixTitle = '';
+    let orderNoPart = '';
+    const prefixMatch = mainStr.match(/^(MASTER\s+PROFORMA\s+INVOICE\s+NO|PROFORMA\s+INVOICE\s+NO|MASTER\s+INVOICE\s+NO|BUYER'?S?\s+ORDER\s+NO)\s*:?\s*/i);
+    if (prefixMatch) {
+        prefixTitle = prefixMatch[1].replace(/\s+/g, ' ').toUpperCase() + ':';
+        orderNoPart = mainStr.slice(prefixMatch[0].length).trim();
+    } else {
+        orderNoPart = mainStr;
+    }
+
+    orderNoPart = orderNoPart.replace(/^[:\-\s]+|[:\-\s]+$/g, '').trim();
+
+    return { prefixTitle, orderNoPart, datePart, validityNote };
+};
+
 export const generatePIPDF = (record) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -254,18 +295,91 @@ export const generatePIPDF = (record) => {
 
     doc.line(midX, y + 18, pageWidth - margin, y + 18);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.text("Buyers Order No. & Date:", midX + 2, y + 23);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(record.buyerOrderNo || '', midX + 2, y + 27);
+    const buyerOrderRaw = String(record.buyerOrderNo || '').trim();
+    const fallbackDateStr = formatDate(record.buyerOrderDate) || '';
+    const parsedBO = parseBuyerOrder(buyerOrderRaw, fallbackDateStr);
+
+    if (parsedBO && (parsedBO.prefixTitle || parsedBO.validityNote)) {
+        // Multi-line structured Master Proforma / Order format
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text("Buyers Order No. & Date:", midX + 2, y + 21.2);
+
+        if (parsedBO.prefixTitle) {
+            const prefixFs = fitFontSizeOneLine(doc, parsedBO.prefixTitle, rightColWidth - 4, 9, 6.5, 'bold');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(prefixFs);
+            doc.text(parsedBO.prefixTitle, midX + 2, y + 24.3);
+        }
+
+        const line3Y = parsedBO.prefixTitle ? (y + 27.5) : (y + 25.5);
+
+        // Right side Date
+        let dateWidth = 0;
+        if (parsedBO.datePart) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9.5);
+            dateWidth = doc.getTextWidth(parsedBO.datePart);
+            doc.text(parsedBO.datePart, midX + rightColWidth - 2, line3Y, { align: 'right' });
+        }
+
+        // Left side Order No
+        if (parsedBO.orderNoPart) {
+            const maxOrderNoWidth = Math.max(20, rightColWidth - 4 - (dateWidth > 0 ? (dateWidth + 4) : 0));
+            const orderNoFs = fitFontSizeOneLine(doc, parsedBO.orderNoPart, maxOrderNoWidth, 9.5, 6, 'bold');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(orderNoFs);
+            doc.text(parsedBO.orderNoPart, midX + 2, line3Y);
+        }
+
+        // Validity Note
+        if (parsedBO.validityNote) {
+            const line4Y = parsedBO.prefixTitle ? (y + 30.3) : (y + 29);
+            const validityFs = fitFontSizeOneLine(doc, parsedBO.validityNote, rightColWidth - 4, 7.2, 5.5, 'bold');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(validityFs);
+            doc.text(parsedBO.validityNote, midX + 2, line4Y);
+        }
+    } else {
+        // Standard / Plain Order format
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text("Buyers Order No. & Date:", midX + 2, y + 23);
+
+        const orderText = parsedBO ? parsedBO.orderNoPart : buyerOrderRaw;
+        const dateText = parsedBO ? parsedBO.datePart : '';
+
+        let dateWidth = 0;
+        if (dateText) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+            dateWidth = doc.getTextWidth(dateText);
+            doc.text(dateText, midX + rightColWidth - 2, y + 27.5, { align: 'right' });
+        }
+
+        if (orderText) {
+            const maxW = Math.max(20, rightColWidth - 4 - (dateWidth > 0 ? (dateWidth + 4) : 0));
+            const fs = fitFontSizeOneLine(doc, orderText, maxW, 10, 6, 'bold');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(fs);
+            doc.text(orderText, midX + 2, y + 27.5);
+        }
+    }
 
     doc.line(midX, y + 31, pageWidth - margin, y + 31);
     doc.setFont("helvetica", "normal");
-    doc.text("Other References", midX + 2, y + 35);
-    doc.setFont("helvetica", "bold");
-    doc.text(record.otherReferences || '', midX + 2, y + 35);
+    doc.setFontSize(8);
+    if (record.otherReferences) {
+        doc.text("Other References:", midX + 2, y + 35);
+        const oRefLabelW = doc.getTextWidth("Other References:") + 2;
+        const oRefMaxW = rightColWidth - 4 - oRefLabelW;
+        const oRefFs = fitFontSizeOneLine(doc, record.otherReferences, oRefMaxW, 8.5, 6, 'bold');
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(oRefFs);
+        doc.text(record.otherReferences, midX + 2 + oRefLabelW, y + 35);
+    } else {
+        doc.text("Other References", midX + 2, y + 35);
+    }
 
     // Row 2: Importer vs Shipping Info (Stacked Left)
     y += row1Height;

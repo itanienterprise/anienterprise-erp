@@ -64,6 +64,47 @@ const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fon
     return minSize;
 };
 
+const parseBuyerOrder = (str, fallbackDate) => {
+    let raw = (str || '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!raw) return null;
+
+    let validityNote = '';
+    let mainStr = raw;
+
+    const validityMatch = mainStr.match(/(?:\(([^)]+)\)|(This\s+Proforma\s+is\s+valid[^\n]*))/i);
+    if (validityMatch) {
+        validityNote = (validityMatch[1] || validityMatch[2] || '').trim();
+        mainStr = mainStr.replace(validityMatch[0], '').trim();
+    }
+    if (validityNote) {
+        validityNote = validityNote.replace(/^[\s(]+|[\s)]+$/g, '').trim();
+        validityNote = validityNote.replace(/\bvalid\b/i, 'Valid');
+    }
+
+    let datePart = '';
+    const dateMatch = mainStr.match(/\b(?:DATE|DT)\s*:\s*([^\s,()]+)/i);
+    if (dateMatch) {
+        datePart = 'DATE: ' + dateMatch[1].trim();
+        mainStr = mainStr.replace(dateMatch[0], '').trim();
+    } else if (fallbackDate) {
+        datePart = 'DATE: ' + fallbackDate;
+    }
+
+    let prefixTitle = '';
+    let orderNoPart = '';
+    const prefixMatch = mainStr.match(/^(MASTER\s+PROFORMA\s+INVOICE\s+NO|PROFORMA\s+INVOICE\s+NO|MASTER\s+INVOICE\s+NO|BUYER'?S?\s+ORDER\s+NO)\s*:?\s*/i);
+    if (prefixMatch) {
+        prefixTitle = prefixMatch[1].replace(/\s+/g, ' ').toUpperCase() + ':';
+        orderNoPart = mainStr.slice(prefixMatch[0].length).trim();
+    } else {
+        orderNoPart = mainStr;
+    }
+
+    orderNoPart = orderNoPart.replace(/^[:\-\s]+|[:\-\s]+$/g, '').trim();
+
+    return { prefixTitle, orderNoPart, datePart, validityNote };
+};
+
 export const generatePLPDF = async (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = [], products = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.width;
@@ -286,7 +327,11 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         doc.setFont("helvetica", "bold");
         doc.text("Buyer's Order No:", midX + 3, rightY);
         doc.setFont("helvetica", "normal");
+        const boMaxW = (pageWidth - margin) - (midX + 32) - 2;
+        const boFs = fitFontSizeOneLine(doc, record.buyerOrderNo || 'N/A', boMaxW, 9, 5, 'normal');
+        doc.setFontSize(boFs);
         doc.text(record.buyerOrderNo || 'N/A', midX + 32, rightY);
+        doc.setFontSize(9);
         rightY += 5;
 
         doc.setFont("helvetica", "bold");
@@ -436,6 +481,21 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
                     piDisplayStr = `PROFORMA INVOICE: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`;
                 } else {
                     piDisplayStr = `PROFORMA INVOICE: ${cleanPiNumber} Date:${formatDate(pi?.date || '')} & REVISED PI NO: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`;
+                }
+            }
+
+            const buyerOrderRaw = String(record.buyerOrderNo || pi?.buyerOrderNo || '').trim();
+            const fallbackDateStr = formatDate(record.buyerOrderDate || pi?.buyerOrderDate) || '';
+            const parsedBO = parseBuyerOrder(buyerOrderRaw, fallbackDateStr);
+            if (parsedBO && (parsedBO.prefixTitle || parsedBO.orderNoPart)) {
+                const isDuplicate = !parsedBO.prefixTitle && parsedBO.orderNoPart === (record.piNumber || '').trim();
+                if (!isDuplicate) {
+                    const boPrefix = parsedBO.prefixTitle || "BUYER'S ORDER NO:";
+                    const boDate = parsedBO.datePart ? ` ${parsedBO.datePart}` : '';
+                    piDisplayStr += `\n& ${boPrefix} ${parsedBO.orderNoPart}${boDate}`;
+                    if (parsedBO.validityNote) {
+                        piDisplayStr += `\n(${parsedBO.validityNote})`;
+                    }
                 }
             }
 

@@ -46,6 +46,47 @@ const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fon
     return minSize;
 };
 
+const parseBuyerOrder = (str, fallbackDate) => {
+    let raw = (str || '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!raw) return null;
+
+    let validityNote = '';
+    let mainStr = raw;
+
+    const validityMatch = mainStr.match(/(?:\(([^)]+)\)|(This\s+Proforma\s+is\s+valid[^\n]*))/i);
+    if (validityMatch) {
+        validityNote = (validityMatch[1] || validityMatch[2] || '').trim();
+        mainStr = mainStr.replace(validityMatch[0], '').trim();
+    }
+    if (validityNote) {
+        validityNote = validityNote.replace(/^[\s(]+|[\s)]+$/g, '').trim();
+        validityNote = validityNote.replace(/\bvalid\b/i, 'Valid');
+    }
+
+    let datePart = '';
+    const dateMatch = mainStr.match(/\b(?:DATE|DT)\s*:\s*([^\s,()]+)/i);
+    if (dateMatch) {
+        datePart = 'DATE: ' + dateMatch[1].trim();
+        mainStr = mainStr.replace(dateMatch[0], '').trim();
+    } else if (fallbackDate) {
+        datePart = 'DATE: ' + fallbackDate;
+    }
+
+    let prefixTitle = '';
+    let orderNoPart = '';
+    const prefixMatch = mainStr.match(/^(MASTER\s+PROFORMA\s+INVOICE\s+NO|PROFORMA\s+INVOICE\s+NO|MASTER\s+INVOICE\s+NO|BUYER'?S?\s+ORDER\s+NO)\s*:?\s*/i);
+    if (prefixMatch) {
+        prefixTitle = prefixMatch[1].replace(/\s+/g, ' ').toUpperCase() + ':';
+        orderNoPart = mainStr.slice(prefixMatch[0].length).trim();
+    } else {
+        orderNoPart = mainStr;
+    }
+
+    orderNoPart = orderNoPart.replace(/^[:\-\s]+|[:\-\s]+$/g, '').trim();
+
+    return { prefixTitle, orderNoPart, datePart, validityNote };
+};
+
 const formatExporterAddressOneLine = (addressStr) => {
     if (!addressStr) return '';
     const lines = addressStr.split('\n').map(l => l.trim()).filter(Boolean);
@@ -201,6 +242,22 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
             }
         } else {
             addWrapped(`PRICE AS PER PROFORMA INVOICE: ${piNo || record.piNumber || ''} Date:${piDate || formatDate(record.piDate)}`);
+        }
+
+        const buyerOrderRaw = String(record.buyerOrderNo || pi?.buyerOrderNo || '').trim();
+        const fallbackDateStr = formatDate(record.buyerOrderDate || pi?.buyerOrderDate) || '';
+        const parsedBO = parseBuyerOrder(buyerOrderRaw, fallbackDateStr);
+        if (parsedBO && (parsedBO.prefixTitle || parsedBO.orderNoPart)) {
+            const isDuplicate = !parsedBO.prefixTitle && parsedBO.orderNoPart === (record.piNumber || '').trim();
+            if (!isDuplicate) {
+                const boPrefix = parsedBO.prefixTitle || "BUYER'S ORDER NO:";
+                const boDate = parsedBO.datePart ? ` ${parsedBO.datePart}` : '';
+                const boLine = `& ${boPrefix} ${parsedBO.orderNoPart}${boDate}`;
+                addWrapped(boLine);
+                if (parsedBO.validityNote) {
+                    addWrapped(`(${parsedBO.validityNote})`);
+                }
+            }
         }
 
         if (record.trNumber) {
@@ -362,6 +419,22 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 drawWrapped(`PRICE AS PER PROFORMA INVOICE: ${piNo || record.piNumber || ''} Date:${piDate || formatDate(record.piDate)}`, true);
             }
 
+            const buyerOrderRaw = String(record.buyerOrderNo || pi?.buyerOrderNo || '').trim();
+            const fallbackDateStr = formatDate(record.buyerOrderDate || pi?.buyerOrderDate) || '';
+            const parsedBO = parseBuyerOrder(buyerOrderRaw, fallbackDateStr);
+            if (parsedBO && (parsedBO.prefixTitle || parsedBO.orderNoPart)) {
+                const isDuplicate = !parsedBO.prefixTitle && parsedBO.orderNoPart === (record.piNumber || '').trim();
+                if (!isDuplicate) {
+                    const boPrefix = parsedBO.prefixTitle || "BUYER'S ORDER NO:";
+                    const boDate = parsedBO.datePart ? ` ${parsedBO.datePart}` : '';
+                    const boLine = `& ${boPrefix} ${parsedBO.orderNoPart}${boDate}`;
+                    drawWrapped(boLine, true);
+                    if (parsedBO.validityNote) {
+                        drawWrapped(`(${parsedBO.validityNote})`, true);
+                    }
+                }
+            }
+
             if (record.trNumber) {
                 const trDateStr = record.trDate ? formatDate(record.trDate) : '';
                 const trLine = trDateStr ? `UNDER TR NO. ${record.trNumber} DATE:${trDateStr}` : `UNDER TR NO. ${record.trNumber}`;
@@ -418,6 +491,27 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                     { text: " Date:", bold: true },
                     { text: piDate || formatDate(record.piDate), bold: true }
                 ]);
+            }
+
+            const buyerOrderRaw = String(record.buyerOrderNo || pi?.buyerOrderNo || '').trim();
+            const fallbackDateStr = formatDate(record.buyerOrderDate || pi?.buyerOrderDate) || '';
+            const parsedBO = parseBuyerOrder(buyerOrderRaw, fallbackDateStr);
+            if (parsedBO && (parsedBO.prefixTitle || parsedBO.orderNoPart)) {
+                const isDuplicate = !parsedBO.prefixTitle && parsedBO.orderNoPart === (record.piNumber || '').trim();
+                if (!isDuplicate) {
+                    const boPrefix = parsedBO.prefixTitle || "BUYER'S ORDER NO:";
+                    const boDate = parsedBO.datePart ? ` ${parsedBO.datePart}` : '';
+                    drawLine([
+                        { text: `& ${boPrefix} `, bold: true },
+                        { text: parsedBO.orderNoPart, bold: true },
+                        { text: boDate, bold: true }
+                    ]);
+                    if (parsedBO.validityNote) {
+                        drawLine([
+                            { text: `(${parsedBO.validityNote})`, bold: true }
+                        ]);
+                    }
+                }
             }
 
             if (record.trNumber) {
@@ -616,9 +710,22 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         : cleanPlPiNumber.split(',').map(s => s.trim()).filter(Boolean);
     const displayPlPis = plPiList.length > 0 ? plPiList : (cleanPlPiNumber ? [cleanPlPiNumber] : ['']);
 
+    const buyerOrderRaw = String(record.buyerOrderNo || pi?.buyerOrderNo || '').trim();
+    const fallbackDateStr = formatDate(record.buyerOrderDate || pi?.buyerOrderDate) || '';
+    const parsedBO = parseBuyerOrder(buyerOrderRaw, fallbackDateStr);
+    const hasStructuredBO = Boolean(parsedBO && (parsedBO.prefixTitle || parsedBO.validityNote));
+    const hasPlainBO = Boolean(parsedBO && !hasStructuredBO && (parsedBO.orderNoPart || parsedBO.datePart));
+
+    let extraBoHeight = 0;
+    if (hasStructuredBO) {
+        extraBoHeight = 8;
+    } else if (hasPlainBO) {
+        extraBoHeight = 4;
+    }
+
     const extraPiLines = displayPlPis.length > 1 ? (displayPlPis.length - 1) : 0;
     const extraHeight = extraPiLines * 4;
-    const row1Height = (isPiRevised ? 37.5 : 33.5) + extraHeight;
+    const row1Height = (isPiRevised ? 37.5 : 33.5) + extraHeight + extraBoHeight;
     doc.rect(margin, y, leftColWidth, row1Height);
     doc.rect(midX, y, rightColWidth, row1Height);
 
@@ -670,59 +777,175 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     doc.line(midX, y + 14, pageWidth - margin, y + 14);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text("Buyer's Order No /Proforma Invoice No.& Date", midX + 2, y + 18);
+    doc.setFontSize(8.5);
+    doc.text("Buyer's Order No /Proforma Invoice No.& Date", midX + 2, y + 17.5);
 
-    if (isPiRevised) {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8.5);
-        displayPlPis.forEach((pNum, idx) => {
-            doc.text(pNum, midX + 2, y + 22.5 + (idx * 4));
-        });
+    let curY = y + 17.5;
 
-        const origPiDateVal = formatDate(pi?.date || '') || '';
-        doc.setFontSize(8.5);
-        doc.text("DATE-" + origPiDateVal, midX + rightColWidth - 2, y + 22.5, { align: 'right' });
+    if (hasStructuredBO) {
+        // PI Numbers FIRST
+        curY += 3.5;
+        if (isPiRevised) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            displayPlPis.forEach((pNum, idx) => {
+                doc.text(pNum, midX + 2, curY + (idx * 4));
+            });
 
-        const revLineY = y + 22.5 + (displayPlPis.length * 4);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8.5);
-        doc.text(record.piNumber || '', midX + 2, revLineY);
+            const origPiDateVal = formatDate(pi?.date || '') || '';
+            doc.setFontSize(8.5);
+            doc.text("DATE-" + origPiDateVal, midX + rightColWidth - 2, curY, { align: 'right' });
 
-        const revisedPiDateVal = formatDate(record.piDate) || '';
-        doc.setFontSize(8.5);
-        doc.text("DATE-" + revisedPiDateVal, midX + rightColWidth - 2, revLineY, { align: 'right' });
+            curY += (displayPlPis.length * 4);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.text(record.piNumber || '', midX + 2, curY);
 
-        const divLineY = revLineY + 3;
-        doc.line(midX, divLineY, pageWidth - margin, divLineY);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.text("Seller (if other than consigner)", midX + 2, divLineY + 3.5);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        const buyerLines = doc.splitTextToSize(buyerName || '', rightColWidth - 5);
-        doc.text(buyerLines, midX + 2, divLineY + 6);
+            const revisedPiDateVal = formatDate(record.piDate) || '';
+            doc.setFontSize(8.5);
+            doc.text("DATE-" + revisedPiDateVal, midX + rightColWidth - 2, curY, { align: 'right' });
+        } else {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(displayPlPis.length > 1 ? 8.5 : 9);
+            displayPlPis.forEach((pNum, idx) => {
+                doc.text(pNum, midX + 2, curY + (idx * 4));
+            });
+
+            const piDateVal = formatDate(record.piDate || pi?.date) || '';
+            doc.setFontSize(8.5);
+            doc.text("DATE-" + piDateVal, midX + rightColWidth - 2, curY, { align: 'right' });
+            curY += (displayPlPis.length - 1) * 4;
+        }
+
+        // MASTER PROFORMA INVOICE details SECOND
+        if (parsedBO.prefixTitle) {
+            curY += 3.2;
+            const prefixFs = fitFontSizeOneLine(doc, parsedBO.prefixTitle, rightColWidth - 4, 8.5, 6.5, 'bold');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(prefixFs);
+            doc.text(parsedBO.prefixTitle, midX + 2, curY);
+        }
+
+        curY += 3.2;
+        let dateW = 0;
+        if (parsedBO.datePart) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            dateW = doc.getTextWidth(parsedBO.datePart);
+            doc.text(parsedBO.datePart, midX + rightColWidth - 2, curY, { align: 'right' });
+        }
+        if (parsedBO.orderNoPart) {
+            const maxOrderW = Math.max(20, rightColWidth - 4 - (dateW > 0 ? (dateW + 4) : 0));
+            const orderFs = fitFontSizeOneLine(doc, parsedBO.orderNoPart, maxOrderW, 8.5, 6, 'bold');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(orderFs);
+            doc.text(parsedBO.orderNoPart, midX + 2, curY);
+        }
+
+        if (parsedBO.validityNote) {
+            curY += 2.8;
+            const valFs = fitFontSizeOneLine(doc, parsedBO.validityNote, rightColWidth - 4, 7, 5.5, 'bold');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(valFs);
+            doc.text(parsedBO.validityNote, midX + 2, curY);
+        }
+
+    } else if (hasPlainBO) {
+        // PI Numbers FIRST
+        curY += 3.5;
+        if (isPiRevised) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            displayPlPis.forEach((pNum, idx) => {
+                doc.text(pNum, midX + 2, curY + (idx * 4));
+            });
+
+            const origPiDateVal = formatDate(pi?.date || '') || '';
+            doc.setFontSize(8.5);
+            doc.text("DATE-" + origPiDateVal, midX + rightColWidth - 2, curY, { align: 'right' });
+
+            curY += (displayPlPis.length * 4);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.text(record.piNumber || '', midX + 2, curY);
+
+            const revisedPiDateVal = formatDate(record.piDate) || '';
+            doc.setFontSize(8.5);
+            doc.text("DATE-" + revisedPiDateVal, midX + rightColWidth - 2, curY, { align: 'right' });
+        } else {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(displayPlPis.length > 1 ? 8.5 : 9);
+            displayPlPis.forEach((pNum, idx) => {
+                doc.text(pNum, midX + 2, curY + (idx * 4));
+            });
+
+            const piDateVal = formatDate(record.piDate || pi?.date) || '';
+            doc.setFontSize(8.5);
+            doc.text("DATE-" + piDateVal, midX + rightColWidth - 2, curY, { align: 'right' });
+            curY += (displayPlPis.length - 1) * 4;
+        }
+
+        // Plain Buyer Order SECOND
+        curY += 3.5;
+        let dateW = 0;
+        if (parsedBO.datePart) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            dateW = doc.getTextWidth(parsedBO.datePart);
+            doc.text(parsedBO.datePart, midX + rightColWidth - 2, curY, { align: 'right' });
+        }
+        if (parsedBO.orderNoPart) {
+            const maxOrderW = Math.max(20, rightColWidth - 4 - (dateW > 0 ? (dateW + 4) : 0));
+            const orderFs = fitFontSizeOneLine(doc, parsedBO.orderNoPart, maxOrderW, 8.5, 6, 'bold');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(orderFs);
+            doc.text(parsedBO.orderNoPart, midX + 2, curY);
+        }
+
     } else {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(displayPlPis.length > 1 ? 8.5 : 9);
-        displayPlPis.forEach((pNum, idx) => {
-            doc.text(pNum, midX + 2, y + 22.5 + (idx * 4));
-        });
+        if (isPiRevised) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            displayPlPis.forEach((pNum, idx) => {
+                doc.text(pNum, midX + 2, y + 22.5 + (idx * 4));
+            });
 
-        const piDateVal = formatDate(record.piDate || pi?.date) || '';
-        doc.setFontSize(8.5);
-        doc.text("DATE-" + piDateVal, midX + rightColWidth - 2, y + 22.5, { align: 'right' });
+            const origPiDateVal = formatDate(pi?.date || '') || '';
+            doc.setFontSize(8.5);
+            doc.text("DATE-" + origPiDateVal, midX + rightColWidth - 2, y + 22.5, { align: 'right' });
 
-        const divLineY = y + 25.5 + extraHeight;
-        doc.line(midX, divLineY, pageWidth - margin, divLineY);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.text("Seller (if other than consigner)", midX + 2, divLineY + 3.5);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        const buyerLines = doc.splitTextToSize(buyerName || '', rightColWidth - 5);
-        doc.text(buyerLines, midX + 2, divLineY + 6.5);
+            curY = y + 22.5 + (displayPlPis.length * 4);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.text(record.piNumber || '', midX + 2, curY);
+
+            const revisedPiDateVal = formatDate(record.piDate) || '';
+            doc.setFontSize(8.5);
+            doc.text("DATE-" + revisedPiDateVal, midX + rightColWidth - 2, curY, { align: 'right' });
+        } else {
+            curY = y + 22.5;
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(displayPlPis.length > 1 ? 8.5 : 9);
+            displayPlPis.forEach((pNum, idx) => {
+                doc.text(pNum, midX + 2, curY + (idx * 4));
+            });
+
+            const piDateVal = formatDate(record.piDate || pi?.date) || '';
+            doc.setFontSize(8.5);
+            doc.text("DATE-" + piDateVal, midX + rightColWidth - 2, curY, { align: 'right' });
+            curY += (displayPlPis.length - 1) * 4;
+        }
     }
+
+    const divLineY = curY + 2.8;
+    doc.line(midX, divLineY, pageWidth - margin, divLineY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text("Seller (if other than consigner)", midX + 2, divLineY + 3.5);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    const buyerLines = doc.splitTextToSize(buyerName || '', rightColWidth - 5);
+    doc.text(buyerLines, midX + 2, divLineY + 6.5);
 
     // Row 2: Importer vs Country/Terms/LC Box
     y += row1Height;
