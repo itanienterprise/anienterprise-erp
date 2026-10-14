@@ -79,7 +79,18 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '';
-        const d = new Date(dateStr);
+        if (typeof dateStr === 'string') {
+            const trimmed = dateStr.trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+                const [year, month, day] = trimmed.split('T')[0].split('-');
+                return `${day}/${month}/${year}`;
+            }
+            if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(trimmed)) {
+                const parts = trimmed.split(/[\/\-]/);
+                return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+            }
+        }
+        const d = dateStr instanceof Date ? dateStr : new Date(dateStr);
         if (isNaN(d.getTime())) return dateStr;
         return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
     };
@@ -194,7 +205,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
         if (record.trNumber) {
             const trDateStr = record.trDate ? formatDate(record.trDate) : '';
-            const trLine = trDateStr ? `UNDER TR NO.${record.trNumber} DATE:${trDateStr}` : `UNDER TR NO.${record.trNumber}`;
+            const trLine = trDateStr ? `UNDER TR NO. ${record.trNumber} DATE:${trDateStr}` : `UNDER TR NO. ${record.trNumber}`;
             addWrapped(trLine);
             curY += lineSpacing;
         }
@@ -332,19 +343,37 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
             curY += lineSpacing;
         };
 
-        drawLine([
-            { text: "IMPORTED AGAINST " },
-            { text: "IRC NO-", bold: true },
-            { text: irc, bold: true }
-        ]);
-
         if (maxWidth > 0) {
+            drawWrapped(`IMPORTED AGAINST IRC NO-${irc}`, true);
             const cnDatePart = cnDate ? `, DATED.${cnDate}` : '';
             const amndPart = coverNoteAmnd ? `. ${coverNoteAmnd}` : '';
             drawWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}${cnDatePart}${amndPart} OF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.`);
             curY += lineSpacing;
             drawWrapped('WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE PACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN ACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND', false);
+
+            if (isPiRevised) {
+                if (record.lcAmendment) {
+                    drawWrapped(`PRICE AS PER PROFORMA INVOICE: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`, true);
+                } else {
+                    drawWrapped(`PRICE AS PER PROFORMA INVOICE: ${cleanPiNumber} Date:${formatDate(pi?.date || '')}`, true);
+                    drawWrapped(`& REVISED PI NO: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`, true);
+                }
+            } else {
+                drawWrapped(`PRICE AS PER PROFORMA INVOICE: ${piNo || record.piNumber || ''} Date:${piDate || formatDate(record.piDate)}`, true);
+            }
+
+            if (record.trNumber) {
+                const trDateStr = record.trDate ? formatDate(record.trDate) : '';
+                const trLine = trDateStr ? `UNDER TR NO. ${record.trNumber} DATE:${trDateStr}` : `UNDER TR NO. ${record.trNumber}`;
+                drawWrapped(trLine, true);
+                curY += lineSpacing;
+            }
         } else {
+            drawLine([
+                { text: "IMPORTED AGAINST " },
+                { text: "IRC NO-", bold: true },
+                { text: irc, bold: true }
+            ]);
             const cnDatePart = cnDate ? `, DATED.${cnDate}` : '';
             const amndPart = coverNoteAmnd ? `. ${coverNoteAmnd}` : '';
             drawLine([
@@ -359,46 +388,46 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
             drawLine([{ text: "WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE" }]);
             drawLine([{ text: "PACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN" }]);
             drawLine([{ text: "ACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND" }]);
-        }
 
-        if (isPiRevised) {
-            if (record.lcAmendment) {
-                drawLine([
-                    { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
-                    { text: record.piNumber || '', bold: true },
-                    { text: " Date:", bold: true },
-                    { text: formatDate(record.piDate), bold: true }
-                ]);
+            if (isPiRevised) {
+                if (record.lcAmendment) {
+                    drawLine([
+                        { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
+                        { text: record.piNumber || '', bold: true },
+                        { text: " Date:", bold: true },
+                        { text: formatDate(record.piDate), bold: true }
+                    ]);
+                } else {
+                    drawLine([
+                        { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
+                        { text: cleanPiNumber, bold: true },
+                        { text: " Date:", bold: true },
+                        { text: formatDate(pi?.date || ''), bold: true }
+                    ]);
+                    drawLine([
+                        { text: "& REVISED PI NO: ", bold: true },
+                        { text: record.piNumber || '', bold: true },
+                        { text: " Date:", bold: true },
+                        { text: formatDate(record.piDate), bold: true }
+                    ]);
+                }
             } else {
                 drawLine([
                     { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
-                    { text: cleanPiNumber, bold: true },
+                    { text: piNo || record.piNumber || '', bold: true },
                     { text: " Date:", bold: true },
-                    { text: formatDate(pi?.date || ''), bold: true }
-                ]);
-                drawLine([
-                    { text: "& REVISED PI NO: ", bold: true },
-                    { text: record.piNumber || '', bold: true },
-                    { text: " Date:", bold: true },
-                    { text: formatDate(record.piDate), bold: true }
+                    { text: piDate || formatDate(record.piDate), bold: true }
                 ]);
             }
-        } else {
-            drawLine([
-                { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
-                { text: piNo || record.piNumber || '', bold: true },
-                { text: " Date:", bold: true },
-                { text: piDate || formatDate(record.piDate), bold: true }
-            ]);
-        }
 
-        if (record.trNumber) {
-            const trDateStr = record.trDate ? formatDate(record.trDate) : '';
-            drawLine([
-                { text: "UNDER TR NO. ", bold: true },
-                { text: trDateStr ? `${record.trNumber} DATE:${trDateStr}` : record.trNumber, bold: true }
-            ]);
-            curY += lineSpacing;
+            if (record.trNumber) {
+                const trDateStr = record.trDate ? formatDate(record.trDate) : '';
+                drawLine([
+                    { text: "UNDER TR NO. ", bold: true },
+                    { text: trDateStr ? `${record.trNumber} DATE:${trDateStr}` : record.trNumber, bold: true }
+                ]);
+                curY += lineSpacing;
+            }
         }
 
         if (showSafta) {
@@ -468,27 +497,36 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
             }
         }
 
-        drawLine([
-            { text: "IMPORTERS TIN NO.", bold: true },
-            { text: tin, bold: true },
-            { text: ", & " },
-            { text: "BIN-", bold: true },
-            { text: bin, bold: true }
-        ]);
-
-        if (bankBin) {
+        if (maxWidth > 0) {
+            drawWrapped(`IMPORTERS TIN NO.${tin}, & BIN-${bin}`, true);
+            if (bankBin) {
+                drawWrapped(`BANK BIN-${bankBin}`, true);
+            }
+            drawWrapped('Export Standard packing', false);
+            drawWrapped(`COUNTRY OF ORIGIN ${countryOrigin.toUpperCase()}`, true);
+        } else {
             drawLine([
-                { text: "BANK BIN-", bold: true },
-                { text: bankBin, bold: true }
+                { text: "IMPORTERS TIN NO.", bold: true },
+                { text: tin, bold: true },
+                { text: ", & " },
+                { text: "BIN-", bold: true },
+                { text: bin, bold: true }
+            ]);
+
+            if (bankBin) {
+                drawLine([
+                    { text: "BANK BIN-", bold: true },
+                    { text: bankBin, bold: true }
+                ]);
+            }
+
+            drawLine([{ text: "Export Standard packing" }]);
+
+            drawLine([
+                { text: "COUNTRY OF ORIGIN ", bold: true },
+                { text: countryOrigin.toUpperCase(), bold: true }
             ]);
         }
-
-        drawLine([{ text: "Export Standard packing" }]);
-
-        drawLine([
-            { text: "COUNTRY OF ORIGIN ", bold: true },
-            { text: countryOrigin.toUpperCase(), bold: true }
-        ]);
         return curY;
     };
 
@@ -799,7 +837,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10.5);
         let lcY = y + 20 + (termsLines.length * 4.5);
-        doc.text(`LC NO: ${lcNo}   DATE:${formatDate(record.lcDate || lc?.openingDate)}`, midX + 2, lcY);
+        doc.text(`LC NO: ${lcNo}   DATE: ${formatDate(record.lcDate || lc?.openingDate || lc?.lcDate)}`, midX + 2, lcY);
 
         if (lcAmendment) {
             lcY += 4.5;
@@ -850,11 +888,36 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         cellPadding: numericCellPadding
     };
 
+    const isIndianHsCodeEnabled = (prod, pIdx) => {
+        if (record.showIndHsCode === false || pi?.showIndHsCode === false) {
+            return false;
+        }
+        if (prod && prod.showIndHsCode === false) {
+            return false;
+        }
+        const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod?.productName || '').trim().toLowerCase()) || pi?.productsList?.[pIdx];
+        if (piProd && piProd.showIndHsCode === false) {
+            return false;
+        }
+        return Boolean(
+            record.showIndHsCode === true ||
+            pi?.showIndHsCode === true ||
+            prod?.showIndHsCode === true ||
+            piProd?.showIndHsCode === true
+        );
+    };
+
+    const getProductIndHsCode = (prod, pIdx) => {
+        const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod?.productName || '').trim().toLowerCase()) || pi?.productsList?.[pIdx];
+        return prod?.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || '';
+    };
+
     productsList.forEach((prod, pIdx) => {
         const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
         const isLastProduct = pIdx === numProducts - 1;
-        const indHsEnabled = (prod.showIndHsCode === true || pi?.productsList?.[pIdx]?.showIndHsCode === true);
-        const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled);
+        const indHsCode = getProductIndHsCode(prod, pIdx);
+        const indHsEnabled = Boolean(indHsCode && isIndianHsCodeEnabled(prod, pIdx));
+        const hasDoubleHsCode = indHsEnabled;
         let rowHeight = productRowHeight(numProducts, hasFreight);
         if (rowHeight && hasDoubleHsCode) {
             rowHeight += 3;
@@ -863,12 +926,12 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         firstRowIndexForProduct.push(tableBody.length);
 
         let requiredNewlines = 1;
-        if ((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled) requiredNewlines += 1;
+        if (hasDoubleHsCode) requiredNewlines += 1;
         if (showSafta && isLastProduct && (!hasFreight || numProducts === 1)) requiredNewlines += 2.5;
         if (numProducts === 1) {
             requiredNewlines += 2;
         } else {
-            requiredNewlines = ((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled) ? 2 : 1;
+            requiredNewlines = hasDoubleHsCode ? 2 : 1;
         }
 
         let cellText = "\n".repeat(requiredNewlines);
@@ -880,9 +943,10 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         let singleRowMinHeight = undefined;
         if (numProducts === 1) {
             const descTextHeight = getDescriptionBlockHeight(certFontSize, 108);
-            const firstIndHsEnabled = (prod.showIndHsCode === true || pi?.productsList?.[0]?.showIndHsCode === true);
-            const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[0]?.hsCodeInd) && firstIndHsEnabled);
-            const offsetToDesc = -1 + 7.5 + (hasDoubleHsCode ? 4 : 0) + (showSafta ? 16.5 : 0) + 6;
+            const firstIndHsCode = getProductIndHsCode(prod, 0);
+            const firstIndHsEnabled = Boolean(firstIndHsCode && isIndianHsCodeEnabled(prod, 0));
+            const hasFirstDoubleHsCode = firstIndHsEnabled;
+            const offsetToDesc = -1 + 7.5 + (hasFirstDoubleHsCode ? 4 : 0) + (showSafta ? 16.5 : 0) + 6;
             if (record.productsImage) {
                 try {
                     const imgProps = doc.getImageProperties(record.productsImage);
@@ -983,8 +1047,9 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 let productsRowsHeight = 0;
                 productsList.forEach((prod, pIdx) => {
                     const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
-                    const indHsEnabled = (prod.showIndHsCode === true || pi?.productsList?.[pIdx]?.showIndHsCode === true);
-                    const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled);
+                    const indHsCode = getProductIndHsCode(prod, pIdx);
+                    const indHsEnabled = Boolean(indHsCode && isIndianHsCodeEnabled(prod, pIdx));
+                    const hasDoubleHsCode = indHsEnabled;
                     let rH = productRowHeight(numProducts, hasFreight);
                     if (rH && hasDoubleHsCode) rH += 3;
                     productsRowsHeight += (rH || 14);
@@ -1170,10 +1235,11 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
                 drawY += nameGap;
 
-                const isIndHsEnabled = (prod.showIndHsCode === true || pi?.productsList?.[pIdx]?.showIndHsCode === true);
-                if ((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && isIndHsEnabled) {
+                const indHsCode = getProductIndHsCode(prod, pIdx);
+                const isIndHsEnabled = Boolean(indHsCode && isIndianHsCodeEnabled(prod, pIdx));
+                if (isIndHsEnabled) {
                     const bdHsLine = `H.S. CODE NO.${prod.hsCode || ''} (BD)`;
-                    const indHsLine = `H.S. CODE NO.${prod.hsCodeInd || pi.productsList[pIdx].hsCodeInd} (IND)`;
+                    const indHsLine = `H.S. CODE NO.${indHsCode} (IND)`;
                     const bdFS = fitFontSizeOneLine(doc, bdHsLine, maxPNameWidth, hsCodeFS, 7, 'bold');
                     doc.setFontSize(bdFS);
                     doc.text(bdHsLine, centerX, drawY, { align: 'center' });
@@ -1416,21 +1482,21 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     }
 
     const enrichedProductsList = productsList.map((prod, idx) => {
-        const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
-        const isIndHsEnabled = (prod.showIndHsCode === true || piProd?.showIndHsCode === true) && pi?.showIndHsCode !== false && record.showIndHsCode !== false;
+        const indHsCode = getProductIndHsCode(prod, idx);
+        const isIndHsEnabled = Boolean(indHsCode && isIndianHsCodeEnabled(prod, idx));
         return {
             ...prod,
             bagCount: prod.bagCount,
             packingType: prod.packingType,
-            hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || '',
+            hsCodeInd: indHsCode,
             showIndHsCode: isIndHsEnabled,
-            freight: prod.freight || piProd?.freight || '',
-            totalFreight: prod.totalFreight || piProd?.totalFreight || ''
+            freight: prod.freight || '',
+            totalFreight: prod.totalFreight || ''
         };
     });
 
     const trLcNo = lc?.lcNo || record.lcNumber || '';
-    const trLcDate = lc?.lcDate ? formatDate(lc.lcDate) : (record.lcDate ? formatDate(record.lcDate) : '');
+    const trLcDate = lc?.openingDate ? formatDate(lc.openingDate) : (lc?.lcDate ? formatDate(lc.lcDate) : (record.lcDate ? formatDate(record.lcDate) : ''));
     const trBankBin = resolvedBankBin || '';
     const trIrc = importer?.irc || '';
     const trTin = importer?.tin || '';
@@ -1503,7 +1569,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         coverNote: trCoverNote,
         amendmentLine: trAmendmentLine,
         piGrandTotal: trPiGrandTotal,
-        showIndHsCode: pi?.showIndHsCode !== false && record.showIndHsCode !== false,
+        showIndHsCode: enrichedProductsList.some(p => p.showIndHsCode),
         packingType: record.packingType || pi?.packingType || '',
         certification: record.certification || pi?.certification || ''
     }, trSetups);

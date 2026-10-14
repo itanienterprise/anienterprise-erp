@@ -7,7 +7,18 @@ import { appendNocApplicationPage } from './plNocApplicationPage';
 const formatDate = (dateString) => {
     if (!dateString) return '';
     try {
-        const d = new Date(dateString);
+        if (typeof dateString === 'string') {
+            const trimmed = dateString.trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+                const [year, month, day] = trimmed.split('T')[0].split('-');
+                return `${day}/${month}/${year}`;
+            }
+            if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(trimmed)) {
+                const parts = trimmed.split(/[\/\-]/);
+                return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+            }
+        }
+        const d = dateString instanceof Date ? dateString : new Date(dateString);
         if (isNaN(d.getTime())) return dateString;
         const day = String(d.getDate()).padStart(2, '0');
         const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -602,14 +613,34 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
     doc.setFontSize(10);
     doc.text("Seller", pageWidth - margin - 35, y + 28, { align: 'center' });
 
+    const isIndianHsCodeEnabled = (prod, pIdx) => {
+        if (record.showIndHsCode === false || pi?.showIndHsCode === false) {
+            return false;
+        }
+        if (prod && prod.showIndHsCode === false) {
+            return false;
+        }
+        const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod?.productName || '').trim().toLowerCase()) || pi?.productsList?.[pIdx];
+        if (piProd && piProd.showIndHsCode === false) {
+            return false;
+        }
+        return Boolean(
+            record.showIndHsCode === true ||
+            pi?.showIndHsCode === true ||
+            prod?.showIndHsCode === true ||
+            piProd?.showIndHsCode === true
+        );
+    };
+
     const enrichedProductsList = (record.productsList || []).map((prod, idx) => {
         const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
-        const isIndHsEnabled = (prod.showIndHsCode === true || piProd?.showIndHsCode === true) && pi?.showIndHsCode !== false && record.showIndHsCode !== false;
+        const indHsCode = prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || '';
+        const isIndHsEnabled = Boolean(indHsCode && isIndianHsCodeEnabled(prod, idx));
         return {
             ...prod,
             bagCount: prod.bagCount,
             packingType: prod.packingType,
-            hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || '',
+            hsCodeInd: indHsCode,
             showIndHsCode: isIndHsEnabled,
             freight: prod.freight || piProd?.freight || '',
             totalFreight: prod.totalFreight || piProd?.totalFreight || ''
@@ -617,7 +648,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
     });
 
     const trLcNo = lc?.lcNo || record.lcNumber || '';
-    const trLcDate = lc?.lcDate ? formatDate(lc.lcDate) : (record.lcDate ? formatDate(record.lcDate) : '');
+    const trLcDate = lc?.openingDate ? formatDate(lc.openingDate) : (lc?.lcDate ? formatDate(lc.lcDate) : (record.lcDate ? formatDate(record.lcDate) : ''));
     const trBankBin = resolvedBankBin || '';
     const trIrc = importer?.irc || '';
     const trTin = importer?.tin || '';
@@ -700,7 +731,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         coverNote: trCoverNote,
         amendmentLine: trAmendmentLine,
         piGrandTotal: trPiGrandTotal,
-        showIndHsCode: pi?.showIndHsCode !== false && record.showIndHsCode !== false,
+        showIndHsCode: enrichedProductsList.some(p => p.showIndHsCode),
         packingType: record.packingType || pi?.packingType || '',
         certification: record.certification || pi?.certification || ''
     }, trSetups);

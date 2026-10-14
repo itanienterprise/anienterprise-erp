@@ -3,7 +3,18 @@ import { ensureAlgerianFont, preloadAlgerianFont } from './algerianFontLoader';
 const formatTrDate = (dateString) => {
     if (!dateString) return '';
     try {
-        const d = new Date(dateString);
+        if (typeof dateString === 'string') {
+            const trimmed = dateString.trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+                const [year, month, day] = trimmed.split('T')[0].split('-');
+                return `${day}/${month}/${year}`;
+            }
+            if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(trimmed)) {
+                const parts = trimmed.split(/[\/\-]/);
+                return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+            }
+        }
+        const d = dateString instanceof Date ? dateString : new Date(dateString);
         if (isNaN(d.getTime())) return dateString;
         const day = String(d.getDate()).padStart(2, '0');
         const month = String(d.getMonth() + 1).padStart(2, '0');

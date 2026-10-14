@@ -3296,7 +3296,7 @@ function PI({
                         amount: '',
                         freight: '',
                         totalFreight: '',
-                        showIndHsCode: true,
+                        showIndHsCode: prev.showIndHsCode === true,
                         _fromIp: value
                     };
 

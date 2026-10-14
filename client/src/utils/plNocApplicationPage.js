@@ -6,7 +6,18 @@
 const formatDate = (dateStr) => {
     if (!dateStr) return '';
     try {
-        const d = new Date(dateStr);
+        if (typeof dateStr === 'string') {
+            const trimmed = dateStr.trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+                const [year, month, day] = trimmed.split('T')[0].split('-');
+                return `${day}/${month}/${year}`;
+            }
+            if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(trimmed)) {
+                const parts = trimmed.split(/[\/\-]/);
+                return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+            }
+        }
+        const d = dateStr instanceof Date ? dateStr : new Date(dateStr);
         if (isNaN(d.getTime())) return dateStr;
         const day = String(d.getDate()).padStart(2, '0');
         const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -193,7 +204,7 @@ export const appendNocApplicationPage = async (doc, record, context = {}) => {
 
         // Resolve L/C No & Date
         const lcNo = record.lcNo || record.lcNumber || lc?.lcNo || pi?.lcNumber || '';
-        const rawLcDate = lc?.lcDate || record.lcDate || pi?.lcDate || '';
+        const rawLcDate = lc?.openingDate || lc?.lcDate || record.lcDate || pi?.lcDate || '';
         const lcDate = rawLcDate ? formatDate(rawLcDate) : '';
 
         // Resolve Importer & Exporter Names
