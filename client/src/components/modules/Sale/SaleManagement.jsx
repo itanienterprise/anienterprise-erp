@@ -1647,7 +1647,7 @@ const SaleManagement = ({
         };
     };
 
-    // Helper to calculate product-level total stock and stock management rates
+    // Helper to calculate product-level total stock and stock management rates (both overall and per-warehouse)
     const productStockSummaries = useMemo(() => {
         if (!formData.items || formData.items.length === 0) return {};
         const map = {};
@@ -1655,13 +1655,34 @@ const SaleManagement = ({
             ? allSalesRecords.filter(s => s._id !== editingId && s.invoiceNo !== formData.invoiceNo && s.orderNo !== formData.orderNo)
             : allSalesRecords;
 
+        // Collect all (productName, warehouseName) pairs needed
+        const pairs = [];
         formData.items.forEach(item => {
             const cleanPName = (item.productName || '').trim();
-            if (!cleanPName || map[cleanPName.toLowerCase()]) return;
+            if (!cleanPName) return;
+
+            // Overall product stock across all warehouses
+            pairs.push({ productName: cleanPName, warehouseName: '' });
+
+            // Per selected warehouse in brandEntries
+            (item.brandEntries || []).forEach(e => {
+                const wh = (e.warehouseName || '').trim();
+                if (wh) {
+                    pairs.push({ productName: cleanPName, warehouseName: wh });
+                }
+            });
+        });
+
+        pairs.forEach(({ productName, warehouseName }) => {
+            const cleanP = productName.toLowerCase();
+            const cleanWh = (warehouseName || '').toLowerCase();
+            const key = cleanWh ? `${cleanP}:::${cleanWh}` : cleanP;
+            if (map[key]) return;
 
             try {
                 const stockFilters = {
-                    productName: cleanPName,
+                    productName: productName,
+                    ...(warehouseName ? { warehouse: warehouseName } : {}),
                     reportType: 'price'
                 };
                 const stockRes = calculateStockData(
@@ -1675,7 +1696,7 @@ const SaleManagement = ({
                     activeBaseline
                 );
                 const calculatedStock = stockRes?.displayRecords || [];
-                const matchedGroup = calculatedStock.find(g => (g.productName || '').trim().toLowerCase() === cleanPName.toLowerCase());
+                const matchedGroup = calculatedStock.find(g => (g.productName || '').trim().toLowerCase() === cleanP);
 
                 if (matchedGroup) {
                     const inHouseQty = matchedGroup.inHouseQuantity || 0;
@@ -1693,7 +1714,7 @@ const SaleManagement = ({
                     if (ratesSet.size === 0 && Array.isArray(stockRecords)) {
                         stockRecords.forEach(r => {
                             const rProd = (r.productName || r.product || '').trim().toLowerCase();
-                            if (rProd === cleanPName.toLowerCase()) {
+                            if (rProd === cleanP) {
                                 const entries = r.brandEntries || r.entries || [];
                                 entries.forEach(e => {
                                     const price = safeParse(e.purchasedPrice ?? e.rate);
@@ -1711,7 +1732,7 @@ const SaleManagement = ({
                         rateString = `৳${rates[0].toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} - ৳${rates[rates.length - 1].toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                     }
 
-                    map[cleanPName.toLowerCase()] = {
+                    map[key] = {
                         group: matchedGroup,
                         inHouseQty,
                         inHousePkt,
@@ -1722,7 +1743,7 @@ const SaleManagement = ({
                         brandList: matchedGroup.brandList || []
                     };
                 } else {
-                    map[cleanPName.toLowerCase()] = {
+                    map[key] = {
                         group: null,
                         inHouseQty: 0,
                         inHousePkt: 0,
@@ -1735,7 +1756,7 @@ const SaleManagement = ({
                 }
             } catch (err) {
                 console.error('Error calculating product stock summary:', err);
-                map[cleanPName.toLowerCase()] = {
+                map[key] = {
                     group: null,
                     inHouseQty: 0,
                     inHousePkt: 0,
@@ -1751,9 +1772,14 @@ const SaleManagement = ({
         return map;
     }, [stockRecords, warehouses, allSalesRecords, damagesRecords, activeBaseline, editingId, formData.invoiceNo, formData.orderNo, formData.items]);
 
-    const getProductStockSummary = (productName) => {
+    const getProductStockSummary = (productName, warehouseName = '') => {
         if (!productName) return null;
-        return productStockSummaries[(productName || '').trim().toLowerCase()] || null;
+        const cleanP = (productName || '').trim().toLowerCase();
+        const cleanWh = (warehouseName || '').trim().toLowerCase();
+        if (cleanWh) {
+            return productStockSummaries[`${cleanP}:::${cleanWh}`] || null;
+        }
+        return productStockSummaries[cleanP] || null;
     };
 
     const getBrandStockRate = (productName, brandName, lcNo) => {
@@ -6340,20 +6366,16 @@ const SaleManagement = ({
 
                             {/* Stock Management Details Table - After Product Details Section */}
                             {(() => {
-                                const activeProductsWithBrands = (formData.items || []).map((item) => {
+                                const activeProductsWithBrands = (formData.items || []).map((item, pIndex) => {
                                     if (!item.productName) return null;
+                                    const norm = str => (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                                    const brandEntries = item.brandEntries || [];
+
                                     const selectedBrandNames = Array.from(new Set([
-                                        ...(item.brandEntries || []).map(e => (e.brandName || e.brand || '').trim()),
+                                        ...brandEntries.map(e => (e.brandName || e.brand || '').trim()),
                                         (item.brand || item.brandName || '').trim()
                                     ].filter(Boolean)));
                                     if (selectedBrandNames.length === 0) return null;
-
-                                    const pSummary = getProductStockSummary(item.productName);
-                                    const group = pSummary?.group;
-                                    if (!group) return null;
-
-                                    const norm = str => (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
-                                    const brandEntries = item.brandEntries || [];
 
                                     // Brand + LC combinations already selected in this product
                                     const selectedBrandLcs = new Set(
@@ -6362,38 +6384,62 @@ const SaleManagement = ({
                                             .map(e => `${norm(e.brandName || e.brand)}:::${(e.lcNo || '').trim().toLowerCase()}`)
                                     );
 
-                                    // Brands that still have at least one entry without an LC selected
-                                    const brandsNeedingLc = new Set(
-                                        brandEntries
-                                            .filter(e => !(e.lcNo && e.lcNo.trim()))
-                                            .map(e => norm(e.brandName || e.brand))
-                                            .filter(Boolean)
-                                    );
+                                    // Entries that still need an LC
+                                    const entriesNeedingLc = brandEntries.filter(e => {
+                                        const bName = norm(e.brandName || e.brand);
+                                        return bName && !(e.lcNo && e.lcNo.trim());
+                                    });
 
                                     // If all brand rows already have an LC selected, hide table for this product
-                                    if (brandsNeedingLc.size === 0) return null;
+                                    if (entriesNeedingLc.length === 0) return null;
 
-                                    const effectiveBrandList = (group.brandList || []).filter(b => {
-                                        const bName = norm(b.brand);
-                                        // Only show brands that still have rows needing an LC
-                                        if (!brandsNeedingLc.has(bName)) return false;
+                                    // Collect effective brand list based on each entry's selected warehouse (or all warehouses if no warehouse selected)
+                                    const effectiveBrandList = [];
+                                    const seenBrandLcWh = new Set();
+                                    let sampleGroup = null;
 
-                                        // Hide specific LC if this exact brand + LC combination has already been selected in this product
-                                        const bLc = (b.lcNo || '').trim().toLowerCase();
-                                        if (bLc && bLc !== '—' && selectedBrandLcs.has(`${bName}:::${bLc}`)) return false;
+                                    entriesNeedingLc.forEach(entry => {
+                                        const bName = norm(entry.brandName || entry.brand);
+                                        const whName = (entry.warehouseName || '').trim();
 
-                                        return true;
+                                        const pSummary = getProductStockSummary(item.productName, whName);
+                                        const grp = pSummary?.group;
+                                        if (!sampleGroup && grp) {
+                                            sampleGroup = grp;
+                                        }
+                                        if (!grp || !Array.isArray(grp.brandList)) return;
+
+                                        grp.brandList.forEach(b => {
+                                            const bBrand = norm(b.brand);
+                                            if (bBrand !== bName) return;
+
+                                            const bLc = (b.lcNo || '').trim().toLowerCase();
+                                            // Hide specific LC if this exact brand + LC combination has already been selected in this product
+                                            if (bLc && bLc !== '—' && selectedBrandLcs.has(`${bBrand}:::${bLc}`)) return;
+
+                                            // Prevent duplicate display if multiple entries have the same brand and warehouse
+                                            const dedupKey = `${bBrand}:::${bLc}:::${whName.toLowerCase()}`;
+                                            if (seenBrandLcWh.has(dedupKey)) return;
+                                            seenBrandLcWh.add(dedupKey);
+
+                                            effectiveBrandList.push({
+                                                ...b,
+                                                warehouse: whName || b.warehouse || ''
+                                            });
+                                        });
                                     });
+
                                     if (effectiveBrandList.length === 0) return null;
 
-                                    return { item, group, effectiveBrandList };
+                                    const group = sampleGroup || { productName: item.productName };
+                                    return { item, group, effectiveBrandList, productIndex: pIndex };
                                 }).filter(Boolean);
 
                                 if (activeProductsWithBrands.length === 0) return null;
 
                                 return (
                                     <div className="space-y-4 pt-1">
-                                        {activeProductsWithBrands.map(({ item, group, effectiveBrandList }, pIdx) => {
+                                        {activeProductsWithBrands.map(({ item, group, effectiveBrandList, productIndex }, pIdx) => {
                                             const brandSpans = [];
                                             effectiveBrandList.forEach((ent, i) => {
                                                 const bName = (ent.brand || 'No Brand').trim().toLowerCase();
@@ -6445,7 +6491,26 @@ const SaleManagement = ({
                                                                                     {showBrandName ? (brand.brand || '-').trim() : ''}
                                                                                 </td>
                                                                                 <td className="px-5 py-3 text-center whitespace-nowrap align-middle">
-                                                                                    <span className="text-sm text-purple-800 bg-purple-50/60 px-3 py-1 rounded-xl font-bold inline-block">
+                                                                                    <span
+                                                                                        onClick={() => {
+                                                                                            if (!brand.lcNo || brand.lcNo === '—') return;
+                                                                                            const norm = str => (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                                                                                            const targetBrand = norm(brand.brand);
+                                                                                            const entryIndex = (item.brandEntries || []).findIndex(e => {
+                                                                                                const bName = norm(e.brandName || e.brand);
+                                                                                                const whName = (e.warehouseName || '').trim().toLowerCase();
+                                                                                                const bWh = (brand.warehouse || '').trim().toLowerCase();
+                                                                                                return bName === targetBrand && !(e.lcNo && e.lcNo.trim()) && (!bWh || !whName || whName === bWh);
+                                                                                            });
+                                                                                            if (entryIndex >= 0) {
+                                                                                                setActiveItemIndex(productIndex);
+                                                                                                setActiveEntryIndex(entryIndex);
+                                                                                                handleLcSelect(brand.lcNo);
+                                                                                            }
+                                                                                        }}
+                                                                                        className="text-sm text-purple-800 bg-purple-50/60 hover:bg-purple-100 hover:text-purple-900 px-3 py-1 rounded-xl font-bold inline-block cursor-pointer transition-all active:scale-95"
+                                                                                        title="Click to select this LC"
+                                                                                    >
                                                                                         {brand.lcNo || '—'}
                                                                                     </span>
                                                                                 </td>
