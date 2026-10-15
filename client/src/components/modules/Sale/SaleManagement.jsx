@@ -573,7 +573,8 @@ const SaleManagement = ({
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const adminName = currentUser?.name || currentUser?.username || 'Admin';
 
-            const acceptedIds = new Set(recordsToAccept.map(r => String(r._id)));
+            const acceptedIds = new Set(recordsToAccept.map(r => String(r._id || r.id)).filter(Boolean));
+            const acceptedInvoices = new Set(recordsToAccept.map(r => String(r.invoiceNo || r.orderNo || '').trim().toUpperCase()).filter(Boolean));
             recordsToAccept.forEach(r => {
                 const rId = String(r._id || r.id || '');
                 const rInv = String(r.invoiceNo || r.orderNo || '').trim().toUpperCase();
@@ -581,33 +582,23 @@ const SaleManagement = ({
                 if (rId) recentStatusUpdatesRef.current.set(rId, { status: finalStatus, isEdited: false, time: Date.now() });
                 if (rInv) recentStatusUpdatesRef.current.set(rInv, { status: finalStatus, isEdited: false, time: Date.now() });
             });
-            setAllSalesRecords(prev => (prev || []).map(s => {
-                if (acceptedIds.has(String(s._id))) {
+            const isTargetAccepted = (s) => acceptedIds.has(String(s._id || s.id)) || (s.invoiceNo && acceptedInvoices.has(String(s.invoiceNo).trim().toUpperCase())) || (s.orderNo && acceptedInvoices.has(String(s.orderNo).trim().toUpperCase()));
+            const updateAcceptedSale = (s) => {
+                if (isTargetAccepted(s)) {
                     const finalStatus = (parseFloat(s.paidAmount || 0) >= parseFloat(s.totalAmount || 0) && parseFloat(s.totalAmount || 0) > 0) ? 'Complete' : 'Pending';
                     return { ...s, status: finalStatus, isEdited: false, acceptedBy: actionBy, approvedBy: actionBy };
                 }
                 return s;
-            }));
+            };
+            setAllSalesRecords(prev => deduplicateSales((prev || []).map(updateAcceptedSale)));
             setSales(prev => {
-                if (isRequestedOnly || isEditRequestedOnly) {
-                    return (prev || []).filter(s => !acceptedIds.has(String(s._id)));
-                }
-                return (prev || []).map(s => {
-                    if (acceptedIds.has(String(s._id))) {
-                        const finalStatus = (parseFloat(s.paidAmount || 0) >= parseFloat(s.totalAmount || 0) && parseFloat(s.totalAmount || 0) > 0) ? 'Complete' : 'Pending';
-                        return { ...s, status: finalStatus, isEdited: false, acceptedBy: actionBy, approvedBy: actionBy };
-                    }
-                    return s;
-                });
+                const list = (isRequestedOnly || isEditRequestedOnly)
+                    ? (prev || []).filter(s => !isTargetAccepted(s))
+                    : (prev || []).map(updateAcceptedSale);
+                return deduplicateSales(list);
             });
             queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
-                Array.isArray(old) ? old.map(s => {
-                    if (acceptedIds.has(String(s._id))) {
-                        const finalStatus = (parseFloat(s.paidAmount || 0) >= parseFloat(s.totalAmount || 0) && parseFloat(s.totalAmount || 0) > 0) ? 'Complete' : 'Pending';
-                        return { ...s, status: finalStatus, isEdited: false, acceptedBy: actionBy, approvedBy: actionBy };
-                    }
-                    return s;
-                }) : []
+                deduplicateSales(Array.isArray(old) ? old.map(updateAcceptedSale) : [])
             );
             if (refreshPendingIndicators) refreshPendingIndicators();
             setSelectedItems(new Set());
