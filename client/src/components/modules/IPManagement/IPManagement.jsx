@@ -345,8 +345,21 @@ function IPManagement({
         endDate: '',
         port: '',
         importer: '',
-        productName: ''
+        productName: '',
+        status: 'except_expired'
     });
+
+    const hasCustomFilters = useMemo(() => {
+        return (
+            filters.quickRange !== 'all' ||
+            Boolean(filters.startDate) ||
+            Boolean(filters.endDate) ||
+            Boolean(filters.port) ||
+            Boolean(filters.importer) ||
+            Boolean(filters.productName) ||
+            (filters.status && filters.status !== 'except_expired')
+        );
+    }, [filters]);
 
     const activePorts = useMemo(() => (ports || []).filter(p => !p.isLoadingPort), [ports]);
 
@@ -1255,7 +1268,9 @@ function IPManagement({
             startDate: '',
             endDate: '',
             port: '',
-            importer: ''
+            importer: '',
+            productName: '',
+            status: 'except_expired'
         });
     };
 
@@ -1278,6 +1293,14 @@ function IPManagement({
         if (filters.port && record.port !== filters.port) return false;
         if (filters.importer && record.ipParty !== filters.importer) return false;
         if (filters.productName && record.productName !== filters.productName) return false;
+
+        // Status filter
+        const recStatus = (record.computedStatus || '').trim().toLowerCase();
+        if (filters.status === 'except_expired') {
+            if (recStatus === 'expired') return false;
+        } else if (filters.status && filters.status !== 'all') {
+            if (recStatus !== filters.status.trim().toLowerCase()) return false;
+        }
 
         // Date filtering
         if (filters.startDate || filters.endDate) {
@@ -1359,16 +1382,16 @@ function IPManagement({
                             <button
                                 ref={filterButtonRef}
                                 onClick={() => setShowFilters(!showFilters)}
-                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showFilters || Object.values(filters).some(v => v !== '' && v !== 'all') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showFilters || hasCustomFilters ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                             >
-                                <FunnelIcon className={`w-4 h-4 ${(showFilters || Object.values(filters).some(v => v !== '' && v !== 'all')) ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-4 h-4 ${(showFilters || hasCustomFilters) ? 'text-white' : 'text-gray-400'}`} />
                                 <span className="text-sm font-medium">Filter</span>
                             </button>
 
                             {/* Floating Filter Panel */}
                             {showFilters && (
-                                <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[450px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200 text-left">
-                                    <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-50">
+                                <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[460px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200 text-left max-h-[85vh] overflow-y-auto custom-scrollbar">
+                                    <div className="flex items-center justify-between mb-5 pb-2 border-b border-gray-100">
                                         <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
                                         <button
                                             type="button"
@@ -1376,13 +1399,78 @@ function IPManagement({
                                                 resetFilters();
                                                 setShowFilters(false);
                                             }}
-                                            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                                            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest transition-colors"
                                         >
                                             RESET ALL
                                         </button>
                                     </div>
 
                                     <div className="space-y-5">
+                                        {/* Status Filter */}
+                                        <div className="space-y-2 text-center pb-3 border-b border-gray-100">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Status</label>
+                                            <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
+                                                {[
+                                                    {
+                                                        label: 'All Except Expired',
+                                                        value: 'except_expired',
+                                                        activeCls: 'bg-blue-600 text-white shadow-md shadow-blue-500/30 font-bold',
+                                                        inactiveCls: 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                    },
+                                                    {
+                                                        label: 'All',
+                                                        value: 'all',
+                                                        activeCls: 'bg-gray-800 text-white shadow-md shadow-gray-700/30 font-bold',
+                                                        inactiveCls: 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                    },
+                                                    {
+                                                        label: 'Active',
+                                                        value: 'Active',
+                                                        dot: 'bg-green-500',
+                                                        activeCls: 'bg-green-600 text-white shadow-md shadow-green-500/30 font-bold',
+                                                        inactiveCls: 'bg-green-50 text-green-700 border border-green-200/60 hover:bg-green-100'
+                                                    },
+                                                    {
+                                                        label: 'Extended',
+                                                        value: 'Extended',
+                                                        dot: 'bg-blue-500',
+                                                        activeCls: 'bg-blue-600 text-white shadow-md shadow-blue-500/30 font-bold',
+                                                        inactiveCls: 'bg-blue-50 text-blue-700 border border-blue-200/60 hover:bg-blue-100'
+                                                    },
+                                                    {
+                                                        label: 'Expire Soon',
+                                                        value: 'Expire Soon',
+                                                        dot: 'bg-amber-500',
+                                                        activeCls: 'bg-amber-500 text-white shadow-md shadow-amber-500/30 font-bold',
+                                                        inactiveCls: 'bg-amber-50 text-amber-700 border border-amber-200/60 hover:bg-amber-100'
+                                                    },
+                                                    {
+                                                        label: 'Expired',
+                                                        value: 'Expired',
+                                                        dot: 'bg-red-500',
+                                                        activeCls: 'bg-red-600 text-white shadow-md shadow-red-500/30 font-bold',
+                                                        inactiveCls: 'bg-red-50 text-red-600 border border-red-200/60 hover:bg-red-100'
+                                                    }
+                                                ].map((opt) => {
+                                                    const isSelected = (filters.status || 'except_expired') === opt.value;
+                                                    return (
+                                                        <button
+                                                            key={opt.value}
+                                                            type="button"
+                                                            onClick={() => setFilters(prev => ({ ...prev, status: opt.value }))}
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                                                isSelected ? opt.activeCls : opt.inactiveCls
+                                                            }`}
+                                                        >
+                                                            {opt.dot && (
+                                                                <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : opt.dot}`} />
+                                                            )}
+                                                            {opt.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
                                         {/* Quick Range */}
                                         <div className="space-y-2 text-center">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>

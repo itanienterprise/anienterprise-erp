@@ -8349,6 +8349,15 @@ export const generateIPManagementReportPDF = (reportData, totals, searchQuery = 
             doc.text(filters.productName, margin + 25, yPos);
         }
 
+        if (filters.status && filters.status !== 'all') {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Status:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            const statusLabel = filters.status === 'except_expired' ? 'All (Except Expired)' : filters.status;
+            doc.text(statusLabel, margin + 25, yPos);
+        }
+
         const tableHeaders = [
             ['SL', 'Date', 'Close Date', 'IP Number', 'Ref No', 'Importer', 'Port', 'Product Name', 'Quantity', 'LC Rem', 'IP Balance', 'Total LC', 'Status']
         ];
