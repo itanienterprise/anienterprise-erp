@@ -4733,6 +4733,23 @@ function LCReceive({
                                                 }, {});
                                                 const uniqueEntries = Object.values(uniqueEntriesMap);
 
+                                                // Group unique entries into product groups (by productName and truckNo) to avoid repeating truck and product for each brand
+                                                const productGroups = [];
+                                                uniqueEntries.forEach(item => {
+                                                    const key = `${item.productName || ''}|${item.truckNo || ''}`;
+                                                    let grp = productGroups.find(g => g.key === key);
+                                                    if (!grp) {
+                                                        grp = {
+                                                            key,
+                                                            productName: item.productName,
+                                                            truckNo: item.truckNo,
+                                                            items: []
+                                                        };
+                                                        productGroups.push(grp);
+                                                    }
+                                                    grp.items.push(item);
+                                                });
+
                                                 return (
                                                     <tr
     key={entry.groupedKey}
@@ -4824,41 +4841,69 @@ function LCReceive({
                                                         <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.bdCnF || '-'}</td>
                                                         <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.billOfEntry || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600 align-middle">
-                                                        {uniqueEntries.map((item, idx) => (
-                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{item.truckNo || '0'}</div>
+                                                        {productGroups.map((grp, gIdx) => (
+                                                            <div
+                                                                key={gIdx}
+                                                                className={`flex items-center font-medium ${gIdx > 0 ? 'border-t border-gray-200' : ''}`}
+                                                                style={{ minHeight: `${grp.items.length * 32 + Math.max(0, grp.items.length - 1)}px` }}
+                                                            >
+                                                                {grp.truckNo || '0'}
+                                                            </div>
                                                         ))}
                                                     </td>
                                                     <td className="px-6 py-4 text-sm text-gray-600 align-middle">
-                                                        {uniqueEntries.map((item, idx) => (
-                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0 truncate max-w-xs">{item.productName || '-'}</div>
+                                                        {productGroups.map((grp, gIdx) => (
+                                                            <div
+                                                                key={gIdx}
+                                                                className={`flex items-center font-medium ${gIdx > 0 ? 'border-t border-gray-200' : ''}`}
+                                                                style={{ minHeight: `${grp.items.length * 32 + Math.max(0, grp.items.length - 1)}px` }}
+                                                            >
+                                                                <span className="truncate max-w-xs">{grp.productName || '-'}</span>
+                                                            </div>
                                                         ))}
                                                     </td>
                                                     <td className="px-6 py-4 text-sm text-gray-600 align-middle">
-                                                        {uniqueEntries.map((item, idx) => (
-                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0 truncate max-w-xs">{item.brand || '-'}</div>
+                                                        {productGroups.map((grp, gIdx) => (
+                                                            <div key={gIdx} className={gIdx > 0 ? 'border-t border-gray-200' : ''}>
+                                                                {grp.items.map((item, idx) => (
+                                                                    <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0 truncate max-w-xs">{item.brand || '-'}</div>
+                                                                ))}
+                                                            </div>
                                                         ))}
                                                     </td>
                                                     <td className="px-6 py-4 text-sm font-medium text-gray-900 align-middle">
-                                                        {uniqueEntries.map((item, idx) => (
-                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{Math.round(item.quantity).toLocaleString('en-US')}</div>
+                                                        {productGroups.map((grp, gIdx) => (
+                                                            <div key={gIdx} className={gIdx > 0 ? 'border-t border-gray-200' : ''}>
+                                                                {grp.items.map((item, idx) => (
+                                                                    <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{Math.round(item.quantity).toLocaleString('en-US')}</div>
+                                                                ))}
+                                                            </div>
                                                         ))}
                                                     </td>
                                                     <td className="px-6 py-4 text-sm font-semibold text-red-500 align-middle">
-                                                        {uniqueEntries.map((item, idx) => (
-                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">
-                                                                {parseFloat(item.sweepedQuantity) > 0 ? Math.round(item.sweepedQuantity).toLocaleString('en-US') : '-'}
+                                                        {productGroups.map((grp, gIdx) => (
+                                                            <div key={gIdx} className={gIdx > 0 ? 'border-t border-gray-200' : ''}>
+                                                                {grp.items.map((item, idx) => (
+                                                                    <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">
+                                                                        {parseFloat(item.sweepedQuantity) > 0 ? Math.round(item.sweepedQuantity).toLocaleString('en-US') : '-'}
+                                                                    </div>
+                                                                ))}
                                                             </div>
                                                         ))}
                                                     </td>
                                                     <td className="px-6 py-4 text-sm font-bold text-blue-700 align-middle">
-                                                        {uniqueEntries.map((item, idx) => {
-                                                            const inHouse = parseFloat(item.inHouseQuantity) || ((parseFloat(item.quantity) || 0) - (parseFloat(item.sweepedQuantity) || 0));
-                                                            return (
-                                                                <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">
-                                                                    {Math.round(inHouse).toLocaleString('en-US')}
-                                                                </div>
-                                                            );
-                                                        })}
+                                                        {productGroups.map((grp, gIdx) => (
+                                                            <div key={gIdx} className={gIdx > 0 ? 'border-t border-gray-200' : ''}>
+                                                                {grp.items.map((item, idx) => {
+                                                                    const inHouse = parseFloat(item.inHouseQuantity) || ((parseFloat(item.quantity) || 0) - (parseFloat(item.sweepedQuantity) || 0));
+                                                                    return (
+                                                                        <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">
+                                                                            {Math.round(inHouse).toLocaleString('en-US')}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        ))}
                                                     </td>
                                                     {canShowEntryBy && (
                                                         <td className="px-6 py-4 text-sm font-semibold text-gray-700 align-middle whitespace-nowrap">
