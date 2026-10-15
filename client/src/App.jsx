@@ -1958,8 +1958,8 @@ function App() {
         'port': ['ports'],
         'banks': ['banks'],
         'bank': ['banks'],
-        'ip-records': ['ip-records'],
-        'ip': ['ip-records'],
+        'ip-records': ['ip-records', 'pi', 'lc-management', 'packing-lists', 'packingLists', 'stock'],
+        'ip': ['ip-records', 'pi', 'lc-management', 'packing-lists', 'packingLists', 'stock'],
         'pi': ['pi'],
         'packing-lists': ['packing-lists', 'packingLists'],
         'packing-list': ['packing-lists', 'packingLists'],
@@ -2051,7 +2051,36 @@ function App() {
 
       try {
         if (module === 'products' || module === 'product' || module === 'all') {
-          if (typeof fetchProducts === 'function') fetchProducts();
+          const action = data.action;
+          const prodPayload = data.payload?.product;
+          if (prodPayload && (action === 'update' || action === 'create')) {
+            setProducts(prev => {
+              const pId = String(prodPayload._id || prodPayload.id);
+              const exists = prev.some(p => String(p._id || p.id) === pId);
+              let next;
+              if (exists) {
+                next = prev.map(p => String(p._id || p.id) === pId ? { ...p, ...prodPayload } : p);
+              } else {
+                next = [...prev, prodPayload];
+              }
+              return next;
+            });
+            queryClient.setQueryData(QUERY_KEYS.products, old => {
+              if (!Array.isArray(old)) return old;
+              const pId = String(prodPayload._id || prodPayload.id);
+              const exists = old.some(p => String(p._id || p.id) === pId);
+              if (exists) {
+                return old.map(p => String(p._id || p.id) === pId ? { ...p, ...prodPayload } : p);
+              }
+              return [...old, prodPayload];
+            });
+          } else if (action === 'delete' && data.payload?._id) {
+            const delId = String(data.payload._id);
+            setProducts(prev => prev.filter(p => String(p._id || p.id) !== delId));
+            queryClient.setQueryData(QUERY_KEYS.products, old => Array.isArray(old) ? old.filter(p => String(p._id || p.id) !== delId) : old);
+          } else {
+            if (typeof fetchProducts === 'function') fetchProducts();
+          }
         }
       } catch (err) {
         console.warn('Error syncing products in handleDataUpdate:', err);
@@ -2136,6 +2165,11 @@ function App() {
       try {
         if (module === 'ip-records' || module === 'ip' || module === 'all') {
           queryClient.invalidateQueries({ queryKey: ['ip-records'] });
+          queryClient.invalidateQueries({ queryKey: ['pi'] });
+          queryClient.invalidateQueries({ queryKey: ['lc-management'] });
+          queryClient.invalidateQueries({ queryKey: ['packing-lists'] });
+          queryClient.invalidateQueries({ queryKey: ['packingLists'] });
+          queryClient.invalidateQueries({ queryKey: ['stock'] });
         }
       } catch (err) {
         console.warn('Error syncing ip-records in handleDataUpdate:', err);

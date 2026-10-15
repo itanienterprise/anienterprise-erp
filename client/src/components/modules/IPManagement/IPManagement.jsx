@@ -1183,6 +1183,12 @@ function IPManagement({
             }
             setSubmitStatus('success');
             queryClient.invalidateQueries({ queryKey: ['ip-records'] });
+            queryClient.invalidateQueries({ queryKey: ['pi'] });
+            queryClient.invalidateQueries({ queryKey: ['lc-management'] });
+            queryClient.invalidateQueries({ queryKey: ['packing-lists'] });
+            queryClient.invalidateQueries({ queryKey: ['packingLists'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'ip-records' } }));
             setShowIpForm(false);
             resetIpForm();
             fetchIpRecords(true);
@@ -1443,12 +1449,15 @@ function IPManagement({
         if (filters.importer && record.ipParty !== filters.importer) return false;
         if (filters.productName && record.productName !== filters.productName) return false;
 
-        // Status filter
-        const recStatus = (record.computedStatus || '').trim().toLowerCase();
-        if (filters.status === 'except_expired') {
-            if (recStatus === 'expired') return false;
-        } else if (filters.status && filters.status !== 'all') {
-            if (recStatus !== filters.status.trim().toLowerCase()) return false;
+        // Status filter: when searching, show all status IP records
+        const isSearching = Boolean(searchQuery && searchQuery.trim());
+        if (!isSearching) {
+            const recStatus = (record.computedStatus || '').trim().toLowerCase();
+            if (filters.status === 'except_expired') {
+                if (recStatus === 'expired') return false;
+            } else if (filters.status && filters.status !== 'all') {
+                if (recStatus !== filters.status.trim().toLowerCase()) return false;
+            }
         }
 
         // Date filtering
@@ -1522,8 +1531,18 @@ function IPManagement({
                             placeholder="Search IP No, Party, Product or Ref..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none shadow-sm focus:bg-white"
+                            className="block w-full pl-12 md:pl-10 pr-10 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none shadow-sm focus:bg-white"
                         />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                className="absolute inset-y-0 right-0 pr-5 md:pr-3.5 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                                title="Clear search"
+                            >
+                                <XIcon className="h-4 w-4" />
+                            </button>
+                        )}
                     </div>
 
                     <div className="w-full md:w-1/4 flex justify-end z-50 gap-2 sm:gap-3">

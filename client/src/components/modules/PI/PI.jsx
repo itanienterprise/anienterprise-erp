@@ -681,6 +681,12 @@ function PI({
             const mod = (data?.module || '').toLowerCase().trim();
             console.log('[PI] Real-time event received:', data);
             if (!mod || mod === 'pi' || mod === 'ip-records' || mod === 'ip' || mod === 'lc-management' || mod === 'stock' || mod === 'sales' || mod === 'banks' || mod === 'bank' || mod === 'all') {
+                if (mod === 'ip-records' || mod === 'ip' || mod === 'all') {
+                    queryClient.invalidateQueries({ queryKey: ['ip-records'] });
+                }
+                if (mod === 'pi' || mod === 'all') {
+                    queryClient.invalidateQueries({ queryKey: ['pi'] });
+                }
                 fetchRecords(false);
             }
         };

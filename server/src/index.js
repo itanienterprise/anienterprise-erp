@@ -389,6 +389,7 @@ const InsurancePayment = require('./models/InsurancePayment');
 const StockBaseline = require('./models/StockBaseline');
 const { encryptData, decryptData } = require('./utils/encryption');
 const { updateBrandAcrossAllCollections } = require('./services/brandCascadeService');
+const { cascadeIpUpdate, cascadeProductUpdate, cascadeProductIpNameUpdate } = require('./services/ipCascadeService');
 const { syncSaleOnSave, syncSaleOnDelete, repairAllCustomerSalesHistory } = require('./services/customerSyncService');
 const CryptoJS = require('crypto-js');
 const ActivityLog = require('./models/ActivityLog');
@@ -1711,6 +1712,15 @@ apiRouter.delete('/api/ip-records/:id', async (req, res) => {
 // Update IP Record (for Edit functionality)
 apiRouter.put('/api/ip-records/:id', async (req, res) => {
   try {
+    // Fetch existing document to detect changes in IP product name or number
+    const existingDoc = await IpRecord.findById(req.params.id);
+    if (!existingDoc) return res.status(404).json({ message: 'Record not found' });
+
+    let oldData = null;
+    if (existingDoc.data) {
+      try { oldData = decryptData(existingDoc.data); } catch(e){}
+    }
+
     // Check for duplicate IP Number
     if (req.body.ipNumber) {
       const cleanIpNumber = req.body.ipNumber.trim().toLowerCase();
@@ -1744,12 +1754,53 @@ apiRouter.put('/api/ip-records/:id', async (req, res) => {
     }
 
     if (memoryCache.ipRecordsLightweight) {
-      memoryCache.ipRecordsLightweight = memoryCache.ipRecordsLightweight.map(r => r._id.toString() === req.params.id ? { ...r, ...lightResult } : r);
+      memoryCache.ipRecordsLightweight = memoryCache.ipRecordsLightweight.map(r => String(r._id) === String(req.params.id) ? { ...r, ...lightResult } : r);
     }
     memoryCache.ipRecords = null;
 
     broadcastUpdate('ip-records', 'update', { id: req.params.id, ipRecord: lightResult });
     req._broadcastDone = true;
+
+    // Background Cascade: Update all dependent PIs, LCs, Packing Lists, and Stock
+    const oldProductName = oldData?.productName;
+    const oldIpNumber = oldData?.ipNumber;
+    const newProductName = req.body.productName;
+    const newIpNumber = req.body.ipNumber;
+
+    if (
+      (newProductName && oldProductName && newProductName.trim().toLowerCase() !== oldProductName.trim().toLowerCase()) ||
+      (newIpNumber && oldIpNumber && newIpNumber.trim().toLowerCase() !== oldIpNumber.trim().toLowerCase())
+    ) {
+      cascadeIpUpdate({
+        oldIpNumber,
+        newIpNumber,
+        oldProductName,
+        newProductName
+      }).then(cascadeRes => {
+        if (cascadeRes.counts) {
+          const { pis, lcs, packingLists, stocks } = cascadeRes.counts;
+          if (pis > 0) {
+            invalidateMemoryCache('pi');
+            broadcastUpdate('pi', 'update', { reason: 'ip_cascade' });
+          }
+          if (lcs > 0) {
+            invalidateMemoryCache('lc-management');
+            broadcastUpdate('lc-management', 'update', { reason: 'ip_cascade' });
+          }
+          if (packingLists > 0) {
+            invalidateMemoryCache('packing-lists');
+            broadcastUpdate('packing-lists', 'update', { reason: 'ip_cascade' });
+          }
+          if (stocks > 0) {
+            invalidateMemoryCache('stock');
+            broadcastUpdate('stock', 'update', { reason: 'ip_cascade' });
+          }
+        }
+      }).catch(err => {
+        console.error('Error cascading IP update to dependent collections:', err);
+      });
+    }
+
     res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -2728,9 +2779,10 @@ apiRouter.post('/api/products', async (req, res) => {
     const newProduct = new Product({ data: encryptedData });
     const savedProduct = await newProduct.save();
     invalidateMemoryCache('products');
-    broadcastUpdate('products', 'create', { _id: savedProduct._id });
+    const decrypted = { ...req.body, _id: savedProduct._id, createdAt: savedProduct.createdAt };
+    broadcastUpdate('products', 'create', { product: decrypted, _id: savedProduct._id });
     req._broadcastDone = true;
-    res.status(201).json({ ...req.body, _id: savedProduct._id, createdAt: savedProduct.createdAt });
+    res.status(201).json(decrypted);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -2794,8 +2846,63 @@ apiRouter.put('/api/products/:id', async (req, res) => {
       cascadeResults.push(result);
     }
 
+    // Comprehensive cascade for product IP name, HS code, and product name
+    const hasProductChanges = Boolean(
+      (cleanBody.name && cleanBody.name !== existingData.name) ||
+      (cleanBody.ipName !== undefined && cleanBody.ipName !== existingData.ipName) ||
+      (cleanBody.hsCode !== undefined && cleanBody.hsCode !== existingData.hsCode) ||
+      (cleanBody.hsCodeInd !== undefined && cleanBody.hsCodeInd !== existingData.hsCodeInd)
+    );
+
+    if (hasProductChanges) {
+      cascadeProductUpdate({
+        productId: req.params.id,
+        oldProduct: existingData,
+        newProduct: cleanBody
+      }).then(cascadeRes => {
+        if (cascadeRes.counts) {
+          const { ips, pis, lcs, packingLists, stocks, sales, orders, purchases, purchaseReceives } = cascadeRes.counts;
+          if (ips > 0) {
+            invalidateMemoryCache('ip-records');
+            broadcastUpdate('ip-records', 'update', { reason: 'product_cascade' });
+          }
+          if (pis > 0) {
+            invalidateMemoryCache('pi');
+            broadcastUpdate('pi', 'update', { reason: 'product_cascade' });
+          }
+          if (lcs > 0) {
+            invalidateMemoryCache('lc-management');
+            broadcastUpdate('lc-management', 'update', { reason: 'product_cascade' });
+          }
+          if (packingLists > 0) {
+            invalidateMemoryCache('packing-lists');
+            broadcastUpdate('packing-lists', 'update', { reason: 'product_cascade' });
+          }
+          if (stocks > 0) {
+            invalidateMemoryCache('stock');
+            broadcastUpdate('stock', 'update', { reason: 'product_cascade' });
+          }
+          if (sales > 0 || orders > 0) {
+            invalidateMemoryCache('sales');
+            broadcastUpdate('sales', 'update', { reason: 'product_cascade' });
+          }
+          if (purchases > 0) {
+            invalidateMemoryCache('purchases');
+            broadcastUpdate('purchases', 'update', { reason: 'product_cascade' });
+          }
+          if (purchaseReceives > 0) {
+            invalidateMemoryCache('purchase-receives');
+            broadcastUpdate('purchase-receives', 'update', { reason: 'product_cascade' });
+          }
+        }
+      }).catch(err => {
+        console.error('Error cascading product update:', err);
+      });
+    }
+
+    const decryptedProduct = { ...cleanBody, _id: updatedProduct._id, createdAt: updatedProduct.createdAt };
     invalidateMemoryCache('products');
-    broadcastUpdate('products', 'update', { _id: updatedProduct._id });
+    broadcastUpdate('products', 'update', { product: decryptedProduct, _id: updatedProduct._id });
     req._broadcastDone = true;
 
     res.json({

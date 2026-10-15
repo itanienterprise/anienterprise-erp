@@ -5709,6 +5709,12 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 'banks', 'bank', 'importers', 'importer', 'exporters', 'exporter', 'insurance', 'ip-records', 'ip',
                 'pi', 'products', 'product', 'stock', 'sales', 'ports', 'port', 'insurance-payments', 'all'
             ].includes(mod)) {
+                if (mod === 'ip-records' || mod === 'ip' || mod === 'all') {
+                    queryClient.invalidateQueries({ queryKey: ['ip-records'] });
+                }
+                if (mod === 'pi' || mod === 'all') {
+                    queryClient.invalidateQueries({ queryKey: ['pi'] });
+                }
                 fetchInitialData(true);
             }
         };
