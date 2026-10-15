@@ -1207,49 +1207,47 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             return;
         }
 
+        const groupItemIds = new Set((paymentGroup.items || []).map(i => i.id).filter(Boolean));
+        const groupReceiptNo = paymentGroup.receiptNo;
+
+        const isItemMatch = (p) => {
+            if (p.id && groupItemIds.has(p.id)) return true;
+            if (groupReceiptNo && p.receiptNo && p.receiptNo === groupReceiptNo) return true;
+            return false;
+        };
+
+        const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
+        const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+        const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+
+        // Instant optimistic update (0ms UI response)
+        setPayments(prev => {
+            if (newStatus === 'Rejected') {
+                if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
+                    return (prev || []).map(p => isItemMatch(p) ? (p.originalData || { ...p, isEdited: false }) : p);
+                }
+                return (prev || []).filter(p => !isItemMatch(p));
+            } else {
+                return (prev || []).map(p => {
+                    if (isItemMatch(p)) {
+                        return {
+                            ...p,
+                            status: isSMApprovalStep ? p.status : 'Accepted',
+                            smApproved: isSMApprovalStep ? true : p.smApproved,
+                            isEdited: false,
+                            approvedBy: currentUser?.username || 'admin',
+                            approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                        };
+                    }
+                    return p;
+                });
+            }
+        });
+        refreshPendingIndicators?.();
+
         try {
-            setIsSubmitting(true);
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`);
             const customer = custRes.data;
-
-            const groupItemIds = new Set((paymentGroup.items || []).map(i => i.id).filter(Boolean));
-            const groupReceiptNo = paymentGroup.receiptNo;
-
-            const isItemMatch = (p) => {
-                if (p.id && groupItemIds.has(p.id)) return true;
-                if (groupReceiptNo && p.receiptNo && p.receiptNo === groupReceiptNo) return true;
-                return false;
-            };
-
-            const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
-            const smApproved = paymentGroup.items?.[0]?.smApproved === true;
-            const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-            const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
-
-            // Instant optimistic update
-            setPayments(prev => {
-                if (newStatus === 'Rejected') {
-                    if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
-                        return (prev || []).map(p => isItemMatch(p) ? (p.originalData || { ...p, isEdited: false }) : p);
-                    }
-                    return (prev || []).filter(p => !isItemMatch(p));
-                } else {
-                    return (prev || []).map(p => {
-                        if (isItemMatch(p)) {
-                            return {
-                                ...p,
-                                status: isSMApprovalStep ? p.status : 'Accepted',
-                                smApproved: isSMApprovalStep ? true : p.smApproved,
-                                isEdited: false,
-                                approvedBy: currentUser?.username || 'admin',
-                                approvedByName: currentUser?.name || currentUser?.username || 'Admin'
-                            };
-                        }
-                        return p;
-                    });
-                }
-            });
-            refreshPendingIndicators?.();
 
             if (newStatus === 'Rejected') {
                 if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
@@ -1311,10 +1309,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
             }
             queryClient.invalidateQueries({ queryKey: ['customers'] });
-            fetchPayments(true);
             refreshPendingIndicators?.();
 
-            // Notification
+            // Background notification
             try {
                 const now = new Date();
                 const dateStr = now.toLocaleDateString('en-GB');
@@ -1323,11 +1320,6 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 const partyName = paymentGroup.companyName || paymentGroup.customerName || 'Customer';
                 const receiptNo = paymentGroup.receiptNo || '';
                 const isEditRequest = paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested';
-
-                const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
-                const smApproved = paymentGroup.items?.[0]?.smApproved === true;
-                const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
 
                 let title, msg;
                 if (isEditRequest) {
@@ -1345,20 +1337,18 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 }
                 const creatorUser = paymentGroup.items?.[0]?.entryBy || '';
                 const targetUsers = creatorUser ? [creatorUser] : [];
-                if (addNotification) await addNotification(
+                if (addNotification) addNotification(
                     title, 
                     msg, 
                     ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'], 
                     targetUsers, 
                     true, 
                     'payment-collection-section'
-                );
+                ).catch(err => console.error('Notification error:', err));
             } catch (notifErr) { console.error('Notification error:', notifErr); }
         } catch (error) {
             console.error('Error updating payment status:', error);
             alert('Failed to update payment status');
-        } finally {
-            setIsSubmitting(false);
         }
     };
 
@@ -1524,19 +1514,18 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             );
 
             if (addNotification) {
-                await addNotification(
+                addNotification(
                     'Bulk Payment Collection Accepted',
                     `${dateStr} | ${timeStr} | ${actorName} bulk accepted ${validGroups.length} payment collection request(s)`,
                     ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
                     [],
                     true,
                     'payment-collection-section'
-                );
+                ).catch(err => console.error('Notification error:', err));
             }
 
             setSelectedItems(new Set());
             queryClient.invalidateQueries({ queryKey: ['customers'] });
-            fetchPayments(true);
             refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error performing bulk accept:', error);

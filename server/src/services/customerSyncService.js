@@ -257,21 +257,37 @@ async function syncSaleOnSave(saleDoc, reqBody, existingData = null) {
       const hasPriceChanges = Object.keys(orderPriceMap).length > 0;
 
       // Find target customer for this order
-      const allCustomerDocs = await Customer.find({});
-      for (const cDoc of allCustomerDocs) {
-        cDoc.decryptedData = decryptDocData(cDoc.data);
+      let targetCustomerDoc = null;
+      let allCustomerDocs = null;
+      if (newCustId && mongoose.Types.ObjectId.isValid(newCustId)) {
+        targetCustomerDoc = await Customer.findById(newCustId);
+        if (targetCustomerDoc) {
+          targetCustomerDoc.decryptedData = decryptDocData(targetCustomerDoc.data);
+        }
       }
-      const targetCustomerDoc = findCustomerForSale(allCustomerDocs, reqBody);
+      if (!targetCustomerDoc) {
+        allCustomerDocs = await Customer.find({});
+        for (const cDoc of allCustomerDocs) {
+          cDoc.decryptedData = decryptDocData(cDoc.data);
+        }
+        targetCustomerDoc = findCustomerForSale(allCustomerDocs, reqBody);
+      }
       const targetCustId = targetCustomerDoc ? targetCustomerDoc._id.toString() : newCustId;
 
-      // Find all linked sales for this order
-      const allSales = await Sale.find({ _id: { $ne: saleDoc._id } });
+      // Find all linked sales for this order using indexed orderNo
+      const orderCandidates = [orderNo, cleanOrderNo, orderId, cleanOrderId].filter(Boolean);
+      const linkedSaleDocs = orderCandidates.length > 0
+        ? await Sale.find({
+            _id: { $ne: saleDoc._id },
+            orderNo: { $in: orderCandidates }
+          })
+        : [];
       const linkedSales = [];
       const linkedInvoices = new Set();
       if (orderNo) linkedInvoices.add(orderNo);
       if (orderId) linkedInvoices.add(orderId);
 
-      for (const sDoc of allSales) {
+      for (const sDoc of linkedSaleDocs) {
         let sData = decryptDocData(sDoc.data);
         if (!sData) continue;
         const sTypeLow = (sData.saleType || '').toLowerCase().trim();
@@ -388,55 +404,63 @@ async function syncSaleOnSave(saleDoc, reqBody, existingData = null) {
       }
 
       // Now sync customer salesHistory for linked sales
-      for (const cDoc of allCustomerDocs) {
-        let cData = cDoc.decryptedData;
-        if (!cData || !Array.isArray(cData.salesHistory)) continue;
-        const isTarget = targetCustomerDoc && cDoc._id.toString() === targetCustomerDoc._id.toString();
+      if (linkedSales.length > 0 || customerInfoChanged) {
+        if (!allCustomerDocs) {
+          allCustomerDocs = await Customer.find({});
+          for (const cDoc of allCustomerDocs) {
+            cDoc.decryptedData = decryptDocData(cDoc.data);
+          }
+        }
+        for (const cDoc of allCustomerDocs) {
+          let cData = cDoc.decryptedData;
+          if (!cData || !Array.isArray(cData.salesHistory)) continue;
+          const isTarget = targetCustomerDoc && cDoc._id.toString() === targetCustomerDoc._id.toString();
 
-        if (isTarget) {
-          // In target customer: ensure linked sales are present and updated
-          let custModified = false;
-          linkedSales.forEach(ls => {
-            const lsInv = (ls.invoiceNo || '').trim().toUpperCase();
-            const lsOrd = (ls.orderNo || '').trim().toUpperCase();
-            // Remove existing entries for this linked sale
-            const beforeLen = cData.salesHistory.length;
-            cData.salesHistory = cData.salesHistory.filter(h => {
-              const hInv = (h.invoiceNo || '').trim().toUpperCase();
-              const hOrd = (h.orderNo || '').trim().toUpperCase();
-              if (lsInv && hInv === lsInv) return false;
-              if (lsOrd && (hOrd === lsOrd || hInv === lsOrd)) return false;
+          if (isTarget) {
+            // In target customer: ensure linked sales are present and updated
+            let custModified = false;
+            linkedSales.forEach(ls => {
+              const lsInv = (ls.invoiceNo || '').trim().toUpperCase();
+              const lsOrd = (ls.orderNo || '').trim().toUpperCase();
+              // Remove existing entries for this linked sale
+              const beforeLen = cData.salesHistory.length;
+              cData.salesHistory = cData.salesHistory.filter(h => {
+                const hInv = (h.invoiceNo || '').trim().toUpperCase();
+                const hOrd = (h.orderNo || '').trim().toUpperCase();
+                if (lsInv && hInv === lsInv) return false;
+                if (lsOrd && (hOrd === lsOrd || hInv === lsOrd)) return false;
+                return true;
+              });
+              if (cData.salesHistory.length !== beforeLen) custModified = true;
+
+              // Generate fresh entries and prepend
+              const newEntries = buildSaleHistoryEntries(ls, cData);
+              if (newEntries.length > 0) {
+                cData.salesHistory.unshift(...newEntries);
+                custModified = true;
+              }
+            });
+
+            if (custModified) {
+              await Customer.findByIdAndUpdate(cDoc._id, { data: encryptData(cData) });
+            }
+          } else {
+            // In non-target customers: REMOVE all entries matching linked sales or order
+            const initialLen = cData.salesHistory.length;
+            cData.salesHistory = cData.salesHistory.filter(entry => {
+              const entryOrdNo = (entry.orderNo || entry.orderRef || entry.orderId || '').trim().toUpperCase();
+              const entryInvNo = (entry.invoiceNo || '').trim().toUpperCase();
+              const cleanEntryOrdNo = entryOrdNo.replace(/[^A-Z0-9]/g, '');
+
+              if (entryOrdNo && (entryOrdNo === orderNo || entryOrdNo === orderId || linkedInvoices.has(entryOrdNo))) return false;
+              if (cleanEntryOrdNo && (cleanEntryOrdNo === cleanOrderNo || cleanEntryOrdNo === cleanOrderId)) return false;
+              if (entryInvNo && linkedInvoices.has(entryInvNo)) return false;
               return true;
             });
-            if (cData.salesHistory.length !== beforeLen) custModified = true;
 
-            // Generate fresh entries and prepend
-            const newEntries = buildSaleHistoryEntries(ls, cData);
-            if (newEntries.length > 0) {
-              cData.salesHistory.unshift(...newEntries);
-              custModified = true;
+            if (cData.salesHistory.length !== initialLen) {
+              await Customer.findByIdAndUpdate(cDoc._id, { data: encryptData(cData) });
             }
-          });
-
-          if (custModified) {
-            await Customer.findByIdAndUpdate(cDoc._id, { data: encryptData(cData) });
-          }
-        } else {
-          // In non-target customers: REMOVE all entries matching linked sales or order
-          const initialLen = cData.salesHistory.length;
-          cData.salesHistory = cData.salesHistory.filter(entry => {
-            const entryOrdNo = (entry.orderNo || entry.orderRef || entry.orderId || '').trim().toUpperCase();
-            const entryInvNo = (entry.invoiceNo || '').trim().toUpperCase();
-            const cleanEntryOrdNo = entryOrdNo.replace(/[^A-Z0-9]/g, '');
-
-            if (entryOrdNo && (entryOrdNo === orderNo || entryOrdNo === orderId || linkedInvoices.has(entryOrdNo))) return false;
-            if (cleanEntryOrdNo && (cleanEntryOrdNo === cleanOrderNo || cleanEntryOrdNo === cleanOrderId)) return false;
-            if (entryInvNo && linkedInvoices.has(entryInvNo)) return false;
-            return true;
-          });
-
-          if (cData.salesHistory.length !== initialLen) {
-            await Customer.findByIdAndUpdate(cDoc._id, { data: encryptData(cData) });
           }
         }
       }

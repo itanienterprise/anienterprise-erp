@@ -1531,7 +1531,10 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
 
     const handleStatusUpdate = async (purchase, newStatus) => {
         if (!purchase?._id || statusUpdatingId === purchase._id) return;
-        setStatusUpdatingId(purchase._id);
+        const prId = String(purchase._id || purchase.id || '');
+        const prNo = String(purchase.purchaseReceiveNo || purchase.purchaseNo || '').trim().toUpperCase();
+        const isMatch = (p) => (prId && String(p._id || p.id || '') === prId) || (prNo && String(p.purchaseReceiveNo || p.purchaseNo || '').trim().toUpperCase() === prNo);
+
         try {
             const employeeId = currentUser?.employeeId || currentUser?.username || 'admin';
             const employeeDisplayName = currentUser?.name || currentUser?.nameEn || currentUser?.username || 'Admin';
@@ -1543,43 +1546,54 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                 approvedByName: employeeDisplayName
             };
 
-            // Instant optimistic update
-            setPurchaseReceives(prev => (prev || []).map(p => p._id === purchase._id ? updated : p));
+            // Instant optimistic update (0ms disappearance from requested view)
+            setPurchaseReceives(prev => {
+                if (isRequestedOnly) {
+                    return (prev || []).filter(p => !isMatch(p));
+                }
+                return (prev || []).map(p => isMatch(p) ? updated : p);
+            });
             queryClient.setQueryData(['purchase-receives'], (old = []) =>
-                Array.isArray(old) ? old.map(p => p._id === purchase._id ? updated : p) : []
+                Array.isArray(old) ? old.map(p => isMatch(p) ? updated : p) : []
             );
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
 
             const res = await axios.put(`${API_BASE_URL}/api/purchase-receives/${purchase._id}`, updated);
             const savedPR = res.data || updated;
+            setStatusUpdatingId(null);
+
+            // Background stock and notification sync
             const statusLower = (newStatus || '').toLowerCase();
-            if (statusLower === 'approved' || statusLower === 'accepted') {
-                await updateWarehouseStockForPurchaseReceive(savedPR);
-            } else if (statusLower === 'rejected' || statusLower === 'deleted' || statusLower === 'requested') {
-                await reverseWarehouseStockForPurchaseReceive(savedPR);
-            }
-            if (addNotification) {
-                const now = new Date();
-                const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const employeeName = currentUser?.name || currentUser?.username || 'An employee';
-                await addNotification(
-                    `Purchase Receive Request ${newStatus}`,
-                    `${dateStr} | ${timeStr} | Purchase receive entry (${purchase.purchaseReceiveNo || purchase.purchaseNo}) was ${newStatus.toLowerCase()} by ${employeeName}`,
-                    ['admin', 'incharge', 'purchase manager'],
-                    [purchase.createdBy, 'admin'].filter(Boolean)
-                );
-            }
-            queryClient.invalidateQueries({ queryKey: ['purchase-receives'] });
-            queryClient.invalidateQueries({ queryKey: ['stock'] });
-            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
-            queryClient.invalidateQueries({ queryKey: ['purchases'] });
-            fetchPurchaseReceives(true);
-            if (typeof fetchStockRecords === 'function') fetchStockRecords();
-            if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+            (async () => {
+                try {
+                    if (statusLower === 'approved' || statusLower === 'accepted') {
+                        await updateWarehouseStockForPurchaseReceive(savedPR);
+                    } else if (statusLower === 'rejected' || statusLower === 'deleted' || statusLower === 'requested') {
+                        await reverseWarehouseStockForPurchaseReceive(savedPR);
+                    }
+                    if (addNotification) {
+                        const now = new Date();
+                        const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+                        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+                        await addNotification(
+                            `Purchase Receive Request ${newStatus}`,
+                            `${dateStr} | ${timeStr} | Purchase receive entry (${purchase.purchaseReceiveNo || purchase.purchaseNo}) was ${newStatus.toLowerCase()} by ${employeeName}`,
+                            ['admin', 'incharge', 'purchase manager'],
+                            [purchase.createdBy, 'admin'].filter(Boolean)
+                        );
+                    }
+                    queryClient.invalidateQueries({ queryKey: ['purchase-receives'] });
+                    queryClient.invalidateQueries({ queryKey: ['stock'] });
+                    queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+                    queryClient.invalidateQueries({ queryKey: ['purchases'] });
+                    if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+                } catch (bgErr) {
+                    console.error('Error in background PR post-accept sync:', bgErr);
+                }
+            })();
         } catch (error) {
             console.error('Error updating purchase receive status:', error);
-        } finally {
             setStatusUpdatingId(null);
         }
     };

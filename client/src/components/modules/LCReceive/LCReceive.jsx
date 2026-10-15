@@ -2213,12 +2213,11 @@ function LCReceive({
 
     const handleStatusUpdate = async (record, newStatus) => {
         try {
-            setIsSubmitting(true);
             const ids = record.allIds || record.ids || (record._id ? [record._id] : []);
             const idSet = new Set(ids);
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
 
-            // Instant optimistic update
+            // Instant optimistic update (0ms UI response)
             if (typeof setAllStockRecords === 'function') {
                 setAllStockRecords(prev => (prev || []).map(r => idSet.has(r._id) ? {
                     ...r,
@@ -2246,57 +2245,59 @@ function LCReceive({
                     ...rest,
                     status: newStatus,
                     ...(newStatus === 'In Stock' ? { acceptedBy: actionBy, approvedBy: actionBy, approvedByUsername: currentUser?.username || '' } : {}),
-                    ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {}),
+                    ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {})
                 };
                 return axios.put(`${API_BASE_URL}/api/stock/${id}`, { data: encryptData(updatedData) });
             }).filter(Boolean);
 
             await Promise.all(promises);
 
-            // Send notification to the original requester
-            if (addNotification && record.entries && record.entries[0]) {
-                const firstEntry = record.entries[0];
-                const requesterUsername = firstEntry.requestedByUsername;
+            (async () => {
+                try {
+                    // Send notification to the original requester
+                    if (addNotification && record.entries && record.entries[0]) {
+                        const firstEntry = record.entries[0];
+                        const requesterUsername = firstEntry.requestedByUsername;
 
-                if (requesterUsername) {
-                    const now = new Date();
-                    const day = String(now.getDate()).padStart(2, '0');
-                    const month = String(now.getMonth() + 1).padStart(2, '0');
-                    const year = now.getFullYear();
-                    const dateStr = `${day}/${month}/${year}`;
-                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    const adminName = currentUser?.name || currentUser?.username || 'Admin';
+                        if (requesterUsername) {
+                            const now = new Date();
+                            const day = String(now.getDate()).padStart(2, '0');
+                            const month = String(now.getMonth() + 1).padStart(2, '0');
+                            const year = now.getFullYear();
+                            const dateStr = `${day}/${month}/${year}`;
+                            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            const adminName = currentUser?.name || currentUser?.username || 'Admin';
 
-                    const statusLabel = newStatus === 'In Stock' ? 'Accepted' : newStatus;
-                    const actionLabel = newStatus === 'In Stock' ? 'accepted' : 'rejected';
-                    const requesterName = firstEntry.requestedBy || firstEntry.requestedByUsername || 'an employee';
+                            const statusLabel = newStatus === 'In Stock' ? 'Accepted' : newStatus;
+                            const actionLabel = newStatus === 'In Stock' ? 'accepted' : 'rejected';
+                            const requesterName = firstEntry.requestedBy || firstEntry.requestedByUsername || 'an employee';
 
-                    // Notify Admins, Managers, and the Original Requester
-                    const targetRoles = ['admin', 'incharge', 'sales manager'];
-                    const targetUsers = [requesterUsername];
-                    if (!targetUsers.includes('admin')) targetUsers.push('admin');
+                            // Notify Admins, Managers, and the Original Requester
+                            const targetRoles = ['admin', 'incharge', 'sales manager'];
+                            const targetUsers = [requesterUsername];
+                            if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
-                    await addNotification(
-                        `LC Receive ${statusLabel}`,
-                        `${dateStr} | ${timeStr} | ${adminName} has ${actionLabel} the LC receive entry (${firstEntry.lcNo}) requested by ${requesterName}`,
-                        targetRoles,
-                        targetUsers,
-                        false,
-                        'lc-entry-section'
-                    );
+                            await addNotification(
+                                `LC Receive ${statusLabel}`,
+                                `${dateStr} | ${timeStr} | ${adminName} has ${actionLabel} the LC receive entry (${firstEntry.lcNo}) requested by ${requesterName}`,
+                                targetRoles,
+                                targetUsers,
+                                false,
+                                'lc-entry-section'
+                            );
+                        }
+                    }
+
+                    queryClient.invalidateQueries({ queryKey: ['stock'] });
+                    queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+                    if (refreshPendingIndicators) refreshPendingIndicators();
+                } catch (bgErr) {
+                    console.error('Error in background LCReceive post-status-update:', bgErr);
                 }
-            }
-
-            queryClient.invalidateQueries({ queryKey: ['stock'] });
-            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
-            if (fetchStockRecords) fetchStockRecords();
-            fetchWarehouses();
-            if (refreshPendingIndicators) refreshPendingIndicators();
+            })();
         } catch (error) {
             console.error(`Error updating status to ${newStatus}:`, error);
             alert(`Failed to update status to ${newStatus}`);
-        } finally {
-            setIsSubmitting(false);
         }
     };
 

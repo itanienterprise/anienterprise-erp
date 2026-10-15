@@ -86,8 +86,15 @@ function PI({
     const [submitStatus, setSubmitStatus] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
-    const [banks, setBanks] = useState([]);
-    const [ipRecords, setIpRecords] = useState([]);
+    const [banks, setBanks] = useState(() => {
+        const cached = queryClient.getQueryData(['banks']);
+        return Array.isArray(cached) ? cached : [];
+    });
+    const [ipRecords, setIpRecords] = useState(() => {
+        const cached = queryClient.getQueryData(['ip-records']);
+        return Array.isArray(cached) ? cached : [];
+    });
+    const [isLoadingIpRecords, setIsLoadingIpRecords] = useState(false);
     const [lcRecords, setLcRecords] = useState([]);
     const [allStockRecords, setAllStockRecords] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
@@ -800,20 +807,70 @@ function PI({
         }
     };
 
-    const fetchRecords = async (showFullLoading = true) => {
-        if (!showFullLoading) {
-            const cachedPi = queryClient.getQueryData(['pi']);
-            if (cachedPi && Array.isArray(cachedPi) && cachedPi.length > 0 && records.length === 0) {
-                setRecords(cachedPi);
+    const ensureIpRecordsLoaded = async () => {
+        if (ipRecords && ipRecords.length > 0) return ipRecords;
+        setIsLoadingIpRecords(true);
+        try {
+            const data = await queryClient.fetchQuery({
+                queryKey: ['ip-records'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records?excludeAttachments=true`).then(r => Array.isArray(r.data) ? r.data : [])
+            });
+            if (Array.isArray(data) && data.length > 0) {
+                setIpRecords(data);
+                return data;
             }
-        } else {
-            const cachedPi = queryClient.getQueryData(['pi']);
-            if (cachedPi && Array.isArray(cachedPi) && cachedPi.length > 0) {
-                setRecords(cachedPi);
-            } else {
-                setIsLoading(true);
-            }
+        } catch (e) {
+            console.error('Error loading IP records:', e);
+        } finally {
+            setIsLoadingIpRecords(false);
         }
+        return [];
+    };
+
+    const fetchRecords = async (showFullLoading = true) => {
+        // Fast instant cache initialization
+        const cachedPi = queryClient.getQueryData(['pi']);
+        if (cachedPi && Array.isArray(cachedPi) && cachedPi.length > 0) {
+            setRecords(cachedPi);
+        } else if (showFullLoading) {
+            setIsLoading(true);
+        }
+
+        const cachedIp = queryClient.getQueryData(['ip-records']);
+        if (cachedIp && Array.isArray(cachedIp) && cachedIp.length > 0) {
+            setIpRecords(cachedIp);
+        }
+
+        const cachedBanks = queryClient.getQueryData(['banks']);
+        if (cachedBanks && Array.isArray(cachedBanks) && cachedBanks.length > 0) {
+            setBanks(cachedBanks);
+        }
+
+        // Kick off IP records immediately in parallel (no waiting for PI, sales, stock, etc.)
+        const ipFetchPromise = queryClient.fetchQuery({
+            queryKey: ['ip-records'],
+            queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records?excludeAttachments=true`).then(r => Array.isArray(r.data) ? r.data : [])
+        }).then(ipData => {
+            if (Array.isArray(ipData)) {
+                setIpRecords(ipData);
+            }
+            return ipData;
+        }).catch(err => {
+            console.error('Error fetching IP records:', err);
+            return [];
+        });
+
+        // Kick off Banks immediately in parallel
+        const bankFetchPromise = queryClient.fetchQuery({
+            queryKey: ['banks'],
+            queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
+        }).then(bData => {
+            if (Array.isArray(bData)) {
+                setBanks(bData);
+            }
+            return bData;
+        }).catch(() => []);
+
         try {
             // 1. Fetch PI records first and render list table immediately!
             const res = await axios.get(`${API_BASE_URL}/api/pi?_t=${Date.now()}`);
@@ -822,16 +879,8 @@ function PI({
             queryClient.setQueryData(['pi'], piData);
             if (showFullLoading) setIsLoading(false);
 
-            // 2. Fetch supporting data asynchronously in background
-            const [bankData, ipData, lcData, stockData, saleData, notifRes] = await Promise.all([
-                queryClient.fetchQuery({
-                    queryKey: ['banks'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['ip-records'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records`).then(r => Array.isArray(r.data) ? r.data : [])
-                }),
+            // 2. Fetch remainder supporting data asynchronously in background
+            const [lcData, stockData, saleData, notifRes] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['lc-management'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
@@ -846,8 +895,6 @@ function PI({
                 }),
                 axios.get(`${API_BASE_URL}/api/notifications`).catch(() => ({ data: [] }))
             ]);
-            setBanks(Array.isArray(bankData) ? bankData : []);
-            setIpRecords(Array.isArray(ipData) ? ipData : []);
             setLcRecords(Array.isArray(lcData) ? lcData : []);
 
             const rawNotifs = Array.isArray(notifRes?.data) ? notifRes.data : [];
@@ -1842,6 +1889,8 @@ function PI({
                     handleProductFieldChange(idx, 'hsCodeInd', selected.hsCodeInd || '');
                     setActiveDropdown(null);
                     setHighlightedIndex(-1);
+                } else if (dropdownId === 'reviseIpNumber') {
+                    handleReviseIpSelectToggle(value);
                 } else {
                     handleDropdownSelect(field || dropdownId, value);
                 }
@@ -2483,6 +2532,30 @@ function PI({
             setFormData(prev => ({ ...prev, piNumbers: [lastPi], piNumber: lastPi }));
         }
     }
+
+    const filteredIpRecords = useMemo(() => {
+        if (!Array.isArray(ipRecords)) return [];
+        const q = (ipSearch || '').trim().toLowerCase();
+        if (!q) return ipRecords;
+        return ipRecords.filter(ip => {
+            const num = (ip.ipNumber || '').toLowerCase();
+            const party = (ip.ipParty || '').toLowerCase();
+            const prod = (ip.productName || '').toLowerCase();
+            return num.includes(q) || party.includes(q) || prod.includes(q);
+        });
+    }, [ipRecords, ipSearch]);
+
+    const filteredReviseIpRecords = useMemo(() => {
+        if (!Array.isArray(ipRecords)) return [];
+        const q = (reviseIpSearch || '').trim().toLowerCase();
+        if (!q) return ipRecords;
+        return ipRecords.filter(ip => {
+            const num = (ip.ipNumber || '').toLowerCase();
+            const party = (ip.ipParty || '').toLowerCase();
+            const prod = (ip.productName || '').toLowerCase();
+            return num.includes(q) || party.includes(q) || prod.includes(q);
+        });
+    }, [ipRecords, reviseIpSearch]);
 
     const filteredPiSuggestions = useMemo(() => {
         const lastPart = (formData.piNumber || '').split(',').pop().trim().toLowerCase();
@@ -4325,34 +4398,49 @@ function PI({
                                         name="ipSearch"
                                         value={ipSearch}
                                         onChange={(e) => { setIpSearch(e.target.value); setActiveDropdown('ipNumber'); setHighlightedIndex(-1); }}
-                                        onFocus={() => { setActiveDropdown('ipNumber'); setHighlightedIndex(-1); }}
-                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'ipNumber', ipRecords.filter(ip => !ipSearch || ip.ipNumber.toLowerCase().includes(ipSearch.toLowerCase())), 'ipNumber')}
+                                        onFocus={() => {
+                                            setActiveDropdown('ipNumber');
+                                            setHighlightedIndex(-1);
+                                            if (!ipRecords || ipRecords.length === 0) ensureIpRecordsLoaded();
+                                        }}
+                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'ipNumber', filteredIpRecords, 'ipNumber')}
                                         placeholder="Search & Select IP Numbers..."
                                         autoComplete="off"
                                         className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                                     />
                                     {activeDropdown === 'ipNumber' && (
-                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                            {ipRecords.filter(ip => !ipSearch || ip.ipNumber.toLowerCase().includes(ipSearch.toLowerCase())).map((ip, idx) => {
-                                                const isSelected = formData.ipNumbers && formData.ipNumbers.includes(ip.ipNumber);
-                                                return (
-                                                    <button
-                                                        key={ip._id}
-                                                        type="button"
-                                                        onMouseDown={() => handleDropdownSelect('ipNumber', ip.ipNumber)}
-                                                        onMouseEnter={() => setHighlightedIndex(idx)}
-                                                        className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                    >
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold">{ip.ipNumber}</span>
-                                                            <span className="text-[10px] text-gray-500">{ip.ipParty} • {ip.productName}</span>
-                                                        </div>
-                                                        {isSelected && (
-                                                            <span className="text-blue-600 font-bold text-sm">✓</span>
-                                                        )}
-                                                    </button>
-                                                );
-                                            })}
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-gray-50">
+                                            {isLoadingIpRecords || !ipRecords || ipRecords.length === 0 ? (
+                                                <div className="px-4 py-4 text-center text-xs text-gray-500 flex items-center justify-center space-x-2">
+                                                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                                    <span>Loading IP Numbers...</span>
+                                                </div>
+                                            ) : filteredIpRecords.length === 0 ? (
+                                                <div className="px-4 py-4 text-center text-xs text-gray-400">
+                                                    No matching IP records found
+                                                </div>
+                                            ) : (
+                                                filteredIpRecords.slice(0, 100).map((ip, idx) => {
+                                                    const isSelected = formData.ipNumbers && formData.ipNumbers.includes(ip.ipNumber);
+                                                    return (
+                                                        <button
+                                                            key={ip._id || ip.ipNumber || idx}
+                                                            type="button"
+                                                            onMouseDown={() => handleDropdownSelect('ipNumber', ip.ipNumber)}
+                                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                                            className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between transition-colors ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                        >
+                                                            <div className="flex flex-col pr-2 min-w-0">
+                                                                <span className="font-bold truncate">{ip.ipNumber}</span>
+                                                                <span className="text-[10px] text-gray-500 truncate">{ip.ipParty} • {ip.productName}</span>
+                                                            </div>
+                                                            {isSelected && (
+                                                                <span className="text-blue-600 font-bold text-sm ml-2 flex-shrink-0">✓</span>
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -6075,33 +6163,46 @@ function PI({
                                                     onFocus={() => {
                                                         setActiveDropdown('reviseIpNumber');
                                                         setHighlightedIndex(-1);
+                                                        if (!ipRecords || ipRecords.length === 0) ensureIpRecordsLoaded();
                                                     }}
+                                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'reviseIpNumber', filteredReviseIpRecords, 'reviseIpNumber')}
                                                     placeholder="Search & Select IP Numbers to Add..."
                                                     autoComplete="off"
                                                     className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-sm"
                                                 />
                                                 {activeDropdown === 'reviseIpNumber' && (
-                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                                        {ipRecords.filter(ip => !reviseIpSearch || ip.ipNumber.toLowerCase().includes(reviseIpSearch.toLowerCase())).map((ip, idx) => {
-                                                            const isSelected = reviseFormData.ipNumbers && reviseFormData.ipNumbers.includes(ip.ipNumber);
-                                                            return (
-                                                                <button
-                                                                    key={ip._id}
-                                                                    type="button"
-                                                                    onMouseDown={() => handleReviseIpSelectToggle(ip.ipNumber)}
-                                                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                    className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                                >
-                                                                    <div className="flex flex-col text-left">
-                                                                        <span className="font-bold">{ip.ipNumber}</span>
-                                                                        <span className="text-[10px] text-gray-500">{ip.ipParty} • {ip.productName}</span>
-                                                                    </div>
-                                                                    {isSelected && (
-                                                                        <span className="text-blue-600 font-bold text-sm">✓</span>
-                                                                    )}
-                                                                </button>
-                                                            );
-                                                        })}
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-gray-50">
+                                                        {isLoadingIpRecords || !ipRecords || ipRecords.length === 0 ? (
+                                                            <div className="px-4 py-4 text-center text-xs text-gray-500 flex items-center justify-center space-x-2">
+                                                                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                                                <span>Loading IP Numbers...</span>
+                                                            </div>
+                                                        ) : filteredReviseIpRecords.length === 0 ? (
+                                                            <div className="px-4 py-4 text-center text-xs text-gray-400">
+                                                                No matching IP records found
+                                                            </div>
+                                                        ) : (
+                                                            filteredReviseIpRecords.slice(0, 100).map((ip, idx) => {
+                                                                const isSelected = reviseFormData.ipNumbers && reviseFormData.ipNumbers.includes(ip.ipNumber);
+                                                                return (
+                                                                    <button
+                                                                        key={ip._id || ip.ipNumber || idx}
+                                                                        type="button"
+                                                                        onMouseDown={() => handleReviseIpSelectToggle(ip.ipNumber)}
+                                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                        className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between transition-colors ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                    >
+                                                                        <div className="flex flex-col text-left pr-2 min-w-0">
+                                                                            <span className="font-bold truncate">{ip.ipNumber}</span>
+                                                                            <span className="text-[10px] text-gray-500 truncate">{ip.ipParty} • {ip.productName}</span>
+                                                                        </div>
+                                                                        {isSelected && (
+                                                                            <span className="text-blue-600 font-bold text-sm ml-2 flex-shrink-0">✓</span>
+                                                                        )}
+                                                                    </button>
+                                                                );
+                                                            })
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>

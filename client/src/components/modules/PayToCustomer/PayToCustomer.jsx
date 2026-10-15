@@ -1192,49 +1192,47 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             return;
         }
 
+        const groupItemIds = new Set((paymentGroup.items || []).map(i => i.id).filter(Boolean));
+        const groupReceiptNo = paymentGroup.receiptNo;
+
+        const isItemMatch = (p) => {
+            if (p.id && groupItemIds.has(p.id)) return true;
+            if (groupReceiptNo && p.receiptNo && p.receiptNo === groupReceiptNo) return true;
+            return false;
+        };
+
+        const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
+        const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+        const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+
+        // Instant optimistic update (0ms UI response)
+        setPayments(prev => {
+            if (newStatus === 'Rejected') {
+                if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
+                    return (prev || []).map(p => isItemMatch(p) ? (p.originalData || { ...p, isEdited: false }) : p);
+                }
+                return (prev || []).filter(p => !isItemMatch(p));
+            } else {
+                return (prev || []).map(p => {
+                    if (isItemMatch(p)) {
+                        return {
+                            ...p,
+                            status: isSMApprovalStep ? p.status : 'Accepted',
+                            smApproved: isSMApprovalStep ? true : p.smApproved,
+                            isEdited: false,
+                            approvedBy: currentUser?.username || 'admin',
+                            approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                        };
+                    }
+                    return p;
+                });
+            }
+        });
+        refreshPendingIndicators?.();
+
         try {
-            setIsSubmitting(true);
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`);
             const customer = custRes.data;
-
-            const groupItemIds = new Set((paymentGroup.items || []).map(i => i.id).filter(Boolean));
-            const groupReceiptNo = paymentGroup.receiptNo;
-
-            const isItemMatch = (p) => {
-                if (p.id && groupItemIds.has(p.id)) return true;
-                if (groupReceiptNo && p.receiptNo && p.receiptNo === groupReceiptNo) return true;
-                return false;
-            };
-
-            const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
-            const smApproved = paymentGroup.items?.[0]?.smApproved === true;
-            const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-            const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
-
-            // Instant optimistic update
-            setPayments(prev => {
-                if (newStatus === 'Rejected') {
-                    if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
-                        return (prev || []).map(p => isItemMatch(p) ? (p.originalData || { ...p, isEdited: false }) : p);
-                    }
-                    return (prev || []).filter(p => !isItemMatch(p));
-                } else {
-                    return (prev || []).map(p => {
-                        if (isItemMatch(p)) {
-                            return {
-                                ...p,
-                                status: isSMApprovalStep ? p.status : 'Accepted',
-                                smApproved: isSMApprovalStep ? true : p.smApproved,
-                                isEdited: false,
-                                approvedBy: currentUser?.username || 'admin',
-                                approvedByName: currentUser?.name || currentUser?.username || 'Admin'
-                            };
-                        }
-                        return p;
-                    });
-                }
-            });
-            refreshPendingIndicators?.();
 
             if (newStatus === 'Rejected') {
                 if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
@@ -1293,7 +1291,6 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, payToCustomerHistory: updatedHistory });
             }
             queryClient.invalidateQueries({ queryKey: ['customers'] });
-            fetchPayments(true);
             refreshPendingIndicators?.();
 
             try {
@@ -1304,11 +1301,6 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 const partyName = paymentGroup.companyName || paymentGroup.customerName || 'Customer';
                 const receiptNo = paymentGroup.receiptNo || '';
                 const isEditRequest = paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested';
-
-                const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
-                const smApproved = paymentGroup.items?.[0]?.smApproved === true;
-                const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
 
                 let title, msg;
                 if (isEditRequest) {
@@ -1326,20 +1318,18 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 }
                 const creatorUser = paymentGroup.items?.[0]?.entryBy || '';
                 const targetUsers = creatorUser ? [creatorUser] : [];
-                if (addNotification) await addNotification(
+                if (addNotification) addNotification(
                     title, 
                     msg, 
                     ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'], 
                     targetUsers, 
                     true, 
                     'pay-to-customer-section'
-                );
+                ).catch(err => console.error('Notification error:', err));
             } catch (notifErr) { console.error('Notification error:', notifErr); }
         } catch (error) {
             console.error('Error updating payout status:', error);
             alert('Failed to update payout status');
-        } finally {
-            setIsSubmitting(false);
         }
     };
 
@@ -1503,19 +1493,18 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             }));
 
             if (addNotification) {
-                await addNotification(
+                addNotification(
                     'Bulk Pay To Customer Accepted',
                     `${dateStr} | ${timeStr} | ${actorName} bulk accepted ${validGroups.length} payout request(s)`,
                     ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
                     [],
                     true,
                     'pay-to-customer-section'
-                );
+                ).catch(err => console.error('Notification error:', err));
             }
 
             setSelectedItems(new Set());
             queryClient.invalidateQueries({ queryKey: ['customers'] });
-            fetchPayments(true);
             refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error performing bulk accept:', error);

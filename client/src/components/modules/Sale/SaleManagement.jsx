@@ -404,8 +404,25 @@ const SaleManagement = ({
     const [bdCnfSearch, setBdCnfSearch] = useState('');
     const [exporterSearch, setExporterSearch] = useState('');
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
-    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
+    const isRequestedOnlyRef = useRef(false);
+    useEffect(() => { isRequestedOnlyRef.current = isRequestedOnly; }, [isRequestedOnly]);
+    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); isRequestedOnlyRef.current = true; } }, [isRequestedNotif]);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
+    const isEditRequestedOnlyRef = useRef(false);
+    useEffect(() => { isEditRequestedOnlyRef.current = isEditRequestedOnly; }, [isEditRequestedOnly]);
+
+    const deduplicateSales = (list) => {
+        const seen = new Set();
+        return (list || []).filter(item => {
+            const id = item._id ? String(item._id) : null;
+            const inv = item.invoiceNo ? String(item.invoiceNo).trim().toUpperCase() : null;
+            const key = id || inv;
+            if (!key) return true;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    };
     const [originalData, setOriginalData] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     // Show Unit Preference (BAG | QTY | BOTH)
@@ -428,6 +445,7 @@ const SaleManagement = ({
     const [showBulkRateModal, setShowBulkRateModal] = useState(false);
     const [lcRecords, setLcRecords] = useState([]);
     const [lcSearch, setLcSearch] = useState('');
+    const recentStatusUpdatesRef = useRef(new Map());
     const [orderSearch, setOrderSearch] = useState('');
     const [bulkRate, setBulkRate] = useState('');
 
@@ -555,30 +573,36 @@ const SaleManagement = ({
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const adminName = currentUser?.name || currentUser?.username || 'Admin';
 
-            const acceptedIds = new Set(recordsToAccept.map(r => r._id));
+            const acceptedIds = new Set(recordsToAccept.map(r => String(r._id)));
+            recordsToAccept.forEach(r => {
+                const rId = String(r._id || r.id || '');
+                const rInv = String(r.invoiceNo || r.orderNo || '').trim().toUpperCase();
+                const finalStatus = (parseFloat(r.paidAmount || 0) >= parseFloat(r.totalAmount || 0) && parseFloat(r.totalAmount || 0) > 0) ? 'Complete' : 'Pending';
+                if (rId) recentStatusUpdatesRef.current.set(rId, { status: finalStatus, isEdited: false, time: Date.now() });
+                if (rInv) recentStatusUpdatesRef.current.set(rInv, { status: finalStatus, isEdited: false, time: Date.now() });
+            });
             setAllSalesRecords(prev => (prev || []).map(s => {
-                if (acceptedIds.has(s._id)) {
+                if (acceptedIds.has(String(s._id))) {
                     const finalStatus = (parseFloat(s.paidAmount || 0) >= parseFloat(s.totalAmount || 0) && parseFloat(s.totalAmount || 0) > 0) ? 'Complete' : 'Pending';
                     return { ...s, status: finalStatus, isEdited: false, acceptedBy: actionBy, approvedBy: actionBy };
                 }
                 return s;
             }));
             setSales(prev => {
-                const next = (prev || []).map(s => {
-                    if (acceptedIds.has(s._id)) {
+                if (isRequestedOnly || isEditRequestedOnly) {
+                    return (prev || []).filter(s => !acceptedIds.has(String(s._id)));
+                }
+                return (prev || []).map(s => {
+                    if (acceptedIds.has(String(s._id))) {
                         const finalStatus = (parseFloat(s.paidAmount || 0) >= parseFloat(s.totalAmount || 0) && parseFloat(s.totalAmount || 0) > 0) ? 'Complete' : 'Pending';
                         return { ...s, status: finalStatus, isEdited: false, acceptedBy: actionBy, approvedBy: actionBy };
                     }
                     return s;
                 });
-                if (isRequestedOnly) {
-                    return next.filter(s => (s.status || '').toLowerCase() === 'requested' || s.isEdited === true);
-                }
-                return next;
             });
             queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
                 Array.isArray(old) ? old.map(s => {
-                    if (acceptedIds.has(s._id)) {
+                    if (acceptedIds.has(String(s._id))) {
                         const finalStatus = (parseFloat(s.paidAmount || 0) >= parseFloat(s.totalAmount || 0) && parseFloat(s.totalAmount || 0) > 0) ? 'Complete' : 'Pending';
                         return { ...s, status: finalStatus, isEdited: false, acceptedBy: actionBy, approvedBy: actionBy };
                     }
@@ -586,6 +610,8 @@ const SaleManagement = ({
                 }) : []
             );
             if (refreshPendingIndicators) refreshPendingIndicators();
+            setSelectedItems(new Set());
+            if (setIsSelectionMode) setIsSelectionMode(false);
 
             await Promise.all(
                 recordsToAccept.map(async (sale) => {
@@ -621,12 +647,12 @@ const SaleManagement = ({
                             const targetUsers = [sale.requestedByUsername].filter(Boolean);
                             if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
-                            await addNotification(
+                            addNotification(
                                 `${sType} Accepted`,
                                 `${dateStr} | ${timeStr} | ${adminName} has accepted the ${sType.toLowerCase()} entry (${sale.invoiceNo || 'No Invoice'}) requested by ${requesterName}`,
                                 targetRoles,
                                 targetUsers
-                            );
+                            ).catch(err => console.error('Error sending bulk accept notification:', err));
                         } catch (err) {
                             console.error('Error sending bulk accept notification:', err);
                         }
@@ -634,16 +660,9 @@ const SaleManagement = ({
                 })
             );
 
-            setSelectedItems(new Set());
-            if (setIsSelectionMode) setIsSelectionMode(false);
-            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sales });
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
-            try { fetchSales(); } catch (e) { console.error('fetchSales error', e); }
-            try { fetchCustomers(); } catch (e) { console.error('fetchCustomers error', e); }
-            try { fetchWarehouses(); } catch (e) { console.error('fetchWarehouses error', e); }
-            try { fetchStockRecords(); } catch (e) { console.error('fetchStockRecords error', e); }
-            if (refreshPendingIndicators) refreshPendingIndicators();
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
         } catch (error) {
             console.error('Error performing bulk accept:', error);
             setConfirmModalConfig({
@@ -711,19 +730,26 @@ const SaleManagement = ({
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const adminName = currentUser?.name || currentUser?.username || 'Admin';
 
-            const rejectedIds = new Set(recordsToReject.map(r => r._id));
-            setAllSalesRecords(prev => (prev || []).map(s => rejectedIds.has(s._id) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s));
+            const rejectedIds = new Set(recordsToReject.map(r => String(r._id)));
+            recordsToReject.forEach(r => {
+                const rId = String(r._id || r.id || '');
+                const rInv = String(r.invoiceNo || r.orderNo || '').trim().toUpperCase();
+                if (rId) recentStatusUpdatesRef.current.set(rId, { status: 'Rejected', isEdited: false, time: Date.now() });
+                if (rInv) recentStatusUpdatesRef.current.set(rInv, { status: 'Rejected', isEdited: false, time: Date.now() });
+            });
+            setAllSalesRecords(prev => (prev || []).map(s => rejectedIds.has(String(s._id)) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s));
             setSales(prev => {
-                const next = (prev || []).map(s => rejectedIds.has(s._id) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s);
-                if (isRequestedOnly) {
-                    return next.filter(s => (s.status || '').toLowerCase() === 'requested' || s.isEdited === true);
+                if (isRequestedOnly || isEditRequestedOnly) {
+                    return (prev || []).filter(s => !rejectedIds.has(String(s._id)));
                 }
-                return next;
+                return (prev || []).map(s => rejectedIds.has(String(s._id)) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s);
             });
             queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
-                Array.isArray(old) ? old.map(s => rejectedIds.has(s._id) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s) : []
+                Array.isArray(old) ? old.map(s => rejectedIds.has(String(s._id)) ? { ...s, status: 'Rejected', isEdited: false, rejectedBy: actionBy } : s) : []
             );
             if (refreshPendingIndicators) refreshPendingIndicators();
+            setSelectedItems(new Set());
+            if (setIsSelectionMode) setIsSelectionMode(false);
 
             await Promise.all(
                 recordsToReject.map(async (sale) => {
@@ -746,12 +772,12 @@ const SaleManagement = ({
                             const targetUsers = [sale.requestedByUsername].filter(Boolean);
                             if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
-                            await addNotification(
+                            addNotification(
                                 `${sType} Rejected`,
                                 `${dateStr} | ${timeStr} | ${adminName} has rejected the ${sType.toLowerCase()} entry (${sale.invoiceNo || 'No Invoice'}) requested by ${requesterName}`,
                                 targetRoles,
                                 targetUsers
-                            );
+                            ).catch(err => console.error('Error sending bulk reject notification:', err));
                         } catch (err) {
                             console.error('Error sending bulk reject notification:', err);
                         }
@@ -759,16 +785,9 @@ const SaleManagement = ({
                 })
             );
 
-            setSelectedItems(new Set());
-            if (setIsSelectionMode) setIsSelectionMode(false);
-            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sales });
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
             queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
-            try { fetchSales(); } catch (e) { console.error('fetchSales error', e); }
-            try { fetchCustomers(); } catch (e) { console.error('fetchCustomers error', e); }
-            try { fetchWarehouses(); } catch (e) { console.error('fetchWarehouses error', e); }
-            try { fetchStockRecords(); } catch (e) { console.error('fetchStockRecords error', e); }
-            if (refreshPendingIndicators) refreshPendingIndicators();
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
         } catch (error) {
             console.error('Error performing bulk reject:', error);
             setConfirmModalConfig({
@@ -956,9 +975,10 @@ const SaleManagement = ({
 
     const handleStatusUpdate = async (sale, newStatus) => {
         try {
-            setIsSubmitting(true);
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
             const actionUsername = currentUser ? (currentUser.username || '') : '';
+            const saleId = String(sale._id || sale.id || '');
+            const targetInvoice = String(sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
             const { _id, createdAt: _createdAt, ...rest } = sale;
 
             const finalStatus = newStatus === 'accepted'
@@ -986,66 +1006,60 @@ const SaleManagement = ({
                 ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {}),
             };
 
-            // Instant optimistic update
-            const optimisticSale = { ...sale, ...updatedData, _id };
-            setAllSalesRecords(prev => (prev || []).map(s => s._id === _id ? optimisticSale : s));
+            const isMatch = (s) => (saleId && String(s._id || s.id || '') === saleId) || (targetInvoice && String(s.invoiceNo || s.orderNo || '').trim().toUpperCase() === targetInvoice);
+            // Instant optimistic update (0ms disappearance from requested/edit view)
+            const optimisticSale = { ...sale, ...updatedData, _id: sale._id || sale.id };
+
+            if (saleId) recentStatusUpdatesRef.current.set(saleId, { status: finalStatus, isEdited: false, time: Date.now() });
+            if (sale.invoiceNo) recentStatusUpdatesRef.current.set(String(sale.invoiceNo).trim().toUpperCase(), { status: finalStatus, isEdited: false, time: Date.now() });
+
+            setAllSalesRecords(prev => deduplicateSales((prev || []).map(s => isMatch(s) ? optimisticSale : s)));
             setSales(prev => {
-                const next = (prev || []).map(s => s._id === _id ? optimisticSale : s);
-                if (isRequestedOnly) {
-                    return next.filter(s => (s.status || '').toLowerCase() === 'requested' || s.isEdited === true);
-                }
-                return next;
+                const list = isRequestedOnly || isEditRequestedOnly
+                    ? (prev || []).filter(s => !isMatch(s))
+                    : (prev || []).map(s => isMatch(s) ? optimisticSale : s);
+                return deduplicateSales(list);
             });
             queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
-                Array.isArray(old) ? old.map(s => s._id === _id ? optimisticSale : s) : []
+                deduplicateSales(Array.isArray(old) ? old.map(s => isMatch(s) ? optimisticSale : s) : [])
             );
             if (refreshPendingIndicators) refreshPendingIndicators();
 
-            const response = await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
+            const response = await axios.put(`${API_BASE_URL}/api/sales/${saleId}`, updatedData);
 
             if (response.status >= 200 && response.status < 300) {
-                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sales });
+                // Invalidate dependent background queries without blocking UI
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
-
-                // Note: Customer synchronization is authoritatively handled by the backend syncSaleOnSave service
+                queryClient.invalidateQueries({ queryKey: ['customers'] });
 
                 if (addNotification) {
-                    try {
-                        const now = new Date();
-                        const dateStr = formatDate(now);
-                        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                        const adminName = currentUser?.name || currentUser?.username || 'Admin';
-                        const statusLabel = newStatus === 'accepted' ? 'Accepted' : (newStatus === 'Pending' ? 'Pending' : newStatus);
-                        const actionLabel = newStatus === 'accepted' ? 'accepted' : (newStatus === 'Pending' ? 'set to pending' : 'rejected');
-                        const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
-                        const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
+                    (async () => {
+                        try {
+                            const now = new Date();
+                            const dateStr = formatDate(now);
+                            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            const adminName = currentUser?.name || currentUser?.username || 'Admin';
+                            const statusLabel = newStatus === 'accepted' ? 'Accepted' : (newStatus === 'Pending' ? 'Pending' : newStatus);
+                            const actionLabel = newStatus === 'accepted' ? 'accepted' : (newStatus === 'Pending' ? 'set to pending' : 'rejected');
+                            const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
+                            const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
 
-                        const targetRoles = ['admin', 'incharge', 'sales manager'];
-                        const targetUsers = [sale.requestedByUsername].filter(Boolean);
-                        // Explicitly include 'admin' username to be sure they get it regardless of role filter
-                        if (!targetUsers.includes('admin')) targetUsers.push('admin');
+                            const targetRoles = ['admin', 'incharge', 'sales manager'];
+                            const targetUsers = [sale.requestedByUsername].filter(Boolean);
+                            if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
-                        console.log(`[handleStatusUpdate] Calling addNotification for ${sType} ${statusLabel}`);
-                        await addNotification(
-                            `${sType} ${statusLabel}`,
-                            `${dateStr} | ${timeStr} | ${adminName} has ${actionLabel} the ${sType.toLowerCase()} entry (${sale.invoiceNo}) requested by ${requesterName}`,
-                            targetRoles,
-                            targetUsers
-                        );
-                        console.log(`[handleStatusUpdate] addNotification successful.`);
-                    } catch (err) {
-                        console.error(`[handleStatusUpdate] Error in addNotification:`, err);
-                    }
+                            await addNotification(
+                                `${sType} ${statusLabel}`,
+                                `${dateStr} | ${timeStr} | ${adminName} has ${actionLabel} the ${sType.toLowerCase()} entry (${sale.invoiceNo}) requested by ${requesterName}`,
+                                targetRoles,
+                                targetUsers
+                            );
+                        } catch (err) {
+                            console.error(`[handleStatusUpdate] Error in addNotification:`, err);
+                        }
+                    })();
                 }
-
-                console.log(`[handleStatusUpdate] Re-fetching data...`);
-                try { fetchSales(); } catch (e) { console.error('fetchSales error', e); }
-                try { fetchCustomers(); } catch (e) { console.error('fetchCustomers error', e); }
-                try { fetchWarehouses(); } catch (e) { console.error('fetchWarehouses error', e); }
-                try { fetchStockRecords(); } catch (e) { console.error('fetchStockRecords error', e); }
-                if (refreshPendingIndicators) refreshPendingIndicators();
-                console.log(`[handleStatusUpdate] Update successfully finished!`);
             } else {
                 console.warn(`[handleStatusUpdate] Unexpected response status:`, response.status);
                 alert(`Status update returned unexpected status code: ${response.status}`);
@@ -1053,9 +1067,6 @@ const SaleManagement = ({
         } catch (error) {
             console.error(`Error updating sale status to ${newStatus}:`, error);
             alert(`Failed to update status to ${newStatus}. See console for details: ${error.message || 'Unknown error'}`);
-        } finally {
-            setIsSubmitting(false);
-            console.log(`[handleStatusUpdate] Submitting state reset to false.`);
         }
     };
     const saleFilterRef = useRef(null);
@@ -1277,8 +1288,65 @@ const SaleManagement = ({
         const handleRealtimeUpdate = (data) => {
             const mod = data?.module;
             console.log('[SaleManagement] Real-time event received:', data);
-            if (!mod || mod === 'sales' || mod === 'orders' || mod === 'all' || mod === 'notifications') {
-                debouncedFetchSales();
+            if (!mod || mod === 'sales' || mod === 'orders' || mod === 'all') {
+                if (data?.action === 'update' && data?.payload?.sale) {
+                    const updatedSale = data.payload.sale;
+                    const uId = String(updatedSale._id || updatedSale.id || '');
+                    const uInv = String(updatedSale.invoiceNo || '').trim().toUpperCase();
+                    const isMatch = (s) => (uId && String(s._id || s.id || '') === uId) || (uInv && String(s.invoiceNo || '').trim().toUpperCase() === uInv);
+
+                    setAllSalesRecords(prev => deduplicateSales((prev || []).map(s => isMatch(s) ? { ...s, ...updatedSale } : s)));
+                    setSales(prev => {
+                        const statusLow = (updatedSale.status || '').toLowerCase();
+                        const isReq = statusLow === 'requested';
+                        const isEditReq = updatedSale.isEdited === true && !isReq;
+                        if (isRequestedOnlyRef.current && !isReq) return (prev || []).filter(s => !isMatch(s));
+                        if (isEditRequestedOnlyRef.current && !isEditReq) return (prev || []).filter(s => !isMatch(s));
+                        return deduplicateSales((prev || []).map(s => isMatch(s) ? { ...s, ...updatedSale } : s));
+                    });
+                    queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
+                        deduplicateSales(Array.isArray(old) ? old.map(s => isMatch(s) ? { ...s, ...updatedSale } : s) : [])
+                    );
+                    if (refreshPendingIndicators) refreshPendingIndicators();
+                } else if (data?.action === 'delete' && data?.payload?.id) {
+                    const delId = String(data.payload.id);
+                    setAllSalesRecords(prev => (prev || []).filter(s => String(s._id || s.id) !== delId));
+                    setSales(prev => (prev || []).filter(s => String(s._id || s.id) !== delId));
+                    queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
+                        Array.isArray(old) ? old.filter(s => String(s._id || s.id) !== delId) : []
+                    );
+                    if (refreshPendingIndicators) refreshPendingIndicators();
+                } else if (data?.action === 'create' && data?.payload?.sale) {
+                    const nSale = data.payload.sale;
+                    const nId = String(nSale._id || nSale.id || '');
+                    const nInv = String(nSale.invoiceNo || '').trim().toUpperCase();
+                    const isMatch = (s) => (nId && String(s._id || s.id || '') === nId) || (nInv && String(s.invoiceNo || '').trim().toUpperCase() === nInv);
+
+                    setAllSalesRecords(prev => {
+                        const exists = (prev || []).some(isMatch);
+                        const list = exists ? prev.map(s => isMatch(s) ? { ...s, ...nSale } : s) : [nSale, ...(prev || [])];
+                        return deduplicateSales(list);
+                    });
+                    setSales(prev => {
+                        const statusLow = (nSale.status || '').toLowerCase();
+                        const isReq = statusLow === 'requested';
+                        const isEditReq = nSale.isEdited === true && !isReq;
+                        if (isRequestedOnlyRef.current && !isReq) return (prev || []).filter(s => !isMatch(s));
+                        if (isEditRequestedOnlyRef.current && !isEditReq) return (prev || []).filter(s => !isMatch(s));
+                        const exists = (prev || []).some(isMatch);
+                        const list = exists ? prev.map(s => isMatch(s) ? { ...s, ...nSale } : s) : [nSale, ...(prev || [])];
+                        return deduplicateSales(list);
+                    });
+                    queryClient.setQueryData(QUERY_KEYS.sales, (old = []) => {
+                        const arr = Array.isArray(old) ? old : [];
+                        const exists = arr.some(isMatch);
+                        const list = exists ? arr.map(s => isMatch(s) ? { ...s, ...nSale } : s) : [nSale, ...arr];
+                        return deduplicateSales(list);
+                    });
+                    if (refreshPendingIndicators) refreshPendingIndicators();
+                } else if (data?.action === 'reconnect' || data?.action === 'refresh') {
+                    debouncedFetchSales();
+                }
             }
             if (mod === 'customers' || mod === 'all') {
                 debouncedFetchCustomers();
@@ -1301,7 +1369,10 @@ const SaleManagement = ({
         if (socket) {
             socket.on('data_updated', handleRealtimeUpdate);
         }
-        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        const onCustomEvent = (e) => {
+            if (e?.detail?._fromApp && socket?.connected) return;
+            handleRealtimeUpdate(e?.detail);
+        };
         window.addEventListener('erp_data_updated', onCustomEvent);
 
         // Fallback polling every 60s while viewing SaleManagement to ensure consistency without excessive CPU/network load
@@ -1415,17 +1486,28 @@ const SaleManagement = ({
 
         const cached = queryClient.getQueryData(QUERY_KEYS.sales);
         if (cached && cached.length > 0 && (!allSalesRecords || allSalesRecords.length === 0)) {
-            setAllSalesRecords(cached);
-            setSales(filterSalesList(cached));
+            const dedupedCached = deduplicateSales(cached);
+            setAllSalesRecords(dedupedCached);
+            setSales(deduplicateSales(filterSalesList(dedupedCached)));
         }
         try {
             const res = await axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`);
-            const decryptedSales = Array.isArray(res.data) ? res.data : [];
+            const rawSales = Array.isArray(res.data) ? res.data : [];
+            const now = Date.now();
+            const decryptedSales = deduplicateSales(rawSales.map(s => {
+                const sId = String(s._id || s.id || '');
+                const sInv = String(s.invoiceNo || '').trim().toUpperCase();
+                const recent = (sId && recentStatusUpdatesRef.current.get(sId)) || (sInv && recentStatusUpdatesRef.current.get(sInv));
+                if (recent && (now - recent.time < 30000)) {
+                    return { ...s, status: recent.status, isEdited: recent.isEdited };
+                }
+                return s;
+            }));
             setAllSalesRecords(decryptedSales);
-            setSales(filterSalesList(decryptedSales));
+            setSales(deduplicateSales(filterSalesList(decryptedSales)));
             queryClient.setQueryData(QUERY_KEYS.sales, decryptedSales);
             if (fetchSalesGlobal) {
-                fetchSalesGlobal();
+                fetchSalesGlobal(decryptedSales);
             }
         } catch (error) {
             console.error('Error fetching sales:', error);
@@ -2359,118 +2441,155 @@ const SaleManagement = ({
             if (response.status >= 200 && response.status < 300) {
                 setSubmitStatus('success');
 
+                const savedItem = {
+                    ...formData,
+                    ...(response.data || {}),
+                    _id: response.data?._id || editingId
+                };
+
+                // Close modal and stop submitting state immediately for instant feedback
+                setShowForm(false);
+                setIsSubmitting(false);
+                resetForm();
+
+                // Optimistically update component state and React Query cache immediately
+                if (editingId) {
+                    setSales(prev => deduplicateSales((prev || []).map(s => (s._id === editingId ? { ...s, ...savedItem } : s))));
+                    setAllSalesRecords(prev => deduplicateSales((prev || []).map(s => (s._id === editingId ? { ...s, ...savedItem } : s))));
+                    queryClient.setQueryData(QUERY_KEYS.sales, (old) => {
+                        return deduplicateSales((Array.isArray(old) ? old : []).map(s => (s._id === editingId ? { ...s, ...savedItem } : s)));
+                    });
+                } else {
+                    const sId = String(savedItem._id || savedItem.id || '');
+                    const sInv = String(savedItem.invoiceNo || '').trim().toUpperCase();
+                    const isMatch = (s) => (sId && String(s._id || s.id || '') === sId) || (sInv && String(s.invoiceNo || '').trim().toUpperCase() === sInv);
+
+                    setSales(prev => {
+                        const exists = (prev || []).some(isMatch);
+                        const list = exists ? prev.map(s => isMatch(s) ? { ...s, ...savedItem } : s) : [savedItem, ...(prev || [])];
+                        return deduplicateSales(list);
+                    });
+                    setAllSalesRecords(prev => {
+                        const exists = (prev || []).some(isMatch);
+                        const list = exists ? prev.map(s => isMatch(s) ? { ...s, ...savedItem } : s) : [savedItem, ...(prev || [])];
+                        return deduplicateSales(list);
+                    });
+                    queryClient.setQueryData(QUERY_KEYS.sales, (old) => {
+                        const arr = Array.isArray(old) ? old : [];
+                        const exists = arr.some(isMatch);
+                        const list = exists ? arr.map(s => isMatch(s) ? { ...s, ...savedItem } : s) : [savedItem, ...arr];
+                        return deduplicateSales(list);
+                    });
+                }
+
+                // Invalidate dependent background data
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
+                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
+                queryClient.invalidateQueries({ queryKey: ['customers'] });
+
+                // Asynchronously dispatch notifications in the background without blocking the UI
                 const currentStatus = (formData.status || '').toLowerCase();
                 const isRequested = currentStatus.includes('requested');
 
                 if (addNotification && isRequested) {
-                    const now = new Date();
-                    const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    const employeeName = currentUser?.name || currentUser?.username || 'An employee';
-                    const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
-                    const targetRoles = ['admin', 'incharge', 'sales manager'];
-                    const targetUsers = [formData.requestedByUsername].filter(Boolean);
-                    if (!targetUsers.includes('admin')) targetUsers.push('admin');
+                    (async () => {
+                        try {
+                            const now = new Date();
+                            const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+                            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+                            const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
+                            const targetRoles = ['admin', 'incharge', 'sales manager'];
+                            const targetUsers = [formData.requestedByUsername].filter(Boolean);
+                            if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
-                    if (!editingId) {
-                        const finalInvoiceNo = response.data?.invoiceNo || formData.invoiceNo || 'No Invoice';
-                        await addNotification(
-                            `New ${sType} Requested`,
-                            `${dateStr} | ${timeStr} | ${employeeName} has requested a new ${sType.toLowerCase()} entry (${finalInvoiceNo})`,
-                            targetRoles,
-                            targetUsers
-                        );
-                    } else {
+                            if (!editingId) {
+                                const finalInvoiceNo = response.data?.invoiceNo || formData.invoiceNo || 'No Invoice';
+                                await addNotification(
+                                    `New ${sType} Requested`,
+                                    `${dateStr} | ${timeStr} | ${employeeName} has requested a new ${sType.toLowerCase()} entry (${finalInvoiceNo})`,
+                                    targetRoles,
+                                    targetUsers
+                                );
+                            } else {
+                                // Compare for detailed changes
+                                const changedFields = [];
+                                const fieldLabels = {
+                                    date: 'Date',
+                                    invoiceNo: 'Invoice',
+                                    companyName: 'Company',
+                                    customerName: 'Customer',
+                                    lcNo: 'LC No',
+                                    contact: 'Contact',
+                                    importer: 'Importer',
+                                    port: 'Port',
+                                    indianCnF: 'Indian C&F',
+                                    bdCnf: 'BD C&F',
+                                    truck: 'Truck',
+                                    discount: 'Discount',
+                                    paidAmount: 'Paid',
+                                    creditPeriod: 'Credit Period'
+                                };
 
-                        // Compare for detailed changes
-                        const changedFields = [];
-                        const fieldLabels = {
-                            date: 'Date',
-                            invoiceNo: 'Invoice',
-                            companyName: 'Company',
-                            customerName: 'Customer',
-                            lcNo: 'LC No',
-                            contact: 'Contact',
-                            importer: 'Importer',
-                            port: 'Port',
-                            indianCnF: 'Indian C&F',
-                            bdCnf: 'BD C&F',
-                            truck: 'Truck',
-                            discount: 'Discount',
-                            paidAmount: 'Paid',
-                            creditPeriod: 'Credit Period'
-                        };
-
-                        // Compare simple top-level fields
-                        Object.keys(fieldLabels).forEach(field => {
-                            if (originalData && String(formData[field]) !== String(originalData[field])) {
-                                changedFields.push(fieldLabels[field]);
-                            }
-                        });
-
-                        // Granular comparison of items (Price vs QTY)
-                        let qtyChanged = false;
-                        let rateChanged = false;
-
-                        if (originalData && originalData.items) {
-                            formData.items.forEach((item, pIdx) => {
-                                const origItem = originalData.items[pIdx];
-                                if (!origItem) {
-                                    qtyChanged = true; // New item added
-                                    return;
-                                }
-
-                                item.brandEntries.forEach((entry, eIdx) => {
-                                    const origEntry = (origItem.brandEntries || [])[eIdx];
-                                    if (!origEntry) {
-                                        qtyChanged = true;
-                                        return;
-                                    }
-
-                                    if (String(entry.quantity) !== String(origEntry.quantity)) qtyChanged = true;
-                                    if (String(entry.unitPrice) !== String(origEntry.unitPrice)) rateChanged = true;
-                                    if (entry.brand !== origEntry.brand || entry.warehouseName !== origEntry.warehouseName) {
-                                        // If brand/warehouse changed, we just call it a QTY/Product update contextually
-                                        qtyChanged = true;
+                                Object.keys(fieldLabels).forEach(field => {
+                                    if (originalData && String(formData[field]) !== String(originalData[field])) {
+                                        changedFields.push(fieldLabels[field]);
                                     }
                                 });
-                            });
 
-                            // Check if items were removed
-                            if (formData.items.length < originalData.items.length) qtyChanged = true;
+                                let qtyChanged = false;
+                                let rateChanged = false;
+
+                                if (originalData && originalData.items) {
+                                    formData.items.forEach((item, pIdx) => {
+                                        const origItem = originalData.items[pIdx];
+                                        if (!origItem) {
+                                            qtyChanged = true;
+                                            return;
+                                        }
+
+                                        (item.brandEntries || []).forEach((entry, eIdx) => {
+                                            const origEntry = (origItem.brandEntries || [])[eIdx];
+                                            if (!origEntry) {
+                                                qtyChanged = true;
+                                                return;
+                                            }
+
+                                            if (String(entry.quantity) !== String(origEntry.quantity)) qtyChanged = true;
+                                            if (String(entry.unitPrice) !== String(origEntry.unitPrice)) rateChanged = true;
+                                            if (entry.brand !== origEntry.brand || entry.warehouseName !== origEntry.warehouseName) {
+                                                qtyChanged = true;
+                                            }
+                                        });
+                                    });
+
+                                    if (formData.items.length < originalData.items.length) qtyChanged = true;
+                                }
+
+                                if (qtyChanged) changedFields.push('QTY');
+                                if (rateChanged) changedFields.push('Price');
+
+                                if (!qtyChanged && !rateChanged) {
+                                    if (originalData && formData.totalAmount !== originalData.totalAmount) changedFields.push('Price');
+                                    if (originalData && formData.dueAmount !== originalData.dueAmount) changedFields.push('Due');
+                                }
+
+                                const detailMsg = changedFields.length > 0
+                                    ? `\nUpdated fields: ${[...new Set(changedFields)].join(', ')}`
+                                    : '';
+
+                                await addNotification(
+                                    `${sType} Request Updated`,
+                                    `${dateStr} | ${timeStr} | ${employeeName} has updated the requested ${sType.toLowerCase()} entry (${formData.invoiceNo || 'No Invoice'})${detailMsg}`,
+                                    targetRoles,
+                                    targetUsers
+                                );
+                            }
+                        } catch (notifErr) {
+                            console.error('Error sending sale notification:', notifErr);
                         }
-
-                        if (qtyChanged) changedFields.push('QTY');
-                        if (rateChanged) changedFields.push('Price');
-
-                        // Only check derived fields if root cause wasn't items
-                        if (!qtyChanged && !rateChanged) {
-                            if (originalData && formData.totalAmount !== originalData.totalAmount) changedFields.push('Price');
-                            if (originalData && formData.dueAmount !== originalData.dueAmount) changedFields.push('Due');
-                        }
-
-                        const detailMsg = changedFields.length > 0
-                            ? `\nUpdated fields: ${[...new Set(changedFields)].join(', ')}`
-                            : '';
-
-                        await addNotification(
-                            `${sType} Request Updated`,
-                            `${dateStr} | ${timeStr} | ${employeeName} has updated the requested ${sType.toLowerCase()} entry (${formData.invoiceNo || 'No Invoice'})${detailMsg}`,
-                            targetRoles,
-                            targetUsers
-                        );
-                    }
+                    })();
                 }
-
-                setShowForm(false);
-                resetForm();
-                fetchSales();
-
-
-                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sales });
-                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stock });
-                queryClient.invalidateQueries({ queryKey: QUERY_KEYS.warehouses });
-                queryClient.invalidateQueries({ queryKey: ['customers'] });
             } else {
                 setSubmitStatus('error');
                 setSubmitError(response?.data?.message || 'Failed to save sale. Please try again.');
@@ -4400,10 +4519,28 @@ const SaleManagement = ({
     });
 
     const stats = {
-        totalSales: displayedSales.reduce((sum, s) => sum + (parseFloat(s.totalAmount) || 0), 0),
+        totalSales: displayedSales.reduce((sum, s) => {
+            const stored = parseFloat(s.totalAmount) || 0;
+            if (stored > 0) return sum + stored;
+            const calculated = (s.items || []).reduce((iSum, it) => {
+                const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                return iSum + (qty * parseFloat(it.unitPrice || 0));
+            }, 0);
+            return sum + calculated;
+        }, 0),
         totalDiscount: displayedSales.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0),
         totalPaid: displayedSales.reduce((sum, s) => sum + (parseFloat(s.paidAmount) || 0), 0),
-        totalDue: displayedSales.reduce((sum, s) => sum + (parseFloat(s.dueAmount) || 0), 0),
+        totalDue: displayedSales.reduce((sum, s) => {
+            const storedDue = parseFloat(s.dueAmount) || 0;
+            const storedTotal = parseFloat(s.totalAmount) || 0;
+            if (storedDue > 0 || storedTotal > 0) return sum + storedDue;
+            const calculatedTotal = (s.items || []).reduce((iSum, it) => {
+                const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                return iSum + (qty * parseFloat(it.unitPrice || 0));
+            }, 0);
+            const dueVal = Math.max(0, calculatedTotal - parseFloat(s.discount || 0) - parseFloat(s.paidAmount || 0));
+            return sum + dueVal;
+        }, 0),
         totalTrucks: saleType === 'Border' ? displayedSales.reduce((sum, sale) => {
             const items = sale.items || [];
             const truckTotal = items.reduce((iSum, item) => {

@@ -110,22 +110,32 @@ const memoryCache = {
   costOfGoods: null,
   tokens: null,
   products: null,
+  ipRecords: null,
+  ipRecordsLightweight: null,
   pendingIndicators: null,
   pendingTimestamp: 0
 };
 
-const invalidateMemoryCache = (modName) => {
+const invalidateMemoryCache = (modName, options = {}) => {
   const mod = (modName || '').toLowerCase().trim();
   memoryCache.pendingIndicators = null;
   if (!mod || mod === 'all') {
     Object.keys(memoryCache).forEach(k => { if (k !== 'pendingTimestamp') memoryCache[k] = null; });
     return;
   }
+  if (['ip', 'ips', 'ip-record', 'ip-records', 'iprecord', 'iprecords'].includes(mod)) {
+    memoryCache.ipRecords = null;
+    memoryCache.ipRecordsLightweight = null;
+  }
   if (['stock', 'stock-baseline'].includes(mod)) {
     memoryCache.stock = null;
     memoryCache.warehouses = null;
   }
-  if (['sale', 'sales'].includes(mod)) memoryCache.sales = null;
+  if (['sale', 'sales'].includes(mod)) {
+    if (!options?.preserveSalesCache) {
+      memoryCache.sales = null;
+    }
+  }
   if (['purchase', 'purchases'].includes(mod)) memoryCache.purchases = null;
   if (['purchase-receive', 'purchase-receives', 'purchasereceive', 'purchasereceives'].includes(mod)) {
     memoryCache.purchaseReceives = null;
@@ -134,7 +144,9 @@ const invalidateMemoryCache = (modName) => {
   }
   if (['customer', 'customers', 'payment-collection', 'paymentcollection', 'payments', 'pay-to-customer', 'paytocustomer'].includes(mod)) {
     memoryCache.customers = null;
-    memoryCache.sales = null;
+    if (!options?.preserveSalesCache) {
+      memoryCache.sales = null;
+    }
   }
   if (['warehouse', 'warehouses', 'transfer', 'transfers'].includes(mod)) {
     memoryCache.warehouses = null;
@@ -147,7 +159,9 @@ const invalidateMemoryCache = (modName) => {
     memoryCache.stock = null;
     memoryCache.warehouses = null;
     memoryCache.customers = null;
-    memoryCache.sales = null;
+    if (!options?.preserveSalesCache) {
+      memoryCache.sales = null;
+    }
   }
   if (['cost-of-goods', 'costofgoods', 'cog'].includes(mod)) {
     memoryCache.costOfGoods = null;
@@ -162,7 +176,7 @@ const invalidateMemoryCache = (modName) => {
 
 const broadcastUpdate = (moduleName, action = 'update', payload = {}) => {
   try {
-    invalidateMemoryCache(moduleName);
+    invalidateMemoryCache(moduleName, payload);
     const clientsCount = io.engine ? io.engine.clientsCount : (io.sockets?.sockets ? io.sockets.sockets.size : 0);
     console.log(`[Socket] Broadcasting real-time update: module=${moduleName}, action=${action}, clientsCount=${clientsCount}`);
     io.emit('data_updated', {
@@ -899,7 +913,7 @@ app.post('/v', (req, res, next) => {
       const origSend = res.send;
       let broadcastSent = false;
       res.send = function (data) {
-        if (!broadcastSent && res.statusCode >= 200 && res.statusCode < 300) {
+        if (!broadcastSent && !req._broadcastDone && res.statusCode >= 200 && res.statusCode < 300) {
           broadcastSent = true;
           req._broadcastDone = true;
           const match = String(p || '').match(/\/api\/([a-zA-Z0-9_-]+)/);
@@ -1707,14 +1721,70 @@ apiRouter.put('/api/ip-records/:id', async (req, res) => {
   }
 });
 
+let inFlightIpFetch = null;
+
 apiRouter.get('/api/ip-records', async (req, res) => {
   try {
-    const records = await IpRecord.find().sort({ createdAt: -1 });
-    const decrypted = records.map(r => {
-      const d = decryptData(r.data);
-      return { ...d, _id: r._id, createdAt: r.createdAt };
+    const isLightweight = req.query.lightweight === 'true' || req.query.excludeAttachments === 'true';
+    const noCache = req.query._nocache === 'true';
+
+    if (!noCache) {
+      if (isLightweight && memoryCache.ipRecordsLightweight) {
+        return res.json(memoryCache.ipRecordsLightweight);
+      }
+      if (!isLightweight && memoryCache.ipRecords) {
+        return res.json(memoryCache.ipRecords);
+      }
+    }
+
+    if (!inFlightIpFetch) {
+      inFlightIpFetch = (async () => {
+        const records = await IpRecord.find().sort({ createdAt: -1 }).lean();
+        const fullDecrypted = [];
+        const lightDecrypted = [];
+
+        records.forEach(r => {
+          const d = decryptData(r.data);
+          if (d) {
+            const item = { ...d, _id: r._id, createdAt: r.createdAt };
+            fullDecrypted.push(item);
+
+            const lightItem = { ...d, _id: r._id, createdAt: r.createdAt };
+            if (lightItem.ipAttachment) {
+              lightItem.hasAttachment = true;
+              delete lightItem.ipAttachment;
+            } else {
+              lightItem.hasAttachment = false;
+            }
+            lightDecrypted.push(lightItem);
+          }
+        });
+
+        memoryCache.ipRecords = fullDecrypted;
+        memoryCache.ipRecordsLightweight = lightDecrypted;
+        return { fullDecrypted, lightDecrypted };
+      })().finally(() => {
+        inFlightIpFetch = null;
+      });
+    }
+
+    const { fullDecrypted, lightDecrypted } = await inFlightIpFetch;
+    res.json(isLightweight ? lightDecrypted : fullDecrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Single IP attachment retrieval on demand
+apiRouter.get('/api/ip-records/:id/attachment', async (req, res) => {
+  try {
+    const record = await IpRecord.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: 'Record not found' });
+    const decrypted = decryptData(record.data);
+    res.json({
+      ipAttachment: decrypted?.ipAttachment || '',
+      ipAttachmentName: decrypted?.ipAttachmentName || ''
     });
-    res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -3281,24 +3351,51 @@ apiRouter.post('/api/sales', async (req, res) => {
       data: encryptedData
     });
     const savedSale = await newSale.save();
-    try {
-      await syncSaleOnSave(savedSale, saleData, null);
-    } catch (syncErr) {
+    // Synchronize customer sales history in background without blocking response
+    syncSaleOnSave(savedSale, saleData, null).catch(syncErr => {
       console.error('Error synchronizing customer sales history on sale create:', syncErr);
-    }
+    });
 
     // Update memoryCache.sales in-place
+    const returnedSale = {
+      ...saleData,
+      _id: savedSale._id,
+      createdAt: savedSale.createdAt,
+      saleType: sType,
+      invoiceNo: newInvoiceNo
+    };
+    inFlightSalesFetch = null;
     if (Array.isArray(memoryCache.sales)) {
-      memoryCache.sales.unshift({
-        ...saleData,
-        _id: savedSale._id,
-        createdAt: savedSale.createdAt,
-        saleType: sType,
-        invoiceNo: newInvoiceNo
+      const targetId = (savedSale._id || '').toString();
+      const targetInv = (newInvoiceNo || '').trim().toUpperCase();
+      const exists = memoryCache.sales.some(s => {
+        const sId = (s._id || s.id || '').toString();
+        const sInv = (s.invoiceNo || '').trim().toUpperCase();
+        return (targetId && sId === targetId) || (targetInv && sInv === targetInv);
       });
+      if (exists) {
+        memoryCache.sales = memoryCache.sales.map(s => {
+          const sId = (s._id || s.id || '').toString();
+          const sInv = (s.invoiceNo || '').trim().toUpperCase();
+          if ((targetId && sId === targetId) || (targetInv && sInv === targetInv)) {
+            return { ...s, ...returnedSale };
+          }
+          return s;
+        });
+      } else {
+        memoryCache.sales.unshift(returnedSale);
+      }
     }
 
-    res.status(201).json({ ...saleData, _id: savedSale._id, createdAt: savedSale.createdAt });
+    memoryCache.pendingIndicators = null;
+    req._broadcastDone = true;
+    broadcastUpdate('sales', 'create', {
+      id: savedSale._id,
+      sale: returnedSale,
+      preserveSalesCache: true
+    });
+
+    res.status(201).json(returnedSale);
   } catch (err) {
     if (err.code === 11000) {
       return res.status(400).json({ message: 'Duplicate Invoice Number! Please try again.' });
@@ -3345,9 +3442,13 @@ apiRouter.delete('/api/sales/:id', async (req, res) => {
     }
 
     await Sale.findByIdAndDelete(req.params.id);
+    inFlightSalesFetch = null;
     if (Array.isArray(memoryCache.sales)) {
       memoryCache.sales = memoryCache.sales.filter(s => s._id?.toString() !== req.params.id);
     }
+    memoryCache.pendingIndicators = null;
+    req._broadcastDone = true;
+    broadcastUpdate('sales', 'delete', { id: req.params.id, preserveSalesCache: true });
     res.json({ message: 'Sale deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -3427,27 +3528,46 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
       data: encryptedData
     }, { returnDocument: 'after' });
 
-    // Synchronize customer salesHistory across all customers (for both Orders and Sales)
-    try {
-      await syncSaleOnSave(updatedSale, req.body, existingData);
-    } catch (cascadeErr) {
+    // Synchronize customer salesHistory across all customers in background (for both Orders and Sales)
+    syncSaleOnSave(updatedSale, req.body, existingData).catch(cascadeErr => {
       console.error('Error auto-updating customer sales history on sale/order update:', cascadeErr);
-    }
+    });
 
     // Update memoryCache.sales in-place
+    const returnedSale = {
+      ...req.body,
+      _id: updatedSale._id,
+      createdAt: updatedSale.createdAt,
+      updatedAt: updatedSale.updatedAt
+    };
+    inFlightSalesFetch = null;
     if (Array.isArray(memoryCache.sales)) {
-      const sIdx = memoryCache.sales.findIndex(s => s._id?.toString() === req.params.id);
-      if (sIdx !== -1) {
-        memoryCache.sales[sIdx] = {
-          ...memoryCache.sales[sIdx],
-          ...req.body,
-          _id: updatedSale._id,
-          updatedAt: updatedSale.updatedAt
-        };
+      const targetId = String(req.params.id || updatedSale._id || '');
+      const targetInv = String(req.body.invoiceNo || '').trim().toUpperCase();
+      let matchedAny = false;
+      memoryCache.sales = memoryCache.sales.map(s => {
+        const sId = String(s._id || s.id || '');
+        const sInv = String(s.invoiceNo || '').trim().toUpperCase();
+        if ((targetId && sId === targetId) || (targetInv && sInv === targetInv)) {
+          matchedAny = true;
+          return { ...s, ...returnedSale };
+        }
+        return s;
+      });
+      if (!matchedAny) {
+        memoryCache.sales.unshift(returnedSale);
       }
     }
 
-    res.json({ ...req.body, _id: updatedSale._id, createdAt: updatedSale.createdAt });
+    memoryCache.pendingIndicators = null;
+    req._broadcastDone = true;
+    broadcastUpdate('sales', 'update', {
+      id: updatedSale._id,
+      sale: returnedSale,
+      preserveSalesCache: true
+    });
+
+    res.json(returnedSale);
   } catch (err) {
     if (err.code === 11000) {
       return res.status(400).json({ message: 'Duplicate Invoice Number detected!' });
@@ -3464,7 +3584,7 @@ apiRouter.get('/api/sales', async (req, res) => {
       return res.json(memoryCache.sales);
     }
     if (!inFlightSalesFetch) {
-      inFlightSalesFetch = (async () => {
+      const currentFetch = (async () => {
         const records = await Sale.find().sort({ createdAt: -1 }).lean();
         const decrypted = records.map(r => {
           let d = decryptData(r.data);
@@ -3474,11 +3594,16 @@ apiRouter.get('/api/sales', async (req, res) => {
           }
           return { ...d, _id: r._id, createdAt: r.createdAt, saleType: d.saleType || r.saleType, invoiceNo: d.invoiceNo || r.invoiceNo };
         });
-        memoryCache.sales = decrypted;
+        if (inFlightSalesFetch === currentFetch) {
+          memoryCache.sales = decrypted;
+        }
         return decrypted;
       })().finally(() => {
-        inFlightSalesFetch = null;
+        if (inFlightSalesFetch === currentFetch) {
+          inFlightSalesFetch = null;
+        }
       });
+      inFlightSalesFetch = currentFetch;
     }
     const data = await inFlightSalesFetch;
     res.json(data);

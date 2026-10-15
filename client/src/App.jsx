@@ -1806,8 +1806,13 @@ function App() {
     }
   };
 
-  const fetchSales = async () => {
+  const fetchSales = async (preloadedData) => {
     try {
+      if (Array.isArray(preloadedData)) {
+        setSalesRecords(preloadedData);
+        queryClient.setQueryData(QUERY_KEYS.sales, preloadedData);
+        return preloadedData;
+      }
       const response = await axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`);
       const data = Array.isArray(response.data) ? response.data : [];
       setSalesRecords(data);
@@ -1986,22 +1991,57 @@ function App() {
         'notifications': ['notifications'],
       };
 
-      const keysToInvalidate = moduleKeyMap[module] || [module];
-      keysToInvalidate.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: [key] });
-      });
+      // Only invalidate queries if it's NOT an in-place payload update (prevents re-fetch storms)
+      if (!event?.payload?.sale && !event?.payload?.id) {
+        const keysToInvalidate = moduleKeyMap[module] || [module];
+        keysToInvalidate.forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: [key] });
+        });
+      }
 
       // Synchronize App state with individual try/catch guards so one failure never halts others
       try {
         if (module === 'sales' || module === 'orders' || module === 'all' || module === 'notifications') {
-          if (typeof fetchSales === 'function') fetchSales();
+          if (event?.action === 'update' && event?.payload?.sale) {
+            const uSale = event.payload.sale;
+            const uId = String(uSale._id || uSale.id || '');
+            const uInv = String(uSale.invoiceNo || uSale.orderNo || '').trim().toUpperCase();
+            const isMatch = (s) => (uId && String(s._id || s.id || '') === uId) || (uInv && String(s.invoiceNo || s.orderNo || '').trim().toUpperCase() === uInv);
+            setSalesRecords(prev => (prev || []).map(s => isMatch(s) ? { ...s, ...uSale } : s));
+            queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
+              Array.isArray(old) ? old.map(s => isMatch(s) ? { ...s, ...uSale } : s) : []
+            );
+          } else if (event?.action === 'delete' && event?.payload?.id) {
+            const delId = String(event.payload.id);
+            setSalesRecords(prev => (prev || []).filter(s => String(s._id || s.id) !== delId));
+            queryClient.setQueryData(QUERY_KEYS.sales, (old = []) =>
+              Array.isArray(old) ? old.filter(s => String(s._id || s.id) !== delId) : []
+            );
+          } else if (event?.action === 'create' && event?.payload?.sale) {
+            const nSale = event.payload.sale;
+            const nId = String(nSale._id || nSale.id || '');
+            const nInv = String(nSale.invoiceNo || '').trim().toUpperCase();
+            const isMatch = (s) => (nId && String(s._id || s.id || '') === nId) || (nInv && String(s.invoiceNo || '').trim().toUpperCase() === nInv);
+
+            setSalesRecords(prev => {
+              const exists = (prev || []).some(isMatch);
+              return exists ? prev.map(s => isMatch(s) ? { ...s, ...nSale } : s) : [nSale, ...(prev || [])];
+            });
+            queryClient.setQueryData(QUERY_KEYS.sales, (old = []) => {
+              const arr = Array.isArray(old) ? old : [];
+              const exists = arr.some(isMatch);
+              return exists ? arr.map(s => isMatch(s) ? { ...s, ...nSale } : s) : [nSale, ...arr];
+            });
+          } else if (event?.action === 'reconnect' || event?.action === 'refresh') {
+            if (typeof fetchSales === 'function') fetchSales();
+          }
         }
       } catch (err) {
         console.warn('Error syncing sales in handleDataUpdate:', err);
       }
 
       try {
-        if (['stock', 'stock-baseline', 'warehouses', 'warehouse', 'transfer', 'transfers', 'purchase-receives', 'purchase-receive', 'purchasereceive', 'purchasereceives', 'returns', 'return', 'return-product', 'returnproduct', 'sales'].includes(module) || module === 'all') {
+        if (['stock', 'stock-baseline', 'warehouses', 'warehouse', 'transfer', 'transfers', 'purchase-receives', 'purchase-receive', 'purchasereceive', 'purchasereceives', 'returns', 'return', 'return-product', 'returnproduct'].includes(module) || module === 'all') {
           if (typeof fetchStockRecords === 'function') fetchStockRecords();
           if (typeof fetchWarehouses === 'function') fetchWarehouses();
         }

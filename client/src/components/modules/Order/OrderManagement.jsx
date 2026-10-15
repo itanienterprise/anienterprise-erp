@@ -59,6 +59,7 @@ const OrderManagement = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [employeesMap, setEmployeesMap] = useState({});
     const [employeesFullNameMap, setEmployeesFullNameMap] = useState({});
+    const recentStatusUpdatesRef = useRef(new Map());
 
     useEffect(() => {
         if (propActiveBaseline) {
@@ -161,12 +162,31 @@ const OrderManagement = ({
 
     // Requested & Edit Request Toggle Filters
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const isRequestedOnlyRef = useRef(false);
+    useEffect(() => { isRequestedOnlyRef.current = isRequestedOnly; }, [isRequestedOnly]);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
+    const isEditRequestedOnlyRef = useRef(false);
+    useEffect(() => { isEditRequestedOnlyRef.current = isEditRequestedOnly; }, [isEditRequestedOnly]);
+
+    const deduplicateOrders = (list) => {
+        const seen = new Set();
+        return (list || []).filter(item => {
+            const id = item._id ? String(item._id) : null;
+            const inv = (item.invoiceNo || item.orderNo) ? String(item.invoiceNo || item.orderNo).trim().toUpperCase() : null;
+            const key = id || inv;
+            if (!key) return true;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    };
 
     useEffect(() => {
         if (isRequestedNotif) {
             setIsRequestedOnly(true);
+            isRequestedOnlyRef.current = true;
             setIsEditRequestedOnly(false);
+            isEditRequestedOnlyRef.current = false;
         }
     }, [isRequestedNotif]);
 
@@ -359,8 +379,65 @@ const OrderManagement = ({
         const handleRealtimeUpdate = (data) => {
             const mod = (data?.module || '').toLowerCase().trim();
             if (!mod || ['orders', 'sales', 'order', 'sale', 'all', 'notifications'].includes(mod)) {
-                fetchOrders();
-                if (refreshPendingIndicators) refreshPendingIndicators();
+                if (data?.action === 'update' && data?.payload?.sale) {
+                    const updatedOrder = data.payload.sale;
+                    const uId = String(updatedOrder._id || updatedOrder.id || '');
+                    const uOrd = String(updatedOrder.invoiceNo || updatedOrder.orderNo || '').trim().toUpperCase();
+                    const isMatch = (o) => (uId && String(o._id || o.id || '') === uId) || (uOrd && String(o.invoiceNo || o.orderNo || '').trim().toUpperCase() === uOrd);
+
+                    setAllSalesRecords(prev => deduplicateOrders((prev || []).map(o => isMatch(o) ? { ...o, ...updatedOrder } : o)));
+                    setSales(prev => {
+                        const statusLow = (updatedOrder.status || '').toLowerCase();
+                        const isReq = statusLow === 'requested';
+                        const isEditReq = updatedOrder.isEdited === true && !isReq;
+                        if (isRequestedOnlyRef.current && !isReq) return (prev || []).filter(o => !isMatch(o));
+                        if (isEditRequestedOnlyRef.current && !isEditReq) return (prev || []).filter(o => !isMatch(o));
+                        return deduplicateOrders((prev || []).map(o => isMatch(o) ? { ...o, ...updatedOrder } : o));
+                    });
+                    queryClient.setQueryData(['sales'], (old = []) =>
+                        deduplicateOrders(Array.isArray(old) ? old.map(o => isMatch(o) ? { ...o, ...updatedOrder } : o) : [])
+                    );
+                    if (refreshPendingIndicators) refreshPendingIndicators();
+                } else if (data?.action === 'delete' && data?.payload?.id) {
+                    const delId = String(data.payload.id);
+                    setAllSalesRecords(prev => (prev || []).filter(o => String(o._id || o.id) !== delId));
+                    setSales(prev => (prev || []).filter(o => String(o._id || o.id) !== delId));
+                    queryClient.setQueryData(['sales'], (old = []) =>
+                        Array.isArray(old) ? old.filter(o => String(o._id || o.id) !== delId) : []
+                    );
+                    if (refreshPendingIndicators) refreshPendingIndicators();
+                } else if (data?.action === 'create' && data?.payload?.sale) {
+                    const nOrder = data.payload.sale;
+                    const nId = String(nOrder._id || nOrder.id || '');
+                    const nOrd = String(nOrder.invoiceNo || nOrder.orderNo || '').trim().toUpperCase();
+                    const isMatch = (o) => (nId && String(o._id || o.id || '') === nId) || (nOrd && String(o.invoiceNo || o.orderNo || '').trim().toUpperCase() === nOrd);
+
+                    setAllSalesRecords(prev => {
+                        const exists = (prev || []).some(isMatch);
+                        const list = exists ? prev.map(o => isMatch(o) ? { ...o, ...nOrder } : o) : [nOrder, ...(prev || [])];
+                        return deduplicateOrders(list);
+                    });
+                    setSales(prev => {
+                        const statusLow = (nOrder.status || '').toLowerCase();
+                        const isReq = statusLow === 'requested';
+                        const isEditReq = nOrder.isEdited === true && !isReq;
+                        if (isRequestedOnlyRef.current && !isReq) return (prev || []).filter(o => !isMatch(o));
+                        if (isEditRequestedOnlyRef.current && !isEditReq) return (prev || []).filter(o => !isMatch(o));
+                        const exists = (prev || []).some(isMatch);
+                        const list = exists ? prev.map(o => isMatch(o) ? { ...o, ...nOrder } : o) : [nOrder, ...(prev || [])];
+                        return deduplicateOrders(list);
+                    });
+                    queryClient.setQueryData(['sales'], (old = []) => {
+                        const arr = Array.isArray(old) ? old : [];
+                        const exists = arr.some(isMatch);
+                        const list = exists ? arr.map(o => isMatch(o) ? { ...o, ...nOrder } : o) : [nOrder, ...arr];
+                        return deduplicateOrders(list);
+                    });
+                    if (refreshPendingIndicators) refreshPendingIndicators();
+                } else if (data?.action === 'reconnect' || data?.action === 'refresh') {
+                    fetchOrders();
+                    if (refreshPendingIndicators) refreshPendingIndicators();
+                }
             }
             if (['customers', 'customer', 'all'].includes(mod)) {
                 fetchCustomers();
@@ -697,7 +774,17 @@ const OrderManagement = ({
                     queryFn: () => axios.get(`${API_BASE_URL}/api/returns`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
                 })
             ]);
-            const data = Array.isArray(salesData) ? salesData : [];
+            const rawData = Array.isArray(salesData) ? salesData : [];
+            const now = Date.now();
+            const data = rawData.map(o => {
+                const oId = String(o._id || o.id || '');
+                const oInv = String(o.invoiceNo || o.orderNo || '').trim().toUpperCase();
+                const recent = (oId && recentStatusUpdatesRef.current.get(oId)) || (oInv && recentStatusUpdatesRef.current.get(oInv));
+                if (recent && (now - recent.time < 30000)) {
+                    return { ...o, status: recent.status, isEdited: recent.isEdited };
+                }
+                return o;
+            });
             setAllSalesRecords(data);
             setReturnsList(Array.isArray(returnsData) ? returnsData : []);
 
@@ -1207,24 +1294,34 @@ const OrderManagement = ({
         try {
             const actionBy = currentUser ? (currentUser.name || currentUser.username || 'Administrator') : 'Administrator';
             const actionUsername = currentUser ? (currentUser.username || 'admin') : 'admin';
+            const orderId = String(order._id || order.id || '');
+            const targetOrderNo = String(order.invoiceNo || order.orderNo || '').trim().toUpperCase();
+            const isMatch = (o) => (orderId && String(o._id || o.id || '') === orderId) || (targetOrderNo && String(o.invoiceNo || o.orderNo || '').trim().toUpperCase() === targetOrderNo);
 
             // Instant optimistic update
             if (newStatus === 'Rejected') {
+                if (orderId) recentStatusUpdatesRef.current.set(orderId, { status: 'Rejected', isEdited: false, time: Date.now() });
+                if (targetOrderNo) recentStatusUpdatesRef.current.set(targetOrderNo, { status: 'Rejected', isEdited: false, time: Date.now() });
                 if (order.isEdited === true && (order.status || '').toLowerCase() !== 'requested') {
                     const nextOrder = { ...order, isEdited: false };
-                    setAllSalesRecords(prev => (prev || []).map(o => o._id === order._id ? nextOrder : o));
-                    setSales(prev => (prev || []).map(o => o._id === order._id ? nextOrder : o));
+                    setAllSalesRecords(prev => (prev || []).map(o => isMatch(o) ? nextOrder : o));
+                    setSales(prev => {
+                        if (isEditRequestedOnly) return (prev || []).filter(o => !isMatch(o));
+                        return (prev || []).map(o => isMatch(o) ? nextOrder : o);
+                    });
                     queryClient.setQueryData(['sales'], (old = []) =>
-                        Array.isArray(old) ? old.map(o => o._id === order._id ? nextOrder : o) : []
+                        Array.isArray(old) ? old.map(o => isMatch(o) ? nextOrder : o) : []
                     );
                 } else {
-                    setAllSalesRecords(prev => (prev || []).filter(o => o._id !== order._id));
-                    setSales(prev => (prev || []).filter(o => o._id !== order._id));
+                    setAllSalesRecords(prev => (prev || []).filter(o => !isMatch(o)));
+                    setSales(prev => (prev || []).filter(o => !isMatch(o)));
                     queryClient.setQueryData(['sales'], (old = []) =>
-                        Array.isArray(old) ? old.filter(o => o._id !== order._id) : []
+                        Array.isArray(old) ? old.filter(o => !isMatch(o)) : []
                     );
                 }
             } else {
+                if (orderId) recentStatusUpdatesRef.current.set(orderId, { status: newStatus, isEdited: false, time: Date.now() });
+                if (targetOrderNo) recentStatusUpdatesRef.current.set(targetOrderNo, { status: newStatus, isEdited: false, time: Date.now() });
                 const payload = {
                     ...order,
                     status: newStatus,
@@ -1236,10 +1333,15 @@ const OrderManagement = ({
                     approvedByName: order.approvedByName || actionBy,
                     approvedByUsername: order.approvedByUsername || actionUsername,
                 };
-                setAllSalesRecords(prev => (prev || []).map(o => o._id === order._id ? payload : o));
-                setSales(prev => (prev || []).map(o => o._id === order._id ? payload : o));
+                setAllSalesRecords(prev => deduplicateOrders((prev || []).map(o => isMatch(o) ? payload : o)));
+                setSales(prev => {
+                    const list = (isRequestedOnly || isEditRequestedOnly)
+                        ? (prev || []).filter(o => !isMatch(o))
+                        : (prev || []).map(o => isMatch(o) ? payload : o);
+                    return deduplicateOrders(list);
+                });
                 queryClient.setQueryData(['sales'], (old = []) =>
-                    Array.isArray(old) ? old.map(o => o._id === order._id ? payload : o) : []
+                    deduplicateOrders(Array.isArray(old) ? old.map(o => isMatch(o) ? payload : o) : [])
                 );
             }
             if (refreshPendingIndicators) refreshPendingIndicators();
@@ -1275,14 +1377,9 @@ const OrderManagement = ({
                     addNotification(`Order ${order.invoiceNo || order.orderNo} ${newStatus.toLowerCase()} successfully!`, 'success');
                 }
             }
-            queryClient.invalidateQueries({ queryKey: ['sales'] });
             queryClient.invalidateQueries({ queryKey: ['customers'] });
             queryClient.invalidateQueries({ queryKey: ['stock'] });
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
-            fetchOrders();
-            if (typeof fetchCustomers === 'function') fetchCustomers();
-            if (fetchSalesGlobal) fetchSalesGlobal();
-            if (refreshPendingIndicators) refreshPendingIndicators();
         } catch (err) {
             console.error(`Error updating order status to ${newStatus}:`, err);
             const msg = err.response?.data?.message || 'Failed to update order status';
@@ -1297,15 +1394,28 @@ const OrderManagement = ({
 
         const actionBy = currentUser ? (currentUser.name || currentUser.username || 'Administrator') : 'Administrator';
         const actionUsername = currentUser ? (currentUser.username || 'admin') : 'admin';
-        const targetIds = new Set(targetOrders.map(o => o._id));
+        const targetIds = new Set(targetOrders.map(o => String(o._id)));
+        targetOrders.forEach(o => {
+            const oId = String(o._id || o.id || '');
+            const oInv = String(o.invoiceNo || o.orderNo || '').trim().toUpperCase();
+            if (oId) recentStatusUpdatesRef.current.set(oId, { status: 'Accepted', isEdited: false, time: Date.now() });
+            if (oInv) recentStatusUpdatesRef.current.set(oInv, { status: 'Accepted', isEdited: false, time: Date.now() });
+        });
 
         // Optimistic update
-        setAllSalesRecords(prev => (prev || []).map(o => targetIds.has(o._id) ? { ...o, status: 'Accepted', isEdited: false, acceptedBy: actionBy, approvedBy: actionBy } : o));
-        setSales(prev => (prev || []).map(o => targetIds.has(o._id) ? { ...o, status: 'Accepted', isEdited: false, acceptedBy: actionBy, approvedBy: actionBy } : o));
+        setAllSalesRecords(prev => (prev || []).map(o => targetIds.has(String(o._id)) ? { ...o, status: 'Accepted', isEdited: false, acceptedBy: actionBy, approvedBy: actionBy } : o));
+        setSales(prev => {
+            if (isRequestedOnly || isEditRequestedOnly) {
+                return (prev || []).filter(o => !targetIds.has(String(o._id)));
+            }
+            return (prev || []).map(o => targetIds.has(String(o._id)) ? { ...o, status: 'Accepted', isEdited: false, acceptedBy: actionBy, approvedBy: actionBy } : o);
+        });
         queryClient.setQueryData(['sales'], (old = []) =>
-            Array.isArray(old) ? old.map(o => targetIds.has(o._id) ? { ...o, status: 'Accepted', isEdited: false, acceptedBy: actionBy, approvedBy: actionBy } : o) : []
+            Array.isArray(old) ? old.map(o => targetIds.has(String(o._id)) ? { ...o, status: 'Accepted', isEdited: false, acceptedBy: actionBy, approvedBy: actionBy } : o) : []
         );
         if (refreshPendingIndicators) refreshPendingIndicators();
+        if (setSelectedItems) setSelectedItems(new Set());
+        if (setIsSelectionMode) setIsSelectionMode(false);
 
         try {
             await Promise.all(
@@ -1324,11 +1434,7 @@ const OrderManagement = ({
                     return axios.put(`${API_BASE_URL}/api/sales/${order._id}`, payload);
                 })
             );
-            if (setSelectedItems) setSelectedItems(new Set());
-            if (setIsSelectionMode) setIsSelectionMode(false);
-            queryClient.invalidateQueries({ queryKey: ['sales'] });
             queryClient.invalidateQueries({ queryKey: ['customers'] });
-            fetchOrders();
             if (refreshPendingIndicators) refreshPendingIndicators();
         } catch (err) {
             console.error('Error bulk accepting orders:', err);
@@ -1340,6 +1446,12 @@ const OrderManagement = ({
         const targetOrders = (sales || []).filter(s => selectedItems.has(s._id));
         if (targetOrders.length === 0) return;
         const targetIds = new Set(targetOrders.map(o => o._id));
+        targetOrders.forEach(o => {
+            const oId = String(o._id || o.id || '');
+            const oInv = String(o.invoiceNo || o.orderNo || '').trim().toUpperCase();
+            if (oId) recentStatusUpdatesRef.current.set(oId, { status: 'Rejected', isEdited: false, time: Date.now() });
+            if (oInv) recentStatusUpdatesRef.current.set(oInv, { status: 'Rejected', isEdited: false, time: Date.now() });
+        });
 
         // Optimistic update
         setAllSalesRecords(prev => (prev || []).filter(o => !targetIds.has(o._id)));

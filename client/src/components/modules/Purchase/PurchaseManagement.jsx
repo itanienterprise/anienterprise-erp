@@ -1134,6 +1134,10 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
     };
 
     const handleStatusUpdate = async (purchase, newStatus) => {
+        const purId = String(purchase._id || purchase.id || '');
+        const purNo = String(purchase.purchaseNo || '').trim().toUpperCase();
+        const isMatch = (p) => (purId && String(p._id || p.id || '') === purId) || (purNo && String(p.purchaseNo || '').trim().toUpperCase() === purNo);
+
         try {
             const employeeId = currentUser?.employeeId || currentUser?.username || 'admin';
             const employeeDisplayName = currentUser?.name || currentUser?.nameEn || currentUser?.username || 'Admin';
@@ -1145,32 +1149,42 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                 approvedByName: employeeDisplayName
             };
 
-            // Instant optimistic update
-            setPurchases(prev => (prev || []).map(p => p._id === purchase._id ? updated : p));
+            // Instant optimistic update (0ms disappearance from requested view)
+            setPurchases(prev => {
+                if (isRequestedOnly) {
+                    return (prev || []).filter(p => !isMatch(p));
+                }
+                return (prev || []).map(p => isMatch(p) ? updated : p);
+            });
             queryClient.setQueryData(['purchases'], (old = []) =>
-                Array.isArray(old) ? old.map(p => p._id === purchase._id ? updated : p) : []
+                Array.isArray(old) ? old.map(p => isMatch(p) ? updated : p) : []
             );
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
 
             await axios.put(`${API_BASE_URL}/api/purchases/${purchase._id}`, updated);
-            if (addNotification) {
-                const now = new Date();
-                const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const employeeName = currentUser?.name || currentUser?.username || 'An employee';
-                await addNotification(
-                    `Purchase Request ${newStatus}`,
-                    `${dateStr} | ${timeStr} | Purchase entry (${purchase.purchaseNo}) was ${newStatus.toLowerCase()} by ${employeeName}`,
-                    ['admin', 'incharge', 'purchase manager'],
-                    [purchase.createdBy, 'admin'].filter(Boolean)
-                );
-            }
-            queryClient.invalidateQueries({ queryKey: ['purchases'] });
-            queryClient.invalidateQueries({ queryKey: ['stock'] });
-            queryClient.invalidateQueries({ queryKey: ['purchase-receives'] });
-            fetchPurchases();
-            if (typeof fetchStockRecords === 'function') fetchStockRecords();
-            if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+
+            (async () => {
+                try {
+                    if (addNotification) {
+                        const now = new Date();
+                        const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+                        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+                        await addNotification(
+                            `Purchase Request ${newStatus}`,
+                            `${dateStr} | ${timeStr} | Purchase entry (${purchase.purchaseNo}) was ${newStatus.toLowerCase()} by ${employeeName}`,
+                            ['admin', 'incharge', 'purchase manager'],
+                            [purchase.createdBy, 'admin'].filter(Boolean)
+                        );
+                    }
+                    queryClient.invalidateQueries({ queryKey: ['purchases'] });
+                    queryClient.invalidateQueries({ queryKey: ['stock'] });
+                    queryClient.invalidateQueries({ queryKey: ['purchase-receives'] });
+                    if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+                } catch (bgErr) {
+                    console.error('Error in background purchase post-accept sync:', bgErr);
+                }
+            })();
         } catch (error) {
             console.error('Error updating purchase status:', error);
         }

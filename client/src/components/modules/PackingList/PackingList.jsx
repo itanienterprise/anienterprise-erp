@@ -741,7 +741,7 @@ function PackingList({
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['ip-records'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records?excludeAttachments=true`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
                 axios.get(`${API_BASE_URL}/api/notifications`).catch(() => ({ data: [] }))
             ]);
