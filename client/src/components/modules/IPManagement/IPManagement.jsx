@@ -112,7 +112,7 @@ function IPManagement({
 
     const fetchEmployees = async () => {
         try {
-            const rawData = await queryClient.fetchQuery({
+            const rawData = await queryClient.ensureQueryData({
                 queryKey: ['employees'],
                 queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
             });
@@ -391,9 +391,35 @@ function IPManagement({
         const socket = getSocket();
         const handleRealtimeUpdate = (data) => {
             const mod = (data?.module || '').toLowerCase().trim();
-            console.log('[IPManagement] Real-time event received:', data);
-            if (!mod || mod === 'ip-records' || mod === 'ip' || mod === 'lc-management' || mod === 'stock' || mod === 'sales' || mod === 'pi' || mod === 'all') {
+            const action = (data?.action || '').toLowerCase().trim();
+            const payload = data?.payload || {};
+
+            if (mod === 'ip-records' || mod === 'ip') {
+                if (action === 'create' && payload.ipRecord) {
+                    const newRec = payload.ipRecord;
+                    setIpRecords(prev => {
+                        if (prev.some(r => r._id === newRec._id)) return prev;
+                        return [newRec, ...prev];
+                    });
+                    queryClient.setQueryData(['ip-records'], old => Array.isArray(old) ? [newRec, ...old.filter(r => r._id !== newRec._id)] : [newRec]);
+                    return;
+                }
+                if (action === 'update' && payload.ipRecord) {
+                    const updated = payload.ipRecord;
+                    setIpRecords(prev => prev.map(r => r._id === updated._id ? { ...r, ...updated } : r));
+                    queryClient.setQueryData(['ip-records'], old => Array.isArray(old) ? old.map(r => r._id === updated._id ? { ...r, ...updated } : r) : []);
+                    return;
+                }
+                if (action === 'delete' && payload.id) {
+                    const delId = payload.id;
+                    setIpRecords(prev => prev.filter(r => r._id !== delId));
+                    queryClient.setQueryData(['ip-records'], old => Array.isArray(old) ? old.filter(r => r._id !== delId) : []);
+                    return;
+                }
                 fetchIpRecords(true);
+            } else if (mod === 'lc-management' || mod === 'stock' || mod === 'sales' || mod === 'pi' || mod === 'all') {
+                // Background update of secondary calculations without re-fetching IP records
+                fetchSecondaryData();
             }
         };
 
@@ -405,7 +431,7 @@ function IPManagement({
 
         const pollTimer = setInterval(() => {
             fetchIpRecords(true);
-        }, 30000);
+        }, 60000);
 
         return () => {
             if (socket) {
@@ -442,43 +468,29 @@ function IPManagement({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [showFilters]);
 
-    const fetchIpRecords = async (silent = false) => {
-        if (!silent) {
-            const cachedIp = queryClient.getQueryData(['ip-records']);
-            if (cachedIp && Array.isArray(cachedIp) && cachedIp.length > 0 && ipRecords.length === 0) {
-                setIpRecords(cachedIp);
-            } else if (ipRecords.length === 0) {
-                setIsLoading(true);
-            }
-        }
+    const fetchSecondaryData = async () => {
         try {
-            // 1. Fetch IP records first and render table instantly!
-            const res = await axios.get(`${API_BASE_URL}/api/ip-records?_t=${Date.now()}`);
-            const ipData = Array.isArray(res.data) ? res.data : [];
-            setIpRecords(ipData);
-            queryClient.setQueryData(['ip-records'], ipData);
-            setIsLoading(false);
-
-            // 2. Fetch secondary metadata in background
             const [lcData, stockData, saleData, piData] = await Promise.all([
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['lc-management'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['stock'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['sales'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['pi'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/pi`).then(r => Array.isArray(r.data) ? r.data : [])
                 })
             ]);
+
             setLcRecords(Array.isArray(lcData) ? lcData : []);
+
             const rawPi = Array.isArray(piData) ? piData : [];
             const decryptedPi = rawPi.map(item => {
                 try {
@@ -512,6 +524,75 @@ function IPManagement({
             });
             setAllSalesRecords(decryptedSales);
         } catch (error) {
+            console.error('Error fetching secondary metadata:', error);
+        }
+    };
+
+    const fetchIpRecords = async (silent = false) => {
+        // 1. Immediately hydrate from in-memory React Query cache for 0ms initial render!
+        const cachedIp = queryClient.getQueryData(['ip-records']);
+        if (cachedIp && Array.isArray(cachedIp) && cachedIp.length > 0) {
+            setIpRecords(cachedIp);
+            setIsLoading(false);
+        } else if (!silent && ipRecords.length === 0) {
+            setIsLoading(true);
+        }
+
+        // 2. Immediately hydrate secondary data from React Query cache if present
+        const cachedLc = queryClient.getQueryData(['lc-management']);
+        if (cachedLc && Array.isArray(cachedLc) && lcRecords.length === 0) {
+            setLcRecords(cachedLc);
+        }
+
+        const cachedStock = queryClient.getQueryData(['stock']);
+        if (cachedStock && Array.isArray(cachedStock) && allStockRecords.length === 0) {
+            const raw = Array.isArray(cachedStock?.data) ? cachedStock.data : cachedStock;
+            setAllStockRecords(raw.map(item => {
+                try {
+                    let d = item.data ? decryptData(item.data) : item;
+                    if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
+                    else if (d && d.data && typeof d.data === 'string' && !d.lcNo) { try { d = decryptData(d.data); } catch (e) { } }
+                    return d;
+                } catch { return item; }
+            }));
+        }
+
+        const cachedSales = queryClient.getQueryData(['sales']);
+        if (cachedSales && Array.isArray(cachedSales) && allSalesRecords.length === 0) {
+            const raw = Array.isArray(cachedSales?.data) ? cachedSales.data : cachedSales;
+            setAllSalesRecords(raw.map(item => {
+                try {
+                    let d = item.data ? decryptData(item.data) : item;
+                    if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
+                    else if (d && d.data && typeof d.data === 'string' && !d.lcNo && !d.saleType) { try { d = decryptData(d.data); } catch (e) { } }
+                    return d;
+                } catch { return item; }
+            }));
+        }
+
+        const cachedPi = queryClient.getQueryData(['pi']);
+        if (cachedPi && Array.isArray(cachedPi) && piRecords.length === 0) {
+            setPiRecords(cachedPi.map(item => {
+                try {
+                    let d = item.data ? decryptData(item.data) : item;
+                    if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
+                    else if (d && d.data && typeof d.data === 'string' && !d.piNumber) { try { d = decryptData(d.data); } catch (e) { } }
+                    return { ...d, _id: item._id };
+                } catch { return item; }
+            }));
+        }
+
+        try {
+            // 3. Fetch lightweight IP records (38 KB instead of 18 MB!)
+            const res = await axios.get(`${API_BASE_URL}/api/ip-records?excludeAttachments=true`);
+            const ipData = Array.isArray(res.data) ? res.data : [];
+            setIpRecords(ipData);
+            queryClient.setQueryData(['ip-records'], ipData);
+            setIsLoading(false);
+
+            // 4. Fetch or reuse secondary metadata asynchronously in background
+            fetchSecondaryData();
+        } catch (error) {
             console.error('Error fetching IP records:', error);
         } finally {
             setIsLoading(false);
@@ -525,6 +606,48 @@ function IPManagement({
         return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
     };
 
+    // Pre-indexed maps for O(1) balance calculations
+    const stockByLc = useMemo(() => {
+        const map = {};
+        (allStockRecords || []).forEach(s => {
+            const lcClean = cleanLc(s.lcNo);
+            if (!lcClean) return;
+            const status = (s.status || '').toLowerCase();
+            if (status !== 'accepted' && status !== 'in stock') return;
+            if (!map[lcClean]) map[lcClean] = [];
+            map[lcClean].push(s);
+        });
+        return map;
+    }, [allStockRecords]);
+
+    const borderSalesByLc = useMemo(() => {
+        const map = {};
+        (allSalesRecords || []).forEach(s => {
+            const sTypeLow = (s.saleType || '').toLowerCase().trim();
+            const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
+            const status = (s.status || '').toLowerCase();
+            const isValidStatus = !status.includes('rejected') && status !== 'requested';
+            if (!isBorder || !isValidStatus) return;
+
+            const collectLcs = new Set();
+            if (s.lcNo) collectLcs.add(cleanLc(s.lcNo));
+            if (s.lcNumber) collectLcs.add(cleanLc(s.lcNumber));
+            if (s.lc_no) collectLcs.add(cleanLc(s.lc_no));
+            (s.items || []).forEach(i => {
+                if (i.lcNo) collectLcs.add(cleanLc(i.lcNo));
+                (i.brandEntries || []).forEach(b => {
+                    if (b.lcNo) collectLcs.add(cleanLc(b.lcNo));
+                });
+            });
+            collectLcs.forEach(lcClean => {
+                if (!lcClean) return;
+                if (!map[lcClean]) map[lcClean] = [];
+                map[lcClean].push(s);
+            });
+        });
+        return map;
+    }, [allSalesRecords]);
+
     // Calculate total receive quantity for an LC (with updatedLcReceive override support)
     const getLcReceiveQty = (lc) => {
         if (!lc) return 0;
@@ -537,53 +660,35 @@ function IPManagement({
         }
 
         const receiptsMapForBalance = {};
-        (allStockRecords || [])
-            .filter(s => {
-                const recordLcNoClean = cleanLc(s.lcNo);
-                const status = (s.status || '').toLowerCase();
-                return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-            })
-            .forEach(s => {
-                const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                const key = `${dateStr}_${groupVal}`;
+        const matchedStocks = stockByLc[lcNoClean] || [];
+        matchedStocks.forEach(s => {
+            const rawDate = s.date || s.receiveDate || s.createdAt || '';
+            const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+            const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+            const key = `${dateStr}_${groupVal}`;
 
-                if (!receiptsMapForBalance[key]) {
-                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                    receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                } else {
-                    if (!s.totalLcQuantity) {
-                        receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                    }
+            if (!receiptsMapForBalance[key]) {
+                const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+            } else {
+                if (!s.totalLcQuantity) {
+                    receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
                 }
-            });
+            }
+        });
         const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
 
-        const borderSaleQtyKg = (allSalesRecords || [])
-            .filter(s => {
-                const matchesLc = !!lcNoClean && (
-                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
-                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
-                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
-                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
-                );
-                const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
-                const status = (s.status || '').toLowerCase();
-                const isValidStatus = !status.includes('rejected') && status !== 'requested';
-                return matchesLc && isValidStatus && isBorder;
-            })
-            .reduce((sum, s) => {
-                const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                    const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                    return iSum + (brandSubtotal || parseNum(item.quantity));
-                }, 0);
-                const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
-                return sum + qty;
+        const matchedSales = borderSalesByLc[lcNoClean] || [];
+        const borderSaleQtyKg = matchedSales.reduce((sum, s) => {
+            const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                return iSum + (brandSubtotal || parseNum(item.quantity));
             }, 0);
+            const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
+            return sum + qty;
+        }, 0);
 
-        return receivedQtyKg + borderSaleQtyKg;
+        return Math.round((receivedQtyKg + borderSaleQtyKg) * 100) / 100;
     };
 
     const getLcReceiveQtyForIp = (lc, targetIp) => {
@@ -1185,7 +1290,34 @@ function IPManagement({
         document.body.removeChild(link);
     };
 
-    const handleEdit = (record) => {
+    const handleViewAttachment = async (record) => {
+        const hasPdf = Boolean(record.ipAttachment || record.hasAttachment);
+        if (!hasPdf) {
+            alert("No PDF document has been uploaded for this IP record.");
+            return;
+        }
+        if (record.ipAttachment) {
+            setViewingPdf(record.ipAttachment);
+            setViewingPdfName(record.ipAttachmentName || `IP_${record.ipNumber || 'document'}.pdf`);
+            return;
+        }
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/ip-records/${record._id}/attachment`);
+            if (res.data?.ipAttachment) {
+                record.ipAttachment = res.data.ipAttachment;
+                record.ipAttachmentName = res.data.ipAttachmentName || record.ipAttachmentName;
+                setViewingPdf(res.data.ipAttachment);
+                setViewingPdfName(res.data.ipAttachmentName || `IP_${record.ipNumber || 'document'}.pdf`);
+            } else {
+                alert("No PDF document has been uploaded for this IP record.");
+            }
+        } catch (err) {
+            console.error('Failed to load attachment:', err);
+            alert("Error loading PDF attachment.");
+        }
+    };
+
+    const handleEdit = async (record) => {
         setFormData({
             openingDate: record.openingDate || '',
             closeDate: record.closeDate || '',
@@ -1203,6 +1335,23 @@ function IPManagement({
         });
         setEditingId(record._id);
         setShowIpForm(true);
+
+        if (!record.ipAttachment && record.hasAttachment) {
+            try {
+                const res = await axios.get(`${API_BASE_URL}/api/ip-records/${record._id}/attachment`);
+                if (res.data?.ipAttachment) {
+                    record.ipAttachment = res.data.ipAttachment;
+                    record.ipAttachmentName = res.data.ipAttachmentName || record.ipAttachmentName;
+                    setFormData(prev => ({
+                        ...prev,
+                        ipAttachment: res.data.ipAttachment,
+                        ipAttachmentName: res.data.ipAttachmentName || prev.ipAttachmentName
+                    }));
+                }
+            } catch (err) {
+                console.error('Failed to load attachment for editing:', err);
+            }
+        }
     };
 
     const handleDelete = (id) => {
@@ -2218,16 +2367,11 @@ function IPManagement({
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                if (record.ipAttachment) {
-                                                                    setViewingPdf(record.ipAttachment);
-                                                                    setViewingPdfName(record.ipAttachmentName);
-                                                                } else {
-                                                                    alert("No PDF document has been uploaded for this IP record.");
-                                                                }
+                                                                handleViewAttachment(record);
                                                             }}
-                                                            className={`${record.ipAttachment ? 'text-blue-500 hover:text-blue-700' : 'text-gray-200 cursor-not-allowed'} transition-colors`}
-                                                            title={record.ipAttachment ? `View ${record.ipAttachmentName || 'PDF'}` : 'No PDF attached'}
-                                                            aria-label={record.ipAttachment ? `View ${record.ipAttachmentName || 'PDF'}` : 'No PDF attached'}
+                                                            className={`${(record.ipAttachment || record.hasAttachment) ? 'text-blue-500 hover:text-blue-700' : 'text-gray-200 cursor-not-allowed'} transition-colors`}
+                                                            title={(record.ipAttachment || record.hasAttachment) ? `View ${record.ipAttachmentName || 'PDF'}` : 'No PDF attached'}
+                                                            aria-label={(record.ipAttachment || record.hasAttachment) ? `View ${record.ipAttachmentName || 'PDF'}` : 'No PDF attached'}
                                                             data-action={`View PDF (${record.ipNumber || 'IP'})`}
                                                         >
                                                             <PDFIcon className="w-5 h-5" />
@@ -2393,15 +2537,10 @@ function IPManagement({
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        if (record.ipAttachment) {
-                                                                            setViewingPdf(record.ipAttachment);
-                                                                            setViewingPdfName(record.ipAttachmentName);
-                                                                        } else {
-                                                                            alert("No PDF document has been uploaded for this IP record.");
-                                                                        }
+                                                                        handleViewAttachment(record);
                                                                     }}
                                                                     data-action={`View PDF (${record.ipNumber || 'IP'})`}
-                                                                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 ${record.ipAttachment ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'} rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95`}
+                                                                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 ${(record.ipAttachment || record.hasAttachment) ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'} rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95`}
                                                                 >
                                                                     <PDFIcon className="w-3.5 h-3.5" /> PDF
                                                                 </button>

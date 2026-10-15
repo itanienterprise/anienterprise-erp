@@ -4,7 +4,8 @@ import {
     XIcon, BoxIcon, EyeIcon, PDFIcon, DownloadIcon, FileTextIcon,
     CalendarIcon, MapPinIcon, ShieldIcon, BuildingIcon, UserIcon, CheckIcon
 } from '../../Icons';
-import { formatDate } from '../../../utils/helpers';
+import { formatDate, API_BASE_URL } from '../../../utils/helpers';
+import axios from '../../../utils/api';
 
 const PIDetailsModal = React.lazy(() =>
     import('../PI/PIDetailsModal').then(m => ({ default: m.PIDetailsModal }))
@@ -817,12 +818,26 @@ export const IPDetailsModal = ({
                                 </div>
                                 <h4 className="text-xs font-black uppercase tracking-wider text-gray-700">General IP Information</h4>
                             </div>
-                            {ipRecord.ipAttachment && (
+                            {(ipRecord.ipAttachment || ipRecord.hasAttachment) && (
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setViewingPdf(ipRecord.ipAttachment);
-                                        setViewingPdfName(ipRecord.ipAttachmentName || `IP_${ipRecord.ipNumber}.pdf`);
+                                    onClick={async () => {
+                                        if (ipRecord.ipAttachment) {
+                                            setViewingPdf(ipRecord.ipAttachment);
+                                            setViewingPdfName(ipRecord.ipAttachmentName || `IP_${ipRecord.ipNumber}.pdf`);
+                                        } else {
+                                            try {
+                                                const res = await axios.get(`${API_BASE_URL}/api/ip-records/${ipRecord._id}/attachment`);
+                                                if (res.data?.ipAttachment) {
+                                                    ipRecord.ipAttachment = res.data.ipAttachment;
+                                                    ipRecord.ipAttachmentName = res.data.ipAttachmentName || ipRecord.ipAttachmentName;
+                                                    setViewingPdf(res.data.ipAttachment);
+                                                    setViewingPdfName(res.data.ipAttachmentName || `IP_${ipRecord.ipNumber}.pdf`);
+                                                }
+                                            } catch (err) {
+                                                console.error('Failed to load attachment:', err);
+                                            }
+                                        }
                                     }}
                                     className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200/80 rounded-lg text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
                                     title="Preview Attached PDF"
@@ -909,7 +924,7 @@ export const IPDetailsModal = ({
 
                             <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Attachment Status</span>
-                                {ipRecord.ipAttachment ? (
+                                {(ipRecord.ipAttachment || ipRecord.hasAttachment) ? (
                                     <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
                                         <PDFIcon className="w-3.5 h-3.5 text-emerald-500" /> Attached
                                     </span>
