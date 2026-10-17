@@ -334,14 +334,26 @@ app.use(session({
     collectionName: 'sessions',
     touchAfter: 24 * 3600 // touch session once every 24h
   }),
-  rolling: true, // Automatically refreshes cookie maxAge on user activity so active sessions never drop
+  rolling: false,
   cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days active sliding window
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE === 'true',
     sameSite: 'lax'
   }
 }));
+
+// Session Cookie Expiration Middleware based on Remember Me
+app.use((req, res, next) => {
+  if (req.session && req.session.user) {
+    if (req.session.rememberMe) {
+      req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+    } else {
+      req.session.cookie.expires = false;
+      req.session.cookie.maxAge = null;
+    }
+  }
+  next();
+});
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db')
@@ -5562,12 +5574,20 @@ apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
     // Store user data in session
     req.session.user = userData;
 
-    // Ensure cookie maxAge is set (30 days default with rolling refresh)
-    req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+    const isRemember = rememberMe === true || rememberMe === 'true';
+    req.session.rememberMe = isRemember;
+
+    if (isRemember) {
+      req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days persistent cookie
+    } else {
+      req.session.cookie.expires = false;
+      req.session.cookie.maxAge = null; // Session-only cookie (cleared when browser session ends)
+    }
 
     res.json({
       success: true,
-      user: userData
+      user: userData,
+      rememberMe: isRemember
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -5598,7 +5618,8 @@ apiRouter.get('/api/auth/check', async (req, res) => {
         req.session.user.role = 'Admin';
         return res.json({
           authenticated: true,
-          user: req.session.user
+          user: req.session.user,
+          rememberMe: !!req.session.rememberMe
         });
       }
 
@@ -5637,14 +5658,16 @@ apiRouter.get('/api/auth/check', async (req, res) => {
 
       res.json({
         authenticated: true,
-        user: req.session.user
+        user: req.session.user,
+        rememberMe: !!req.session.rememberMe
       });
     } catch (err) {
       console.error('Session check error:', err);
       // Fallback to existing session user if DB lookup fails
       res.json({
         authenticated: true,
-        user: req.session.user
+        user: req.session.user,
+        rememberMe: !!req.session.rememberMe
       });
     }
   } else {

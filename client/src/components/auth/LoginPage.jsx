@@ -3,10 +3,14 @@ import { API_BASE_URL } from '../../utils/helpers';
 import './LoginPage.css';
 
 const LoginPage = ({ onLogin }) => {
-    const [username, setUsername] = useState('');
+    const [username, setUsername] = useState(() => {
+        return localStorage.getItem('savedUsername') || '';
+    });
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);
+    const [rememberMe, setRememberMe] = useState(() => {
+        return localStorage.getItem('rememberMe') === 'true';
+    });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -32,7 +36,15 @@ const LoginPage = ({ onLogin }) => {
                 if (userRole === 'general staff') {
                     setError('Access denied. General staff are not allowed to log in to this system.');
                 } else {
-                    onLogin(data.user);
+                    const isRemember = data.rememberMe ?? rememberMe;
+                    if (isRemember) {
+                        localStorage.setItem('savedUsername', username);
+                        localStorage.setItem('rememberMe', 'true');
+                    } else {
+                        localStorage.removeItem('savedUsername');
+                        localStorage.removeItem('rememberMe');
+                    }
+                    onLogin(data.user, isRemember);
                 }
             } else {
                 setError(data.message || 'Invalid username or password');

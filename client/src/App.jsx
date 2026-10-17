@@ -94,11 +94,18 @@ import { hasPermission } from './utils/permissionHelper';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('isAuthenticated') === 'true';
+    const isRemembered = localStorage.getItem('rememberMe') === 'true';
+    if (isRemembered) {
+      return localStorage.getItem('isAuthenticated') === 'true';
+    }
+    return sessionStorage.getItem('isAuthenticated') === 'true';
   });
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const saved = localStorage.getItem('currentUser');
+      const isRemembered = localStorage.getItem('rememberMe') === 'true';
+      const saved = isRemembered
+        ? localStorage.getItem('currentUser')
+        : sessionStorage.getItem('currentUser');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -191,14 +198,79 @@ function App() {
     };
   }, [isCheckingSession, isAuthenticated, currentUser?.username, currentUser?.role]);
 
-  const handleLogin = (user) => {
+  // Cross-tab auth synchronization
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
+    const channel = new BroadcastChannel('erp_auth_sync');
+
+    channel.onmessage = (event) => {
+      const msg = event.data;
+      if (!msg) return;
+
+      if (msg.type === 'SESSION_REQUEST') {
+        if (isAuthenticated && currentUser) {
+          channel.postMessage({
+            type: 'SESSION_RESPONSE',
+            user: currentUser,
+            rememberMe: localStorage.getItem('rememberMe') === 'true'
+          });
+        }
+      } else if (msg.type === 'LOGOUT') {
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        sessionStorage.clear();
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('isAuthenticated');
+        localStorage.removeItem('rememberMe');
+      } else if (msg.type === 'LOGIN') {
+        if (msg.user) {
+          setIsAuthenticated(true);
+          setCurrentUser(msg.user);
+          sessionStorage.setItem('isAuthenticated', 'true');
+          sessionStorage.setItem('currentUser', JSON.stringify(msg.user));
+          localStorage.setItem('currentUser', JSON.stringify(msg.user));
+          if (msg.rememberMe) {
+            localStorage.setItem('rememberMe', 'true');
+            localStorage.setItem('isAuthenticated', 'true');
+          }
+        }
+      }
+    };
+
+    return () => {
+      channel.close();
+    };
+  }, [isAuthenticated, currentUser]);
+
+  const handleLogin = (user, rememberMe = false) => {
     setIsAuthenticated(true);
     setCurrentUser(user);
     setSidebarOpen(false);
-    localStorage.setItem('isAuthenticated', 'true');
+
+    // Active session for current tab/window
+    sessionStorage.setItem('isAuthenticated', 'true');
+    sessionStorage.setItem('currentUser', JSON.stringify(user));
     localStorage.setItem('currentUser', JSON.stringify(user));
+
+    if (rememberMe) {
+      localStorage.setItem('rememberMe', 'true');
+      localStorage.setItem('isAuthenticated', 'true');
+    } else {
+      localStorage.removeItem('rememberMe');
+      localStorage.removeItem('isAuthenticated');
+    }
+
     setCurrentView('dashboard');
     localStorage.setItem('currentView', 'dashboard');
+
+    // Notify other open tabs of login
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const channel = new BroadcastChannel('erp_auth_sync');
+        channel.postMessage({ type: 'LOGIN', user, rememberMe });
+        channel.close();
+      } catch (e) { }
+    }
 
     // Collapse all sidebar dropdowns on login
     setStockDropdownOpen(false);
@@ -224,9 +296,24 @@ function App() {
       setIsAuthenticated(false);
       setCurrentUser(null);
       setSidebarOpen(false);
+
+      // Clear both localStorage and sessionStorage
       localStorage.removeItem('currentUser');
-      localStorage.setItem('isAuthenticated', 'false');
+      localStorage.removeItem('isAuthenticated');
+      localStorage.removeItem('rememberMe');
       localStorage.removeItem('currentView');
+
+      sessionStorage.removeItem('currentUser');
+      sessionStorage.removeItem('isAuthenticated');
+
+      // Notify other open tabs of logout
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        try {
+          const channel = new BroadcastChannel('erp_auth_sync');
+          channel.postMessage({ type: 'LOGOUT' });
+          channel.close();
+        } catch (e) { }
+      }
 
       // Collapse all sidebar dropdowns on logout
       setStockDropdownOpen(false);
@@ -528,30 +615,105 @@ function App() {
 
   // Check session on mount + poll every 60s to pick up permission changes
   useEffect(() => {
+    let isCancelled = false;
+
     const checkSession = async () => {
+      const isRemembered = localStorage.getItem('rememberMe') === 'true';
+      const hasTabSession = sessionStorage.getItem('isAuthenticated') === 'true';
+
+      // If neither is true, this tab was newly opened or browser was restarted without rememberMe.
+      // Check if another tab in the same browser session is currently active.
+      if (!isRemembered && !hasTabSession) {
+        let adoptedFromOtherTab = false;
+
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          try {
+            const channel = new BroadcastChannel('erp_auth_sync');
+            const checkPromise = new Promise((resolve) => {
+              channel.onmessage = (event) => {
+                if (event.data?.type === 'SESSION_RESPONSE' && event.data?.user) {
+                  resolve(event.data);
+                }
+              };
+              setTimeout(() => resolve(null), 120);
+            });
+            channel.postMessage({ type: 'SESSION_REQUEST' });
+            const responseData = await checkPromise;
+            channel.close();
+
+            if (responseData && !isCancelled) {
+              adoptedFromOtherTab = true;
+              sessionStorage.setItem('isAuthenticated', 'true');
+              sessionStorage.setItem('currentUser', JSON.stringify(responseData.user));
+              localStorage.setItem('currentUser', JSON.stringify(responseData.user));
+              if (responseData.rememberMe) {
+                localStorage.setItem('rememberMe', 'true');
+                localStorage.setItem('isAuthenticated', 'true');
+              }
+            }
+          } catch (e) { }
+        }
+
+        if (!adoptedFromOtherTab) {
+          // No active tab and rememberMe is false: user closed browser/tab and must log in again
+          if (!isCancelled) {
+            setIsAuthenticated(false);
+            setCurrentUser(null);
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('isAuthenticated');
+            localStorage.removeItem('rememberMe');
+            sessionStorage.removeItem('currentUser');
+            sessionStorage.removeItem('isAuthenticated');
+            try {
+              await axios.post(`${API_BASE_URL}/api/auth/logout`);
+            } catch (e) { }
+            setIsCheckingSession(false);
+          }
+          return;
+        }
+      }
+
+      // If we reach here, either rememberMe is true, or this tab has an active session
       try {
         const response = await axios.get(`${API_BASE_URL}/api/auth/check`);
+        if (isCancelled) return;
+
         if (response.data.authenticated) {
           setIsAuthenticated(true);
           setCurrentUser(response.data.user);
+          sessionStorage.setItem('isAuthenticated', 'true');
+          sessionStorage.setItem('currentUser', JSON.stringify(response.data.user));
           localStorage.setItem('currentUser', JSON.stringify(response.data.user));
-          localStorage.setItem('isAuthenticated', 'true');
+          if (response.data.rememberMe) {
+            localStorage.setItem('rememberMe', 'true');
+            localStorage.setItem('isAuthenticated', 'true');
+          }
         } else {
           setIsAuthenticated(false);
           setCurrentUser(null);
           localStorage.removeItem('currentUser');
-          localStorage.setItem('isAuthenticated', 'false');
+          localStorage.removeItem('isAuthenticated');
+          localStorage.removeItem('rememberMe');
+          sessionStorage.removeItem('currentUser');
+          sessionStorage.removeItem('isAuthenticated');
         }
       } catch (err) {
-        // Not authenticated, that's fine
-        setIsAuthenticated(false);
-        setCurrentUser(null);
-        localStorage.removeItem('currentUser');
-        localStorage.setItem('isAuthenticated', 'false');
+        if (!isCancelled) {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          localStorage.removeItem('currentUser');
+          localStorage.removeItem('isAuthenticated');
+          localStorage.removeItem('rememberMe');
+          sessionStorage.removeItem('currentUser');
+          sessionStorage.removeItem('isAuthenticated');
+        }
       } finally {
-        setIsCheckingSession(false);
+        if (!isCancelled) {
+          setIsCheckingSession(false);
+        }
       }
     };
+
     checkSession();
 
     // Poll every 60 seconds so any permission changes made by admin
@@ -566,6 +728,7 @@ function App() {
             if (JSON.stringify(prev?.permissions) !== JSON.stringify(fresh?.permissions) ||
               prev?.role !== fresh?.role || prev?.status !== fresh?.status) {
               localStorage.setItem('currentUser', JSON.stringify(fresh));
+              sessionStorage.setItem('currentUser', JSON.stringify(fresh));
               return fresh;
             }
             return prev;
@@ -575,18 +738,28 @@ function App() {
           setIsAuthenticated(false);
           setCurrentUser(null);
           localStorage.removeItem('currentUser');
+          localStorage.removeItem('isAuthenticated');
+          localStorage.removeItem('rememberMe');
+          sessionStorage.removeItem('currentUser');
+          sessionStorage.removeItem('isAuthenticated');
         }
       } catch (e) {
         if (e.response && (e.response.status === 401 || e.response.status === 403)) {
           setIsAuthenticated(false);
           setCurrentUser(null);
           localStorage.removeItem('currentUser');
-          localStorage.setItem('isAuthenticated', 'false');
+          localStorage.removeItem('isAuthenticated');
+          localStorage.removeItem('rememberMe');
+          sessionStorage.removeItem('currentUser');
+          sessionStorage.removeItem('isAuthenticated');
         }
       }
     }, 60000);
 
-    return () => clearInterval(sessionPollInterval);
+    return () => {
+      isCancelled = true;
+      clearInterval(sessionPollInterval);
+    };
   }, []);
 
   // Listen for unauthorized session expiration events from API interceptor
@@ -595,7 +768,10 @@ function App() {
       setIsAuthenticated(false);
       setCurrentUser(null);
       localStorage.removeItem('currentUser');
-      localStorage.setItem('isAuthenticated', 'false');
+      localStorage.removeItem('isAuthenticated');
+      localStorage.removeItem('rememberMe');
+      sessionStorage.removeItem('currentUser');
+      sessionStorage.removeItem('isAuthenticated');
     };
     window.addEventListener('erp:auth_unauthorized', handleAuthUnauthorized);
     return () => window.removeEventListener('erp:auth_unauthorized', handleAuthUnauthorized);
