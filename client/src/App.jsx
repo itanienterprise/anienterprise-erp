@@ -212,7 +212,8 @@ function App() {
           channel.postMessage({
             type: 'SESSION_RESPONSE',
             user: currentUser,
-            rememberMe: localStorage.getItem('rememberMe') === 'true'
+            rememberMe: localStorage.getItem('rememberMe') === 'true',
+            sessionToken: sessionStorage.getItem('erp_session_token') || localStorage.getItem('erp_session_token')
           });
         }
       } else if (msg.type === 'LOGOUT') {
@@ -222,6 +223,7 @@ function App() {
         localStorage.removeItem('currentUser');
         localStorage.removeItem('isAuthenticated');
         localStorage.removeItem('rememberMe');
+        localStorage.removeItem('erp_session_token');
       } else if (msg.type === 'LOGIN') {
         if (msg.user) {
           setIsAuthenticated(true);
@@ -229,6 +231,12 @@ function App() {
           sessionStorage.setItem('isAuthenticated', 'true');
           sessionStorage.setItem('currentUser', JSON.stringify(msg.user));
           localStorage.setItem('currentUser', JSON.stringify(msg.user));
+          if (msg.sessionToken) {
+            sessionStorage.setItem('erp_session_token', msg.sessionToken);
+            if (msg.rememberMe) {
+              localStorage.setItem('erp_session_token', msg.sessionToken);
+            }
+          }
           if (msg.rememberMe) {
             localStorage.setItem('rememberMe', 'true');
             localStorage.setItem('isAuthenticated', 'true');
@@ -242,7 +250,7 @@ function App() {
     };
   }, [isAuthenticated, currentUser]);
 
-  const handleLogin = (user, rememberMe = false) => {
+  const handleLogin = (user, rememberMe = false, sessionToken = null) => {
     setIsAuthenticated(true);
     setCurrentUser(user);
     setSidebarOpen(false);
@@ -251,6 +259,15 @@ function App() {
     sessionStorage.setItem('isAuthenticated', 'true');
     sessionStorage.setItem('currentUser', JSON.stringify(user));
     localStorage.setItem('currentUser', JSON.stringify(user));
+
+    if (sessionToken) {
+      sessionStorage.setItem('erp_session_token', sessionToken);
+      if (rememberMe) {
+        localStorage.setItem('erp_session_token', sessionToken);
+      } else {
+        localStorage.removeItem('erp_session_token');
+      }
+    }
 
     if (rememberMe) {
       localStorage.setItem('rememberMe', 'true');
@@ -267,7 +284,7 @@ function App() {
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
         const channel = new BroadcastChannel('erp_auth_sync');
-        channel.postMessage({ type: 'LOGIN', user, rememberMe });
+        channel.postMessage({ type: 'LOGIN', user, rememberMe, sessionToken });
         channel.close();
       } catch (e) { }
     }
@@ -301,10 +318,12 @@ function App() {
       localStorage.removeItem('currentUser');
       localStorage.removeItem('isAuthenticated');
       localStorage.removeItem('rememberMe');
+      localStorage.removeItem('erp_session_token');
       localStorage.removeItem('currentView');
 
       sessionStorage.removeItem('currentUser');
       sessionStorage.removeItem('isAuthenticated');
+      sessionStorage.removeItem('erp_session_token');
 
       // Notify other open tabs of logout
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -646,6 +665,12 @@ function App() {
               sessionStorage.setItem('isAuthenticated', 'true');
               sessionStorage.setItem('currentUser', JSON.stringify(responseData.user));
               localStorage.setItem('currentUser', JSON.stringify(responseData.user));
+              if (responseData.sessionToken) {
+                sessionStorage.setItem('erp_session_token', responseData.sessionToken);
+                if (responseData.rememberMe) {
+                  localStorage.setItem('erp_session_token', responseData.sessionToken);
+                }
+              }
               if (responseData.rememberMe) {
                 localStorage.setItem('rememberMe', 'true');
                 localStorage.setItem('isAuthenticated', 'true');
@@ -662,8 +687,10 @@ function App() {
             localStorage.removeItem('currentUser');
             localStorage.removeItem('isAuthenticated');
             localStorage.removeItem('rememberMe');
+            localStorage.removeItem('erp_session_token');
             sessionStorage.removeItem('currentUser');
             sessionStorage.removeItem('isAuthenticated');
+            sessionStorage.removeItem('erp_session_token');
             try {
               await axios.post(`${API_BASE_URL}/api/auth/logout`);
             } catch (e) { }
@@ -684,6 +711,12 @@ function App() {
           sessionStorage.setItem('isAuthenticated', 'true');
           sessionStorage.setItem('currentUser', JSON.stringify(response.data.user));
           localStorage.setItem('currentUser', JSON.stringify(response.data.user));
+          if (response.data.sessionToken) {
+            sessionStorage.setItem('erp_session_token', response.data.sessionToken);
+            if (response.data.rememberMe) {
+              localStorage.setItem('erp_session_token', response.data.sessionToken);
+            }
+          }
           if (response.data.rememberMe) {
             localStorage.setItem('rememberMe', 'true');
             localStorage.setItem('isAuthenticated', 'true');
@@ -694,8 +727,10 @@ function App() {
           localStorage.removeItem('currentUser');
           localStorage.removeItem('isAuthenticated');
           localStorage.removeItem('rememberMe');
+          localStorage.removeItem('erp_session_token');
           sessionStorage.removeItem('currentUser');
           sessionStorage.removeItem('isAuthenticated');
+          sessionStorage.removeItem('erp_session_token');
         }
       } catch (err) {
         if (!isCancelled) {
@@ -704,8 +739,10 @@ function App() {
           localStorage.removeItem('currentUser');
           localStorage.removeItem('isAuthenticated');
           localStorage.removeItem('rememberMe');
+          localStorage.removeItem('erp_session_token');
           sessionStorage.removeItem('currentUser');
           sessionStorage.removeItem('isAuthenticated');
+          sessionStorage.removeItem('erp_session_token');
         }
       } finally {
         if (!isCancelled) {
@@ -740,8 +777,10 @@ function App() {
           localStorage.removeItem('currentUser');
           localStorage.removeItem('isAuthenticated');
           localStorage.removeItem('rememberMe');
+          localStorage.removeItem('erp_session_token');
           sessionStorage.removeItem('currentUser');
           sessionStorage.removeItem('isAuthenticated');
+          sessionStorage.removeItem('erp_session_token');
         }
       } catch (e) {
         if (e.response && (e.response.status === 401 || e.response.status === 403)) {
@@ -750,8 +789,10 @@ function App() {
           localStorage.removeItem('currentUser');
           localStorage.removeItem('isAuthenticated');
           localStorage.removeItem('rememberMe');
+          localStorage.removeItem('erp_session_token');
           sessionStorage.removeItem('currentUser');
           sessionStorage.removeItem('isAuthenticated');
+          sessionStorage.removeItem('erp_session_token');
         }
       }
     }, 60000);
@@ -770,8 +811,10 @@ function App() {
       localStorage.removeItem('currentUser');
       localStorage.removeItem('isAuthenticated');
       localStorage.removeItem('rememberMe');
+      localStorage.removeItem('erp_session_token');
       sessionStorage.removeItem('currentUser');
       sessionStorage.removeItem('isAuthenticated');
+      sessionStorage.removeItem('erp_session_token');
     };
     window.addEventListener('erp:auth_unauthorized', handleAuthUnauthorized);
     return () => window.removeEventListener('erp:auth_unauthorized', handleAuthUnauthorized);
@@ -2227,8 +2270,8 @@ function App() {
 
       try {
         if (module === 'products' || module === 'product' || module === 'all') {
-          const action = data.action;
-          const prodPayload = data.payload?.product;
+          const action = event?.action;
+          const prodPayload = event?.payload?.product;
           if (prodPayload && (action === 'update' || action === 'create')) {
             setProducts(prev => {
               const pId = String(prodPayload._id || prodPayload.id);
@@ -2250,8 +2293,8 @@ function App() {
               }
               return [...old, prodPayload];
             });
-          } else if (action === 'delete' && data.payload?._id) {
-            const delId = String(data.payload._id);
+          } else if (action === 'delete' && event?.payload?._id) {
+            const delId = String(event.payload._id);
             setProducts(prev => prev.filter(p => String(p._id || p.id) !== delId));
             queryClient.setQueryData(QUERY_KEYS.products, old => Array.isArray(old) ? old.filter(p => String(p._id || p.id) !== delId) : old);
           } else {

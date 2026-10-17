@@ -37,6 +37,14 @@ const LoginPage = ({ onLogin }) => {
                     setError('Access denied. General staff are not allowed to log in to this system.');
                 } else {
                     const isRemember = data.rememberMe ?? rememberMe;
+                    if (data.sessionToken) {
+                        sessionStorage.setItem('erp_session_token', data.sessionToken);
+                        if (isRemember) {
+                            localStorage.setItem('erp_session_token', data.sessionToken);
+                        } else {
+                            localStorage.removeItem('erp_session_token');
+                        }
+                    }
                     if (isRemember) {
                         localStorage.setItem('savedUsername', username);
                         localStorage.setItem('rememberMe', 'true');
@@ -44,7 +52,7 @@ const LoginPage = ({ onLogin }) => {
                         localStorage.removeItem('savedUsername');
                         localStorage.removeItem('rememberMe');
                     }
-                    onLogin(data.user, isRemember);
+                    onLogin(data.user, isRemember, data.sessionToken);
                 }
             } else {
                 setError(data.message || 'Invalid username or password');
@@ -92,8 +100,11 @@ const LoginPage = ({ onLogin }) => {
                                 </svg>
                             </span>
                             <input
+                                id="login-username"
+                                name="username"
                                 type="text"
                                 placeholder="Username"
+                                autoComplete="username"
                                 value={username}
                                 onChange={(e) => { setUsername(e.target.value); setError(''); }}
                                 required
@@ -109,8 +120,11 @@ const LoginPage = ({ onLogin }) => {
                                 </svg>
                             </span>
                             <input
+                                id="login-password"
+                                name="password"
                                 type={showPassword ? 'text' : 'password'}
                                 placeholder="Password"
+                                autoComplete="current-password"
                                 value={password}
                                 onChange={(e) => { setPassword(e.target.value); setError(''); }}
                                 required
@@ -137,8 +151,10 @@ const LoginPage = ({ onLogin }) => {
                         </div>
 
                         <div className="lp-options">
-                            <label className="lp-checkbox-label">
+                            <label className="lp-checkbox-label" htmlFor="login-rememberMe">
                                 <input
+                                    id="login-rememberMe"
+                                    name="rememberMe"
                                     type="checkbox"
                                     checked={rememberMe}
                                     onChange={(e) => setRememberMe(e.target.checked)}

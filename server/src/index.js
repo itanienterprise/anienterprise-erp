@@ -42,6 +42,14 @@ try {
 
 dotenv.config();
 
+const {
+  sessionSecurityMiddleware,
+  generateSessionToken,
+  generateSessionFingerprint,
+  getClientIp,
+  getIpSubnet
+} = require('./middleware/sessionSecurity');
+
 const http = require('http');
 const { Server } = require('socket.io');
 
@@ -354,6 +362,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Session Hijacking Protection Middleware
+app.use(sessionSecurityMiddleware);
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db')
@@ -5571,8 +5582,27 @@ apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
       avatarPhoto: user.avatarPhoto || null
     };
 
-    // Store user data in session
+    // Regenerate session ID upon authentication to prevent Session Fixation attacks
+    await new Promise((resolve, reject) => {
+      req.session.regenerate((err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+
+    const clientIp = getClientIp(req);
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const sessionToken = generateSessionToken();
+
+    // Store user data and security bindings in session
     req.session.user = userData;
+    req.session.clientIp = clientIp;
+    req.session.ipSubnet = getIpSubnet(clientIp);
+    req.session.userAgent = userAgent;
+    req.session.sessionToken = sessionToken;
+    req.session.fingerprint = generateSessionFingerprint(req);
+    req.session.createdAt = Date.now();
+    req.session.lastActivity = Date.now();
 
     const isRemember = rememberMe === true || rememberMe === 'true';
     req.session.rememberMe = isRemember;
@@ -5587,7 +5617,8 @@ apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
     res.json({
       success: true,
       user: userData,
-      rememberMe: isRemember
+      rememberMe: isRemember,
+      sessionToken: sessionToken
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -5614,12 +5645,18 @@ apiRouter.get('/api/auth/check', async (req, res) => {
         (userRecord && (userRecord.role || '').toLowerCase() === 'admin') ||
         (req.session.user.role || '').toLowerCase() === 'admin';
 
+      // Ensure anti-hijacking session token exists on active session
+      if (!req.session.sessionToken) {
+        req.session.sessionToken = generateSessionToken();
+      }
+
       if (isAdmin) {
         req.session.user.role = 'Admin';
         return res.json({
           authenticated: true,
           user: req.session.user,
-          rememberMe: !!req.session.rememberMe
+          rememberMe: !!req.session.rememberMe,
+          sessionToken: req.session.sessionToken
         });
       }
 
@@ -5659,7 +5696,8 @@ apiRouter.get('/api/auth/check', async (req, res) => {
       res.json({
         authenticated: true,
         user: req.session.user,
-        rememberMe: !!req.session.rememberMe
+        rememberMe: !!req.session.rememberMe,
+        sessionToken: req.session.sessionToken
       });
     } catch (err) {
       console.error('Session check error:', err);
@@ -5667,7 +5705,8 @@ apiRouter.get('/api/auth/check', async (req, res) => {
       res.json({
         authenticated: true,
         user: req.session.user,
-        rememberMe: !!req.session.rememberMe
+        rememberMe: !!req.session.rememberMe,
+        sessionToken: req.session?.sessionToken
       });
     }
   } else {
@@ -5908,6 +5947,17 @@ apiRouter.post('/api/auth/change-password', async (req, res) => {
 
     user.password = await hashPassword(newPassword);
     await user.save();
+
+    // Destroy all other active sessions for this user across all devices to terminate any hijacked sessions
+    try {
+      const currentSessionId = req.sessionID;
+      await mongoose.connection.db.collection('sessions').deleteMany({
+        _id: { $ne: currentSessionId },
+        session: { $regex: `"username":"${username}"` }
+      });
+    } catch (e) {
+      console.error('Error clearing other sessions on password change:', e);
+    }
 
     res.json({ success: true, message: 'Password changed successfully' });
   } catch (err) {

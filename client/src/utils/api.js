@@ -10,6 +10,14 @@ axios.defaults.withCredentials = true;
  * Request Interceptor: Automatically encrypts the body and adds security headers.
  */
 axios.interceptors.request.use((config) => {
+    // Attach anti-hijacking session token if available
+    const sessionToken = (typeof window !== 'undefined')
+        ? (sessionStorage.getItem('erp_session_token') || localStorage.getItem('erp_session_token'))
+        : null;
+    if (sessionToken && config.headers) {
+        config.headers['X-Session-Token'] = sessionToken;
+    }
+
     // skip non-api requests or health checks
     if (!config.url.includes('/api') || config.url.includes('/health')) {
         return config;
@@ -129,11 +137,16 @@ const secureFetch = async (url, options = {}) => {
         d: originalData
     };
 
+    const sessionToken = (typeof window !== 'undefined')
+        ? (sessionStorage.getItem('erp_session_token') || localStorage.getItem('erp_session_token'))
+        : null;
+
     const headers = {
         ...options.headers,
         'Content-Type': 'application/json',
         'X-Timestamp': timestamp,
         'X-Signature': generateSignature(gatewayPayload, timestamp),
+        ...(sessionToken ? { 'X-Session-Token': sessionToken } : {})
     };
 
     const body = JSON.stringify({ payload: encryptData(gatewayPayload) });
