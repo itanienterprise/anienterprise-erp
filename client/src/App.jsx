@@ -1925,16 +1925,14 @@ function App() {
       setIsLoading(true);
     }
     try {
+      const cacheBuster = `_t=${Date.now()}`;
       const [rawStock] = await Promise.all([
-        queryClient.fetchQuery({
-          queryKey: QUERY_KEYS.stock,
-          queryFn: async () => {
-            const stockRes = await axios.get(`${API_BASE_URL}/api/stock`);
-            return Array.isArray(stockRes.data) ? stockRes.data : [];
-          }
-        }),
+        axios.get(`${API_BASE_URL}/api/stock?${cacheBuster}`)
+          .then(r => Array.isArray(r.data) ? r.data : [])
+          .catch(() => queryClient.getQueryData(QUERY_KEYS.stock) || []),
         fetchStockBaseline()
       ]);
+      queryClient.setQueryData(QUERY_KEYS.stock, rawStock);
       setAllStockRecords(rawStock);
     } catch (error) {
       console.error('Error fetching stock:', error);

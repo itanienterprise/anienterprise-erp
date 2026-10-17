@@ -13,6 +13,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { generateLCReceiveReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import TableScrollNav from '../../shared/TableScrollNav';
+import { getSocket } from '../../../utils/socket';
 import './LCReceive.css';
 
 const formatRequestedBy = (requestedBy, requestedByUsername, employeesMap = {}) => {
@@ -502,12 +503,172 @@ function LCReceive({
     highlightId, isRequestedNotif
 }) {
     
+    const isPurchaseReceiveItem = (item) => {
+        if (!item) return false;
+        if (item.purchaseReceiveId) return true;
+        if (item.requestedBy === 'PurchaseReceive' || item.requestedByUsername === 'PurchaseReceive') return true;
+        if (item.isPurchase) return true;
+        const lc = (item.lcNo || '').trim().toUpperCase();
+        if (lc.startsWith('PUR-') || lc === 'PURCHASE') return true;
+        return false;
+    };
+
     const isAccountManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
     const [cnfs, setCnfs] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+
+    const recentStatusUpdatesRef = useRef(new Map());
+
+    const [localStockRecords, setLocalStockRecords] = useState(() => {
+        const cached = queryClient.getQueryData(['stock']);
+        if (Array.isArray(cached) && cached.length > 0) return cached;
+        if (Array.isArray(stockRecords) && stockRecords.length > 0) return stockRecords;
+        return [];
+    });
+
+    useEffect(() => {
+        if (Array.isArray(stockRecords) && stockRecords.length > 0) {
+            setLocalStockRecords(stockRecords);
+        }
+    }, [stockRecords]);
+
+    const fetchDirectStockRecords = async (silent = false) => {
+        const cached = queryClient.getQueryData(['stock']);
+        if ((!cached || cached.length === 0) && (!localStockRecords || localStockRecords.length === 0) && !silent) {
+            setIsLoading(true);
+        }
+        try {
+            const cacheBuster = `_t=${Date.now()}`;
+            const res = await axios.get(`${API_BASE_URL}/api/stock?${cacheBuster}`);
+            const rawStock = Array.isArray(res?.data) ? res.data : [];
+            queryClient.setQueryData(['stock'], rawStock);
+            if (typeof setAllStockRecords === 'function') {
+                setAllStockRecords(rawStock);
+            }
+            setLocalStockRecords(rawStock);
+        } catch (err) {
+            console.error('Error fetching stock directly in LCReceive:', err);
+        } finally {
+            if (!silent) setIsLoading(false);
+        }
+    };
+
+    const effectiveStockRecords = useMemo(() => {
+        const list = (localStockRecords && localStockRecords.length > 0)
+            ? localStockRecords
+            : (stockRecords || []);
+        const now = Date.now();
+
+        return list.map(item => {
+            const itemId = String(item._id || item.id || '').trim();
+            const recent = itemId ? recentStatusUpdatesRef.current.get(itemId) : null;
+            if (recent && (now - recent.time < 30000)) {
+                return {
+                    ...item,
+                    status: recent.status !== undefined ? recent.status : item.status,
+                    isEdited: recent.isEdited !== undefined ? recent.isEdited : item.isEdited,
+                    ...(recent.acceptedBy ? { acceptedBy: recent.acceptedBy, approvedBy: recent.approvedBy, approvedByUsername: recent.approvedByUsername } : {}),
+                    ...(recent.rejectedBy ? { rejectedBy: recent.rejectedBy } : {})
+                };
+            }
+            return item;
+        });
+    }, [localStockRecords, stockRecords]);
+
+    const effectiveLcReceiveRecords = useMemo(() => {
+        if (!effectiveStockRecords || effectiveStockRecords.length === 0) {
+            return lcReceiveRecords || [];
+        }
+
+        const searchLower = (lcSearchQuery || '').toLowerCase().trim();
+
+        const resolveProductName = (name) => {
+            if (!name) return '';
+            if (!products || !Array.isArray(products)) return name;
+
+            const normalize = (str) => {
+                if (!str) return '';
+                let s = str.trim().toLowerCase();
+                if (s.endsWith('s')) {
+                    s = s.slice(0, -1);
+                }
+                return s;
+            };
+
+            const target = normalize(name);
+            if (!target) return name;
+
+            const lowerName = name.trim().toLowerCase();
+            let found = products.find(p =>
+                (p.name || '').trim().toLowerCase() === lowerName ||
+                (p.ipName || '').trim().toLowerCase() === lowerName
+            );
+            if (found) return found.name;
+
+            found = products.find(p =>
+                normalize(p.name) === target ||
+                normalize(p.ipName) === target
+            );
+            return found ? found.name : name;
+        };
+
+        const lcStock = effectiveStockRecords.filter(item => !isPurchaseReceiveItem(item));
+
+        const filtered = lcStock.filter(item => {
+            if (lcFilters?.startDate && item.date < lcFilters.startDate) return false;
+            if (lcFilters?.endDate && item.date > lcFilters.endDate) return false;
+            if (lcFilters?.warehouse && (item.warehouse || '').trim().toLowerCase() !== lcFilters.warehouse.toLowerCase()) return false;
+            if (lcFilters?.indCnf && (item.indianCnF || '').trim().toLowerCase() !== lcFilters.indCnf.toLowerCase()) return false;
+            if (lcFilters?.bdCnf && (item.bdCnF || '').trim().toLowerCase() !== lcFilters.bdCnf.toLowerCase()) return false;
+            if (lcFilters?.billOfEntry && (item.billOfEntry || '').trim().toLowerCase() !== lcFilters.billOfEntry.toLowerCase()) return false;
+            if (lcFilters?.productName && (item.productName || '').trim().toLowerCase() !== lcFilters.productName.toLowerCase()) return false;
+            if (lcFilters?.brand) {
+                const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
+                if (!brandList.some(b => (b || '').trim().toLowerCase() === lcFilters.brand.toLowerCase())) return false;
+            }
+
+            if (!searchLower) return true;
+
+            const matchesLcNo = (item.lcNo || '').toLowerCase().includes(searchLower);
+            const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
+            const matchesWarehouse = (item.warehouse || '').toLowerCase().includes(searchLower);
+            const matchesImporter = (item.importer || '').toLowerCase().includes(searchLower);
+            const matchesExporter = (item.exporter || '').toLowerCase().includes(searchLower);
+            const matchesBillOfEntry = (item.billOfEntry || '').toLowerCase().includes(searchLower);
+            const matchesTruck = (item.truckNo || '').toLowerCase().includes(searchLower);
+            const matchesProduct = (item.productName || '').toLowerCase().includes(searchLower);
+            const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
+            const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
+
+            const matchesEntryBy = (item.entryByName || '').toLowerCase().includes(searchLower) ||
+                (item.entryBy || '').toLowerCase().includes(searchLower) ||
+                (item.requestedBy || '').toLowerCase().includes(searchLower) ||
+                (item.requestedByUsername || '').toLowerCase().includes(searchLower);
+
+            return matchesLcNo || matchesPort || matchesWarehouse || matchesImporter || matchesExporter || matchesBillOfEntry || matchesTruck || matchesProduct || matchesBrand || matchesEntryBy;
+        }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        return filtered.map(item => {
+            if (item.entries && Array.isArray(item.entries)) {
+                return {
+                    ...item,
+                    productName: resolveProductName(item.productName),
+                    entries: item.entries.map(e => ({
+                        ...e,
+                        productName: resolveProductName(e.productName)
+                    }))
+                };
+            }
+            return {
+                ...item,
+                productName: resolveProductName(item.productName)
+            };
+        });
+    }, [effectiveStockRecords, lcReceiveRecords, lcSearchQuery, lcFilters, products]);
 
     const [localHighlightId, setLocalHighlightId] = useState(null);
     const activeHighlightId = highlightId || localHighlightId;
@@ -560,7 +721,7 @@ function LCReceive({
         const targetDigits = target.replace(/\D/g, '');
 
         // Find the matching grouped record — check top-level lcNo AND entry-level lcNo
-        const targetItem = lcReceiveRecords.find(item => {
+        const targetItem = (effectiveLcReceiveRecords || lcReceiveRecords).find(item => {
             const lcStr = String(item.lcNo || '').toLowerCase().trim();
             const lcDigits = lcStr.replace(/\D/g, '');
             const idStr = String(item._id || '').toLowerCase().trim();
@@ -625,7 +786,7 @@ function LCReceive({
         );
 
         return () => timeouts.forEach(clearTimeout);
-    }, [activeHighlightId, lcReceiveRecords, isRequestedNotif]);
+    }, [activeHighlightId, effectiveLcReceiveRecords, isRequestedNotif]);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [lcRecords, setLcRecords] = useState([]);
@@ -707,10 +868,6 @@ function LCReceive({
         }
     };
     const [viewData, setViewData] = useState(null);
-    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
-    // Note: isRequestedOnly is now set correctly by the highlightId useEffect based on actual record status.
-    // The old blind setter (if (isRequestedNotif) setIsRequestedOnly(true)) was removed because it caused
-    // approved LC entries to be hidden when navigating from a "New LC Received" notification.
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     const [employeesMap, setEmployeesMap] = useState({});
 
@@ -1023,9 +1180,45 @@ function LCReceive({
         setExpandedCard(prev => prev === key ? null : key);
     };
 
-    // Fetch warehouses
+    // Fetch warehouses and direct stock with real-time sync
     useEffect(() => {
         fetchWarehouses();
+        fetchDirectStockRecords(true);
+
+        const socket = getSocket();
+        let debounceTimer = null;
+        const debouncedFetch = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchDirectStockRecords(true);
+            }, 80);
+        };
+
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['stock', 'lcreceive', 'lc-receive', 'warehouses', 'warehouse', 'all'].includes(mod)) {
+                debouncedFetch();
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchDirectStockRecords(true);
+        }, 30000);
+
+        return () => {
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            if (debounceTimer) clearTimeout(debounceTimer);
+            clearInterval(pollTimer);
+        };
     }, []);
 
     // Close all dropdowns on outside click
@@ -1954,7 +2147,9 @@ function LCReceive({
             queryClient.invalidateQueries({ queryKey: ['stock'] });
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             if (fetchStockRecords) fetchStockRecords();
+            fetchDirectStockRecords(true);
             fetchWarehouses();
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'stock', action: isEditing ? 'update' : 'create' } }));
             if (savedLcNo || savedId) {
                 setLocalHighlightId(savedLcNo || savedId);
                 setTimeout(() => setLocalHighlightId(null), 6000);
@@ -1989,7 +2184,7 @@ function LCReceive({
                         const employeeName = currentUser?.name || currentUser?.username || 'An employee';
 
                         // Identify what changed
-                        const originalRecord = lcReceiveRecords.find(r => r._id === savedId || (r.allIds && r.allIds.includes(savedId)));
+                        const originalRecord = (effectiveLcReceiveRecords || lcReceiveRecords).find(r => r._id === savedId || (r.allIds && r.allIds.includes(savedId)));
                         const changes = [];
                         if (originalRecord) {
                             if (originalRecord.date !== currentStockFormData.date) changes.push('Date');
@@ -2217,7 +2412,26 @@ function LCReceive({
             const idSet = new Set(ids);
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
 
+            // Record status update in anti-rollback ref
+            ids.forEach(id => {
+                recentStatusUpdatesRef.current.set(String(id).trim(), {
+                    status: newStatus,
+                    acceptedBy: newStatus === 'In Stock' ? actionBy : undefined,
+                    approvedBy: newStatus === 'In Stock' ? actionBy : undefined,
+                    approvedByUsername: newStatus === 'In Stock' ? (currentUser?.username || '') : undefined,
+                    rejectedBy: newStatus === 'Rejected' ? actionBy : undefined,
+                    time: Date.now()
+                });
+            });
+
             // Instant optimistic update (0ms UI response)
+            setLocalStockRecords(prev => (prev || []).map(r => idSet.has(r._id) ? {
+                ...r,
+                status: newStatus,
+                ...(newStatus === 'In Stock' ? { acceptedBy: actionBy, approvedBy: actionBy, approvedByUsername: currentUser?.username || '' } : {}),
+                ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {})
+            } : r));
+
             if (typeof setAllStockRecords === 'function') {
                 setAllStockRecords(prev => (prev || []).map(r => idSet.has(r._id) ? {
                     ...r,
@@ -2237,7 +2451,7 @@ function LCReceive({
             if (refreshPendingIndicators) refreshPendingIndicators();
 
             const promises = ids.map(id => {
-                const originalRecord = stockRecords.find(r => r._id === id);
+                const originalRecord = (effectiveStockRecords || stockRecords).find(r => r._id === id);
                 if (!originalRecord) return null;
 
                 const { _id, createdAt, __v, ...rest } = originalRecord;
@@ -2251,6 +2465,8 @@ function LCReceive({
             }).filter(Boolean);
 
             await Promise.all(promises);
+            fetchDirectStockRecords(true);
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'stock', action: 'status_update' } }));
 
             (async () => {
                 try {
@@ -2332,7 +2548,26 @@ function LCReceive({
             const allTargetIds = new Set();
             recordsToAccept.forEach(r => (r.allIds || r.ids || (r._id ? [r._id] : [])).forEach(id => allTargetIds.add(id)));
 
+            // Record status update in anti-rollback ref
+            allTargetIds.forEach(id => {
+                recentStatusUpdatesRef.current.set(String(id).trim(), {
+                    status: 'In Stock',
+                    acceptedBy: actionBy,
+                    approvedBy: actionBy,
+                    approvedByUsername: actionUsername,
+                    time: Date.now()
+                });
+            });
+
             // Instant optimistic update
+            setLocalStockRecords(prev => (prev || []).map(r => allTargetIds.has(r._id) ? {
+                ...r,
+                status: 'In Stock',
+                acceptedBy: actionBy,
+                approvedBy: actionBy,
+                approvedByUsername: actionUsername
+            } : r));
+
             if (typeof setAllStockRecords === 'function') {
                 setAllStockRecords(prev => (prev || []).map(r => allTargetIds.has(r._id) ? {
                     ...r,
@@ -2358,7 +2593,7 @@ function LCReceive({
             for (const record of recordsToAccept) {
                 const ids = record.allIds || record.ids || [];
                 for (const id of ids) {
-                    const originalRecord = stockRecords.find(r => r._id === id);
+                    const originalRecord = (effectiveStockRecords || stockRecords).find(r => r._id === id);
                     if (!originalRecord) continue;
 
                     const { _id, createdAt, __v, ...rest } = originalRecord;
@@ -2409,7 +2644,9 @@ function LCReceive({
             queryClient.invalidateQueries({ queryKey: ['stock'] });
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             if (fetchStockRecords) fetchStockRecords();
+            fetchDirectStockRecords(true);
             fetchWarehouses();
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'stock', action: 'bulk_accept' } }));
             if (refreshPendingIndicators) refreshPendingIndicators();
         } catch (error) {
             console.error('Error performing bulk accept:', error);
@@ -2429,7 +2666,7 @@ function LCReceive({
         if (!selectedItems || selectedItems.size === 0) return;
 
         // Search across all records (including requested ones) for selected items in 'Requested' status
-        const requestedSelectedRecords = lcReceiveRecords.filter(item => {
+        const requestedSelectedRecords = (effectiveLcReceiveRecords || lcReceiveRecords).filter(item => {
             const groupedKey = getLCReceiveGroupKey(item);
             const isSelected = selectedItems.has(groupedKey) || selectedItems.has(item._id);
             const isReq = (item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected';
@@ -2495,7 +2732,22 @@ function LCReceive({
             const allTargetIds = new Set();
             recordsToReject.forEach(r => (r.allIds || r.ids || (r._id ? [r._id] : [])).forEach(id => allTargetIds.add(id)));
 
+            // Record status update in anti-rollback ref
+            allTargetIds.forEach(id => {
+                recentStatusUpdatesRef.current.set(String(id).trim(), {
+                    status: 'Rejected',
+                    rejectedBy: actionBy,
+                    time: Date.now()
+                });
+            });
+
             // Instant optimistic update
+            setLocalStockRecords(prev => (prev || []).map(r => allTargetIds.has(r._id) ? {
+                ...r,
+                status: 'Rejected',
+                rejectedBy: actionBy
+            } : r));
+
             if (typeof setAllStockRecords === 'function') {
                 setAllStockRecords(prev => (prev || []).map(r => allTargetIds.has(r._id) ? {
                     ...r,
@@ -2517,7 +2769,7 @@ function LCReceive({
             for (const record of recordsToReject) {
                 const ids = record.allIds || record.ids || [];
                 for (const id of ids) {
-                    const originalRecord = stockRecords.find(r => r._id === id);
+                    const originalRecord = (effectiveStockRecords || stockRecords).find(r => r._id === id);
                     if (!originalRecord) continue;
 
                     const { _id, createdAt, __v, ...rest } = originalRecord;
@@ -2566,7 +2818,9 @@ function LCReceive({
             queryClient.invalidateQueries({ queryKey: ['stock'] });
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             if (fetchStockRecords) fetchStockRecords();
+            fetchDirectStockRecords(true);
             fetchWarehouses();
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'stock', action: 'bulk_reject' } }));
             if (refreshPendingIndicators) refreshPendingIndicators();
         } catch (error) {
             console.error('Error performing bulk reject:', error);
@@ -2585,7 +2839,7 @@ function LCReceive({
     const handleBulkReject = () => {
         if (!selectedItems || selectedItems.size === 0) return;
 
-        const requestedSelectedRecords = lcReceiveRecords.filter(item => {
+        const requestedSelectedRecords = (effectiveLcReceiveRecords || lcReceiveRecords).filter(item => {
             const groupedKey = getLCReceiveGroupKey(item);
             const isSelected = selectedItems.has(groupedKey) || selectedItems.has(item._id);
             const isReq = (item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected';
@@ -2838,20 +3092,9 @@ function LCReceive({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
 
-    // Helper to identify purchase receive records
-    const isPurchaseReceiveItem = (item) => {
-        if (!item) return false;
-        if (item.purchaseReceiveId) return true;
-        if (item.requestedBy === 'PurchaseReceive' || item.requestedByUsername === 'PurchaseReceive') return true;
-        if (item.isPurchase) return true;
-        const lc = (item.lcNo || '').trim().toUpperCase();
-        if (lc.startsWith('PUR-') || lc === 'PURCHASE') return true;
-        return false;
-    };
-
     const cleanStockRecords = useMemo(() => {
-        return (stockRecords || []).filter(r => !isPurchaseReceiveItem(r));
-    }, [stockRecords]);
+        return (effectiveStockRecords || []).filter(r => !isPurchaseReceiveItem(r));
+    }, [effectiveStockRecords]);
 
     // Handlers for dropdown filtering
     const getFilteredOptions = (type) => {
@@ -2889,14 +3132,12 @@ function LCReceive({
 
     const filteredRecords = useMemo(() => {
         let records = [];
-        const baseList = (lcReceiveRecords || []).filter(item => !isPurchaseReceiveItem(item));
+        const baseList = (effectiveLcReceiveRecords || []).filter(item => !isPurchaseReceiveItem(item));
         if (isRequestedOnly) {
             records = baseList.filter(item => (item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected');
         } else {
             records = baseList.filter(item => !(item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected');
         }
-
-        // The search query and advanced filters are already applied to lcReceiveRecords by App.jsx
 
         // Apply interactive sorting
         return [...records].sort((a, b) => {
@@ -2923,12 +3164,12 @@ function LCReceive({
             if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [lcReceiveRecords, isRequestedOnly, sortConfig]);
+    }, [effectiveLcReceiveRecords, isRequestedOnly, sortConfig]);
 
     const requestedCount = useMemo(() => {
-        const requested = (lcReceiveRecords || []).filter(item => !isPurchaseReceiveItem(item) && (item.status || '').toLowerCase().includes('requested'));
+        const requested = (effectiveLcReceiveRecords || []).filter(item => !isPurchaseReceiveItem(item) && (item.status || '').toLowerCase().includes('requested'));
         return new Set(requested.map(item => `${item.date || ''}-${item.warehouse || ''}-${item.indianCnF || ''}-${item.bdCnF || ''}`)).size;
-    }, [lcReceiveRecords]);
+    }, [effectiveLcReceiveRecords]);
 
     const memoizedSummary = useMemo(() => {
         const totalPackets = filteredRecords.reduce((sum, item) => sum + (parseFloat(item.packet) || 0), 0);
@@ -5272,7 +5513,7 @@ function LCReceive({
                     setShowLcReport(true);
                 }}
                 onExportExcel={() => {
-                    generateLCReceiveReportExcel(lcReceiveRecords, lcFilters, lcReceiveSummary);
+                    generateLCReceiveReportExcel(effectiveLcReceiveRecords || lcReceiveRecords, lcFilters, memoizedSummary || lcReceiveSummary);
                 }}
             />
         </div>
