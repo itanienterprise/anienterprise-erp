@@ -2995,6 +2995,74 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
       }));
     }
 
+    // Guard against concurrent client-side race conditions reverting Accepted payments to Requested
+    if (req.body.paymentHistory && Array.isArray(req.body.paymentHistory) && oldData.paymentHistory && Array.isArray(oldData.paymentHistory)) {
+      const oldAcceptedMap = new Map();
+      oldData.paymentHistory.forEach(oldP => {
+        const pStatus = (oldP.status || '').toLowerCase();
+        if (pStatus === 'accepted' || pStatus === 'completed' || oldP.smApproved === true) {
+          const id = String(oldP.id || '').trim();
+          const rcpt = String(oldP.receiptNo || '').trim().toUpperCase();
+          if (id) oldAcceptedMap.set(id, oldP);
+          if (rcpt) oldAcceptedMap.set(rcpt, oldP);
+        }
+      });
+
+      req.body.paymentHistory = req.body.paymentHistory.map(p => {
+        const pStatus = (p.status || '').toLowerCase();
+        const id = String(p.id || '').trim();
+        const rcpt = String(p.receiptNo || '').trim().toUpperCase();
+        const oldAccepted = (id && oldAcceptedMap.get(id)) || (rcpt && oldAcceptedMap.get(rcpt));
+        if (oldAccepted && pStatus === 'requested') {
+          return {
+            ...p,
+            status: oldAccepted.status || 'Accepted',
+            smApproved: oldAccepted.smApproved !== undefined ? oldAccepted.smApproved : true,
+            smApprovedBy: oldAccepted.smApprovedBy || p.smApprovedBy,
+            smApprovedByName: oldAccepted.smApprovedByName || p.smApprovedByName,
+            approvedBy: oldAccepted.approvedBy || p.approvedBy,
+            approvedByName: oldAccepted.approvedByName || p.approvedByName,
+            isEdited: false
+          };
+        }
+        return p;
+      });
+    }
+
+    // Guard against concurrent client-side race conditions reverting Accepted payouts to Requested
+    if (req.body.payToCustomerHistory && Array.isArray(req.body.payToCustomerHistory) && oldData.payToCustomerHistory && Array.isArray(oldData.payToCustomerHistory)) {
+      const oldAcceptedMap = new Map();
+      oldData.payToCustomerHistory.forEach(oldP => {
+        const pStatus = (oldP.status || '').toLowerCase();
+        if (pStatus === 'accepted' || pStatus === 'completed' || oldP.smApproved === true) {
+          const id = String(oldP.id || '').trim();
+          const rcpt = String(oldP.receiptNo || '').trim().toUpperCase();
+          if (id) oldAcceptedMap.set(id, oldP);
+          if (rcpt) oldAcceptedMap.set(rcpt, oldP);
+        }
+      });
+
+      req.body.payToCustomerHistory = req.body.payToCustomerHistory.map(p => {
+        const pStatus = (p.status || '').toLowerCase();
+        const id = String(p.id || '').trim();
+        const rcpt = String(p.receiptNo || '').trim().toUpperCase();
+        const oldAccepted = (id && oldAcceptedMap.get(id)) || (rcpt && oldAcceptedMap.get(rcpt));
+        if (oldAccepted && pStatus === 'requested') {
+          return {
+            ...p,
+            status: oldAccepted.status || 'Accepted',
+            smApproved: oldAccepted.smApproved !== undefined ? oldAccepted.smApproved : true,
+            smApprovedBy: oldAccepted.smApprovedBy || p.smApprovedBy,
+            smApprovedByName: oldAccepted.smApprovedByName || p.smApprovedByName,
+            approvedBy: oldAccepted.approvedBy || p.approvedBy,
+            approvedByName: oldAccepted.approvedByName || p.approvedByName,
+            isEdited: false
+          };
+        }
+        return p;
+      });
+    }
+
     const encryptedData = encryptData(req.body);
     const updatedRecord = await Customer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Customer not found' });

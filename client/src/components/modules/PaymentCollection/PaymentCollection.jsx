@@ -20,6 +20,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    const recentStatusUpdatesRef = useRef(new Map());
+    const customerUpdateQueueRef = useRef(new Map());
     const [currentUser] = useState(() => {
         if (propCurrentUser) return propCurrentUser;
         try {
@@ -43,6 +45,13 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
     const canApproveSecond = hasPermission(currentUser, 'paymentCollection', 'secondApprove');
     const canViewPaymentRequest = hasPermission(currentUser, 'paymentCollection', 'paymentRequest') || hasPermission(currentUser, 'paymentCollection', 'paymentApprovalRequest') || canApprove || canApproveFirst || canApproveSecond;
     const canShowEntryBy = isAdmin || (currentUser?.role || '').toLowerCase() === 'incharge' || hasPermission(currentUser, 'paymentCollection', 'showEntryBy');
+    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+    const isHeadOfSales = (currentUser?.role || '').toLowerCase() === 'head of sales';
+    const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
+    const userModulePerms = currentUser?.permissions?.paymentCollection;
+    const hasSecondApprovePerm = (userModulePerms && userModulePerms.secondApprove === true) || canApproveSecond;
+    const hasFirstApprovePerm = (userModulePerms && userModulePerms.firstApprove === true) || canApproveFirst || isSalesManager;
+    const hasFullApprovePerm = isAdmin || isIncharge || isHeadOfSales || canApprove || hasSecondApprovePerm;
 
     const showRequestedApprovalButtons = (group) => {
         if (!group) return false;
@@ -62,15 +71,13 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
         const isSelfEntry = myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName);
         if (isSelfEntry) return false;
-        
+
         const entryRole = (group.items?.[0]?.entryByRole || item.entryByRole || group.entryByRole || '').toLowerCase();
         const smApproved = group.items?.[0]?.smApproved === true || item.smApproved === true || group.smApproved === true;
         const currentUserRole = (currentUser?.role || '').toLowerCase();
 
         const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
         const isCreatorSalesManager = entryRole === 'sales manager';
-
-        const userModulePerms = currentUser?.permissions?.paymentCollection;
 
         if (smApproved) {
             // Check if current user is the one who did 1st approval
@@ -82,32 +89,27 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             if (isFirstApprover) return false;
         }
 
+        // Users with full/final approve authority can always approve pending requests
+        if (hasFullApprovePerm) {
+            return true;
+        }
+
         // CASE A: Entry created by Sales Manager (Status: Pending Approval)
         // Requires 2nd/Final approval (Head of Sales / Incharge / Admin / secondApprove)
         if (isCreatorSalesManager && !smApproved) {
-            if (userModulePerms && typeof userModulePerms.secondApprove === 'boolean') {
-                return userModulePerms.secondApprove === true;
-            }
             if (currentUserRole === 'sales manager') return false;
-            return currentUserRole === 'head of sales' || currentUserRole === 'incharge' || canApproveSecond;
+            return currentUserRole === 'head of sales' || currentUserRole === 'incharge' || hasSecondApprovePerm || canApprove;
         }
 
         // CASE B: 1st Approval Step for Data Entry / Account Manager entries (Status: Pending 1st Approval)
         if (!smApproved) {
-            if (userModulePerms && typeof userModulePerms.firstApprove === 'boolean') {
-                return userModulePerms.firstApprove === true;
-            }
-            if (currentUserRole === 'sales manager') return true;
-            return canApproveFirst;
+            return hasFirstApprovePerm;
         }
 
         // CASE C: 2nd Approval Step for Data Entry / Account Manager entries (Status: Pending 2nd Approval)
         if (smApproved) {
-            if (userModulePerms && typeof userModulePerms.secondApprove === 'boolean') {
-                return userModulePerms.secondApprove === true;
-            }
             if (currentUserRole === 'sales manager') return false;
-            return currentUserRole === 'incharge' || currentUserRole === 'head of sales' || currentUserRole === 'accounts manager' || currentUserRole === 'account manager' || canApproveSecond;
+            return currentUserRole === 'incharge' || currentUserRole === 'head of sales' || currentUserRole === 'accounts manager' || currentUserRole === 'account manager' || hasSecondApprovePerm || canApprove;
         }
 
         return false;
@@ -148,13 +150,12 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
         return (myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName));
     };
-
     const getStatusBadgeText = (group) => {
         if (group.status === 'Requested') {
             const entryRole = (group.items?.[0]?.entryByRole || '').toLowerCase();
             const smApproved = group.items?.[0]?.smApproved === true;
             const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-            
+
             if (isCreatorAccountsOrDataEntry) {
                 return smApproved ? 'Pending 2nd Approval' : 'Pending 1st Approval';
             }
@@ -168,8 +169,12 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
     // Requested & Edit Request Toggle Filters
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
-    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
+    const isRequestedOnlyRef = useRef(false);
+    useEffect(() => { isRequestedOnlyRef.current = isRequestedOnly; }, [isRequestedOnly]);
+    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); isRequestedOnlyRef.current = true; } }, [isRequestedNotif]);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
+    const isEditRequestedOnlyRef = useRef(false);
+    useEffect(() => { isEditRequestedOnlyRef.current = isEditRequestedOnly; }, [isEditRequestedOnly]);
 
     // Selection & Bulk Actions
     const [selectedItems, setSelectedItems] = useState(new Set());
@@ -249,7 +254,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 return next;
             });
             if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                try { navigator.vibrate(50); } catch (e) {}
+                try { navigator.vibrate(50); } catch (e) { }
             }
         }, 500);
     };
@@ -360,10 +365,25 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         fetchEmployees();
 
         const socket = getSocket();
+        let debounceTimer = null;
+        const debouncedFetch = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchPayments(true);
+            }, 80);
+        };
+
         const handleRealtimeUpdate = (data) => {
             const mod = (data?.module || '').toLowerCase().trim();
             if (!mod || ['customers', 'customer', 'payment-collection', 'paymentcollection', 'payments', 'pay-to-customer', 'paytocustomer', 'sales', 'banks', 'all'].includes(mod)) {
-                fetchPayments(true);
+                if (data?.action === 'update' && data?.payload?.customer) {
+                    const updatedCust = data.payload.customer;
+                    setRawCustomers(prev => (prev || []).map(c => c._id === updatedCust._id ? updatedCust : c));
+                    queryClient.setQueryData(['customers'], (old = []) =>
+                        Array.isArray(old) ? old.map(c => c._id === updatedCust._id ? updatedCust : c) : [updatedCust]
+                    );
+                }
+                debouncedFetch();
             }
         };
 
@@ -382,6 +402,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 socket.off('data_updated', handleRealtimeUpdate);
             }
             window.removeEventListener('erp_data_updated', onCustomEvent);
+            if (debounceTimer) clearTimeout(debounceTimer);
             clearInterval(pollTimer);
         };
     }, []);
@@ -398,7 +419,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 let d = emp;
                 if (emp && emp.data) {
                     if (typeof emp.data === 'string') {
-                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) { }
                     } else if (typeof emp.data === 'object') {
                         d = { ...emp.data, _id: emp._id };
                     }
@@ -692,44 +713,66 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         }
         try {
             const cacheBuster = `_t=${Date.now()}`;
-            const [customersData, purchasesData, stockData, purchaseReceivesData, salesData] = await Promise.all([
-                queryClient.fetchQuery({
-                    queryKey: ['customers'],
-                    queryFn: () => api.get(`/api/customers?${cacheBuster}`).catch(() => [])
+            const [customersRes, purchasesData, stockData, purchaseReceivesData, salesData] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/customers?${cacheBuster}`).catch(err => {
+                    console.error('Error fetching customers directly in PaymentCollection:', err);
+                    return { data: queryClient.getQueryData(['customers']) || [] };
                 }),
-                queryClient.fetchQuery({
-                    queryKey: ['purchases'],
-                    queryFn: () => api.get(`/api/purchases?${cacheBuster}`).catch(() => [])
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['stock'],
-                    queryFn: () => api.get(`/api/stock?${cacheBuster}`).catch(() => [])
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['purchase-receives'],
-                    queryFn: () => api.get(`/api/purchase-receives?${cacheBuster}`).catch(() => [])
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['sales'],
-                    queryFn: () => api.get(`/api/sales?${cacheBuster}`).catch(() => [])
-                })
+                queryClient.getQueryData(['purchases']) ? Promise.resolve(queryClient.getQueryData(['purchases'])) :
+                    queryClient.fetchQuery({
+                        queryKey: ['purchases'],
+                        queryFn: () => api.get('/api/purchases').catch(() => [])
+                    }),
+                queryClient.getQueryData(['stock']) ? Promise.resolve(queryClient.getQueryData(['stock'])) :
+                    queryClient.fetchQuery({
+                        queryKey: ['stock'],
+                        queryFn: () => api.get('/api/stock').catch(() => [])
+                    }),
+                queryClient.getQueryData(['purchase-receives']) ? Promise.resolve(queryClient.getQueryData(['purchase-receives'])) :
+                    queryClient.fetchQuery({
+                        queryKey: ['purchase-receives'],
+                        queryFn: () => api.get('/api/purchase-receives').catch(() => [])
+                    }),
+                queryClient.getQueryData(['sales']) ? Promise.resolve(queryClient.getQueryData(['sales'])) :
+                    queryClient.fetchQuery({
+                        queryKey: ['sales'],
+                        queryFn: () => api.get('/api/sales').catch(() => [])
+                    })
             ]);
 
-            const rawData = Array.isArray(customersData) ? customersData : [];
+            const rawData = Array.isArray(customersRes?.data) ? customersRes.data : [];
+            queryClient.setQueryData(['customers'], rawData);
             const purData = Array.isArray(purchasesData) ? purchasesData : [];
             const stkData = Array.isArray(stockData) ? stockData : [];
             const prData = Array.isArray(purchaseReceivesData) ? purchaseReceivesData : [];
             const slsData = Array.isArray(salesData) ? salesData : [];
             const allPayments = [];
             const customersList = [];
+            const now = Date.now();
 
             rawData.forEach(customer => {
                 customersList.push(customer);
 
                 const customerHistory = customer.paymentHistory || [];
                 customerHistory.forEach(payment => {
+                    const pId = String(payment.id || '').trim();
+                    const pReceipt = String(payment.receiptNo || '').trim().toUpperCase();
+                    const recent = (pId && recentStatusUpdatesRef.current.get(pId)) || (pReceipt && recentStatusUpdatesRef.current.get(pReceipt));
+
+                    let pStatus = payment.status;
+                    let pIsEdited = payment.isEdited;
+                    let pSmApproved = payment.smApproved;
+                    if (recent && (now - recent.time < 30000)) {
+                        pStatus = recent.status;
+                        pIsEdited = recent.isEdited;
+                        if (recent.smApproved !== undefined) pSmApproved = recent.smApproved;
+                    }
+
                     allPayments.push({
                         ...payment,
+                        status: pStatus,
+                        isEdited: pIsEdited,
+                        smApproved: pSmApproved,
                         customerId: customer._id,
                         customerName: customer.customerName,
                         companyName: customer.companyName,
@@ -898,7 +941,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     const sInv = (sale.invoiceNo || '').trim().toUpperCase();
                     const sOrd = (sale.orderNo || '').trim().toUpperCase();
                     return (itemInv && (sInv === itemInv || sOrd === itemInv)) ||
-                           (itemOrd && (sInv === itemOrd || sOrd === itemOrd));
+                        (itemOrd && (sInv === itemOrd || sOrd === itemOrd));
                 });
 
                 if (matchingSale) {
@@ -1141,18 +1184,30 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         try {
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${paymentToDelete.customerId}`);
             const customer = custRes.data;
-            const updatedHistory = (customer.paymentHistory || []).filter(p => p.id !== paymentToDelete.id);
+            const updatedHistory = (customer.paymentHistory || []).filter(p => p.id !== paymentToDelete.id && p.receiptNo !== paymentToDelete.receiptNo);
             const updatedCustomer = { ...customer, paymentHistory: updatedHistory };
-            await axios.put(`${API_BASE_URL}/api/customers/${paymentToDelete.customerId}`, updatedCustomer);
 
-            setSubmitStatus('success');
-            queryClient.invalidateQueries({ queryKey: ['customers'] });
-            queryClient.invalidateQueries({ queryKey: ['sales'] });
-            queryClient.invalidateQueries({ queryKey: ['banks'] });
+            setPayments(prev => (prev || []).filter(p => p.id !== paymentToDelete.id && p.receiptNo !== paymentToDelete.receiptNo));
+            setRawCustomers(prev => (prev || []).map(c => c._id === paymentToDelete.customerId ? updatedCustomer : c));
+            queryClient.setQueryData(['customers'], (old = []) =>
+                Array.isArray(old) ? old.map(c => c._id === paymentToDelete.customerId ? updatedCustomer : c) : [updatedCustomer]
+            );
+
             setShowDeleteConfirm(false);
             setPaymentToDelete(null);
             setSubmitStatus(null);
+            refreshPendingIndicators?.();
+
+            await axios.put(`${API_BASE_URL}/api/customers/${paymentToDelete.customerId}`, updatedCustomer);
+
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['banks'] });
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'customers', action: 'update', payload: { id: paymentToDelete.customerId, customer: updatedCustomer } }
+            }));
             fetchPayments(true);
+            refreshPendingIndicators?.();
 
             // Notification
             try {
@@ -1207,18 +1262,41 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             return;
         }
 
-        const groupItemIds = new Set((paymentGroup.items || []).map(i => i.id).filter(Boolean));
-        const groupReceiptNo = paymentGroup.receiptNo;
+        const groupItemIds = new Set((paymentGroup.items || []).map(i => String(i.id || '').trim()).filter(Boolean));
+        if (item.id) groupItemIds.add(String(item.id).trim());
+        const groupReceiptNo = (paymentGroup.receiptNo || item.receiptNo || '').toString().trim().toUpperCase();
 
         const isItemMatch = (p) => {
-            if (p.id && groupItemIds.has(p.id)) return true;
-            if (groupReceiptNo && p.receiptNo && p.receiptNo === groupReceiptNo) return true;
+            if (!p) return false;
+            const pId = String(p.id || '').trim();
+            if (pId && groupItemIds.has(pId)) return true;
+            const pReceipt = (p.receiptNo || '').toString().trim().toUpperCase();
+            if (groupReceiptNo && pReceipt && pReceipt === groupReceiptNo) return true;
             return false;
         };
 
-        const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
+        const entryRole = (paymentGroup.items?.[0]?.entryByRole || item.entryByRole || '').toLowerCase();
         const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-        const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+        const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !hasFullApprovePerm;
+
+        const statusToSet = isSMApprovalStep ? item.status : (newStatus === 'Rejected' ? 'Rejected' : 'Accepted');
+        const nowMs = Date.now();
+        groupItemIds.forEach(id => {
+            recentStatusUpdatesRef.current.set(String(id), {
+                status: statusToSet,
+                smApproved: isSMApprovalStep ? true : true,
+                isEdited: false,
+                time: nowMs
+            });
+        });
+        if (groupReceiptNo) {
+            recentStatusUpdatesRef.current.set(groupReceiptNo, {
+                status: statusToSet,
+                smApproved: isSMApprovalStep ? true : true,
+                isEdited: false,
+                time: nowMs
+            });
+        }
 
         // Instant optimistic update (0ms UI response)
         setPayments(prev => {
@@ -1233,9 +1311,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         return {
                             ...p,
                             status: isSMApprovalStep ? p.status : 'Accepted',
-                            smApproved: isSMApprovalStep ? true : p.smApproved,
+                            smApproved: true,
                             isEdited: false,
-                            approvedBy: currentUser?.username || 'admin',
+                            approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
                             approvedByName: currentUser?.name || currentUser?.username || 'Admin'
                         };
                     }
@@ -1243,16 +1321,85 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 });
             }
         });
+
+        // Instant optimistic update of rawCustomers and queryClient
+        const targetCustomerId = paymentGroup.customerId || item.customerId;
+        const cachedCustomers = queryClient.getQueryData(['customers']) || rawCustomers || [];
+        const existingCustomer = cachedCustomers.find(c => c._id === targetCustomerId);
+        if (existingCustomer) {
+            let optimisticHistory;
+            if (newStatus === 'Rejected') {
+                if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
+                    optimisticHistory = (existingCustomer.paymentHistory || []).map(p => {
+                        if (isItemMatch(p)) {
+                            const { originalData, editedBy, editedByName, editedByRole, ...rest } = p;
+                            if (originalData) {
+                                const { editedBy: origEditedBy, editedByName: origEditedByName, editedByRole: origEditedByRole, ...origRest } = originalData;
+                                return {
+                                    ...rest,
+                                    ...origRest,
+                                    isEdited: false,
+                                    editedBy: origEditedBy || '',
+                                    editedByName: origEditedByName || '',
+                                    editedByRole: origEditedByRole || ''
+                                };
+                            }
+                            return { ...rest, isEdited: false, editedBy: '', editedByName: '', editedByRole: '' };
+                        }
+                        return p;
+                    });
+                } else {
+                    optimisticHistory = (existingCustomer.paymentHistory || []).filter(p => !isItemMatch(p));
+                }
+            } else {
+                optimisticHistory = (existingCustomer.paymentHistory || []).map(p => {
+                    if (isItemMatch(p)) {
+                        const { originalData, ...rest } = p;
+                        if (isSMApprovalStep) {
+                            return {
+                                ...rest,
+                                smApproved: true,
+                                smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                                smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            };
+                        } else {
+                            return {
+                                ...rest,
+                                status: 'Accepted',
+                                smApproved: true,
+                                isEdited: false,
+                                approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                                approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            };
+                        }
+                    }
+                    return p;
+                });
+            }
+
+            const optimisticCustObj = { ...existingCustomer, paymentHistory: optimisticHistory };
+            setRawCustomers(prev => (prev || []).map(c => c._id === targetCustomerId ? optimisticCustObj : c));
+            queryClient.setQueryData(['customers'], (old = []) =>
+                Array.isArray(old) ? old.map(c => c._id === targetCustomerId ? optimisticCustObj : c) : [optimisticCustObj]
+            );
+        }
         refreshPendingIndicators?.();
 
-        try {
-            const custRes = await axios.get(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`);
-            const customer = custRes.data;
+        // Queue server persistence per customer to prevent concurrent read-modify-write race conditions
+        const queue = customerUpdateQueueRef.current.get(targetCustomerId) || Promise.resolve();
+        const nextPromise = queue.catch(() => {}).then(async () => {
+            const cachedCustomers = queryClient.getQueryData(['customers']) || rawCustomers || [];
+            let customer = cachedCustomers.find(c => c._id === targetCustomerId);
+            if (!customer || !Array.isArray(customer.paymentHistory)) {
+                const custRes = await axios.get(`${API_BASE_URL}/api/customers/${targetCustomerId}`);
+                customer = custRes.data;
+            }
 
+            let updatedHistory;
             if (newStatus === 'Rejected') {
                 if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
                     // Revert edit request back to original data before edit
-                    const updatedHistory = (customer.paymentHistory || []).map(p => {
+                    updatedHistory = (customer.paymentHistory || []).map(p => {
                         if (isItemMatch(p)) {
                             const { originalData, editedBy, editedByName, editedByRole, ...rest } = p;
                             if (originalData) {
@@ -1276,15 +1423,15 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         }
                         return p;
                     });
-                    await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
+                    await axios.put(`${API_BASE_URL}/api/customers/${targetCustomerId}`, { ...customer, paymentHistory: updatedHistory });
                 } else {
                     // Remove requested payment
-                    const updatedHistory = (customer.paymentHistory || []).filter(p => !isItemMatch(p));
-                    await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
+                    updatedHistory = (customer.paymentHistory || []).filter(p => !isItemMatch(p));
+                    await axios.put(`${API_BASE_URL}/api/customers/${targetCustomerId}`, { ...customer, paymentHistory: updatedHistory });
                 }
             } else {
                 // Accept
-                const updatedHistory = (customer.paymentHistory || []).map(p => {
+                updatedHistory = (customer.paymentHistory || []).map(p => {
                     if (isItemMatch(p)) {
                         const { originalData, ...rest } = p;
                         if (isSMApprovalStep) {
@@ -1298,6 +1445,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                             return {
                                 ...rest,
                                 status: 'Accepted',
+                                smApproved: true,
                                 isEdited: false,
                                 approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
                                 approvedByName: currentUser?.name || currentUser?.username || 'Admin'
@@ -1306,9 +1454,34 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     }
                     return p;
                 });
-                await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
+                await axios.put(`${API_BASE_URL}/api/customers/${targetCustomerId}`, { ...customer, paymentHistory: updatedHistory });
             }
-            queryClient.invalidateQueries({ queryKey: ['customers'] });
+
+            const updatedCustomerObj = { ...customer, paymentHistory: updatedHistory };
+            setRawCustomers(prev => (prev || []).map(c => c._id === targetCustomerId ? updatedCustomerObj : c));
+            queryClient.setQueryData(['customers'], (old = []) =>
+                Array.isArray(old) ? old.map(c => c._id === targetCustomerId ? updatedCustomerObj : c) : [updatedCustomerObj]
+            );
+
+            // Re-sync payments state for this customer
+            setPayments(prev => {
+                const otherPayments = (prev || []).filter(p => p.customerId !== targetCustomerId);
+                const updatedPayments = (updatedCustomerObj.paymentHistory || []).map(payment => ({
+                    ...payment,
+                    customerId: updatedCustomerObj._id,
+                    customerName: updatedCustomerObj.customerName,
+                    companyName: updatedCustomerObj.companyName,
+                    customerType: updatedCustomerObj.customerType || 'General Customer',
+                    partyType: updatedCustomerObj.customerType || 'General Customer',
+                    customerAddress: updatedCustomerObj.location || '',
+                    readableCustomerId: updatedCustomerObj.customerId
+                }));
+                return [...updatedPayments, ...otherPayments];
+            });
+
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'customers', action: 'update', payload: { id: targetCustomerId, customer: updatedCustomerObj } }
+            }));
             refreshPendingIndicators?.();
 
             // Background notification
@@ -1346,6 +1519,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     'payment-collection-section'
                 ).catch(err => console.error('Notification error:', err));
             } catch (notifErr) { console.error('Notification error:', notifErr); }
+        });
+
+        customerUpdateQueueRef.current.set(targetCustomerId, nextPromise);
+        try {
+            await nextPromise;
         } catch (error) {
             console.error('Error updating payment status:', error);
             alert('Failed to update payment status');
@@ -1411,15 +1589,36 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             ].filter(Boolean).map(s => String(s).toLowerCase().trim());
 
             // Instant optimistic update
-            const acceptGroupReceipts = new Set(validGroups.map(g => g.receiptNo).filter(Boolean));
+            const acceptGroupReceipts = new Set(validGroups.map(g => String(g.receiptNo || '').trim().toUpperCase()).filter(Boolean));
             const acceptItemIds = new Set();
-            validGroups.forEach(g => (g.items || []).forEach(i => { if (i.id) acceptItemIds.add(i.id); }));
+            validGroups.forEach(g => (g.items || []).forEach(i => { if (i.id) acceptItemIds.add(String(i.id).trim()); }));
+
+            const nowMs = Date.now();
+            acceptItemIds.forEach(id => {
+                recentStatusUpdatesRef.current.set(String(id), {
+                    status: 'Accepted',
+                    smApproved: true,
+                    isEdited: false,
+                    time: nowMs
+                });
+            });
+            acceptGroupReceipts.forEach(rc => {
+                recentStatusUpdatesRef.current.set(rc, {
+                    status: 'Accepted',
+                    smApproved: true,
+                    isEdited: false,
+                    time: nowMs
+                });
+            });
+
             setPayments(prev => (prev || []).map(p => {
-                if ((p.id && acceptItemIds.has(p.id)) || (p.receiptNo && acceptGroupReceipts.has(p.receiptNo))) {
+                const pId = String(p.id || '').trim();
+                const pReceipt = String(p.receiptNo || '').trim().toUpperCase();
+                if ((pId && acceptItemIds.has(pId)) || (pReceipt && acceptGroupReceipts.has(pReceipt))) {
                     const entryRole = (p.entryByRole || '').toLowerCase();
                     const smApproved = p.smApproved === true;
                     const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                    const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+                    const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !hasFullApprovePerm;
 
                     if (isSMApprovalStep) {
                         return {
@@ -1439,6 +1638,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         return {
                             ...p,
                             status: 'Accepted',
+                            smApproved: true,
                             isEdited: false,
                             approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
                             approvedByName: currentUser?.name || currentUser?.username || 'Admin'
@@ -1457,30 +1657,36 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 customerMap[group.customerId].push(group);
             });
 
-            await Promise.all(
+            const updatedCustomersList = await Promise.all(
                 Object.entries(customerMap).map(async ([customerId, customerGroups]) => {
-                    const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
-                    const customer = custRes.data;
+                    const existingCust = (queryClient.getQueryData(['customers']) || rawCustomers || []).find(c => c._id === customerId);
+                    let customer = existingCust;
+                    if (!customer || !Array.isArray(customer.paymentHistory)) {
+                        const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
+                        customer = custRes.data;
+                    }
 
                     const targetItemIds = new Set();
                     const targetReceiptNos = new Set();
                     customerGroups.forEach(g => {
-                        if (g.receiptNo) targetReceiptNos.add(g.receiptNo);
+                        if (g.receiptNo) targetReceiptNos.add(String(g.receiptNo).trim().toUpperCase());
                         (g.items || []).forEach(item => {
-                            if (item.id) targetItemIds.add(item.id);
-                            if (item.receiptNo) targetReceiptNos.add(item.receiptNo);
+                            if (item.id) targetItemIds.add(String(item.id).trim());
+                            if (item.receiptNo) targetReceiptNos.add(String(item.receiptNo).trim().toUpperCase());
                         });
                     });
 
                     const updatedHistory = (customer.paymentHistory || []).map(p => {
-                        const matchesId = p.id && targetItemIds.has(p.id);
-                        const matchesReceipt = p.receiptNo && targetReceiptNos.has(p.receiptNo);
+                        const pId = String(p.id || '').trim();
+                        const pReceipt = String(p.receiptNo || '').trim().toUpperCase();
+                        const matchesId = pId && targetItemIds.has(pId);
+                        const matchesReceipt = pReceipt && targetReceiptNos.has(pReceipt);
                         if (matchesId || matchesReceipt) {
                             const { originalData, ...rest } = p;
                             const entryRole = (p.entryByRole || '').toLowerCase();
                             const smApproved = p.smApproved === true;
                             const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                            const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+                            const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !hasFullApprovePerm;
 
                             if (isSMApprovalStep) {
                                 return {
@@ -1500,6 +1706,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                 return {
                                     ...rest,
                                     status: 'Accepted',
+                                    smApproved: true,
                                     isEdited: false,
                                     approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
                                     approvedByName: currentUser?.name || currentUser?.username || 'Admin'
@@ -1509,8 +1716,16 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         return p;
                     });
 
-                    return axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, paymentHistory: updatedHistory });
+                    const putRes = await axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, paymentHistory: updatedHistory });
+                    return putRes.data || { ...customer, paymentHistory: updatedHistory };
                 })
+            );
+
+            // Update local customer caches with the saved data
+            const updatedMap = new Map(updatedCustomersList.map(c => [c._id, c]));
+            setRawCustomers(prev => (prev || []).map(c => updatedMap.get(c._id) || c));
+            queryClient.setQueryData(['customers'], (old = []) =>
+                Array.isArray(old) ? old.map(c => updatedMap.get(c._id) || c) : updatedCustomersList
             );
 
             if (addNotification) {
@@ -1525,7 +1740,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             }
 
             setSelectedItems(new Set());
-            queryClient.invalidateQueries({ queryKey: ['customers'] });
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'customers', action: 'update' }
+            }));
             refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error performing bulk accept:', error);
@@ -1628,32 +1845,32 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         }
                     });
 
-                const updatedHistory = (customer.paymentHistory || [])
-                    .filter(p => !((p.id && newRequestIds.has(p.id)) || (p.receiptNo && newRequestReceipts.has(p.receiptNo))))
-                    .map(p => {
-                        if ((p.id && editRequestIds.has(p.id)) || (p.receiptNo && editRequestReceipts.has(p.receiptNo))) {
-                            const { originalData, editedBy, editedByName, editedByRole, ...rest } = p;
-                            if (originalData) {
-                                const { editedBy: origEditedBy, editedByName: origEditedByName, editedByRole: origEditedByRole, ...origRest } = originalData;
+                    const updatedHistory = (customer.paymentHistory || [])
+                        .filter(p => !((p.id && newRequestIds.has(p.id)) || (p.receiptNo && newRequestReceipts.has(p.receiptNo))))
+                        .map(p => {
+                            if ((p.id && editRequestIds.has(p.id)) || (p.receiptNo && editRequestReceipts.has(p.receiptNo))) {
+                                const { originalData, editedBy, editedByName, editedByRole, ...rest } = p;
+                                if (originalData) {
+                                    const { editedBy: origEditedBy, editedByName: origEditedByName, editedByRole: origEditedByRole, ...origRest } = originalData;
+                                    return {
+                                        ...rest,
+                                        ...origRest,
+                                        isEdited: false,
+                                        editedBy: origEditedBy || '',
+                                        editedByName: origEditedByName || '',
+                                        editedByRole: origEditedByRole || ''
+                                    };
+                                }
                                 return {
                                     ...rest,
-                                    ...origRest,
                                     isEdited: false,
-                                    editedBy: origEditedBy || '',
-                                    editedByName: origEditedByName || '',
-                                    editedByRole: origEditedByRole || ''
+                                    editedBy: '',
+                                    editedByName: '',
+                                    editedByRole: ''
                                 };
                             }
-                            return {
-                                ...rest,
-                                isEdited: false,
-                                editedBy: '',
-                                editedByName: '',
-                                editedByRole: ''
-                            };
-                        }
-                        return p;
-                    });
+                            return p;
+                        });
 
                     return axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, paymentHistory: updatedHistory });
                 })
@@ -1672,6 +1889,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
             setSelectedItems(new Set());
             queryClient.invalidateQueries({ queryKey: ['customers'] });
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'customers', action: 'update' }
+            }));
             fetchPayments(true);
             refreshPendingIndicators?.();
         } catch (error) {
@@ -1771,15 +1991,46 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 paymentHistory: [...paymentEntries, ...(customer.paymentHistory || [])]
             };
 
-            await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
+            const targetCustomer = rawCustomers.find(c => c._id === newPayment.customerId) || customer;
+            const newPaymentObjects = paymentEntries.map(p => ({
+                ...p,
+                customerId: targetCustomer._id || newPayment.customerId,
+                customerName: targetCustomer.customerName,
+                companyName: targetCustomer.companyName,
+                customerType: targetCustomer.customerType || 'General Customer',
+                partyType: targetCustomer.customerType || 'General Customer',
+                customerAddress: targetCustomer.location || targetCustomer.address || '',
+                readableCustomerId: targetCustomer.customerId
+            }));
+
+            // Optimistically update payments & rawCustomers & React Query cache
+            setPayments(prev => [...newPaymentObjects, ...(prev || [])]);
+            setRawCustomers(prev => (prev || []).map(c => c._id === newPayment.customerId ? updatedCustomer : c));
+            queryClient.setQueryData(['customers'], (old = []) =>
+                Array.isArray(old) ? old.map(c => c._id === newPayment.customerId ? updatedCustomer : c) : [updatedCustomer]
+            );
+
+            // Auto-switch to Requested view so user sees newly added entry immediately
+            setIsRequestedOnly(true);
+            setIsEditRequestedOnly(false);
+            setSearchQuery('');
+            refreshPendingIndicators?.();
+
             setSubmitStatus('success');
             setShowAddModal(false);
             setSubmitStatus(null);
             resetNewPayment();
+
+            await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
+
             queryClient.invalidateQueries({ queryKey: ['customers'] });
             queryClient.invalidateQueries({ queryKey: ['sales'] });
             queryClient.invalidateQueries({ queryKey: ['banks'] });
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'customers', action: 'update', payload: { id: newPayment.customerId, customer: updatedCustomer } }
+            }));
             fetchPayments(true);
+            refreshPendingIndicators?.();
 
             (async () => {
                 try {
@@ -1807,7 +2058,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                 view: 'payment-collection-section'
                             }
                         );
-                    } catch (actErr) {}
+                    } catch (actErr) { }
 
                     if (addNotification) await addNotification(
                         'New Payment Collection Requested',
@@ -1939,17 +2190,49 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 paymentHistory: [...updatedPaymentEntries, ...remainingHistory]
             };
 
-            await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
-            setSubmitStatus('success');
+            const targetCustomer = rawCustomers.find(c => c._id === newPayment.customerId) || customer;
+            const updatedPaymentObjects = updatedPaymentEntries.map(p => ({
+                ...p,
+                customerId: targetCustomer._id || newPayment.customerId,
+                customerName: targetCustomer.customerName,
+                companyName: targetCustomer.companyName,
+                customerType: targetCustomer.customerType || 'General Customer',
+                partyType: targetCustomer.customerType || 'General Customer',
+                customerAddress: targetCustomer.location || targetCustomer.address || '',
+                readableCustomerId: targetCustomer.customerId
+            }));
 
-            // Notification
+            // Optimistic update
+            setPayments(prev => {
+                const remaining = (prev || []).filter(p => p.receiptNo !== editingPayment.receiptNo);
+                return [...updatedPaymentObjects, ...remaining];
+            });
+            setRawCustomers(prev => (prev || []).map(c => c._id === newPayment.customerId ? updatedCustomer : c));
+            queryClient.setQueryData(['customers'], (old = []) =>
+                Array.isArray(old) ? old.map(c => c._id === newPayment.customerId ? updatedCustomer : c) : [updatedCustomer]
+            );
+
+            if (isEditReq) {
+                setIsEditRequestedOnly(true);
+                setIsRequestedOnly(false);
+            }
+            refreshPendingIndicators?.();
+
+            setSubmitStatus('success');
             setShowAddModal(false);
             setSubmitStatus(null);
             resetNewPayment();
+
+            await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
+
             queryClient.invalidateQueries({ queryKey: ['customers'] });
             queryClient.invalidateQueries({ queryKey: ['sales'] });
             queryClient.invalidateQueries({ queryKey: ['banks'] });
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'customers', action: 'update', payload: { id: newPayment.customerId, customer: updatedCustomer } }
+            }));
             fetchPayments(true);
+            refreshPendingIndicators?.();
 
             (async () => {
                 try {
@@ -1979,17 +2262,17 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                 view: 'payment-collection-section'
                             }
                         );
-                    } catch (actErr) {}
+                    } catch (actErr) { }
 
                     const msg = isEditReq
                         ? `${dateStr} | ${timeStr} | ${editorName} requested an edit on payment (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName}`
                         : `${dateStr} | ${timeStr} | ${editorName} updated payment (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName}`;
                     if (addNotification) await addNotification(
-                        title, 
-                        msg, 
-                        ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'], 
-                        [], 
-                        true, 
+                        title,
+                        msg,
+                        ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
+                        [],
+                        true,
                         'payment-collection-section'
                     );
                 } catch (notifErr) { console.error('Notification error:', notifErr); }
@@ -2786,11 +3069,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                         <div className="flex flex-col gap-1 items-start">
                                                             <div className="text-sm font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
                                                             {group.partyType && (
-                                                                <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide ${
-                                                                    group.partyType === 'Party Customer'
-                                                                        ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
-                                                                        : 'bg-blue-50 text-blue-700 border border-blue-200/60'
-                                                                }`}>
+                                                                <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide ${group.partyType === 'Party Customer'
+                                                                    ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                                                    : 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                                    }`}>
                                                                     {group.partyType}
                                                                 </span>
                                                             )}
@@ -2903,14 +3185,14 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                     {getEntryByName(group.entryBy, group.entryByName)}
                                                                 </span>
                                                                 {(group.editedBy || group.editedByName) &&
-                                                                 (group.editedBy || '').toLowerCase() !== 'admin' &&
-                                                                 (group.editedByName || '').toLowerCase() !== 'admin' &&
-                                                                 (group.items?.[0]?.editedByRole || '').toLowerCase() !== 'admin' &&
-                                                                 (group.isEdited || !group.items?.[0]?.originalData) && (
-                                                                    <span className="text-[10px] text-amber-600 font-medium">
-                                                                        ✎ {getEditedByName(group.editedBy, group.editedByName)}
-                                                                    </span>
-                                                                )}
+                                                                    (group.editedBy || '').toLowerCase() !== 'admin' &&
+                                                                    (group.editedByName || '').toLowerCase() !== 'admin' &&
+                                                                    (group.items?.[0]?.editedByRole || '').toLowerCase() !== 'admin' &&
+                                                                    (group.isEdited || !group.items?.[0]?.originalData) && (
+                                                                        <span className="text-[10px] text-amber-600 font-medium">
+                                                                            ✎ {getEditedByName(group.editedBy, group.editedByName)}
+                                                                        </span>
+                                                                    )}
                                                                 {group.items?.[0]?.smApprovedByName && (
                                                                     <span className="text-[10px] text-blue-600 font-medium" title="1st Approval (SM)">
                                                                         ✓ {getFirstNameFromIdentifier(group.items[0].smApprovedByName || group.items[0].smApprovedBy)}
@@ -2981,17 +3263,40 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                     <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
                                                         <SearchIcon className="w-6 h-6 text-gray-400" />
                                                     </div>
-                                                    <p className="text-gray-500 font-medium">No payments found</p>
+                                                    {isRequestedOnly ? (
+                                                        <>
+                                                            <p className="text-gray-800 font-semibold text-sm">No pending payment requests</p>
+                                                            <p className="text-xs text-gray-400 max-w-sm">All requested payment collections have been accepted or processed.</p>
+                                                            <button
+                                                                onClick={() => { setIsRequestedOnly(false); setIsEditRequestedOnly(false); }}
+                                                                className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors border border-blue-200 shadow-sm"
+                                                            >
+                                                                View All Collections →
+                                                            </button>
+                                                        </>
+                                                    ) : isEditRequestedOnly ? (
+                                                        <>
+                                                            <p className="text-gray-800 font-semibold text-sm">No pending edit requests</p>
+                                                            <button
+                                                                onClick={() => { setIsRequestedOnly(false); setIsEditRequestedOnly(false); }}
+                                                                className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors border border-blue-200 shadow-sm"
+                                                            >
+                                                                View All Collections →
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <p className="text-gray-500 font-medium">No payments found</p>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
                                     )}
-                            </tbody>
-                        </table>
-                    </div>
-                    <TableScrollNav className="hidden md:flex" count={displayedGroups.length} />
+                                </tbody>
+                            </table>
+                        </div>
+                        <TableScrollNav className="hidden md:flex" count={displayedGroups.length} />
 
-                    {/* Mobile Card View */}
+                        {/* Mobile Card View */}
                         <div className="block md:hidden px-1 py-4 space-y-3">
                             {isLoading ? (
                                 Array(3).fill(0).map((_, i) => (
@@ -3065,11 +3370,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                     <div className="mobile-card-title truncate">{group.companyName || group.customerName}</div>
                                                     {group.partyType && (
                                                         <div className="mt-0.5">
-                                                            <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide ${
-                                                                group.partyType === 'Party Customer'
-                                                                    ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
-                                                                    : 'bg-blue-50 text-blue-700 border border-blue-200/60'
-                                                            }`}>
+                                                            <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide ${group.partyType === 'Party Customer'
+                                                                ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                                                : 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                                }`}>
                                                                 {group.partyType}
                                                             </span>
                                                         </div>
@@ -3142,14 +3446,14 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                                 {getEntryByName(group.entryBy, group.entryByName)}
                                                                             </span>
                                                                             {(group.editedBy || group.editedByName) &&
-                                                                             (group.editedBy || '').toLowerCase() !== 'admin' &&
-                                                                             (group.editedByName || '').toLowerCase() !== 'admin' &&
-                                                                             (group.items?.[0]?.editedByRole || '').toLowerCase() !== 'admin' &&
-                                                                             (group.isEdited || !group.items?.[0]?.originalData) && (
-                                                                                <span className="text-[10px] text-amber-600 font-medium">
-                                                                                    ✎ {getEditedByName(group.editedBy, group.editedByName)}
-                                                                                </span>
-                                                                            )}
+                                                                                (group.editedBy || '').toLowerCase() !== 'admin' &&
+                                                                                (group.editedByName || '').toLowerCase() !== 'admin' &&
+                                                                                (group.items?.[0]?.editedByRole || '').toLowerCase() !== 'admin' &&
+                                                                                (group.isEdited || !group.items?.[0]?.originalData) && (
+                                                                                    <span className="text-[10px] text-amber-600 font-medium">
+                                                                                        ✎ {getEditedByName(group.editedBy, group.editedByName)}
+                                                                                    </span>
+                                                                                )}
                                                                             {group.items?.[0]?.smApprovedByName && (
                                                                                 <span className="text-[10px] text-blue-600 font-medium" title="1st Approval (SM)">
                                                                                     ✓ {getFirstNameFromIdentifier(group.items[0].smApprovedByName || group.items[0].smApprovedBy)}
@@ -3204,18 +3508,31 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                             )}
                                         </div>
                                     );
-                                }) ) : (
-                                    <div className="text-center py-8">
-                                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-50 mb-3">
-                                            <SearchIcon className="w-6 h-6 text-gray-400" />
-                                        </div>
-                                        <p className="text-gray-500 font-medium">No payments found</p>
+                                })) : (
+                                <div className="text-center py-8">
+                                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-50 mb-3">
+                                        <SearchIcon className="w-6 h-6 text-gray-400" />
                                     </div>
-                                )}
+                                    {isRequestedOnly ? (
+                                        <div className="flex flex-col items-center gap-1">
+                                            <p className="text-gray-800 font-semibold text-sm">No pending payment requests</p>
+                                            <p className="text-xs text-gray-400 max-w-xs">All requested payment collections have been accepted.</p>
+                                            <button
+                                                onClick={() => { setIsRequestedOnly(false); setIsEditRequestedOnly(false); }}
+                                                className="mt-2 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200"
+                                            >
+                                                View All Collections →
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <p className="text-gray-500 font-medium">No payments found</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
-        )}
+            )}
             {/* Add Collection Card (Style Match with Add Customer) */}
             {showAddModal && (
                 <div className="payment-form-container">
@@ -3702,7 +4019,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         {/* Footer Buttons */}
                         {(() => {
                             const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
-                                              rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || '';
+                                rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || '';
                             const totalAmt = (newPayment.items || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
                             return (
                                 <div className="md:col-span-2 flex items-center justify-end gap-3 pt-4 border-t border-gray-50 mt-6 relative z-10">
@@ -3713,10 +4030,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                             partyName && totalAmt > 0
                                                 ? `Save Payment Collection ("${partyName}") • ৳${totalAmt.toLocaleString('en-IN')}`
                                                 : partyName
-                                                ? `Save Payment Collection ("${partyName}")`
-                                                : totalAmt > 0
-                                                ? `Save Payment Collection • ৳${totalAmt.toLocaleString('en-IN')}`
-                                                : 'Save Payment Collection'
+                                                    ? `Save Payment Collection ("${partyName}")`
+                                                    : totalAmt > 0
+                                                        ? `Save Payment Collection • ৳${totalAmt.toLocaleString('en-IN')}`
+                                                        : 'Save Payment Collection'
                                         }
                                         data-customer-name={partyName}
                                         data-total-amount={totalAmt > 0 ? String(totalAmt) : ''}
@@ -3763,7 +4080,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     <div className="relative bg-white/90 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl p-8 max-w-md w-full animate-in zoom-in slide-in-from-bottom-8 duration-500">
                         {/* Status Icon */}
                         <div className={`flex items-center justify-center w-20 h-20 rounded-full mx-auto mb-6 transition-all duration-500 ${submitStatus === 'success' ? 'bg-emerald-100 text-emerald-600' :
-                                submitStatus === 'error' ? 'bg-red-100 text-red-600' : 'bg-red-50 text-red-500'
+                            submitStatus === 'error' ? 'bg-red-100 text-red-600' : 'bg-red-50 text-red-500'
                             }`}>
                             {submitStatus === 'success' ? (
                                 <CheckIcon className="w-10 h-10 animate-in zoom-in duration-300" />
@@ -3843,10 +4160,9 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'dang
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200 z-10">
-                <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
-                    type === 'danger' ? 'bg-red-100 text-red-600' :
+                <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${type === 'danger' ? 'bg-red-100 text-red-600' :
                     type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
-                }`}>
+                    }`}>
                     {type === 'danger' ? (
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -3880,13 +4196,12 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'dang
                         type="button"
                         onClick={onConfirm || onClose}
                         disabled={isSubmitting}
-                        className={`w-full px-4 py-2.5 text-white text-xs font-bold rounded-xl shadow-lg transition-all transform active:scale-95 disabled:opacity-50 cursor-pointer ${
-                            type === 'danger'
-                                ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
-                                : type === 'success'
+                        className={`w-full px-4 py-2.5 text-white text-xs font-bold rounded-xl shadow-lg transition-all transform active:scale-95 disabled:opacity-50 cursor-pointer ${type === 'danger'
+                            ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
+                            : type === 'success'
                                 ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
                                 : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
-                        }`}
+                            }`}
                     >
                         {isSubmitting ? 'Processing...' : confirmText}
                     </button>
