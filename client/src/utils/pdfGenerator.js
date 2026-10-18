@@ -5370,50 +5370,139 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             let grandCredit = 0;
             let grandDiscount = 0;
 
-            const chronoHistory = sortedHistoryData;
+            // Merge same invoice if date is same for sales, purchases, and returns
+            const mergedChronoHistory = sortedHistoryData.reduce((acc, item) => {
+                const formattedDate = formatDate(item.date);
+                const refNo = (item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '').trim().toUpperCase();
+                const canMerge = Boolean(refNo && refNo !== '-' && refNo !== '—' && (item.type === 'sale' || item.type === 'purchase' || item.type === 'return'));
 
-            let lastBalance = chronoHistory.length > 0 ? chronoHistory[chronoHistory.length - 1].runningBalance : 0;
+                const existing = canMerge
+                    ? acc.find(x => x.type === item.type && formatDate(x.date) === formattedDate && (x.refNo || '').toUpperCase() === refNo)
+                    : null;
 
-            chronoHistory.forEach((item, idx) => {
-                const typeLabel = item.type === 'sale' ? '[SALE]' : (item.type === 'payment' ? '[COLLECTION]' : (item.type === 'payToCustomer' ? '[PAYOUT]' : (item.type === 'return' ? '[RETURN]' : '[PURCHASE]')));
-                let particularsStr = "";
-                if (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') {
-                    const pName = item.product ? `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}` : (item.type === 'sale' ? 'Sales Invoice' : (item.type === 'return' ? 'Product Return' : 'Purchase Invoice'));
-                    particularsStr = `${typeLabel} ${pName}`;
-                    if (item.reason) {
-                        particularsStr += `\nReason: ${item.reason}`;
+                if (existing) {
+                    existing.subItems.push(item);
+                    existing.totalAmount = (parseFloat(existing.totalAmount) || 0) + (parseFloat(item.amount) || 0);
+                    existing.totalPaid = (parseFloat(existing.totalPaid) || 0) + (parseFloat(item.paid || item.truckFare) || 0);
+                    existing.totalDiscount = (parseFloat(existing.totalDiscount) || 0) + (parseFloat(item.discount) || 0);
+                    existing.totalQty = (parseFloat(existing.totalQty) || 0) + (parseFloat(item.quantity || item.qty) || 0);
+                    if (item.type === 'return') {
+                        existing.totalReturnExpense = (parseFloat(existing.totalReturnExpense) || 0) + (parseFloat(item.returnExpense) || 0);
                     }
-                } else if (item.type === 'payment') {
-                    const mStr = `${item.method}${item.bankName || item.receiveBy ? ` (${item.bankName || item.receiveBy})` : ''}`;
-                    particularsStr = `${typeLabel} ${mStr}`;
-                } else if (item.type === 'payToCustomer') {
-                    const mStr = `${item.method}${item.bankName || item.paidBy ? ` (${item.bankName || item.paidBy})` : ''}`;
-                    particularsStr = `${typeLabel} ${mStr}`;
+                    existing.runningBalance = item.runningBalance;
+                    return acc;
                 }
 
-                const tfVal = parseFloat(item.paid || item.truckFare || 0);
-                if ((item.type === 'sale' || item.type === 'purchase') && tfVal > 0) {
-                    particularsStr += `\nTruck Fare paid (Tk. ${tfVal.toLocaleString('en-IN')})`;
+                acc.push({
+                    ...item,
+                    refNo: refNo || (item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '-'),
+                    subItems: [item],
+                    totalAmount: parseFloat(item.amount || 0),
+                    totalPaid: parseFloat(item.paid || item.truckFare || 0),
+                    totalDiscount: parseFloat(item.discount || 0),
+                    totalQty: parseFloat(item.quantity || item.qty || 0),
+                    totalReturnExpense: parseFloat(item.returnExpense || 0),
+                    runningBalance: item.runningBalance
+                });
+                return acc;
+            }, []);
+
+            let lastBalance = sortedHistoryData.length > 0 ? sortedHistoryData[sortedHistoryData.length - 1].runningBalance : 0;
+
+            mergedChronoHistory.forEach((entry, idx) => {
+                const typeLabel = entry.type === 'sale' ? '[SALE]' : (entry.type === 'payment' ? '[COLLECTION]' : (entry.type === 'payToCustomer' ? '[PAYOUT]' : (entry.type === 'return' ? '[RETURN]' : '[PURCHASE]')));
+                let particularsStr = "";
+
+                if (entry.subItems.length > 1) {
+                    const lines = [];
+                    entry.subItems.forEach(si => {
+                        const siTypeLabel = si.type === 'sale' ? '[SALE]' : (si.type === 'purchase' ? '[PURCHASE]' : '[RETURN]');
+                        const siBrand = si.brand && si.brand !== '-' ? ` (${si.brand})` : '';
+                        const siProd = si.product ? `${si.product}${siBrand}` : 'Item';
+
+                        let line = `${siTypeLabel} ${siProd}`;
+                        if (si.reason) {
+                            line += ` (Reason: ${si.reason})`;
+                        }
+                        lines.push(line);
+                    });
+
+                    if (entry.totalPaid > 0 && (entry.type === 'sale' || entry.type === 'purchase')) {
+                        lines.push(`Truck Fare paid (Tk. ${entry.totalPaid.toLocaleString('en-IN')})`);
+                    }
+
+                    const notes = [...new Set(entry.subItems.map(si => si.remarks || si.note || si.reference || si.narration).filter(Boolean))];
+                    if (notes.length > 0) {
+                        lines.push(`Note: ${notes.join(', ')}`);
+                    }
+
+                    if (entry.type === 'return' && entry.totalReturnExpense > 0) {
+                        lines.push(`Return Expense: Tk. ${entry.totalReturnExpense.toLocaleString('en-IN')}`);
+                    }
+
+                    particularsStr = lines.join('\n');
+                } else {
+                    const item = entry.subItems[0];
+                    if (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') {
+                        const pBrand = item.brand && item.brand !== '-' ? ` (${item.brand})` : '';
+                        const pName = item.product ? `${item.product}${pBrand}` : (item.type === 'sale' ? 'Sales Invoice' : (item.type === 'return' ? 'Product Return' : 'Purchase Invoice'));
+                        particularsStr = `${typeLabel} ${pName}`;
+                        if (item.reason) {
+                            particularsStr += `\nReason: ${item.reason}`;
+                        }
+                    } else if (item.type === 'payment') {
+                        const mStr = `${item.method}${item.bankName || item.receiveBy ? ` (${item.bankName || item.receiveBy})` : ''}`;
+                        particularsStr = `${typeLabel} ${mStr}`;
+                    } else if (item.type === 'payToCustomer') {
+                        const mStr = `${item.method}${item.bankName || item.paidBy ? ` (${item.bankName || item.paidBy})` : ''}`;
+                        particularsStr = `${typeLabel} ${mStr}`;
+                    }
+
+                    const tfVal = parseFloat(item.paid || item.truckFare || 0);
+                    if ((item.type === 'sale' || item.type === 'purchase') && tfVal > 0) {
+                        particularsStr += `\nTruck Fare paid (Tk. ${tfVal.toLocaleString('en-IN')})`;
+                    }
+
+                    const noteVal = item.remarks || item.note || item.reference || item.narration;
+                    if (noteVal) {
+                        particularsStr += `\nNote: ${noteVal}`;
+                    }
+
+                    if (item.type === 'return' && parseFloat(item.returnExpense || 0) > 0) {
+                        particularsStr += `\nReturn Expense: Tk. ${parseFloat(item.returnExpense).toLocaleString('en-IN')}`;
+                    }
                 }
 
-                const noteVal = item.remarks || item.note || item.reference || item.narration;
-                if (noteVal) {
-                    particularsStr += `\nNote: ${noteVal}`;
-                }
+                const debitVal = (entry.type === 'sale' || entry.type === 'payToCustomer')
+                    ? (parseFloat(entry.totalAmount || 0))
+                    : (entry.type === 'return' ? parseFloat(entry.totalReturnExpense || 0) : 0);
+                const creditVal = (entry.type === 'payment' || entry.type === 'purchase' || entry.type === 'return')
+                    ? (parseFloat(entry.totalAmount || 0))
+                    : (entry.type === 'sale' && parseFloat(entry.totalPaid || 0) > 0 ? parseFloat(entry.totalPaid || 0) : 0);
+                const discVal = parseFloat(entry.totalDiscount || 0);
+                const qtyVal = (entry.type === 'sale' || entry.type === 'purchase' || entry.type === 'return') ? parseFloat(entry.totalQty || 0) : 0;
 
-                if (item.type === 'return' && parseFloat(item.returnExpense || 0) > 0) {
-                    particularsStr += `\nReturn Expense: Tk. ${parseFloat(item.returnExpense).toLocaleString('en-IN')}`;
-                }
+                let qtyColStr = '-';
+                let rateColStr = '-';
+                if (entry.type === 'sale' || entry.type === 'purchase' || entry.type === 'return') {
+                    if (entry.subItems.length > 1) {
+                        qtyColStr = entry.subItems.map(si => {
+                            const q = parseFloat(si.quantity || si.qty || 0);
+                            return q > 0 ? q.toLocaleString('en-US') : '-';
+                        }).join('\n');
 
-                const debitVal = (item.type === 'sale' || item.type === 'payToCustomer')
-                    ? (parseFloat(item.amount || 0))
-                    : (item.type === 'return' ? parseFloat(item.returnExpense || 0) : 0);
-                const creditVal = (item.type === 'payment' || item.type === 'purchase' || item.type === 'return')
-                    ? (parseFloat(item.amount || 0))
-                    : (item.type === 'sale' && parseFloat(item.paid || 0) > 0 ? parseFloat(item.paid || 0) : 0);
-                const discVal = parseFloat(item.discount || 0);
-                const qtyVal = (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? parseFloat(item.quantity || item.qty || 0) : 0;
-                const rateVal = (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? parseFloat(item.rate || 0) : 0;
+                        rateColStr = entry.subItems.map(si => {
+                            const r = parseFloat(si.rate || 0);
+                            return r > 0 ? r.toLocaleString('en-IN') : '-';
+                        }).join('\n');
+                    } else {
+                        const item = entry.subItems[0];
+                        const q = parseFloat(item.quantity || item.qty || 0);
+                        const r = parseFloat(item.rate || 0);
+                        qtyColStr = q > 0 ? q.toLocaleString('en-US') : '-';
+                        rateColStr = r > 0 ? r.toLocaleString('en-IN') : '-';
+                    }
+                }
 
                 grandQty += qtyVal;
                 grandDebit += debitVal;
@@ -5422,15 +5511,15 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
 
                 const row = [
                     idx + 1,
-                    formatDate(item.date),
-                    item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '-',
+                    formatDate(entry.date),
+                    entry.refNo || '-',
                     particularsStr,
-                    (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? (qtyVal > 0 ? qtyVal.toLocaleString('en-US') : '-') : '-',
-                    (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? (rateVal > 0 ? rateVal.toLocaleString('en-IN') : '-') : '-',
+                    qtyColStr,
+                    rateColStr,
                     debitVal > 0 ? debitVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
                     creditVal > 0 ? creditVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
                     discVal > 0 ? discVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
-                    parseFloat(item.runningBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    parseFloat(entry.runningBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 ];
                 tableRows.push(row);
             });

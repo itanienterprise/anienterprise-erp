@@ -884,19 +884,38 @@ const OrderManagement = ({
             }
         }
 
-        // Also gather brands from stockRecords and warehouses for this product
+        // Also gather brands from stockRecords, warehouses, and sales records for this product
         if (targetProdName) {
             (stockRecords || []).forEach(s => {
                 const sProd = (s.productName || s.product || '').trim().toLowerCase();
-                if (sProd === targetProdName && s.brand) {
-                    brandsSet.add(s.brand.trim());
+                if (sProd === targetProdName) {
+                    if (s.brand) brandsSet.add(s.brand.trim());
+                    if (s.brandName) brandsSet.add(s.brandName.trim());
+                    (s.brandEntries || []).forEach(be => {
+                        const bName = be.brand || be.brandName;
+                        if (bName) brandsSet.add(bName.trim());
+                    });
                 }
             });
             (warehouses || []).forEach(w => {
                 const wProd = (w.productName || w.product || '').trim().toLowerCase();
-                if (wProd === targetProdName && w.brand) {
-                    brandsSet.add(w.brand.trim());
+                if (wProd === targetProdName) {
+                    if (w.brand) brandsSet.add(w.brand.trim());
+                    if (w.brandName) brandsSet.add(w.brandName.trim());
                 }
+            });
+            (allSalesRecords || []).forEach(s => {
+                (s.items || []).forEach(si => {
+                    const siProd = (si.productName || si.product || '').trim().toLowerCase();
+                    if (siProd === targetProdName) {
+                        if (si.brand) brandsSet.add(si.brand.trim());
+                        if (si.brandName) brandsSet.add(si.brandName.trim());
+                        (si.brandEntries || []).forEach(be => {
+                            const bName = be.brand || be.brandName;
+                            if (bName) brandsSet.add(bName.trim());
+                        });
+                    }
+                });
             });
         }
 

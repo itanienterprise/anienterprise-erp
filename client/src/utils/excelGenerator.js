@@ -2881,27 +2881,92 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
             let totalCredit = 0;
             let totalDiscount = 0;
 
-            sortedHistory.forEach(item => {
-                const typeLabel = item.type === 'sale' ? 'SALE' : (item.type === 'payment' ? 'COLLECTION' : (item.type === 'payToCustomer' ? 'PAYOUT' : (item.type === 'return' ? 'RETURN' : 'PURCHASE')));
-                const refNo = item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '-';
+            // Merge same invoice if date is same for sales, purchases, and returns
+            const mergedHistory = sortedHistory.reduce((acc, item) => {
+                const formattedDate = item.date ? formatDate(item.date) : '-';
+                const refNo = (item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '').trim().toUpperCase();
+                const canMerge = Boolean(refNo && refNo !== '-' && refNo !== '—' && (item.type === 'sale' || item.type === 'purchase' || item.type === 'return'));
 
-                let particulars = item.product || '';
-                if (item.brand && item.brand !== '-') particulars += ` (${item.brand})`;
-                if (item.method) particulars += (particulars ? ' - ' : '') + item.method;
-                if (item.bankName) particulars += ` (${item.bankName})`;
-                if (item.reason) particulars += (particulars ? ' - ' : '') + item.reason;
-                if (item.type === 'return' && parseFloat(item.returnExpense || 0) > 0) {
-                    particulars += (particulars ? ' - ' : '') + `Return Expense: Tk. ${parseFloat(item.returnExpense).toLocaleString('en-IN')}`;
+                const existing = canMerge
+                    ? acc.find(x => x.type === item.type && (x.date ? formatDate(x.date) : '-') === formattedDate && (x.refNo || '').toUpperCase() === refNo)
+                    : null;
+
+                if (existing) {
+                    existing.subItems.push(item);
+                    existing.totalAmount = (parseFloat(existing.totalAmount) || 0) + (parseFloat(item.amount) || 0);
+                    existing.totalPaid = (parseFloat(existing.totalPaid) || 0) + (parseFloat(item.paid || item.truckFare) || 0);
+                    existing.totalDiscount = (parseFloat(existing.totalDiscount) || 0) + (parseFloat(item.discount) || 0);
+                    existing.totalQty = (parseFloat(existing.totalQty) || 0) + (parseFloat(item.quantity || item.qty) || 0);
+                    if (item.type === 'return') {
+                        existing.totalReturnExpense = (parseFloat(existing.totalReturnExpense) || 0) + (parseFloat(item.returnExpense) || 0);
+                    }
+                    existing.runningBalance = item.runningBalance;
+                    return acc;
                 }
 
-                const debitVal = (item.type === 'sale' || item.type === 'payToCustomer')
-                    ? (parseFloat(item.amount || 0))
-                    : (item.type === 'return' ? parseFloat(item.returnExpense || 0) : 0);
-                const creditVal = (item.type === 'payment' || item.type === 'purchase' || item.type === 'return')
-                    ? (parseFloat(item.amount || 0))
-                    : (item.type === 'sale' && parseFloat(item.paid || 0) > 0 ? parseFloat(item.paid || 0) : 0);
-                const discVal = parseFloat(item.discount || 0);
-                const qtyVal = (item.type === 'sale' || item.type === 'purchase' || item.type === 'return') ? parseFloat(item.quantity || item.qty || 0) : 0;
+                acc.push({
+                    ...item,
+                    refNo: refNo || (item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '-'),
+                    subItems: [item],
+                    totalAmount: parseFloat(item.amount || 0),
+                    totalPaid: parseFloat(item.paid || item.truckFare || 0),
+                    totalDiscount: parseFloat(item.discount || 0),
+                    totalQty: parseFloat(item.quantity || item.qty || 0),
+                    totalReturnExpense: parseFloat(item.returnExpense || 0),
+                    runningBalance: item.runningBalance
+                });
+                return acc;
+            }, []);
+
+            mergedHistory.forEach(entry => {
+                const typeLabel = entry.type === 'sale' ? 'SALE' : (entry.type === 'payment' ? 'COLLECTION' : (entry.type === 'payToCustomer' ? 'PAYOUT' : (entry.type === 'return' ? 'RETURN' : 'PURCHASE')));
+                const refNo = entry.refNo || '-';
+
+                let particulars = '';
+                if (entry.subItems.length > 1) {
+                    particulars = entry.subItems.map(si => {
+                        const siBrand = si.brand && si.brand !== '-' ? ` (${si.brand})` : '';
+                        return `${si.product || 'Item'}${siBrand}`;
+                    }).join('\n');
+
+                    if (entry.totalPaid > 0 && (entry.type === 'sale' || entry.type === 'purchase')) {
+                        particulars += `\nTruck Fare: Tk. ${entry.totalPaid.toLocaleString('en-IN')}`;
+                    }
+                } else {
+                    const item = entry.subItems[0];
+                    particulars = item.product || '';
+                    if (item.brand && item.brand !== '-') particulars += ` (${item.brand})`;
+                    if (item.method) particulars += (particulars ? ' - ' : '') + item.method;
+                    if (item.bankName) particulars += ` (${item.bankName})`;
+                    if (item.reason) particulars += (particulars ? ' - ' : '') + item.reason;
+                    if (item.type === 'return' && parseFloat(item.returnExpense || 0) > 0) {
+                        particulars += (particulars ? ' - ' : '') + `Return Expense: Tk. ${parseFloat(item.returnExpense).toLocaleString('en-IN')}`;
+                    }
+                    if ((item.type === 'sale' || item.type === 'purchase') && parseFloat(item.paid || item.truckFare || 0) > 0) {
+                        particulars += (particulars ? ' - ' : '') + `Truck Fare: Tk. ${parseFloat(item.paid || item.truckFare).toLocaleString('en-IN')}`;
+                    }
+                }
+
+                const debitVal = (entry.type === 'sale' || entry.type === 'payToCustomer')
+                    ? (parseFloat(entry.totalAmount || 0))
+                    : (entry.type === 'return' ? parseFloat(entry.totalReturnExpense || 0) : 0);
+                const creditVal = (entry.type === 'payment' || entry.type === 'purchase' || entry.type === 'return')
+                    ? (parseFloat(entry.totalAmount || 0))
+                    : (entry.type === 'sale' && parseFloat(entry.totalPaid || 0) > 0 ? parseFloat(entry.totalPaid || 0) : 0);
+                const discVal = parseFloat(entry.totalDiscount || 0);
+                const qtyVal = (entry.type === 'sale' || entry.type === 'purchase' || entry.type === 'return') ? parseFloat(entry.totalQty || 0) : 0;
+
+                let qtyDisplay = '';
+                if (entry.type === 'sale' || entry.type === 'purchase' || entry.type === 'return') {
+                    if (entry.subItems.length > 1) {
+                        qtyDisplay = entry.subItems.map(si => {
+                            const q = parseFloat(si.quantity || si.qty || 0);
+                            return q > 0 ? q.toLocaleString('en-US') : '-';
+                        }).join('\n');
+                    } else {
+                        qtyDisplay = qtyVal > 0 ? qtyVal : '';
+                    }
+                }
 
                 totalQty += qtyVal;
                 totalDebit += debitVal;
@@ -2909,15 +2974,15 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                 totalDiscount += discVal;
 
                 rows.push([
-                    item.date ? formatDate(item.date) : '-',
+                    entry.date ? formatDate(entry.date) : '-',
                     typeLabel,
                     refNo,
                     particulars || '-',
-                    qtyVal > 0 ? qtyVal : '',
+                    qtyDisplay,
                     debitVal > 0 ? Math.round(debitVal) : '',
                     creditVal > 0 ? Math.round(creditVal) : '',
                     discVal > 0 ? Math.round(discVal) : '',
-                    item.runningBalance !== undefined ? Math.round(item.runningBalance) : ''
+                    entry.runningBalance !== undefined ? Math.round(entry.runningBalance) : ''
                 ]);
             });
 

@@ -778,103 +778,17 @@ const Customer = ({
         const vComp = (viewData?.companyName || '').trim().toLowerCase();
         const vCust = (viewData?.customerName || '').trim().toLowerCase();
 
-        const history = (viewData?.salesHistory || []).map(item => {
-            if (effectiveSalesRecords && effectiveSalesRecords.length > 0) {
-                const itemInv = (item.invoiceNo || '').trim().toUpperCase();
-                const itemOrd = (item.orderNo || '').trim().toUpperCase();
-                const matchingSale = effectiveSalesRecords.find(s => {
-                    const sInv = (s.invoiceNo || '').trim().toUpperCase();
-                    const sOrd = (s.orderNo || '').trim().toUpperCase();
-                    return (itemInv && (sInv === itemInv || sOrd === itemInv)) ||
-                           (itemOrd && (sInv === itemOrd || sOrd === itemOrd));
-                });
+        const history = [];
+        const processedInvoices = new Set();
 
-
-                if (matchingSale) {
-                    // Check if this sale actually belongs to this customer
-                    const sCustId = (matchingSale.customerId || matchingSale.customer?._id || '').toString().trim();
-                    const sComp = (matchingSale.companyName || '').trim().toLowerCase();
-
-                    const idMatch = Boolean(targetId && sCustId && (targetId === sCustId));
-                    const compMatch = Boolean(vComp && sComp && vComp === sComp);
-
-                    // If matching sale has customer info and neither ID nor company name match this customer, exclude it!
-                    if ((sCustId || sComp) && !idMatch && !compMatch) {
-                        return null;
-                    }
-
-                    const pName = (item.product || item.productName || '').trim().toLowerCase();
-                    const bName = (item.brand || item.brandName || '').trim().toLowerCase();
-                    const itemQty = parseFloat(item.quantity || item.qty) || 0;
-                    const itemRate = parseFloat(item.rate || 0);
-
-                    const candidateEntries = [];
-                    (matchingSale.items || []).forEach(si => {
-                        const siProd = (si.productName || si.product || '').trim().toLowerCase();
-                        if (!pName || siProd === pName) {
-                            if (si.brandEntries && si.brandEntries.length > 0) {
-                                si.brandEntries.forEach(be => {
-                                    const beBrand = (be.brand || be.brandName || '').trim().toLowerCase();
-                                    if (!bName || beBrand === bName) {
-                                        candidateEntries.push(be);
-                                    }
-                                });
-                            } else {
-                                candidateEntries.push(si);
-                            }
-                        }
-                    });
-
-                    let matchedEntry = candidateEntries.find(entry => {
-                        const eQty = parseFloat(entry.quantity || entry.qty) || 0;
-                        return Math.abs(eQty - itemQty) < 0.001;
-                    });
-                    if (!matchedEntry) {
-                        matchedEntry = candidateEntries.find(entry => {
-                            const r = parseFloat(entry.unitPrice !== undefined && entry.unitPrice !== null && entry.unitPrice !== '' ? entry.unitPrice : entry.rate) || 0;
-                            return Math.abs(r - itemRate) < 0.001;
-                        });
-                    }
-                    if (!matchedEntry && candidateEntries.length === 1) {
-                        matchedEntry = candidateEntries[0];
-                    }
-
-                    let latestRate = null;
-                    if (matchedEntry) {
-                        const r = parseFloat(matchedEntry.unitPrice !== undefined && matchedEntry.unitPrice !== null && matchedEntry.unitPrice !== '' ? matchedEntry.unitPrice : matchedEntry.rate) || 0;
-                        if (r > 0) latestRate = r;
-                    }
-
-                    if (latestRate && Math.abs((parseFloat(item.rate) || 0) - latestRate) > 0.001) {
-                        const qty = parseFloat(item.quantity || item.qty) || 0;
-                        const bag = parseFloat(item.bag || item.packet) || 0;
-                        const isBagUom = (item.uom || viewData?.uom || '').toLowerCase() === 'bag';
-                        const newAmt = isBagUom && bag > 0 ? (bag * latestRate) : (qty * latestRate);
-                        const disc = parseFloat(item.discount) || 0;
-                        const paid = parseFloat(item.paid) || 0;
-                        return {
-                            ...item,
-                            rate: latestRate,
-                            amount: Number(newAmt.toFixed(2)),
-                            due: Number(Math.max(0, newAmt - disc - paid).toFixed(2))
-                        };
-                    }
-                }
-            }
-            return item;
-        }).filter(Boolean);
-
-        // Include any sales from effectiveSalesRecords that belong to this customer but are not in viewData.salesHistory
+        // 1. First, process all sales from effectiveSalesRecords that belong to this customer
         if (effectiveSalesRecords && effectiveSalesRecords.length > 0 && viewData) {
-            const existingInvoices = new Set(history.map(h => (h.invoiceNo || '').trim().toUpperCase()).filter(Boolean));
-
             effectiveSalesRecords.forEach(s => {
-
                 const sType = (s.saleType || '').toLowerCase();
                 const sInv = (s.invoiceNo || '').trim().toUpperCase();
+                const sOrd = (s.orderNo || '').trim().toUpperCase();
                 if (sType === 'order' || sInv.startsWith('ORD') || s.isOrderEntry === true) return;
                 if ((s.status || '').toLowerCase() === 'requested' || (s.status || '').toLowerCase() === 'rejected') return;
-                if (existingInvoices.has(sInv)) return;
 
                 const sCustId = (s.customerId || s.customer?._id || '').toString().trim();
                 const sComp = (s.companyName || '').trim().toLowerCase();
@@ -883,16 +797,30 @@ const Customer = ({
                 const compMatch = Boolean((!sCustId || sCustId === targetId) && vComp && sComp && vComp === sComp);
 
                 if (idMatch || compMatch) {
+                    if (sInv) processedInvoices.add(sInv);
+                    if (sOrd) processedInvoices.add(sOrd);
+
                     const items = s.items && Array.isArray(s.items) ? s.items : [];
+                    const vhMatch = (viewData?.salesHistory || []).find(h => {
+                        const hInv = (h.invoiceNo || '').trim().toUpperCase();
+                        const hOrd = (h.orderNo || '').trim().toUpperCase();
+                        return (sInv && (hInv === sInv || hOrd === sInv)) || (sOrd && (hInv === sOrd || hOrd === sOrd));
+                    });
+
                     if (items.length > 0) {
                         items.forEach((product, pIdx) => {
                             const brandEntries = product.brandEntries && Array.isArray(product.brandEntries) ? product.brandEntries : [];
                             if (brandEntries.length > 0) {
                                 brandEntries.forEach((entry, eIdx) => {
                                     const isFirstEntry = pIdx === 0 && eIdx === 0;
-                                    const qty = parseFloat(entry.quantity) || 0;
-                                    const rate = parseFloat(entry.unitPrice !== undefined && entry.unitPrice !== null && entry.unitPrice !== '' ? entry.unitPrice : (entry.rate || 0)) || 0;
-                                    const amt = parseFloat(entry.totalAmount || entry.amount) || (qty * rate);
+                                    const rate = parseFloat(entry.unitPrice !== undefined && entry.unitPrice !== null && entry.unitPrice !== '' ? entry.unitPrice : (entry.rate || 0)) || (parseFloat(vhMatch?.rate) || 0);
+                                    const qty = parseFloat(entry.originalQuantity) || 
+                                                ((parseFloat(entry.quantity) || 0) + (parseFloat(entry.returnQty) || 0)) || 
+                                                parseFloat(entry.quantity) || 
+                                                parseFloat(vhMatch?.quantity || vhMatch?.qty) || 0;
+                                    const amt = (qty > 0 && rate > 0)
+                                        ? (qty * rate)
+                                        : (parseFloat(entry.originalAmount) || parseFloat(entry.totalAmount || entry.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
                                     const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
                                     const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
                                     const due = isFirstEntry ? (parseFloat(s.dueAmount || s.due) || Math.max(0, amt - paid - discount)) : amt;
@@ -904,7 +832,7 @@ const Customer = ({
                                         orderNo: s.orderNo || '',
                                         lcNo: entry.lcNo || product.lcNo || s.lcNo || '',
                                         product: product.productName || product.product || '',
-                                        brand: entry.brand || entry.brandName || '',
+                                        brand: entry.brand || entry.brandName || product.brand || product.brandName || s.brand || '',
                                         quantity: qty,
                                         rate: rate,
                                         unitPrice: rate,
@@ -914,15 +842,20 @@ const Customer = ({
                                         paid: paid,
                                         due: due,
                                         discount: discount,
-                                        warehouse: entry.warehouseName || '',
+                                        warehouse: entry.warehouseName || product.warehouseName || '',
                                         status: s.status || 'Pending'
                                     });
                                 });
                             } else {
                                 const isFirstEntry = pIdx === 0;
-                                const qty = parseFloat(product.quantity || s.quantity) || 0;
-                                const rate = parseFloat(product.unitPrice || product.rate || s.unitPrice || 0) || 0;
-                                const amt = parseFloat(product.totalAmount || product.amount) || (qty * rate);
+                                const rate = parseFloat(product.unitPrice || product.rate || s.unitPrice || 0) || (parseFloat(vhMatch?.rate) || 0);
+                                const qty = parseFloat(product.originalQuantity || s.originalQuantity) || 
+                                            ((parseFloat(product.quantity || s.quantity) || 0) + (parseFloat(product.returnQty || s.returnQty) || 0)) || 
+                                            parseFloat(product.quantity || s.quantity) || 
+                                            parseFloat(vhMatch?.quantity || vhMatch?.qty) || 0;
+                                const amt = (qty > 0 && rate > 0)
+                                    ? (qty * rate)
+                                    : (parseFloat(product.originalAmount || s.originalAmount) || parseFloat(product.totalAmount || product.amount || s.totalAmount || s.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
                                 const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
                                 const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
                                 const due = isFirstEntry ? (parseFloat(s.dueAmount || s.due) || Math.max(0, amt - paid - discount)) : amt;
@@ -934,7 +867,7 @@ const Customer = ({
                                     orderNo: s.orderNo || '',
                                     lcNo: product.lcNo || s.lcNo || '',
                                     product: product.productName || product.product || '',
-                                    brand: product.brand || '',
+                                    brand: product.brand || product.brandName || s.brand || '',
                                     quantity: qty,
                                     rate: rate,
                                     unitPrice: rate,
@@ -950,10 +883,22 @@ const Customer = ({
                             }
                         });
                     }
-                    existingInvoices.add(sInv);
                 }
             });
         }
+
+        // 2. Include any legacy sales from viewData.salesHistory that are NOT in effectiveSalesRecords
+        (viewData?.salesHistory || []).forEach(item => {
+            const itemInv = (item.invoiceNo || '').trim().toUpperCase();
+            const itemOrd = (item.orderNo || '').trim().toUpperCase();
+            if ((itemInv && processedInvoices.has(itemInv)) || (itemOrd && processedInvoices.has(itemOrd))) {
+                return; // Already processed from effectiveSalesRecords
+            }
+            history.push({
+                ...item,
+                brand: item.brand || item.brandName || ''
+            });
+        });
 
         return history;
     }, [viewData, effectiveSalesRecords]);
@@ -4006,26 +3951,36 @@ const Customer = ({
                                                             )}
                                                             {combinedHistory && combinedHistory.length > 0 ? (
                                                                 combinedHistory.reduce((acc, item) => {
-                                                                    const invoice = item.invoiceNo || item.lcNo;
-                                                                    const existing = item.type === 'sale' && invoice
-                                                                        ? acc.find(x => x.type === 'sale' && (x.invoiceNo === invoice || x.lcNo === invoice))
+                                                                    const invoice = (item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '').trim();
+                                                                    const itemDate = formatDate(item.date);
+                                                                    const canMerge = Boolean(invoice && invoice !== '—' && invoice !== '-' && (item.type === 'sale' || item.type === 'purchase' || item.type === 'return'));
+
+                                                                    const existing = canMerge
+                                                                        ? acc.find(x => x.type === item.type && formatDate(x.date) === itemDate && ((x.invoiceNo || x.lcNo || x.purchaseNo || '').trim() === invoice))
                                                                         : null;
 
                                                                     if (existing) {
                                                                         existing.amount = (parseFloat(existing.amount) || 0) + (parseFloat(item.amount) || 0);
                                                                         existing.paid = (parseFloat(existing.paid) || 0) + (parseFloat(item.paid) || 0);
+                                                                        existing.truck = (parseFloat(existing.truck) || 0) + (parseFloat(item.truck) || 0);
+                                                                        existing.discount = (parseFloat(existing.discount) || 0) + (parseFloat(item.discount) || 0);
 
                                                                         if (!existing.items) {
                                                                             existing.items = [{
                                                                                 product: existing.product_original || existing.product,
-                                                                                quantity: parseFloat(existing.quantity_original || existing.quantity),
-                                                                                rate: parseFloat(existing.rate_original || existing.rate)
+                                                                                brand: existing.brand_original || existing.brand,
+                                                                                quantity: parseFloat(existing.quantity_original || existing.quantity) || 0,
+                                                                                rate: parseFloat(existing.rate_original || existing.rate) || 0
                                                                             }];
                                                                         }
 
                                                                         const itemRate = parseFloat(item.rate || 0);
+                                                                        const itemBrand = (item.brand || '').trim();
+                                                                        const itemProduct = (item.product || '').trim();
+
                                                                         const matchingItem = existing.items.find(si =>
-                                                                            (si.product?.trim() === item.product?.trim()) &&
+                                                                            (si.product?.trim() === itemProduct) &&
+                                                                            ((si.brand || '').trim() === itemBrand) &&
                                                                             (parseFloat(si.rate || 0) === itemRate)
                                                                         );
                                                                         if (matchingItem) {
@@ -4033,13 +3988,15 @@ const Customer = ({
                                                                         } else {
                                                                             existing.items.push({
                                                                                 product: item.product,
+                                                                                brand: item.brand,
                                                                                 quantity: parseFloat(item.quantity || 0),
                                                                                 rate: itemRate
                                                                             });
                                                                         }
 
-                                                                        existing.product = existing.items.map(si => si.product || '—').join('\n');
-                                                                        existing.quantity_display = existing.items.map(si => si.quantity.toLocaleString('en-US')).join('\n');
+                                                                        existing.product_display = existing.items.map(si => `${si.product || '—'}${si.brand && si.brand !== '-' ? ` (${si.brand})` : ''}`).join('\n');
+                                                                        existing.product = existing.product_display;
+                                                                        existing.quantity_display = existing.items.map(si => si.quantity > 0 ? si.quantity.toLocaleString('en-US') : '—').join('\n');
                                                                         existing.rate_display = existing.items.map(si => si.rate > 0 ? `৳${si.rate.toLocaleString('en-IN')}` : '—').join('\n');
 
                                                                         existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || 0));
@@ -4050,6 +4007,7 @@ const Customer = ({
                                                                     acc.push({
                                                                         ...item,
                                                                         product_original: item.product,
+                                                                        brand_original: item.brand,
                                                                         quantity_original: item.quantity,
                                                                         rate_original: item.rate
                                                                     });
@@ -4076,17 +4034,17 @@ const Customer = ({
                                                                                     </span>
                                                                                     <span className="whitespace-pre-wrap font-medium">
                                                                                         {item.type === 'sale'
-                                                                                            ? (item.product
+                                                                                            ? (item.product_display || (item.product
                                                                                                 ? `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}`
-                                                                                                : 'Sales Invoice')
+                                                                                                : 'Sales Invoice'))
                                                                                             : (item.type === 'purchase'
-                                                                                                ? (item.product
+                                                                                                ? (item.product_display || (item.product
                                                                                                     ? `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}`
-                                                                                                    : 'Purchase Invoice')
+                                                                                                    : 'Purchase Invoice'))
                                                                                                 : (item.type === 'return'
-                                                                                                    ? (item.product
+                                                                                                    ? (item.product_display || (item.product
                                                                                                         ? `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}`
-                                                                                                        : 'Product Return')
+                                                                                                        : 'Product Return'))
                                                                                                     : (item.type === 'payment'
                                                                                                         ? `${item.method}${item.bankName || item.receiveBy ? ` (${item.bankName || item.receiveBy})` : ''}`
                                                                                                         : `${item.method}${item.bankName || item.paidBy ? ` (${item.bankName || item.paidBy})` : ''}`
@@ -4188,28 +4146,37 @@ const Customer = ({
                                                     <div className="block md:hidden p-4 space-y-3">
                                                         {combinedHistory && combinedHistory.length > 0 ? (
                                                             combinedHistory.reduce((acc, item) => {
-                                                                const invoice = item.invoiceNo || item.lcNo;
-                                                                const existing = item.type === 'sale' && invoice
-                                                                    ? acc.find(x => x.type === 'sale' && (x.invoiceNo === invoice || x.lcNo === invoice))
+                                                                const invoice = (item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '').trim();
+                                                                const itemDate = formatDate(item.date);
+                                                                const canMerge = Boolean(invoice && invoice !== '—' && invoice !== '-' && (item.type === 'sale' || item.type === 'purchase' || item.type === 'return'));
+
+                                                                const existing = canMerge
+                                                                    ? acc.find(x => x.type === item.type && formatDate(x.date) === itemDate && ((x.invoiceNo || x.lcNo || x.purchaseNo || '').trim() === invoice))
                                                                     : null;
 
                                                                 if (existing) {
                                                                     existing.amount = (parseFloat(existing.amount) || 0) + (parseFloat(item.amount) || 0);
                                                                     existing.paid = (parseFloat(existing.paid) || 0) + (parseFloat(item.paid) || 0);
                                                                     existing.truck = (parseFloat(existing.truck) || 0) + (parseFloat(item.truck) || 0);
+                                                                    existing.discount = (parseFloat(existing.discount) || 0) + (parseFloat(item.discount) || 0);
 
                                                                     // Initialize sub-items for merging logic if not present
                                                                     if (!existing.items) {
                                                                         existing.items = [{
                                                                             product: existing.product_original || existing.product,
-                                                                            quantity: parseFloat(existing.quantity_original || existing.quantity),
-                                                                            rate: parseFloat(existing.rate_original || existing.rate)
+                                                                            brand: existing.brand_original || existing.brand,
+                                                                            quantity: parseFloat(existing.quantity_original || existing.quantity) || 0,
+                                                                            rate: parseFloat(existing.rate_original || existing.rate) || 0
                                                                         }];
                                                                     }
 
                                                                     const itemRate = parseFloat(item.rate || 0);
+                                                                    const itemBrand = (item.brand || '').trim();
+                                                                    const itemProduct = (item.product || '').trim();
+
                                                                     const matchingItem = existing.items.find(si =>
-                                                                        (si.product?.trim() === item.product?.trim()) &&
+                                                                        (si.product?.trim() === itemProduct) &&
+                                                                        ((si.brand || '').trim() === itemBrand) &&
                                                                         (parseFloat(si.rate || 0) === itemRate)
                                                                     );
                                                                     if (matchingItem) {
@@ -4217,14 +4184,16 @@ const Customer = ({
                                                                     } else {
                                                                         existing.items.push({
                                                                             product: item.product,
+                                                                            brand: item.brand,
                                                                             quantity: parseFloat(item.quantity || 0),
                                                                             rate: itemRate
                                                                         });
                                                                     }
 
                                                                     // Rebuild display properties
-                                                                    existing.product = existing.items.map(si => si.product || '—').join('\n');
-                                                                    existing.quantity_display = existing.items.map(si => si.quantity.toLocaleString('en-US')).join('\n');
+                                                                    existing.product_display = existing.items.map(si => `${si.product || '—'}${si.brand && si.brand !== '-' ? ` (${si.brand})` : ''}`).join('\n');
+                                                                    existing.product = existing.product_display;
+                                                                    existing.quantity_display = existing.items.map(si => si.quantity > 0 ? si.quantity.toLocaleString('en-US') : '—').join('\n');
                                                                     existing.rate_display = existing.items.map(si => si.rate > 0 ? `৳${si.rate.toLocaleString('en-IN')}` : '—').join('\n');
 
                                                                     existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || 0));
@@ -4235,6 +4204,7 @@ const Customer = ({
                                                                 acc.push({
                                                                     ...item,
                                                                     product_original: item.product,
+                                                                    brand_original: item.brand,
                                                                     quantity_original: item.quantity,
                                                                     rate_original: item.rate
                                                                 });
@@ -4268,7 +4238,7 @@ const Customer = ({
                                                                                     <>
                                                                                         <div className="flex justify-between items-start">
                                                                                             <span className="text-gray-500">Product:</span>
-                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.product}</span>
+                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.product_display || item.product}</span>
                                                                                         </div>
                                                                                         <div className="flex justify-between items-start">
                                                                                             <span className="text-gray-500">Qty:</span>
