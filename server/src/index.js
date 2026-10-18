@@ -33,9 +33,11 @@ const attUpload = multer ? multer({
   single: () => (req, res, next) => next()
 };
 
-let ZKLib;
+let ZKLib, ZKConstants, ZKUtils;
 try {
   ZKLib = require('node-zklib');
+  ZKConstants = require('node-zklib/constants');
+  ZKUtils = require('node-zklib/utils');
 } catch (e) {
   console.warn('[Attendance] node-zklib not loaded:', e.message);
 }
@@ -7747,6 +7749,146 @@ app.post('/api/attendance/device/push', async (req, res) => {
   }
 });
 
+// ─── Robust ZKTeco Attendance Log Fetcher (Handles 50k+ logs without drops) ──
+async function fetchZkAttendances(ip, port = 4370, timeout = 30000) {
+  if (!ZKLib || !ZKConstants || !ZKUtils) {
+    throw new Error('node-zklib is not installed or available on this server.');
+  }
+  const { COMMANDS, REQUEST_DATA } = ZKConstants;
+  const { createTCPHeader, decodeRecordData40 } = ZKUtils;
+
+  const zk = new ZKLib(ip, Number(port) || 4370, Number(timeout) || 30000, 4000);
+  await zk.createSocket();
+  const z = zk.zklibTcp;
+
+  let users = [];
+  try {
+    const userData = await zk.getUsers();
+    users = Array.isArray(userData?.data) ? userData.data : (Array.isArray(userData) ? userData : []);
+  } catch (_) {}
+
+  // Request attendance logs size
+  z.replyId++;
+  const buf = createTCPHeader(COMMANDS.CMD_DATA_WRRQ, z.sessionId, z.replyId, REQUEST_DATA.GET_ATTENDANCE_LOGS);
+  const reply = await z.requestData(buf);
+  const recvData = reply.subarray(16);
+  const size = recvData.readUIntLE(1, 4);
+
+  const MAX_CHUNK = 16 * 1024;
+  let remain = size % MAX_CHUNK;
+  let numberChunks = Math.floor(size / MAX_CHUNK);
+  let totalChunks = numberChunks + (remain > 0 ? 1 : 0);
+
+  let allPayload = Buffer.from([]);
+
+  for (let c = 0; c < totalChunks; c++) {
+    const start = c * MAX_CHUNK;
+    const chunkSize = (c === totalChunks - 1 && remain > 0) ? remain : MAX_CHUNK;
+
+    const chunkData = await new Promise((resolve, reject) => {
+      z.replyId++;
+      const reqData = Buffer.alloc(8);
+      reqData.writeUInt32LE(start, 0);
+      reqData.writeUInt32LE(chunkSize, 4);
+      const chunkBuf = createTCPHeader(COMMANDS.CMD_DATA_RDY, z.sessionId, z.replyId, reqData);
+
+      let bufferAcc = Buffer.from([]);
+      let chunkTimer = setTimeout(() => {
+        z.socket.off('data', onData);
+        reject(new Error(`Timeout receiving chunk ${c + 1}/${totalChunks}`));
+      }, 8000);
+
+      function onData(d) {
+        bufferAcc = Buffer.concat([bufferAcc, d]);
+
+        while (bufferAcc.length >= 8) {
+          if (bufferAcc.compare(Buffer.from([0x50, 0x50, 0x82, 0x7d]), 0, 4, 0, 4) !== 0) {
+            bufferAcc = bufferAcc.subarray(1);
+            continue;
+          }
+          const packetLen = bufferAcc.readUInt16LE(4);
+          const totalPacketLen = 8 + packetLen;
+          if (bufferAcc.length < totalPacketLen) break;
+
+          const packet = bufferAcc.subarray(0, totalPacketLen);
+          bufferAcc = bufferAcc.subarray(totalPacketLen);
+
+          const commandId = packet.readUInt16LE(8);
+          if (commandId === COMMANDS.CMD_DATA) {
+            clearTimeout(chunkTimer);
+            z.socket.off('data', onData);
+            resolve(packet.subarray(16));
+            return;
+          }
+        }
+      }
+
+      z.socket.on('data', onData);
+      z.socket.write(chunkBuf);
+    });
+
+    allPayload = Buffer.concat([allPayload, chunkData]);
+  }
+
+  await zk.disconnect();
+
+  const logBuffer = allPayload.subarray(4);
+  const records = [];
+  for (let i = 0; i <= logBuffer.length - 40; i += 40) {
+    const slice = logBuffer.subarray(i, i + 40);
+    const r = decodeRecordData40(slice);
+    const verifyByte = slice[26];
+    const stateByte = slice[31];
+
+    let verifyMode = 'FINGERPRINT';
+    if (verifyByte === 4) verifyMode = 'CARD';
+    else if (verifyByte === 0) verifyMode = 'PASSWORD';
+    else if (verifyByte === 15) verifyMode = 'FACE';
+    else if (verifyByte === 1) verifyMode = 'FINGERPRINT';
+
+    records.push({
+      ...r,
+      verifyMode,
+      verifyByte,
+      stateByte
+    });
+  }
+
+  // Calculate intelligent alternating punchType (IN / OUT / BREAK)
+  const byUserDay = new Map();
+  records.forEach(r => {
+    const d = r.recordTime instanceof Date ? r.recordTime : new Date(r.recordTime);
+    if (isNaN(d.getTime())) return;
+    const dayStr = d.toISOString().split('T')[0];
+    const key = String(r.deviceUserId || r.userSn) + '_' + dayStr;
+    if (!byUserDay.has(key)) byUserDay.set(key, []);
+    byUserDay.get(key).push(r);
+  });
+
+  const stateMap = { 0: 'IN', 1: 'OUT', 2: 'BREAK_OUT', 3: 'BREAK_IN', 4: 'OT_IN', 5: 'OT_OUT' };
+
+  byUserDay.forEach(punches => {
+    punches.sort((a, b) => new Date(a.recordTime).getTime() - new Date(b.recordTime).getTime());
+    punches.forEach((p, idx) => {
+      if (p.stateByte === 0 || p.stateByte === undefined) {
+        if (punches.length === 1) {
+          p.punchType = 'IN';
+        } else if (idx === 0) {
+          p.punchType = 'IN';
+        } else if (idx === punches.length - 1) {
+          p.punchType = 'OUT';
+        } else {
+          p.punchType = (idx % 2 === 0) ? 'IN' : 'OUT';
+        }
+      } else {
+        p.punchType = stateMap[p.stateByte] || 'IN';
+      }
+    });
+  });
+
+  return { records, users };
+}
+
 // ─── Multi-Method Ingestion Helper ──────────────────────────────────────────
 async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
   if (!punches || punches.length === 0) return { newInserted: 0, skippedDuplicates: 0 };
@@ -7755,44 +7897,135 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
   const mappingMap = new Map();
   allMappings.forEach(m => mappingMap.set(Number(m.enrollId), m.employeeId));
 
+  const validPunches = punches
+    .map(p => ({
+      enrollId: Number(p.enrollId),
+      punchTime: new Date(p.punchTime),
+      punchType: p.punchType || 'UNKNOWN',
+      verifyMode: p.verifyMode || 'FINGERPRINT/CARD',
+      deviceId: p.deviceId || defaultDeviceId,
+      rawPayload: p.rawPayload || ''
+    }))
+    .filter(p => p.enrollId > 0 && !isNaN(p.punchTime.getTime()))
+    .sort((a, b) => b.punchTime.getTime() - a.punchTime.getTime());
+
+  if (validPunches.length === 0) return { newInserted: 0, skippedDuplicates: 0 };
+
   let newInserted = 0;
   let skippedDuplicates = 0;
+  const BATCH_SIZE = 500;
 
-  for (const p of punches) {
-    const enrollId = Number(p.enrollId);
-    const punchTime = new Date(p.punchTime);
-    if (!enrollId || isNaN(punchTime.getTime())) continue;
+  for (let i = 0; i < validPunches.length; i += BATCH_SIZE) {
+    const batch = validPunches.slice(i, i + BATCH_SIZE);
+    const times = batch.map(b => b.punchTime.getTime());
+    const minTime = new Date(Math.min(...times) - 60000);
+    const maxTime = new Date(Math.max(...times) + 60000);
 
-    // Deduplicate: same enrollId within +/- 60 seconds
-    const windowStart = new Date(punchTime.getTime() - 60000);
-    const windowEnd = new Date(punchTime.getTime() + 60000);
+    const existingDocs = await AttendancePunch.find({
+      punchTime: { $gte: minTime, $lte: maxTime }
+    }, 'enrollId punchTime').lean();
 
-    const exists = await AttendancePunch.findOne({
-      enrollId,
-      punchTime: { $gte: windowStart, $lte: windowEnd }
-    });
+    const toInsert = [];
 
-    if (exists) {
-      skippedDuplicates++;
-      continue;
+    for (const p of batch) {
+      const pTime = p.punchTime.getTime();
+      const isDup = existingDocs.some(e =>
+        Number(e.enrollId) === p.enrollId &&
+        Math.abs(new Date(e.punchTime).getTime() - pTime) <= 60000
+      );
+      if (isDup) {
+        skippedDuplicates++;
+        if (p.punchType && p.punchType !== 'UNKNOWN') {
+          AttendancePunch.updateOne(
+            {
+              enrollId: p.enrollId,
+              punchTime: {
+                $gte: new Date(pTime - 60000),
+                $lte: new Date(pTime + 60000)
+              },
+              $or: [{ punchType: 'UNKNOWN' }, { verifyMode: 'FINGERPRINT/CARD' }]
+            },
+            { $set: { punchType: p.punchType, verifyMode: p.verifyMode } }
+          ).catch(() => {});
+        }
+        continue;
+      }
+
+      const isBatchDup = toInsert.some(e =>
+        Number(e.enrollId) === p.enrollId &&
+        Math.abs(e.punchTime.getTime() - pTime) <= 60000
+      );
+      if (isBatchDup) {
+        skippedDuplicates++;
+        continue;
+      }
+
+      const employeeId = mappingMap.get(p.enrollId) || null;
+      toInsert.push({
+        deviceId: p.deviceId,
+        enrollId: p.enrollId,
+        employeeId,
+        punchTime: p.punchTime,
+        punchType: p.punchType,
+        verifyMode: p.verifyMode,
+        rawPayload: p.rawPayload,
+        processed: false,
+        unmatched: !employeeId
+      });
+      existingDocs.push({ enrollId: p.enrollId, punchTime: p.punchTime });
     }
 
-    const employeeId = mappingMap.get(enrollId) || null;
+    if (toInsert.length > 0) {
+      await AttendancePunch.insertMany(toInsert, { ordered: false });
+      newInserted += toInsert.length;
+    }
+  }
 
-    const newPunch = new AttendancePunch({
-      deviceId: p.deviceId || defaultDeviceId,
-      enrollId,
-      employeeId,
-      punchTime,
-      punchType: p.punchType || 'UNKNOWN',
-      verifyMode: p.verifyMode || 'UNKNOWN',
-      rawPayload: p.rawPayload || '',
-      processed: false,
-      unmatched: !employeeId
+  // Auto-process today's attendance logs for any mapped employees who punched today
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const dayStart = new Date(`${todayStr}T00:00:00.000Z`);
+    const dayEnd = new Date(`${todayStr}T23:59:59.999Z`);
+    const todayEmps = await AttendancePunch.distinct('employeeId', {
+      punchTime: { $gte: dayStart, $lte: dayEnd },
+      employeeId: { $ne: null }
     });
 
-    await newPunch.save();
-    newInserted++;
+    for (const empId of todayEmps) {
+      const result = await processEmployeeDay(empId, todayStr);
+      if (result) {
+        const emp = await Employee.findById(empId);
+        let dec;
+        try {
+          dec = decryptData(emp?.data);
+          if (dec && dec.data && typeof dec.data === 'string' && !dec.employeeId) {
+            try { dec = decryptData(dec.data); } catch (_) {}
+          }
+        } catch (_) {}
+
+        await AttendanceLog.findOneAndUpdate(
+          { employeeId: empId, date: todayStr },
+          {
+            $set: {
+              employeeId: empId,
+              employeeName: dec?.name || dec?.firstName || 'Employee',
+              employeeEmpId: dec?.employeeId || '',
+              date: todayStr,
+              shiftId: result.shiftId,
+              firstPunchIn: result.firstIn,
+              lastPunchOut: result.lastOut,
+              totalHours: result.totalHours,
+              overtimeHours: result.overtimeHours,
+              status: result.status,
+              manualOverride: false
+            }
+          },
+          { upsert: true }
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('[Attendance] Auto-process today warning:', err.message);
   }
 
   return { newInserted, skippedDuplicates };
@@ -7803,33 +8036,17 @@ apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('attendance', 
   if (!ZKLib) {
     return res.status(500).json({ message: 'node-zklib is not installed or available on this server.' });
   }
-  const { ip, port = 4370, timeout = 5000 } = req.body;
+  const { ip, port = 4370, timeout = 30000 } = req.body;
   if (!ip) return res.status(400).json({ message: 'Device IP address is required (e.g. 192.168.1.201).' });
 
-  const zk = new ZKLib(ip, Number(port) || 4370, Number(timeout) || 5000, 4000);
   try {
-    await zk.createSocket();
-    const attendanceData = await zk.getAttendances();
-    let records = [];
-    if (attendanceData && Array.isArray(attendanceData.data)) {
-      records = attendanceData.data;
-    } else if (Array.isArray(attendanceData)) {
-      records = attendanceData;
-    }
-
-    let users = [];
-    try {
-      const userData = await zk.getUsers();
-      users = Array.isArray(userData?.data) ? userData.data : (Array.isArray(userData) ? userData : []);
-    } catch (_) { }
-
-    await zk.disconnect();
+    const { records, users } = await fetchZkAttendances(ip, Number(port) || 4370, Number(timeout) || 30000);
 
     const punchesToIngest = records.map(r => ({
       enrollId: parseInt(r.deviceUserId || r.userSn || 0),
       punchTime: new Date(r.recordTime),
-      punchType: 'UNKNOWN',
-      verifyMode: 'FINGERPRINT/CARD',
+      punchType: r.punchType || 'IN',
+      verifyMode: r.verifyMode || 'FINGERPRINT',
       deviceId: `F8-${ip}`,
       rawPayload: JSON.stringify(r)
     })).filter(p => p.enrollId > 0 && !isNaN(p.punchTime.getTime()));
@@ -7845,7 +8062,6 @@ apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('attendance', 
       usersFound: users.length
     });
   } catch (err) {
-    try { await zk.disconnect(); } catch (_) { }
     console.error('[Attendance] ZK direct IP sync error:', err.message);
     res.status(500).json({
       success: false,
@@ -8071,8 +8287,11 @@ apiRouter.post('/api/attendance/mappings', verifyPermission('attendance', 'add')
       { upsert: true, returnDocument: 'after' }
     );
 
-    // Retroactively link any unmatched punches for this enrollId
-    await AttendancePunch.updateMany({ enrollId: Number(enrollId), unmatched: true }, { employeeId, unmatched: false });
+    // Retroactively link any punches for this enrollId
+    await AttendancePunch.updateMany(
+      { enrollId: { $in: [Number(enrollId), String(enrollId)] } },
+      { employeeId, unmatched: false }
+    );
 
     res.json(mapping);
   } catch (err) { res.status(400).json({ message: err.message }); }
@@ -8080,7 +8299,13 @@ apiRouter.post('/api/attendance/mappings', verifyPermission('attendance', 'add')
 
 apiRouter.delete('/api/attendance/mappings/:id', verifyPermission('attendance', 'delete'), async (req, res) => {
   try {
-    await DeviceMapping.findByIdAndDelete(req.params.id);
+    const mapping = await DeviceMapping.findByIdAndDelete(req.params.id);
+    if (mapping) {
+      await AttendancePunch.updateMany(
+        { enrollId: { $in: [Number(mapping.enrollId), String(mapping.enrollId)] } },
+        { employeeId: null, unmatched: true }
+      );
+    }
     res.json({ message: 'Mapping deleted' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -8157,20 +8382,74 @@ const buildOwnEmployeeFilter = async (user) => {
   return orConditions;
 };
 
+// ─── 2b. Unmapped Enroll IDs on Biometric Devices ──────────────────────────
+apiRouter.get('/api/attendance/unmapped-enrolls', verifyPermission('attendance', 'view'), async (req, res) => {
+  try {
+    const existingMappings = await DeviceMapping.find({}, 'enrollId').lean();
+    const mappedIds = existingMappings.flatMap(m => {
+      const num = Number(m.enrollId);
+      const str = String(m.enrollId);
+      return isNaN(num) ? [str] : [num, str];
+    });
+
+    const unmapped = await AttendancePunch.aggregate([
+      {
+        $match: {
+          $or: [{ unmatched: true }, { employeeId: null }],
+          enrollId: { $nin: mappedIds }
+        }
+      },
+      {
+        $group: {
+          _id: '$enrollId',
+          count: { $sum: 1 },
+          lastPunch: { $max: '$punchTime' },
+          firstPunch: { $min: '$punchTime' },
+          deviceId: { $first: '$deviceId' }
+        }
+      },
+      { $sort: { count: -1 } },
+      { $limit: 100 }
+    ]);
+    res.json(unmapped.map(u => ({
+      enrollId: u._id,
+      count: u.count,
+      punchCount: u.count,
+      lastPunch: u.lastPunch,
+      firstPunch: u.firstPunch,
+      deviceId: u.deviceId
+    })));
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 // ─── 3. Raw Punches ───────────────────────────────────────────────────────────
 apiRouter.get('/api/attendance/punches', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
     const { date, employeeId, unmatched, limit = 200 } = req.query;
     const query = {};
-    if (date) {
-      query.punchTime = { $gte: new Date(`${date}T00:00:00.000Z`), $lte: new Date(`${date}T23:59:59.999Z`) };
+    if (date && typeof date === 'string' && date.trim() !== '') {
+      const d = date.trim();
+      let dayStart, dayEnd;
+      if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(d)) {
+        const [day, month, year] = d.split(/[-/]/);
+        dayStart = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`);
+        dayEnd = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T23:59:59.999Z`);
+      } else {
+        dayStart = new Date(`${d}T00:00:00.000Z`);
+        dayEnd = new Date(`${d}T23:59:59.999Z`);
+      }
+      if (!isNaN(dayStart.getTime()) && !isNaN(dayEnd.getTime())) {
+        query.punchTime = { $gte: dayStart, $lte: dayEnd };
+      }
     }
     const canViewAll = await canUserViewAllAttendance(req.session.user);
     if (!canViewAll) {
       query.$or = await buildOwnEmployeeFilter(req.session.user);
     } else {
       if (employeeId) query.employeeId = employeeId;
-      if (unmatched === 'true') query.unmatched = true;
+      if (unmatched === 'true') {
+        query.$or = [{ unmatched: true }, { employeeId: null }];
+      }
     }
 
     const punches = await AttendancePunch.find(query).sort({ punchTime: -1 }).limit(Number(limit));

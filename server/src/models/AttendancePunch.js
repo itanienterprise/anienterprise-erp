@@ -5,11 +5,14 @@ const attendancePunchSchema = new mongoose.Schema({
   enrollId:   { type: Number, required: true },
   employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
   punchTime:  { type: Date, required: true },
-  punchType:  { type: String, enum: ['IN', 'OUT', 'BREAK_IN', 'BREAK_OUT', 'UNKNOWN'], default: 'UNKNOWN' },
+  punchType:  { type: String, enum: ['IN', 'OUT', 'BREAK_IN', 'BREAK_OUT', 'OT_IN', 'OT_OUT', 'UNKNOWN'], default: 'UNKNOWN' },
   verifyMode: { type: String, default: 'UNKNOWN' },
   rawPayload: { type: String, default: '' },
   processed:  { type: Boolean, default: false },
   unmatched:  { type: Boolean, default: false }
 }, { timestamps: true });
+
+attendancePunchSchema.index({ enrollId: 1, punchTime: -1 });
+attendancePunchSchema.index({ punchTime: -1 });
 
 module.exports = mongoose.model('AttendancePunch', attendancePunchSchema);

@@ -750,8 +750,45 @@ export const calculateLcConclusion = ({
     // 9. Short Qty in kg = LC Inv Qty in kg - Rcv Qty in kg
     const shortQtyKg = Math.max(0, invQtyKg - rcvQtyKg);
 
-    // 10. Unsold Stock in kg = Rcv Qty in kg - Sales Qty in kg - Damage Qty in kg
-    const unsoldStockKg = Math.max(0, rcvQtyKg - salesQtyKg - damageQtyKg);
+    // 10. Unsold Stock in kg
+    // When multiple products exist under an LC, do not deduct negative stock of an oversold product from other products' unsold stock
+    let unsoldStockKg = 0;
+    if (productSummary && productSummary.length > 0) {
+        unsoldStockKg = productSummary.reduce((sum, p) => {
+            const inhouse = parseFloat(p.inhouseQty) || 0;
+            const sale = parseFloat(p.saleQty) || 0;
+            const damage = parseFloat(p.damageQty) || 0;
+            const unsold = Math.max(0, inhouse - sale - damage);
+            return sum + unsold;
+        }, 0);
+    } else if (selectedLcStocks && selectedLcStocks.length > 0) {
+        const prodMap = {};
+        selectedLcStocks.forEach(item => {
+            const prodName = item.productName || item.product || 'default';
+            if (!prodMap[prodName]) prodMap[prodName] = { inhouse: 0, sale: 0, damage: 0 };
+            const qty = parseFloat(item.quantity) || 0;
+            const short = parseFloat(item.sweepedQuantity) || 0;
+            const inhouse = (item.inHouseQuantity !== undefined && item.inHouseQuantity !== null && item.inHouseQuantity !== '')
+                ? (parseFloat(item.inHouseQuantity) || 0)
+                : Math.max(0, qty - short);
+            prodMap[prodName].inhouse += inhouse;
+        });
+        (selectedLcDamages || []).forEach(d => {
+            const prodName = d.productName || 'default';
+            if (!prodMap[prodName]) prodMap[prodName] = { inhouse: 0, sale: 0, damage: 0 };
+            prodMap[prodName].damage += (parseFloat(d.quantity || d.itemQty) || 0);
+        });
+        (selectedLcSales || []).forEach(s => {
+            const prodName = s.productName || s.product || 'default';
+            if (!prodMap[prodName]) prodMap[prodName] = { inhouse: 0, sale: 0, damage: 0 };
+            prodMap[prodName].sale += (parseFloat(s.quantity) || 0);
+        });
+        unsoldStockKg = Object.values(prodMap).reduce((sum, p) => {
+            return sum + Math.max(0, p.inhouse - p.sale - p.damage);
+        }, 0);
+    } else {
+        unsoldStockKg = Math.max(0, rcvQtyKg - salesQtyKg - damageQtyKg);
+    }
 
     // 11. LC Invest = LC Inv Qty in kg * Total Rate/kg in BDT
     const lcInvest = (invQtyKg > 0 && totalRatePerKgBdt > 0)
@@ -767,12 +804,49 @@ export const calculateLcConclusion = ({
     // 14. Sales Value/kg
     const salesValuePerKg = salesQtyKg > 0 ? (salesValue / salesQtyKg) : 0;
 
-    // 15. Unsold Stock Price (Appx) = Unsold Stock in kg * Sales Value/kg
-    const unsoldStockPriceAppx = unsoldStockKg > 0
-        ? (salesValuePerKg > 0
-            ? Math.round(unsoldStockKg * salesValuePerKg)
-            : (parseFloat(profitLossData?.summary?.currentStockValue || 0) || Math.round(unsoldStockKg * totalRatePerKgBdt)))
-        : 0;
+    const getProductAvgCost = (prodName, p) => {
+        const clean = (val) => String(val || '').trim().toLowerCase();
+        const targetClean = clean(prodName);
+        if (selectedLcCostOfGoods && selectedLcCostOfGoods.length > 0) {
+            const matchingCog = selectedLcCostOfGoods.filter(rec => clean(rec.product) === targetClean);
+            if (matchingCog.length > 0) {
+                let totalQty = 0;
+                let totalBill = 0;
+                matchingCog.forEach(rec => {
+                    const costingKg = typeof getRecCostingKg === 'function' ? getRecCostingKg(rec) : (parseFloat(rec.costingKg) || 0);
+                    const q = parseFloat(rec.quantity) || 0;
+                    totalQty += q;
+                    totalBill += Math.round(costingKg * q);
+                });
+                if (totalQty > 0 && totalBill > 0) {
+                    return totalBill / totalQty;
+                }
+            }
+        }
+        if (p) {
+            if (p.inhouseQty > 0 && p.inhousePrice > 0) return p.inhousePrice / p.inhouseQty;
+            if (p.purchaseQty > 0 && p.purchasePrice > 0) return p.purchasePrice / p.purchaseQty;
+        }
+        return totalRatePerKgBdt > 0 ? totalRatePerKgBdt : (rcvQtyKg > 0 ? (totalRateKgBdt / rcvQtyKg) : 0);
+    };
+
+    // 15. Unsold Stock Price (Appx) = calculate based on product-wise average cost
+    let unsoldStockPriceAppx = 0;
+    if (productSummary && productSummary.length > 0) {
+        unsoldStockPriceAppx = productSummary.reduce((sum, p) => {
+            const inhouse = parseFloat(p.inhouseQty) || 0;
+            const sale = parseFloat(p.saleQty) || 0;
+            const damage = parseFloat(p.damageQty) || 0;
+            const unsold = Math.max(0, inhouse - sale - damage);
+            if (unsold <= 0) return sum;
+            const costPerKg = getProductAvgCost(p.productName, p);
+            return sum + Math.round(unsold * costPerKg);
+        }, 0);
+    } else {
+        unsoldStockPriceAppx = unsoldStockKg > 0
+            ? Math.round(unsoldStockKg * totalRatePerKgBdt)
+            : 0;
+    }
 
     // 16. Profit/Loss
     const profitOrLoss = (salesValue + unsoldStockPriceAppx) - totalInvest;

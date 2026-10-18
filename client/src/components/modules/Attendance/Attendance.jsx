@@ -180,6 +180,13 @@ const fmtDate = (str) => {
   if (isNaN(d)) return str;
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
+const isTodayDate = (dt) => {
+  if (!dt) return false;
+  const d = new Date(dt);
+  if (isNaN(d)) return false;
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+};
 const todayStr = () => new Date().toISOString().split('T')[0];
 
 const StatusBadge = ({ status }) => {
@@ -197,6 +204,40 @@ const StatusBadge = ({ status }) => {
   };
   const [cls, label] = map[status] || ['weekend', status];
   return <span className={`att-badge ${cls}`}>{label}</span>;
+};
+
+const PunchTypeBadge = ({ type }) => {
+  const norm = String(type || '').toUpperCase().trim();
+  if (norm === 'IN') {
+    return <span className="att-badge punch-in">● IN</span>;
+  }
+  if (norm === 'OUT') {
+    return <span className="att-badge punch-out">● OUT</span>;
+  }
+  if (norm.includes('BREAK')) {
+    return <span className="att-badge punch-break">☕ {norm.replace('_', ' ')}</span>;
+  }
+  if (norm.includes('OT')) {
+    return <span className="att-badge punch-ot">⏱ {norm.replace('_', ' ')}</span>;
+  }
+  return <span className="att-badge punch-unknown">● {norm || 'UNKNOWN'}</span>;
+};
+
+const VerifyModeBadge = ({ mode }) => {
+  const m = String(mode || '').toUpperCase().trim();
+  if (m.includes('CARD') || m === '4') {
+    return <span className="att-verify-badge card">💳 RFID Card</span>;
+  }
+  if (m.includes('FINGER') || m === '1') {
+    return <span className="att-verify-badge fingerprint">👆 Fingerprint</span>;
+  }
+  if (m.includes('PASS') || m.includes('PIN') || m === '0') {
+    return <span className="att-verify-badge password">🔑 Password</span>;
+  }
+  if (m.includes('FACE') || m === '15') {
+    return <span className="att-verify-badge face">👤 Face ID</span>;
+  }
+  return <span className="att-verify-badge default">👆 Biometric</span>;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -221,6 +262,8 @@ const Attendance = ({ currentUser }) => {
   const [logStatus, setLogStatus] = useState('');
   const [leaveStatus, setLeaveStatus] = useState('');
   const [punchDate, setPunchDate] = useState(todayStr());
+  const [punchUnmatchedOnly, setPunchUnmatchedOnly] = useState(false);
+  const [unmappedEnrolls, setUnmappedEnrolls] = useState([]);
 
   // Modals
   const [shiftModal, setShiftModal] = useState(null); // null | {mode:'add'|'edit', data?}
@@ -300,8 +343,9 @@ const Attendance = ({ currentUser }) => {
 
   const fetchPunches = () => load('punches', async () => {
     const params = new URLSearchParams();
-    params.set('date', punchDate);
-    params.set('limit', '100');
+    if (punchDate && punchDate.trim()) params.set('date', punchDate.trim());
+    if (punchUnmatchedOnly) params.set('unmatched', 'true');
+    params.set('limit', '200');
     if (!canViewAll && myEmployee?._id) {
       params.set('employeeId', myEmployee._id);
     }
@@ -314,6 +358,15 @@ const Attendance = ({ currentUser }) => {
     setMappings(r.data || []);
   });
 
+  const fetchUnmappedEnrolls = () => load('unmapped', async () => {
+    try {
+      const r = await axios.get(`${API_BASE_URL}/api/attendance/unmapped-enrolls`);
+      setUnmappedEnrolls(r.data || []);
+    } catch (e) {
+      console.warn('Could not fetch unmapped enrolls:', e);
+    }
+  });
+
   const fetchEmployees = () => load('employees', async () => {
     const r = await axios.get(`${API_BASE_URL}/api/employees`);
     setEmployees(r.data || []);
@@ -324,6 +377,7 @@ const Attendance = ({ currentUser }) => {
     fetchSummary();
     fetchLive();
     fetchEmployees();
+    fetchUnmappedEnrolls();
     const iv = setInterval(() => { fetchSummary(); fetchLive(); }, 10000);
     return () => clearInterval(iv);
   }, []);
@@ -331,8 +385,8 @@ const Attendance = ({ currentUser }) => {
   useEffect(() => { if (activeTab === 'logs')    { fetchLogs();    } }, [activeTab, logDate, logStatus, logEmpId, canViewAll, myEmployee]);
   useEffect(() => { if (activeTab === 'shifts' && canViewAll)  { fetchShifts();  } }, [activeTab, canViewAll]);
   useEffect(() => { if (activeTab === 'leaves')  { fetchLeaves();  } }, [activeTab, leaveStatus, canViewAll, myEmployee]);
-  useEffect(() => { if (activeTab === 'punches' && canViewAll) { fetchPunches(); } }, [activeTab, punchDate, canViewAll, myEmployee]);
-  useEffect(() => { if (activeTab === 'device' && canViewAll)  { fetchMappings(); fetchEmployees(); } }, [activeTab, canViewAll]);
+  useEffect(() => { if (activeTab === 'punches' && canViewAll) { fetchPunches(); } }, [activeTab, punchDate, punchUnmatchedOnly, canViewAll, myEmployee]);
+  useEffect(() => { if (activeTab === 'device' && canViewAll)  { fetchMappings(); fetchEmployees(); fetchUnmappedEnrolls(); } }, [activeTab, canViewAll]);
 
   useEffect(() => {
     if (!canViewAll && (activeTab === 'shifts' || activeTab === 'punches' || activeTab === 'device')) {
@@ -341,6 +395,25 @@ const Attendance = ({ currentUser }) => {
   }, [canViewAll, activeTab]);
 
   // ── Process attendance ─────────────────────────────────────────────────────
+  const [syncingDevice, setSyncingDevice] = useState(false);
+  const handleQuickSyncDevice = async () => {
+    setSyncingDevice(true);
+    try {
+      const ip = localStorage.getItem('zk_device_ip') || '192.168.0.74';
+      const port = Number(localStorage.getItem('zk_device_port') || 4370);
+      const res = await axios.post(`${API_BASE_URL}/api/attendance/device/sync-ip`, { ip, port });
+      alert(res.data.message || 'Device synchronized successfully');
+      fetchSummary();
+      fetchLive();
+      if (activeTab === 'logs') fetchLogs();
+      if (activeTab === 'punches') fetchPunches();
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to sync from device');
+    } finally {
+      setSyncingDevice(false);
+    }
+  };
+
   const handleProcess = async (date) => {
     setProcessing(true);
     try {
@@ -409,6 +482,9 @@ const Attendance = ({ currentUser }) => {
       await axios.post(`${API_BASE_URL}/api/attendance/mappings`, data);
       setMappingModal(null);
       fetchMappings();
+      fetchSummary();
+      fetchUnmappedEnrolls();
+      if (activeTab === 'punches') fetchPunches();
     } catch (e) { alert(e.response?.data?.message || e.message); }
   };
 
@@ -416,6 +492,9 @@ const Attendance = ({ currentUser }) => {
     if (!window.confirm('Remove this mapping?')) return;
     await axios.delete(`${API_BASE_URL}/api/attendance/mappings/${id}`);
     fetchMappings();
+    fetchSummary();
+    fetchUnmappedEnrolls();
+    if (activeTab === 'punches') fetchPunches();
   };
 
   // ── Log manual edit ────────────────────────────────────────────────────────
@@ -474,6 +553,8 @@ const Attendance = ({ currentUser }) => {
           loadingLive={loading.live}
           onRefresh={() => { fetchSummary(); fetchLive(); }}
           onProcess={() => handleProcess(todayStr())}
+          onQuickSync={handleQuickSyncDevice}
+          syncingDevice={syncingDevice}
           processing={processing}
           canEdit={canEdit}
           canViewAll={canViewAll}
@@ -537,8 +618,12 @@ const Attendance = ({ currentUser }) => {
         <PunchesTab
           punches={punches}
           loading={loading.punches}
-          punchDate={punchDate} setPunchDate={setPunchDate}
+          punchDate={punchDate}
+          setPunchDate={setPunchDate}
+          punchUnmatchedOnly={punchUnmatchedOnly}
+          setPunchUnmatchedOnly={setPunchUnmatchedOnly}
           onRefresh={fetchPunches}
+          onAddMapping={canEdit ? (enrollId) => setMappingModal({ enrollId: String(enrollId) }) : null}
           mappings={mappings}
         />
       )}
@@ -550,8 +635,9 @@ const Attendance = ({ currentUser }) => {
           loading={loading.mappings}
           employees={employees}
           summary={summary}
-          onRefresh={fetchMappings}
-          onAdd={canEdit ? () => setMappingModal(true) : null}
+          unmappedEnrolls={unmappedEnrolls}
+          onRefresh={() => { fetchMappings(); fetchUnmappedEnrolls(); }}
+          onAdd={canEdit ? (init) => setMappingModal(typeof init === 'object' && init !== null ? init : true) : null}
           onDelete={canEdit ? handleMappingDelete : null}
         />
       )}
@@ -582,6 +668,7 @@ const Attendance = ({ currentUser }) => {
       {mappingModal && (
         <MappingModal
           employees={employees}
+          initialData={typeof mappingModal === 'object' ? mappingModal : null}
           onSave={handleMappingSave}
           onClose={() => setMappingModal(null)}
         />
@@ -600,7 +687,7 @@ const Attendance = ({ currentUser }) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Dashboard Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess, processing, canEdit, canViewAll }) => (
+const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess, onQuickSync, syncingDevice, processing, canEdit, canViewAll }) => (
   <>
     {/* Warning: unmatched punches */}
     {canViewAll && summary.unmatchedPunches > 0 && (
@@ -675,7 +762,18 @@ const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess,
           <div className="att-live-dot" />
           <h2 className="att-panel-title">{canViewAll ? 'Live Punch Feed' : 'My Recent Punches'}</h2>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {canEdit && (
+            <button
+              className="att-btn att-btn-secondary att-btn-sm"
+              onClick={onQuickSync}
+              disabled={syncingDevice}
+              title="Sync latest punches directly from ZKTeco device (LAN IP)"
+            >
+              <IcoDevice />
+              {syncingDevice ? 'Syncing Device…' : 'Sync Device'}
+            </button>
+          )}
           {canEdit && (
             <button className="att-btn att-btn-primary att-btn-sm" onClick={onProcess} disabled={processing}>
               <IcoRefresh />
@@ -704,7 +802,7 @@ const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess,
           <table className="att-table">
             <thead>
               <tr>
-                <th>Time</th>
+                <th>Time & Date</th>
                 <th>Enroll ID</th>
                 <th>Type</th>
                 <th>Verify</th>
@@ -712,19 +810,29 @@ const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess,
               </tr>
             </thead>
             <tbody>
-              {livePunches.map(p => (
-                <tr key={p._id}>
-                  <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{fmt12(p.punchTime)}</td>
-                  <td><span className="att-enroll-badge">{p.enrollId}</span></td>
-                  <td><span className={`att-badge ${p.punchType === 'IN' ? 'present' : p.punchType === 'OUT' ? 'absent' : 'leave'}`}>{p.punchType}</span></td>
-                  <td style={{ color: '#64748b', fontSize: '0.78rem' }}>{p.verifyMode}</td>
-                  <td>
-                    {p.unmatched
-                      ? <span className="att-badge absent">⚠ Unmatched</span>
-                      : <span className="att-badge present">✓ Linked</span>}
-                  </td>
-                </tr>
-              ))}
+              {livePunches.map(p => {
+                const today = isTodayDate(p.punchTime);
+                return (
+                  <tr key={p._id}>
+                    <td style={{ fontFamily: 'monospace' }}>
+                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem' }}>
+                        {fmt12(p.punchTime)}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', marginTop: 2, fontWeight: today ? 600 : 400, color: today ? '#059669' : '#64748b' }}>
+                        {today ? '● Today' : fmtDate(p.punchTime)}
+                      </div>
+                    </td>
+                    <td><span className="att-enroll-badge">{p.enrollId}</span></td>
+                    <td><PunchTypeBadge type={p.punchType} /></td>
+                    <td><VerifyModeBadge mode={p.verifyMode} /></td>
+                    <td>
+                      {p.unmatched
+                        ? <span className="att-badge absent">⚠ Unmatched</span>
+                        : <span className="att-badge present">✓ Linked</span>}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -1096,14 +1204,38 @@ const ShiftsTab = ({ shifts, loading, onRefresh, onAdd, onEdit, onDelete }) => (
   </div>
 );
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // Raw Punches Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const PunchesTab = ({ punches, loading, punchDate, setPunchDate, onRefresh }) => (
+const PunchesTab = ({
+  punches,
+  loading,
+  punchDate,
+  setPunchDate,
+  punchUnmatchedOnly,
+  setPunchUnmatchedOnly,
+  onRefresh,
+  onAddMapping
+}) => (
   <div className="att-panel">
     <div className="att-panel-header">
       <h2 className="att-panel-title">Raw Device Punches</h2>
-      <div className="att-controls">
+      <div className="att-controls" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className={`att-btn ${!punchDate ? 'att-btn-primary' : 'att-btn-secondary'}`}
+          style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+          onClick={() => setPunchDate('')}
+        >
+          All Dates
+        </button>
+        <button
+          type="button"
+          className={`att-btn ${punchDate === todayStr() ? 'att-btn-primary' : 'att-btn-secondary'}`}
+          style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+          onClick={() => setPunchDate(todayStr())}
+        >
+          Today
+        </button>
         <div className="att-date-wrap">
           <CustomDatePicker
             value={punchDate}
@@ -1111,6 +1243,15 @@ const PunchesTab = ({ punches, loading, punchDate, setPunchDate, onRefresh }) =>
             compact={true}
           />
         </div>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, color: punchUnmatchedOnly ? '#dc2626' : '#64748b' }}>
+          <input
+            type="checkbox"
+            checked={punchUnmatchedOnly}
+            onChange={e => setPunchUnmatchedOnly(e.target.checked)}
+            style={{ width: 15, height: 15, cursor: 'pointer' }}
+          />
+          <span>Unmapped Only</span>
+        </label>
         <button className="att-btn att-btn-secondary" onClick={onRefresh}>
           <IcoRefresh />
           <span>Refresh</span>
@@ -1125,31 +1266,56 @@ const PunchesTab = ({ punches, loading, punchDate, setPunchDate, onRefresh }) =>
       ) : punches.length === 0 ? (
         <div className="att-empty">
           <IcoClock />
-          <div className="att-empty-title">No punches for this date</div>
+          <div className="att-empty-title">{punchDate ? `No punches for date: ${punchDate}` : 'No punches found'}</div>
+          {punchDate && (
+            <div style={{ marginTop: 10 }}>
+              <button
+                className="att-btn att-btn-secondary"
+                style={{ fontSize: '0.8rem' }}
+                onClick={() => setPunchDate('')}
+              >
+                View Punches for All Dates
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <table className="att-table">
           <thead>
             <tr>
-              <th>Time</th>
+              <th>Date & Time</th>
               <th>Device ID</th>
               <th>Enroll ID</th>
               <th>Type</th>
               <th>Verify</th>
               <th>Linked</th>
-              <th>Processed</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
             {punches.map(p => (
               <tr key={p._id}>
-                <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{fmt12(p.punchTime)}</td>
+                <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                  {new Date(p.punchTime).toLocaleDateString('en-GB')} {fmt12(p.punchTime)}
+                </td>
                 <td style={{ fontSize: '0.76rem', color: '#64748b' }}>{p.deviceId}</td>
                 <td><span className="att-enroll-badge">{p.enrollId}</span></td>
-                <td><span className={`att-badge ${p.punchType === 'IN' ? 'present' : p.punchType === 'OUT' ? 'absent' : 'leave'}`}>{p.punchType}</span></td>
-                <td style={{ color: '#94a3b8', fontSize: '0.76rem' }}>{p.verifyMode}</td>
-                <td>{p.unmatched ? <span className="att-badge absent">⚠ No</span> : <span className="att-badge present">✓ Yes</span>}</td>
-                <td>{p.processed ? <span className="att-badge present">✓</span> : <span className="att-badge weekend">—</span>}</td>
+                <td><PunchTypeBadge type={p.punchType} /></td>
+                <td><VerifyModeBadge mode={p.verifyMode} /></td>
+                <td>{p.unmatched ? <span className="att-badge absent">⚠ Unmapped</span> : <span className="att-badge present">✓ Linked</span>}</td>
+                <td>
+                  {p.unmatched && onAddMapping ? (
+                    <button
+                      className="att-btn att-btn-primary"
+                      style={{ padding: '3px 8px', fontSize: '0.74rem' }}
+                      onClick={() => onAddMapping(p.enrollId)}
+                    >
+                      + Link ID {p.enrollId}
+                    </button>
+                  ) : (
+                    <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1162,7 +1328,7 @@ const PunchesTab = ({ punches, loading, punchDate, setPunchDate, onRefresh }) =>
 // ═══════════════════════════════════════════════════════════════════════════════
 // Device / Mapping Tab — Multi-Method Integration Hub
 // ═══════════════════════════════════════════════════════════════════════════════
-const DeviceTab = ({ mappings, loading, employees, summary, onRefresh, onAdd, onDelete }) => {
+const DeviceTab = ({ mappings, loading, employees, summary, unmappedEnrolls = [], onRefresh, onAdd, onDelete }) => {
   const [activeMethod, setActiveMethod] = useState('lan'); // 'lan' | 'usb' | 'agent' | 'cloud'
   
   // LAN IP Sync state
@@ -1502,6 +1668,60 @@ const DeviceTab = ({ mappings, loading, employees, summary, onRefresh, onAdd, on
             <strong>{summary.unmatchedPunches} punches are from unmapped devices/IDs</strong> — Use the table below to link them to employee names.
           </div>
         )}
+
+        {unmappedEnrolls && unmappedEnrolls.length > 0 && (
+          <div style={{ marginTop: 16, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 12, padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.86rem', color: '#9a3412', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>🔍 Detected Unmapped Enroll IDs on Device ({unmappedEnrolls.length})</span>
+              </div>
+              <span style={{ fontSize: '0.74rem', color: '#c2410c' }}>
+                Click "+ Link to Employee" on any ID to map all its historical punches immediately
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+              {unmappedEnrolls.map(item => (
+                <div
+                  key={item.enrollId}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #ffedd5',
+                    borderRadius: 8,
+                    padding: '10px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className="att-enroll-badge" style={{ fontSize: '0.82rem', padding: '3px 8px' }}>
+                        ID #{item.enrollId}
+                      </span>
+                      <strong style={{ fontSize: '0.82rem', color: '#1e293b' }}>
+                        {item.punchCount?.toLocaleString()} {item.punchCount === 1 ? 'punch' : 'punches'}
+                      </strong>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 4 }}>
+                      Last punch: {item.lastPunch ? new Date(item.lastPunch).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                    </div>
+                  </div>
+                  {onAdd && (
+                    <button
+                      type="button"
+                      className="att-btn att-btn-primary"
+                      style={{ fontSize: '0.74rem', padding: '5px 10px', height: 'auto', whiteSpace: 'nowrap' }}
+                      onClick={() => onAdd({ enrollId: String(item.enrollId), deviceId: item.deviceId || 'F8-DEFAULT' })}
+                    >
+                      + Link to Employee
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Mapping Table */}
@@ -1763,8 +1983,13 @@ const LeaveModal = ({ mode = 'add', data = null, employees, onSave, onClose, can
 };
 
 // Mapping Modal
-const MappingModal = ({ employees, onSave, onClose }) => {
-  const [form, setForm] = useState({ enrollId: '', employeeId: '', deviceId: 'F8-DEFAULT', notes: '' });
+const MappingModal = ({ employees, initialData, onSave, onClose }) => {
+  const [form, setForm] = useState({
+    enrollId: initialData?.enrollId ? String(initialData.enrollId) : '',
+    employeeId: initialData?.employeeId || '',
+    deviceId: initialData?.deviceId || 'F8-DEFAULT',
+    notes: initialData?.notes || ''
+  });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const handleEmpChange = (id) => {

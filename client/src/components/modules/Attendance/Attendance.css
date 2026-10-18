@@ -240,6 +240,28 @@
 .att-badge.approved { background: #dcfce7; color: #16a34a; }
 .att-badge.rejected { background: #fee2e2; color: #dc2626; }
 
+.att-badge.punch-in      { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-weight: 700; }
+.att-badge.punch-out     { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; font-weight: 700; }
+.att-badge.punch-break   { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; font-weight: 600; }
+.att-badge.punch-ot      { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; font-weight: 600; }
+.att-badge.punch-unknown { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; font-weight: 500; }
+
+.att-verify-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 0.73rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.att-verify-badge.fingerprint { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.att-verify-badge.card        { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+.att-verify-badge.password    { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.att-verify-badge.face        { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.att-verify-badge.default     { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+
 /* ── Controls & Filter Bar ─────────────────────────────── */
 .att-controls {
   display: flex;

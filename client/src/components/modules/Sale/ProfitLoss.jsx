@@ -226,6 +226,22 @@ const ThreeDPieChart = ({ items, total }) => {
   );
 };
 
+// Helper to compute net sale quantity for an entry taking into account returns
+const calculateNetSaleQty = (sale, item, entry, returnMap = {}) => {
+  const invRef = (sale.invoiceNo || sale.saleNo || '').trim().toUpperCase();
+  const pName = (item.productName || item.product || '').trim().toLowerCase();
+  const bName = (entry.brandName || entry.brand || item.brand || '').trim().toLowerCase();
+  const entryRetQty = parseFloat(entry.returnQty) || 0;
+  const listRetQty = returnMap[`${invRef}_${pName}_${bName}`] || returnMap[`${invRef}_${pName}`] || 0;
+  const totalRet = Math.max(entryRetQty, listRetQty);
+
+  const orig = parseFloat(entry.originalQuantity) || 0;
+  const rawQty = parseFloat(entry.quantity) || 0;
+  const baseQty = (orig > 0 && orig >= rawQty) ? orig : rawQty;
+  const netQty = totalRet > 0 ? Math.max(0, baseQty - totalRet) : rawQty;
+  return { netQty, totalRet };
+};
+
 export default function ProfitLoss({ salesRecords, products }) {
   // Filters State
   const [filterType, setFilterType] = useState('monthly'); // 'monthly', 'yearly', 'custom', 'all'
@@ -244,21 +260,47 @@ export default function ProfitLoss({ salesRecords, products }) {
   const [insurancePayments, setInsurancePayments] = useState([]);
   const [stockRecords, setStockRecords] = useState([]);
   const [damages, setDamages] = useState([]);
+  const [returnsRecords, setReturnsRecords] = useState([]);
+
+  // Lookup map of return quantities for fast matching by invoice, product, brand
+  const returnQtyMap = useMemo(() => {
+    const map = {};
+    (returnsRecords || []).forEach(r => {
+      const rStatus = (r.status || '').toLowerCase();
+      if (rStatus === 'cancelled' || rStatus === 'rejected') return;
+      const inv = (r.invoiceNo || '').trim().toUpperCase();
+      const p = (r.productName || r.product || '').trim().toLowerCase();
+      const b = (r.brandName || r.brand || '').trim().toLowerCase();
+      const q = parseFloat(r.quantity) || 0;
+      if (q > 0 && inv) {
+        if (p && b) map[`${inv}_${p}_${b}`] = (map[`${inv}_${p}_${b}`] || 0) + q;
+        if (p) map[`${inv}_${p}`] = (map[`${inv}_${p}`] || 0) + q;
+        map[inv] = (map[inv] || 0) + q;
+      }
+    });
+    return map;
+  }, [returnsRecords]);
 
   // Cost of Goods states
   const [costOfGoodsRecords, setCostOfGoodsRecords] = useState([]);
   const [useActualCog, setUseActualCog] = useState(true);
+  const [cogProductFilter, setCogProductFilter] = useState('ALL');
+
+  useEffect(() => {
+    setCogProductFilter('ALL');
+  }, [selectedLcNo]);
 
   useEffect(() => {
     const fetchLCData = async () => {
       try {
-        const [lcRes, expRes, insRes, stockRes, damageRes, cogRes] = await Promise.all([
+        const [lcRes, expRes, insRes, stockRes, damageRes, cogRes, retRes] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/lc-management`),
           axios.get(`${API_BASE_URL}/api/lc-expenses`),
           axios.get(`${API_BASE_URL}/api/insurance-payments`),
           axios.get(`${API_BASE_URL}/api/stock`),
           axios.get(`${API_BASE_URL}/api/damages`),
-          axios.get(`${API_BASE_URL}/api/cost-of-goods`)
+          axios.get(`${API_BASE_URL}/api/cost-of-goods`),
+          axios.get(`${API_BASE_URL}/api/returns`).catch(() => ({ data: [] }))
         ]);
         setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
         setLcExpenses(Array.isArray(expRes.data) ? expRes.data : []);
@@ -266,8 +308,9 @@ export default function ProfitLoss({ salesRecords, products }) {
         setStockRecords(Array.isArray(stockRes.data) ? stockRes.data : []);
         setDamages(Array.isArray(damageRes.data) ? damageRes.data : []);
         setCostOfGoodsRecords(Array.isArray(cogRes.data) ? cogRes.data : []);
+        setReturnsRecords(Array.isArray(retRes?.data) ? retRes.data : []);
       } catch (error) {
-        console.error('Error fetching LC, expenses, stock, damage, and cost of goods data:', error);
+        console.error('Error fetching LC, expenses, stock, damage, returns, and cost of goods data:', error);
       }
     };
     fetchLCData();
@@ -358,6 +401,40 @@ export default function ProfitLoss({ salesRecords, products }) {
     return selectedLcCostOfGoods.reduce((sum, rec) => sum + (parseFloat(rec.quantity) || 0), 0);
   }, [selectedLcCostOfGoods]);
 
+  // Group Cost of Goods records by product (product-based)
+  const cogByProduct = useMemo(() => {
+    if (!selectedLcCostOfGoods || selectedLcCostOfGoods.length === 0) return [];
+    const map = {};
+    selectedLcCostOfGoods.forEach(rec => {
+      const prodName = (rec.product || 'Other Products').trim();
+      if (!map[prodName]) {
+        map[prodName] = {
+          productName: prodName,
+          records: [],
+          totalQty: 0,
+          totalNetBill: 0,
+        };
+      }
+      const costingKgVal = getRecCostingKg(rec);
+      const rowQty = parseFloat(rec.quantity || 0);
+      const rowNetBill = Math.round(costingKgVal * rowQty);
+
+      map[prodName].records.push({
+        ...rec,
+        costingKgVal,
+        rowQty,
+        rowNetBill
+      });
+      map[prodName].totalQty += rowQty;
+      map[prodName].totalNetBill += rowNetBill;
+    });
+
+    return Object.values(map).map(group => ({
+      ...group,
+      avgCostKg: group.totalQty > 0 ? (group.totalNetBill / group.totalQty) : 0
+    }));
+  }, [selectedLcCostOfGoods]);
+
   // Insurance premium for selected LC
   const selectedLcInsuranceAmount = useMemo(() => {
     if (!selectedLc) return 0;
@@ -396,6 +473,61 @@ export default function ProfitLoss({ salesRecords, products }) {
     return true; // 'all'
   };
 
+  // Helper to get product-wise average cost (COG cost if available, otherwise inhouse/purchase cost)
+  const getProductAvgCost = (prodName, prodSummaryItem = null) => {
+    const clean = (val) => String(val || '').trim().toLowerCase();
+    const targetClean = clean(prodName);
+
+    // 1. Check Cost of Goods (COG)
+    if (useActualCog && selectedLcCostOfGoods && selectedLcCostOfGoods.length > 0) {
+      const matchingCog = selectedLcCostOfGoods.filter(rec => clean(rec.product) === targetClean);
+      if (matchingCog.length > 0) {
+        let totalQty = 0;
+        let totalBill = 0;
+        matchingCog.forEach(rec => {
+          const costingKg = getRecCostingKg(rec);
+          const q = parseFloat(rec.quantity) || 0;
+          totalQty += q;
+          totalBill += Math.round(costingKg * q);
+        });
+        if (totalQty > 0 && totalBill > 0) {
+          return totalBill / totalQty;
+        }
+      }
+    }
+
+    // 2. Check product summary / inhouse stock
+    if (prodSummaryItem) {
+      if (prodSummaryItem.inhouseQty > 0 && prodSummaryItem.inhousePrice > 0) {
+        return prodSummaryItem.inhousePrice / prodSummaryItem.inhouseQty;
+      }
+      if (prodSummaryItem.purchaseQty > 0 && prodSummaryItem.purchasePrice > 0) {
+        return prodSummaryItem.purchasePrice / prodSummaryItem.purchaseQty;
+      }
+    }
+
+    // 3. Fallback from selectedLcStocks
+    if (selectedLcStocks && selectedLcStocks.length > 0) {
+      const matchingStocks = selectedLcStocks.filter(item => clean(item.productName || item.product) === targetClean);
+      if (matchingStocks.length > 0) {
+        let stockQty = 0;
+        let stockVal = 0;
+        matchingStocks.forEach(item => {
+          const q = parseFloat(item.inHouseQuantity) || parseFloat(item.quantity) || 0;
+          const p = parseFloat(item.purchasedPrice) || 0;
+          stockQty += q;
+          stockVal += q * p;
+        });
+        if (stockQty > 0 && stockVal > 0) {
+          return stockVal / stockQty;
+        }
+      }
+    }
+
+    // 4. Overall LC average rate
+    return conclusionData?.totalRatePerKgBdt || 0;
+  };
+
   // Process and Filter Sales & Stock Data
   const profitLossData = useMemo(() => {
     const hasLcFilter = selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '';
@@ -432,14 +564,18 @@ export default function ProfitLoss({ salesRecords, products }) {
           ? item.brandEntries
           : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: item.unitPrice || 0, totalAmount: item.totalAmount || 0 }];
 
-        return brandEntries.map(entry => ({
-          productName: item.productName || item.product || '-',
-          brandName: entry.brandName || entry.brand || '-',
-          quantity: parseFloat(entry.quantity) || 0,
-          unitPrice: parseFloat(entry.unitPrice) || 0,
-          totalAmount: parseFloat(entry.totalAmount) || (parseFloat(entry.quantity) * parseFloat(entry.unitPrice)) || 0,
-          lcNo: (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLcNo
-        }));
+        return brandEntries.map(entry => {
+          const { netQty } = calculateNetSaleQty(sale, item, entry, returnQtyMap);
+          const unitPrice = parseFloat(entry.unitPrice) || 0;
+          return {
+            productName: item.productName || item.product || '-',
+            brandName: entry.brandName || entry.brand || '-',
+            quantity: netQty,
+            unitPrice: unitPrice,
+            totalAmount: netQty * unitPrice,
+            lcNo: (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLcNo
+          };
+        });
       }).filter(entry => {
         // Filter by LC Number if specified
         if (selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '') {
@@ -484,7 +620,7 @@ export default function ProfitLoss({ salesRecords, products }) {
       if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
 
       if (!productStockMap[prodName]) {
-        productStockMap[prodName] = { purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: 0 };
+        productStockMap[prodName] = { productName: prodName, purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: 0 };
       }
 
       const qty = parseFloat(item.quantity) || 0;
@@ -521,11 +657,12 @@ export default function ProfitLoss({ salesRecords, products }) {
           if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
 
           if (!productStockMap[prodName]) {
-            productStockMap[prodName] = { purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: getPurchasePrice(prodName), salePrice: 0 };
+            productStockMap[prodName] = { productName: prodName, purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: getPurchasePrice(prodName), salePrice: 0 };
           }
-          const entryQty = parseFloat(entry.quantity) || 0;
-          const entryTotal = parseFloat(entry.totalAmount) || (entryQty * (parseFloat(entry.unitPrice) || 0)) || 0;
-          productStockMap[prodName].saleQty += entryQty;
+          const { netQty } = calculateNetSaleQty(sale, item, entry, returnQtyMap);
+          const unitPrice = parseFloat(entry.unitPrice) || 0;
+          const entryTotal = netQty * unitPrice;
+          productStockMap[prodName].saleQty += netQty;
           productStockMap[prodName].salePrice = (productStockMap[prodName].salePrice || 0) + entryTotal;
         });
       });
@@ -540,7 +677,7 @@ export default function ProfitLoss({ salesRecords, products }) {
       if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
 
       if (!productStockMap[prodName]) {
-        productStockMap[prodName] = { purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: parseFloat(d.price) || getPurchasePrice(prodName), salePrice: 0 };
+        productStockMap[prodName] = { productName: prodName, purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: parseFloat(d.price) || getPurchasePrice(prodName), salePrice: 0 };
       }
       productStockMap[prodName].damageQty += parseFloat(d.quantity) || 0;
     });
@@ -551,29 +688,26 @@ export default function ProfitLoss({ salesRecords, products }) {
       const sStatus = (s.status || '').toLowerCase();
       if (sStatus !== 'accepted' && sStatus !== 'pending') return sum;
       if (!hasLcFilter && !isDateInRange(s.date)) return sum;
-      return sum + (s.items || []).reduce((iSum, itm) => {
-        const itemLc = (itm.lcNo !== undefined && itm.lcNo !== null) ? itm.lcNo : (s.lcNo || '');
-        const brandEntries = (itm.brandEntries && itm.brandEntries.length > 0)
-          ? itm.brandEntries
-          : [{ quantity: itm.quantity, lcNo: itemLc }];
+      return sum + (s.items || []).reduce((iSum, item) => {
+        const itemLc = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (s.lcNo || '');
+        const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
+          ? item.brandEntries
+          : [{ quantity: item.quantity, lcNo: itemLc }];
         return iSum + brandEntries.reduce((bSum, b) => {
           const entryLc = (b.lcNo !== undefined && b.lcNo !== null) ? b.lcNo : itemLc;
           if (hasLcFilter && cleanLc(entryLc) !== targetLcClean) return bSum;
-          return bSum + (parseFloat(b.quantity) || 0);
+          const { netQty } = calculateNetSaleQty(s, item, b, returnQtyMap);
+          return bSum + netQty;
         }, 0);
       }, 0);
     }, 0);
     const overallLcSalesRate = (hasLcFilter && totalLcSalesQtyVal > 0) ? (salesRevenue / totalLcSalesQtyVal) : 0;
 
-    Object.values(productStockMap).forEach(prod => {
+    Object.entries(productStockMap).forEach(([pName, prod]) => {
       const currentStockQty = Math.max(0, prod.inhouseQty - prod.saleQty - prod.damageQty);
-      const avgSalePrice = (prod.saleQty > 0 && (prod.salePrice || 0) > 0) ? (prod.salePrice / prod.saleQty) : 0;
-      const effectiveRate = overallLcSalesRate > 0
-        ? overallLcSalesRate
-        : (avgSalePrice > 0
-            ? avgSalePrice
-            : (prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : (prod.fallbackPrice || 0)));
-      currentStockValue += currentStockQty * effectiveRate;
+      if (currentStockQty <= 0) return;
+      const effectiveRate = getProductAvgCost(prod.productName || pName, prod);
+      currentStockValue += Math.round(currentStockQty * effectiveRate);
     });
 
     const finalRevenue = salesRevenue + currentStockValue;
@@ -592,7 +726,7 @@ export default function ProfitLoss({ salesRecords, products }) {
         margin
       }
     };
-  }, [salesRecords, stockRecords, damages, products, filterType, selectedMonth, selectedYear, startDate, endDate, saleTypeFilter, selectedProduct, selectedLcNo, useActualCog, selectedLc, totalLcCostOfGoodsAmount, selectedLcInsuranceAmount]);
+  }, [salesRecords, stockRecords, damages, products, filterType, selectedMonth, selectedYear, startDate, endDate, saleTypeFilter, selectedProduct, selectedLcNo, useActualCog, selectedLc, totalLcCostOfGoodsAmount, selectedLcInsuranceAmount, returnQtyMap, selectedLcCostOfGoods]);
 
   // Unique product names for filter dropdown
   const uniqueProducts = useMemo(() => {
@@ -694,12 +828,51 @@ export default function ProfitLoss({ salesRecords, products }) {
     if (!selectedLc) return [];
     const cleanLc = (val) => String(val || '').replace(/\D/g, '').toLowerCase();
     const lcNoClean = cleanLc(selectedLc.lcNo);
-    return stockRecords.filter(item => {
-      const status = (item.status || '').toLowerCase();
-      if (status.includes('requested') || status.includes('rejected') || status.includes('deleted')) return false;
-      return cleanLc(item.lcNo) === lcNoClean;
-    });
-  }, [selectedLc, stockRecords]);
+    return stockRecords
+      .filter(item => {
+        const status = (item.status || '').toLowerCase();
+        if (status.includes('requested') || status.includes('rejected') || status.includes('deleted')) return false;
+        return cleanLc(item.lcNo) === lcNoClean;
+      })
+      .map(item => {
+        let invNo = item.invoiceNo ? String(item.invoiceNo).trim() : '';
+        if (!invNo && costOfGoodsRecords && costOfGoodsRecords.length > 0) {
+          const prodName = (item.productName || item.product || '').trim().toLowerCase();
+          const brandName = (item.brand || item.brandName || '').trim().toLowerCase();
+          const matchedWithTruck = costOfGoodsRecords.find(cog => {
+            const lcMatch = cleanLc(cog.lcNo) === lcNoClean;
+            const pMatch = (cog.product || '').trim().toLowerCase() === prodName;
+            const bMatch = (cog.brand || '').trim().toLowerCase() === brandName;
+            const tMatch = item.truckNo && cog.truckNo && String(cog.truckNo).trim().toLowerCase() === String(item.truckNo).trim().toLowerCase();
+            return lcMatch && pMatch && bMatch && tMatch && cog.invoiceNo;
+          });
+          if (matchedWithTruck) {
+            invNo = matchedWithTruck.invoiceNo;
+          } else {
+            const matched = costOfGoodsRecords.find(cog => {
+              const lcMatch = cleanLc(cog.lcNo) === lcNoClean;
+              const pMatch = (cog.product || '').trim().toLowerCase() === prodName;
+              const bMatch = (cog.brand || '').trim().toLowerCase() === brandName;
+              return lcMatch && pMatch && bMatch && cog.invoiceNo;
+            });
+            if (matched) {
+              invNo = matched.invoiceNo;
+            } else {
+              const matchedProd = costOfGoodsRecords.find(cog => {
+                const lcMatch = cleanLc(cog.lcNo) === lcNoClean;
+                const pMatch = (cog.product || '').trim().toLowerCase() === prodName;
+                return lcMatch && pMatch && cog.invoiceNo;
+              });
+              if (matchedProd) invNo = matchedProd.invoiceNo;
+            }
+          }
+        }
+        return {
+          ...item,
+          invoiceNo: invNo || item.invoiceNo || ''
+        };
+      });
+  }, [selectedLc, stockRecords, costOfGoodsRecords]);
 
   // Damage records for the selected LC
   const selectedLcDamages = useMemo(() => {
@@ -715,7 +888,7 @@ export default function ProfitLoss({ salesRecords, products }) {
     return getAdjustedLcValues(selectedLc, stockRecords, salesRecords);
   }, [selectedLc, stockRecords, salesRecords]);
 
-  // Sales records for the selected LC
+  // Sales records for the selected LC (without returns / net active sales)
   const selectedLcSales = useMemo(() => {
     if (!selectedLc || !selectedLc.lcNo) return [];
     const cleanLc = (val) => String(val || '').replace(/\D/g, '').toLowerCase();
@@ -737,9 +910,10 @@ export default function ProfitLoss({ salesRecords, products }) {
         brandEntries.forEach(entry => {
           const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLc;
           if (cleanLc(entryLc) === lcNoClean) {
-            const qty = parseFloat(entry.quantity) || 0;
+            const { netQty, totalRet } = calculateNetSaleQty(sale, item, entry, returnQtyMap);
+            if (netQty <= 0) return; // Skip 0 quantity (e.g. fully returned sales) from active sales
             const unitPrice = parseFloat(entry.unitPrice) || 0;
-            const totalAmount = parseFloat(entry.totalAmount) || (qty * unitPrice);
+            const totalAmount = netQty * unitPrice;
             list.push({
               _id: sale._id || `${sale.invoiceNo}_${item.productName}_${entry.brandName}`,
               date: sale.date || sale.createdAt,
@@ -747,7 +921,8 @@ export default function ProfitLoss({ salesRecords, products }) {
               customerName: sale.customerName || sale.customer || 'General Sale',
               productName: item.productName || item.product || '-',
               brandName: entry.brandName || entry.brand || item.brand || '-',
-              quantity: qty,
+              quantity: netQty,
+              returnedQty: totalRet,
               unitPrice: unitPrice,
               totalAmount: totalAmount,
               saleType: sale.saleType || 'General'
@@ -758,7 +933,105 @@ export default function ProfitLoss({ salesRecords, products }) {
     });
 
     return list;
-  }, [selectedLc, salesRecords]);
+  }, [selectedLc, salesRecords, returnQtyMap]);
+
+  // Return sales records for the selected LC
+  const selectedLcReturns = useMemo(() => {
+    if (!selectedLc || !selectedLc.lcNo) return [];
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '').toLowerCase();
+    const lcNoClean = cleanLc(selectedLc.lcNo);
+    if (!lcNoClean) return [];
+
+    // Collect all invoice numbers belonging to this LC from sales
+    const lcInvoiceSet = new Set();
+    (salesRecords || []).forEach(sale => {
+      (sale.items || []).forEach(item => {
+        const itemLc = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
+        (item.brandEntries || [{ lcNo: itemLc }]).forEach(be => {
+          const entryLc = (be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : itemLc;
+          if (cleanLc(entryLc) === lcNoClean && sale.invoiceNo) {
+            lcInvoiceSet.add(sale.invoiceNo.trim().toUpperCase());
+          }
+        });
+      });
+    });
+
+    const list = [];
+    const seenKeys = new Set();
+
+    // 1. From returnsRecords (/api/returns)
+    (returnsRecords || []).forEach(r => {
+      const rLc = cleanLc(r.lcNo);
+      const rInv = (r.invoiceNo || '').trim().toUpperCase();
+      if (rLc === lcNoClean || (rInv && lcInvoiceSet.has(rInv))) {
+        const prodName = r.productName || r.product || '-';
+        const brandName = r.brand || r.brandName || '-';
+        const key = `${r.invoiceNo}_${prodName}_${brandName}`.toUpperCase();
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          const qty = parseFloat(r.quantity) || 0;
+          const price = parseFloat(r.returnPrice || r.unitPrice || r.rate) || 0;
+          const totalAmount = parseFloat(r.totalAmount) || (qty * price);
+          list.push({
+            _id: r._id || key,
+            invoiceNo: r.invoiceNo || '-',
+            customerName: r.customerName || r.companyName || '-',
+            date: r.date || r.createdAt || r.invoiceDate,
+            productName: prodName,
+            brandName: brandName,
+            quantity: qty,
+            unitPrice: price,
+            totalAmount: totalAmount,
+            reason: r.reason || ''
+          });
+        }
+      }
+    });
+
+    // 2. Also check if any sales record brandEntry has returnQty > 0 that was not in returnsRecords
+    (salesRecords || []).forEach(sale => {
+      (sale.items || []).forEach(item => {
+        const itemLc = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
+        (item.brandEntries || []).forEach(entry => {
+          const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLc;
+          if (cleanLc(entryLc) === lcNoClean) {
+            const retQty = parseFloat(entry.returnQty) || 0;
+            if (retQty > 0) {
+              const prodName = item.productName || item.product || '-';
+              const brandName = entry.brandName || entry.brand || '-';
+              const key = `${sale.invoiceNo}_${prodName}_${brandName}`.toUpperCase();
+              if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                const price = parseFloat(entry.unitPrice || entry.rate) || 0;
+                list.push({
+                  _id: `ret-${sale._id}_${prodName}_${brandName}`,
+                  invoiceNo: sale.invoiceNo || '-',
+                  customerName: sale.customerName || sale.customer || '-',
+                  date: sale.date || sale.createdAt,
+                  productName: prodName,
+                  brandName: brandName,
+                  quantity: retQty,
+                  unitPrice: price,
+                  totalAmount: retQty * price,
+                  reason: 'Returned'
+                });
+              }
+            }
+          }
+        });
+      });
+    });
+
+    return list;
+  }, [selectedLc, returnsRecords, salesRecords]);
+
+  const totalLcReturnsAmount = useMemo(() => {
+    return selectedLcReturns.reduce((sum, r) => sum + (parseFloat(r.totalAmount) || 0), 0);
+  }, [selectedLcReturns]);
+
+  const totalLcReturnsQty = useMemo(() => {
+    return selectedLcReturns.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+  }, [selectedLcReturns]);
 
   const totalLcSalesAmount = useMemo(() => {
     return selectedLcSales.reduce((sum, s) => sum + s.totalAmount, 0);
@@ -767,6 +1040,7 @@ export default function ProfitLoss({ salesRecords, products }) {
   const totalLcSalesQty = useMemo(() => {
     return selectedLcSales.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
   }, [selectedLcSales]);
+
 
   const totalLcReceiveAmount = useMemo(() => {
     return selectedLcStocks.reduce((sum, item) => {
@@ -782,39 +1056,6 @@ export default function ProfitLoss({ salesRecords, products }) {
     }, 0);
   }, [selectedLcStocks, products]);
 
-  // Financial Breakdown 3D Pie Chart data for the selected LC
-  const pieData = useMemo(() => {
-    if (!selectedLc) return { total: 0, items: [] };
-
-    const cog = (useActualCog && selectedLc) ? (totalLcCostOfGoodsAmount + selectedLcInsuranceAmount) : (totalLcCostOfGoodsAmount || 0);
-    const exp = Math.max(0, (totalLcExpensesAmount || 0) - (useActualCog ? selectedLcInsuranceAmount : 0));
-    const profit = Math.max(0, profitLossData.summary.totalProfit || 0);
-
-    const rawItems = [
-      { label: 'Cost of Goods (COG)', value: cog, color: '#3b82f6', darkColor: '#1d4ed8', bgClass: 'bg-blue-500', textClass: 'text-blue-600' },
-      { label: 'LC Expenses', value: exp, color: '#f43f5e', darkColor: '#be123c', bgClass: 'bg-rose-500', textClass: 'text-rose-600' },
-      { label: 'Net Profit', value: profit, color: '#10b981', darkColor: '#047857', bgClass: 'bg-emerald-500', textClass: 'text-emerald-600' },
-    ];
-
-    const items = rawItems.filter(item => item.value > 0);
-    const total = items.reduce((sum, i) => sum + i.value, 0);
-
-    if (total === 0) {
-      return { total: 0, items: [] };
-    }
-
-    let currentAngle = -Math.PI / 2;
-    const slices = items.map(item => {
-      const pct = (item.value / total) * 100;
-      const angle = (pct / 100) * 2 * Math.PI;
-      const startAngle = currentAngle;
-      const endAngle = currentAngle + angle;
-      currentAngle += angle;
-      return { ...item, pct, startAngle, endAngle };
-    });
-
-    return { total, items: slices };
-  }, [selectedLc, totalLcCostOfGoodsAmount, totalLcExpensesAmount, profitLossData.summary.totalProfit, useActualCog, selectedLcInsuranceAmount]);
 
   // Product arrival, inhouse, short, and damage summary
   const productSummary = useMemo(() => {
@@ -922,16 +1163,19 @@ export default function ProfitLoss({ salesRecords, products }) {
             };
           }
 
-          const qty = parseFloat(entry.quantity) || 0;
-          const totalAmount = parseFloat(entry.totalAmount) || (qty * (parseFloat(entry.unitPrice) || 0));
-          summaryMap[prodName].saleQty += qty;
+          const { netQty } = calculateNetSaleQty(sale, item, entry, returnQtyMap);
+          if (netQty <= 0) return;
+
+          const unitPrice = parseFloat(entry.unitPrice) || 0;
+          const totalAmount = netQty * unitPrice;
+          summaryMap[prodName].saleQty += netQty;
           summaryMap[prodName].salePrice += totalAmount;
         });
       });
     });
 
     return Object.values(summaryMap);
-  }, [selectedLc, selectedLcStocks, selectedLcDamages, salesRecords]);
+  }, [selectedLc, selectedLcStocks, selectedLcDamages, salesRecords, returnQtyMap]);
 
   // LC Conclusion summary statement data matching the conclusion sheet
   const conclusionData = useMemo(() => {
@@ -969,9 +1213,67 @@ export default function ProfitLoss({ salesRecords, products }) {
     selectedLcDamages
   ]);
 
+  // Effective summary synchronized with LC Conclusion Statement when an LC is selected
+  const effectiveSummary = useMemo(() => {
+    if (selectedLc && conclusionData && selectedProduct === 'All') {
+      const salesRevenue = Math.round(conclusionData.salesValue || 0);
+      const currentStockValue = Math.round(conclusionData.unsoldStockPriceAppx || 0);
+      const totalRevenue = salesRevenue + currentStockValue;
+      const totalCost = Math.round(conclusionData.totalInvest || 0);
+      const totalProfit = Math.round(conclusionData.profitOrLoss !== undefined && conclusionData.profitOrLoss !== null ? conclusionData.profitOrLoss : (totalRevenue - totalCost));
+      const margin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+      return {
+        salesRevenue,
+        currentStockValue,
+        totalRevenue,
+        totalCost,
+        totalProfit,
+        margin
+      };
+    }
+    return profitLossData.summary;
+  }, [selectedLc, conclusionData, selectedProduct, profitLossData.summary]);
+
+  // Financial Breakdown 3D Pie Chart data for the selected LC
+  const pieData = useMemo(() => {
+    if (!selectedLc) return { total: 0, items: [] };
+
+    const cog = (useActualCog && selectedLc) ? (totalLcCostOfGoodsAmount + selectedLcInsuranceAmount) : (totalLcCostOfGoodsAmount || 0);
+    const exp = Math.max(0, (totalLcExpensesAmount || 0) - (useActualCog ? selectedLcInsuranceAmount : 0));
+    const profit = Math.max(0, effectiveSummary.totalProfit || 0);
+
+    const rawItems = [
+      { label: 'Cost of Goods (COG)', value: cog, color: '#3b82f6', darkColor: '#1d4ed8', bgClass: 'bg-blue-500', textClass: 'text-blue-600' },
+      { label: 'LC Expenses', value: exp, color: '#f43f5e', darkColor: '#be123c', bgClass: 'bg-rose-500', textClass: 'text-rose-600' },
+      { label: 'Net Profit', value: profit, color: '#10b981', darkColor: '#047857', bgClass: 'bg-emerald-500', textClass: 'text-emerald-600' },
+    ];
+
+    const items = rawItems.filter(item => item.value > 0);
+    const total = items.reduce((sum, i) => sum + i.value, 0);
+
+    if (total === 0) {
+      return { total: 0, items: [] };
+    }
+
+    let currentAngle = -Math.PI / 2;
+    const slices = items.map(item => {
+      const pct = (item.value / total) * 100;
+      const angle = (pct / 100) * 2 * Math.PI;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + angle;
+      currentAngle += angle;
+      return { ...item, pct, startAngle, endAngle };
+    });
+
+    return { total, items: slices };
+  }, [selectedLc, totalLcCostOfGoodsAmount, totalLcExpensesAmount, effectiveSummary.totalProfit, useActualCog, selectedLcInsuranceAmount]);
+
   const handlePrint = () => {
     generateProfitLossPDF({
-      profitLossData,
+      profitLossData: {
+        ...profitLossData,
+        summary: effectiveSummary
+      },
       selectedLc,
       selectedLcExpenses,
       selectedLcCostOfGoods,
@@ -985,6 +1287,9 @@ export default function ProfitLoss({ salesRecords, products }) {
       totalLcReceiveAmount,
       totalLcSalesAmount,
       totalLcSalesQty,
+      selectedLcReturns,
+      totalLcReturnsAmount,
+      totalLcReturnsQty,
       filterType,
       selectedMonth,
       selectedYear,
@@ -1300,18 +1605,18 @@ export default function ProfitLoss({ salesRecords, products }) {
               <DollarSignIcon className="w-6 h-6 print:w-4 print:h-4 text-blue-500" />
             </div>
             <div className="text-xs print:text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2 print:mb-1">Total Revenue</div>
-            <div className="text-xl sm:text-2xl print:text-base font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalRevenue).toLocaleString('en-IN')}</div>
+            <div className="text-xl sm:text-2xl print:text-base font-black text-gray-900">৳ {Math.round(effectiveSummary.totalRevenue).toLocaleString('en-IN')}</div>
             <div className="text-[11px] print:text-[9px] mt-2.5 print:mt-1 flex items-center gap-1.5 flex-wrap font-semibold">
               {selectedLc ? (
                 <>
                   <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-extrabold border border-blue-100/80 shadow-2xs">
-                    Sales: ৳ {Math.round(profitLossData.summary.salesRevenue || 0).toLocaleString('en-IN')}
+                    Sales: ৳ {Math.round(effectiveSummary.salesRevenue || 0).toLocaleString('en-IN')}
                   </span>
-                  {profitLossData.summary.currentStockValue > 0 && (
+                  {effectiveSummary.currentStockValue > 0 && (
                     <>
                       <span className="text-gray-400 font-black">+</span>
                       <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 font-extrabold border border-emerald-100/80 shadow-2xs">
-                        Current Stock: ৳ {Math.round(profitLossData.summary.currentStockValue).toLocaleString('en-IN')}
+                        Current Stock: ৳ {Math.round(effectiveSummary.currentStockValue).toLocaleString('en-IN')}
                       </span>
                     </>
                   )}
@@ -1328,7 +1633,7 @@ export default function ProfitLoss({ salesRecords, products }) {
               <ReceiptIcon className="w-6 h-6 print:w-4 print:h-4 text-amber-500" />
             </div>
             <div className="text-xs print:text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2 print:mb-1">Cost of Goods Sold (COGS)</div>
-            <div className="text-xl sm:text-2xl print:text-base font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalCost).toLocaleString('en-IN')}</div>
+            <div className="text-xl sm:text-2xl print:text-base font-black text-gray-900">৳ {Math.round(effectiveSummary.totalCost).toLocaleString('en-IN')}</div>
             <div className="text-[11px] print:text-[9px] text-gray-400 mt-2 print:mt-1 font-medium">
               {useActualCog && selectedLc && selectedLcInsuranceAmount > 0
                 ? `Includes Insurance: ৳ ${Math.round(selectedLcInsuranceAmount).toLocaleString('en-IN')}`
@@ -1342,8 +1647,8 @@ export default function ProfitLoss({ salesRecords, products }) {
               <TrendingUpIcon className="w-6 h-6 print:w-4 print:h-4 text-emerald-500" />
             </div>
             <div className="text-xs print:text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2 print:mb-1">Net Profit / Loss</div>
-            <div className={`text-xl sm:text-2xl print:text-base font-black ${profitLossData.summary.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              ৳ {Math.round(profitLossData.summary.totalProfit).toLocaleString('en-IN')}
+            <div className={`text-xl sm:text-2xl print:text-base font-black ${effectiveSummary.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              ৳ {Math.round(effectiveSummary.totalProfit).toLocaleString('en-IN')}
             </div>
             <div className="text-[11px] print:text-[9px] text-gray-400 mt-2 print:mt-1 font-medium">Net profit before overheads</div>
           </div>
@@ -1354,8 +1659,8 @@ export default function ProfitLoss({ salesRecords, products }) {
               <BarChartIcon className="w-6 h-6 print:w-4 print:h-4 text-indigo-500" />
             </div>
             <div className="text-xs print:text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2 print:mb-1">Net Margin</div>
-            <div className={`text-xl sm:text-2xl print:text-base font-black ${profitLossData.summary.totalProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
-              {profitLossData.summary.margin.toFixed(2)} %
+            <div className={`text-xl sm:text-2xl print:text-base font-black ${effectiveSummary.totalProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+              {effectiveSummary.margin.toFixed(2)} %
             </div>
             <div className="text-[11px] print:text-[9px] text-gray-400 mt-2 print:mt-1 font-medium">Percentage of revenue retained</div>
           </div>
@@ -1444,7 +1749,9 @@ export default function ProfitLoss({ salesRecords, products }) {
                         const saleQtyKg = selectedLcSales.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
                         const damageQtyKg = (productSummary || []).reduce((sum, p) => sum + (parseFloat(p.damageQty) || 0), 0);
                         const shortQtyKg = (productSummary || []).reduce((sum, p) => sum + (parseFloat(p.shortQty) || 0), 0);
-                        const stockInHandKg = Math.max(0, receiveQtyKg - saleQtyKg - damageQtyKg - shortQtyKg);
+                        const stockInHandKg = (productSummary && productSummary.length > 0)
+                          ? productSummary.reduce((sum, p) => sum + Math.max(0, (parseFloat(p.inhouseQty) || 0) - (parseFloat(p.saleQty) || 0) - (parseFloat(p.damageQty) || 0)), 0)
+                          : Math.max(0, receiveQtyKg - saleQtyKg - damageQtyKg - shortQtyKg);
                         return (
                           <div className="space-y-2 border-t border-gray-200/60 pt-2 mt-1">
                             <div className="grid grid-cols-2 gap-2">
@@ -1660,6 +1967,38 @@ export default function ProfitLoss({ salesRecords, products }) {
                     />
                   </label>
                 </div>
+
+                {/* Product Filter Tabs (when multiple products exist) */}
+                {cogByProduct.length > 1 && (
+                  <div className="flex items-center gap-2 px-6 py-2.5 bg-slate-100/70 border-b border-gray-200 overflow-x-auto">
+                    <button
+                      type="button"
+                      onClick={() => setCogProductFilter('ALL')}
+                      className={`px-3 py-1 rounded-full text-xs font-black transition-all ${
+                        cogProductFilter === 'ALL'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                      }`}
+                    >
+                      All Products ({selectedLcCostOfGoods.length})
+                    </button>
+                    {cogByProduct.map(group => (
+                      <button
+                        key={`cog-tab-${group.productName}`}
+                        type="button"
+                        onClick={() => setCogProductFilter(group.productName)}
+                        className={`px-3 py-1 rounded-full text-xs font-black transition-all ${
+                          cogProductFilter === group.productName
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                        }`}
+                      >
+                        {group.productName} ({group.records.length})
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
@@ -1678,46 +2017,97 @@ export default function ProfitLoss({ salesRecords, products }) {
                           <td colSpan="6" className="py-8 text-center text-gray-400 font-semibold">No Cost of Goods records found for this LC.</td>
                         </tr>
                       ) : (
-                        selectedLcCostOfGoods.map((rec, idx) => {
-                          const costingKgVal = getRecCostingKg(rec);
-                          const rowQty = parseFloat(rec.quantity || 0);
-                          const rowNetBill = Math.round(costingKgVal * rowQty);
+                        (() => {
+                          const displayedGroups = (cogProductFilter === 'ALL' || !cogByProduct.some(g => g.productName === cogProductFilter))
+                            ? cogByProduct
+                            : cogByProduct.filter(g => g.productName === cogProductFilter);
 
-                          return (
-                            <tr key={`cog-${rec._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
-                              <td className="py-2.5 px-6 whitespace-nowrap text-gray-500">{formatDate(rec.date)}</td>
-                              <td className="py-2.5 px-4">
-                                <div className="font-black text-gray-900">{rec.invoiceNo || '-'}</div>
-                                <div className="text-xs text-black font-semibold mt-0.5">{rec.truckNo || '-'}</div>
-                              </td>
-                              <td className="py-2.5 px-4">
-                                <div className="font-black text-gray-900">{rec.product || '-'}</div>
-                                <div className="text-xs text-black font-semibold mt-0.5">{rec.brand || '-'}</div>
-                              </td>
-                              <td className="py-2.5 px-4 text-right font-bold text-gray-900">৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              <td className="py-2.5 px-4 text-right font-semibold text-gray-900">{rowQty.toLocaleString()} KG</td>
-                              <td className="py-2.5 px-6 text-right font-black text-blue-600">৳ {rowNetBill.toLocaleString('en-IN')}</td>
-                            </tr>
-                          );
-                        })
+                          return displayedGroups.map((group, gIdx) => (
+                            <React.Fragment key={`cog-group-${group.productName}-${gIdx}`}>
+                              {/* Product Group Header Banner */}
+                              <tr className="bg-blue-50/70 border-y border-blue-200/80">
+                                <td colSpan="6" className="py-2 px-6">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                                      <span className="font-black text-gray-900 uppercase tracking-wider text-xs">
+                                        {group.productName}
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
+                                        {group.records.length} {group.records.length === 1 ? 'Record' : 'Records'}
+                                      </span>
+                                    </div>
+                                    <span className="text-xs font-bold text-blue-900">
+                                      {Math.round(group.totalQty).toLocaleString()} KG • ৳ {Math.round(group.totalNetBill).toLocaleString('en-IN')}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {/* Group Records */}
+                              {group.records.map((rec, idx) => (
+                                <tr key={`cog-${rec._id || idx}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="py-2.5 px-6 whitespace-nowrap text-gray-500">{formatDate(rec.date)}</td>
+                                  <td className="py-2.5 px-4">
+                                    <div className="font-black text-gray-900">{rec.invoiceNo || '-'}</div>
+                                    <div className="text-xs text-black font-semibold mt-0.5">{rec.truckNo || '-'}</div>
+                                  </td>
+                                  <td className="py-2.5 px-4">
+                                    <div className="font-black text-gray-900">{rec.product || '-'}</div>
+                                    <div className="text-xs text-black font-semibold mt-0.5">{rec.brand || '-'}</div>
+                                  </td>
+                                  <td className="py-2.5 px-4 text-right font-bold text-gray-900">৳{rec.costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                  <td className="py-2.5 px-4 text-right font-semibold text-gray-900">{rec.rowQty.toLocaleString()} KG</td>
+                                  <td className="py-2.5 px-6 text-right font-black text-blue-600">৳ {rec.rowNetBill.toLocaleString('en-IN')}</td>
+                                </tr>
+                              ))}
+
+                              {/* Product Subtotal Row */}
+                              <tr className="bg-slate-50/90 font-bold border-b-2 border-gray-200 text-xs">
+                                <td colSpan="3" className="py-2.5 px-6 text-right font-black text-gray-700">
+                                  Subtotal - {group.productName}
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-black text-gray-900 whitespace-nowrap">
+                                  ৳ {group.avgCostKg.toFixed(2)}
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-black text-gray-900 whitespace-nowrap">
+                                  {Math.round(group.totalQty).toLocaleString()} KG
+                                </td>
+                                <td className="py-2.5 px-6 text-right font-black text-blue-700 whitespace-nowrap">
+                                  ৳ {Math.round(group.totalNetBill).toLocaleString('en-IN')}
+                                </td>
+                              </tr>
+                            </React.Fragment>
+                          ));
+                        })()
                       )}
                     </tbody>
-                    {selectedLcCostOfGoods.length > 0 && (
-                      <tfoot className="bg-slate-50 border-t-2 border-gray-200">
-                        <tr className="text-xs">
-                          <td colSpan="3" className="py-3 px-6 font-black text-gray-500 uppercase tracking-wider text-[11px]">Total COG</td>
-                          <td className="py-3 px-4 text-right font-black text-gray-900 whitespace-nowrap">
-                            ৳ {totalLcCostOfGoodsQty > 0 ? (totalLcCostOfGoodsAmount / totalLcCostOfGoodsQty).toFixed(2) : '0.00'}
-                          </td>
-                          <td className="py-3 px-4 text-right font-black text-gray-900 whitespace-nowrap">
-                            {Math.round(totalLcCostOfGoodsQty).toLocaleString('en-US')} KG
-                          </td>
-                          <td className="py-3 px-6 text-right font-black text-blue-600 whitespace-nowrap">
-                            ৳ {Math.round(totalLcCostOfGoodsAmount).toLocaleString('en-IN')}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    )}
+                    {selectedLcCostOfGoods.length > 0 && (() => {
+                      const displayedGroups = (cogProductFilter === 'ALL' || !cogByProduct.some(g => g.productName === cogProductFilter))
+                        ? cogByProduct
+                        : cogByProduct.filter(g => g.productName === cogProductFilter);
+                      const fQty = displayedGroups.reduce((s, g) => s + g.totalQty, 0);
+                      const fAmt = displayedGroups.reduce((s, g) => s + g.totalNetBill, 0);
+
+                      return (
+                        <tfoot className="bg-slate-100/90 border-t-2 border-gray-300">
+                          <tr className="text-xs">
+                            <td colSpan="3" className="py-3 px-6 font-black text-gray-900 uppercase tracking-wider text-[11px]">
+                              {cogProductFilter === 'ALL' ? 'Total COG' : `Total COG (${cogProductFilter})`}
+                            </td>
+                            <td className="py-3 px-4 text-right font-black text-gray-900 whitespace-nowrap">
+                              ৳ {fQty > 0 ? (fAmt / fQty).toFixed(2) : '0.00'}
+                            </td>
+                            <td className="py-3 px-4 text-right font-black text-gray-900 whitespace-nowrap">
+                              {Math.round(fQty).toLocaleString('en-US')} KG
+                            </td>
+                            <td className="py-3 px-6 text-right font-black text-blue-700 whitespace-nowrap text-sm">
+                              ৳ {Math.round(fAmt).toLocaleString('en-IN')}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      );
+                    })()}
                   </table>
                 </div>
               </div>
@@ -1743,6 +2133,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                     <thead>
                       <tr className="bg-gray-50/50 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider">
                         <th className="py-2.5 px-4">Date</th>
+                        <th className="py-2.5 px-4">Invoice No</th>
                         <th className="py-2.5 px-4">Product & Brand</th>
                         <th className="py-2.5 px-3 text-right">Arrival Qty</th>
                         <th className="py-2.5 px-3 text-right">Short</th>
@@ -1753,7 +2144,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                     <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-medium">
                       {selectedLcStocks.length === 0 ? (
                         <tr>
-                          <td colSpan="6" className="py-8 text-center text-gray-400 font-semibold">No stock receive records found for this LC.</td>
+                          <td colSpan="7" className="py-8 text-center text-gray-400 font-semibold">No stock receive records found for this LC.</td>
                         </tr>
                       ) : (
                         selectedLcStocks.map((item, idx) => {
@@ -1772,6 +2163,9 @@ export default function ProfitLoss({ salesRecords, products }) {
                             <tr key={`stock-${item._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
                               <td className="py-2.5 px-4">
                                 <div className="font-bold text-gray-950 whitespace-nowrap">{formatDate(dateStr)}</div>
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <div className="font-bold text-gray-950 whitespace-nowrap">{item.invoiceNo || '-'}</div>
                               </td>
                               <td className="py-2.5 px-4">
                                 <div className="font-bold text-gray-950 break-words">{prodName}</div>
@@ -1797,7 +2191,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                     {selectedLcStocks.length > 0 && (
                       <tfoot className="bg-slate-50 border-t-2 border-gray-200">
                         <tr className="text-xs">
-                          <td colSpan="2" className="py-3.5 px-4 font-black text-gray-500 uppercase tracking-wider text-[11px]">Total Received</td>
+                          <td colSpan="3" className="py-3.5 px-4 font-black text-gray-500 uppercase tracking-wider text-[11px]">Total Received</td>
                           <td className="py-3.5 px-3 text-right font-black text-gray-900 whitespace-nowrap">
                             {Math.round(selectedLcStocks.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0), 0)).toLocaleString()} KG
                           </td>
@@ -1861,7 +2255,14 @@ export default function ProfitLoss({ salesRecords, products }) {
                         selectedLcSales.map((sale, idx) => (
                           <tr key={`sale-${sale._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
                             <td className="py-2.5 px-4">
-                              <div className="font-bold text-gray-950 break-words">{sale.invoiceNo}</div>
+                              <div className="font-bold text-gray-950 break-words flex items-center gap-1.5 flex-wrap">
+                                <span>{sale.invoiceNo}</span>
+                                {sale.returnedQty > 0 && (
+                                  <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-black tracking-wide">
+                                    -{Math.round(sale.returnedQty).toLocaleString()} KG RETURNED
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-[10px] text-gray-400 font-medium break-words">{sale.customerName} • {formatDate(sale.date)}</div>
                             </td>
                             <td className="py-2.5 px-4">
@@ -1893,6 +2294,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                     )}
                   </table>
                 </div>
+
               </div>
             ) : (
               <div className="bg-white p-8 print:p-3 print:py-4 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] print:min-h-0 flex-1 flex flex-col justify-center">
@@ -1959,16 +2361,8 @@ export default function ProfitLoss({ salesRecords, products }) {
                               ৳ {(() => {
                                 const currentStockQty = Math.max(0, prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0));
                                 if (currentStockQty <= 0) return '0';
-                                if (conclusionData && conclusionData.unsoldStockKg > 0 && conclusionData.unsoldStockPriceAppx !== undefined) {
-                                  const proportionalPrice = Math.round((currentStockQty / conclusionData.unsoldStockKg) * conclusionData.unsoldStockPriceAppx);
-                                  return proportionalPrice.toLocaleString('en-IN');
-                                }
-                                const salesRate = (conclusionData?.salesValuePerKg > 0)
-                                  ? conclusionData.salesValuePerKg
-                                  : ((prod.saleQty > 0 && prod.salePrice > 0)
-                                      ? (prod.salePrice / prod.saleQty)
-                                      : (prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : 0));
-                                return Math.round(currentStockQty * salesRate).toLocaleString('en-IN');
+                                const avgCost = getProductAvgCost(prod.productName, prod);
+                                return Math.round(currentStockQty * avgCost).toLocaleString('en-IN');
                               })()}
                             </div>
                           </div>
@@ -1990,10 +2384,85 @@ export default function ProfitLoss({ salesRecords, products }) {
           </div>
         </div>
 
-        {/* Row 3: LC Conclusion Statement */}
-        {selectedLc && conclusionData && (
-          <div className="flex justify-center mt-6 print:mt-6 print:break-before-page">
-            <div className="w-full max-w-2xl bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
+        {/* Row 3: Return Sales (Left) + LC Conclusion Statement (Right) */}
+        {selectedLc && (conclusionData || selectedLcReturns.length > 0) && (
+          <div className={`mt-6 print:mt-6 print:break-before-page ${selectedLcReturns.length > 0 ? 'grid grid-cols-1 lg:grid-cols-2 gap-6 items-start' : 'flex justify-center'}`}>
+            
+            {/* Left Column: Return Sales (when returns exist) */}
+            {selectedLcReturns.length > 0 && (
+              <div className="w-full min-w-0 bg-white rounded-2xl border border-rose-200/80 shadow-sm overflow-hidden animate-in fade-in duration-200">
+                <div className="px-6 py-4 border-b border-rose-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-rose-50/50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-5 bg-rose-500 rounded-full" />
+                    <div>
+                      <h2 className="text-sm font-black text-rose-950 uppercase tracking-wider flex items-center gap-2">
+                        <span>Return Sales</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700">
+                          {selectedLcReturns.length} {selectedLcReturns.length === 1 ? 'Record' : 'Records'}
+                        </span>
+                      </h2>
+                      <p className="text-xs text-rose-600/80 font-medium mt-0.5">
+                        Returned goods and invoices for LC No: <span className="font-bold text-rose-900">{selectedLc.lcNo}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-rose-100/70 text-rose-700 border border-rose-200/60 self-start sm:self-center">
+                    {Math.round(totalLcReturnsQty).toLocaleString('en-US')} KG • ৳ {Math.round(totalLcReturnsAmount).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-rose-50/30 border-b border-rose-100 text-[10px] font-black text-rose-600 uppercase tracking-wider">
+                        <th className="py-2.5 px-5">Invoice / Customer</th>
+                        <th className="py-2.5 px-5">Product & Brand</th>
+                        <th className="py-2.5 px-5 text-right">Return Qty</th>
+                        <th className="py-2.5 px-5 text-right font-black">Return Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-rose-100/60 text-xs text-gray-700 font-medium">
+                      {selectedLcReturns.map((ret, idx) => (
+                        <tr key={`ret-left-${ret._id || idx}`} className="hover:bg-rose-50/40 transition-colors">
+                          <td className="py-3 px-5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-gray-950 break-words">{ret.invoiceNo}</span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-bold uppercase tracking-wider">Return</span>
+                            </div>
+                            <div className="text-[10px] text-gray-400 font-medium break-words mt-0.5">{ret.customerName} • {formatDate(ret.date)}</div>
+                          </td>
+                          <td className="py-3 px-5">
+                            <div className="font-bold text-gray-950 break-words">{ret.productName}</div>
+                            <div className="text-[10px] text-gray-400 font-medium break-words">{ret.brandName}</div>
+                          </td>
+                          <td className="py-3 px-5 text-right font-bold text-rose-600 whitespace-nowrap">
+                            {Math.round(ret.quantity).toLocaleString()} KG
+                          </td>
+                          <td className="py-3 px-5 text-right font-black text-rose-600 whitespace-nowrap">
+                            ৳ {Math.round(ret.totalAmount).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-rose-50/70 border-t-2 border-rose-200">
+                      <tr className="text-xs">
+                        <td colSpan="2" className="py-3 px-5 font-black text-rose-800 uppercase tracking-wider text-[11px]">Total Return Sale</td>
+                        <td className="py-3 px-5 text-right font-black text-rose-700 whitespace-nowrap">
+                          {Math.round(totalLcReturnsQty).toLocaleString('en-US')} KG
+                        </td>
+                        <td className="py-3 px-5 text-right font-black text-rose-700 whitespace-nowrap text-sm">
+                          ৳ {Math.round(totalLcReturnsAmount).toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Right Column: LC Conclusion Statement */}
+            {conclusionData && (
+              <div className={`w-full min-w-0 ${selectedLcReturns.length > 0 ? '' : 'max-w-2xl'} bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200`}>
               <div className="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50/50">
                 <div>
                   <div className="flex items-center gap-2">
@@ -2007,20 +2476,20 @@ export default function ProfitLoss({ salesRecords, products }) {
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="w-full">
+                <table className="w-full text-left border-collapse table-auto">
                   <thead>
                     <tr className="bg-gray-50/50 border-b border-gray-200 text-[11px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider">
-                      <th className="py-2.5 px-6 w-1/2">Particular / Metric</th>
-                      <th className="py-2.5 px-6 text-right w-1/2">Details & Value</th>
+                      <th className="py-2.5 px-4 sm:px-5 w-1/2">Particular / Metric</th>
+                      <th className="py-2.5 px-4 sm:px-5 text-right w-1/2">Details & Value</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs sm:text-sm text-gray-700 font-medium">
                     {/* 1. LC No */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-bold text-gray-900">LC No</td>
-                      <td className="py-2 px-6 text-right font-black text-gray-900">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200/80">
+                      <td className="py-2 px-4 sm:px-5 font-bold text-gray-900">LC No</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-black text-gray-900">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200/80">
                           {conclusionData.lcNo}
                         </span>
                       </td>
@@ -2028,93 +2497,93 @@ export default function ProfitLoss({ salesRecords, products }) {
 
                     {/* 2. Item */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Item</td>
-                      <td className="py-2 px-6 text-right font-black text-gray-900">{conclusionData.item}</td>
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Item</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-black text-gray-900 break-words">{conclusionData.item}</td>
                     </tr>
 
                     {/* 3. Supplier */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Supplier</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">{conclusionData.supplier}</td>
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Supplier</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-bold text-gray-900 break-words">{conclusionData.supplier}</td>
                     </tr>
 
                     {/* Total LC Value */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Total LC Value</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Total LC Value</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-bold text-gray-900">
                         {conclusionData.totalLcValue ? `$ ${Math.round(conclusionData.totalLcValue).toLocaleString('en-US')}` : '-'}
                       </td>
                     </tr>
 
                     {/* 5. Calculation USD Rate */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Calculation USD Rate</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Calculation USD Rate</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-bold text-gray-900">
                         ৳ {conclusionData.dollarRate ? conclusionData.dollarRate.toFixed(2) : '0.00'}
                       </td>
                     </tr>
 
                     {/* 6. Total Value in BDT */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Total Value in BDT</td>
-                      <td className="py-2 px-6 text-right font-black text-blue-600">
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Total Value in BDT</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-black text-blue-600">
                         ৳ {Math.round(conclusionData.totalRateKgBdt).toLocaleString('en-IN')}
                       </td>
                     </tr>
 
                     {/* Total COG IN BDT (C&F/Others) */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Total COG IN BDT (C&F/Others)</td>
-                      <td className="py-2 px-6 text-right font-black text-gray-900">
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Total COG IN BDT (C&F/Others)</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-black text-gray-900">
                         ৳ {Math.round(conclusionData.totalCogBdt || 0).toLocaleString('en-IN')}
                       </td>
                     </tr>
 
                     {/* Insurance */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Insurance</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Insurance</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-bold text-gray-900">
                         ৳ {Math.round(conclusionData.insuranceAmount).toLocaleString('en-IN')}
                       </td>
                     </tr>
 
                     {/* Total Invest */}
                     <tr className="bg-blue-50/40 hover:bg-blue-50/60 transition-colors border-t border-b border-blue-100">
-                      <td className="py-2.5 px-6 font-black text-blue-950 text-sm sm:text-base">Total Invest</td>
-                      <td className="py-2.5 px-6 text-right font-black text-blue-700 text-sm sm:text-base">
+                      <td className="py-2.5 px-4 sm:px-5 font-black text-blue-950 text-sm sm:text-base">Total Invest</td>
+                      <td className="py-2.5 px-4 sm:px-5 text-right font-black text-blue-700 text-sm sm:text-base">
                         ৳ {Math.round(conclusionData.totalInvest).toLocaleString('en-IN')}
                       </td>
                     </tr>
 
                     {/* 7. LC Inv Qty in kg */}
                     <tr className="bg-blue-50/30 hover:bg-blue-50/50 transition-colors">
-                      <td className="py-2.5 px-6 font-bold text-blue-950">LC Inv Qty in kg</td>
-                      <td className="py-2.5 px-6 text-right font-black text-blue-900">
+                      <td className="py-2.5 px-4 sm:px-5 font-bold text-blue-950">LC Inv Qty in kg</td>
+                      <td className="py-2.5 px-4 sm:px-5 text-right font-black text-blue-900">
                         {Math.round(conclusionData.invQtyKg).toLocaleString('en-US')} KG
                       </td>
                     </tr>
 
                     {/* Total Rate/kg in BDT */}
                     <tr className="bg-emerald-50/40 hover:bg-emerald-50/60 transition-colors">
-                      <td className="py-2.5 px-6 font-bold text-emerald-950">Total Rate/kg in BDT</td>
-                      <td className="py-2.5 px-6 text-right font-black text-emerald-700">
+                      <td className="py-2.5 px-4 sm:px-5 font-bold text-emerald-950">Total Rate/kg in BDT</td>
+                      <td className="py-2.5 px-4 sm:px-5 text-right font-black text-emerald-700">
                         ৳ {conclusionData.totalRatePerKgBdt.toFixed(2)}
                       </td>
                     </tr>
 
                     {/* 8. Rcv Qty in kg */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Rcv Qty in kg</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Rcv Qty in kg</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-bold text-gray-900">
                         {Math.round(conclusionData.rcvQtyKg).toLocaleString('en-US')} KG
                       </td>
                     </tr>
 
                     {/* 14. Short Qty in kg */}
                     <tr className="bg-rose-50/40 hover:bg-rose-50/60 transition-colors">
-                      <td className="py-2.5 px-6 font-bold text-rose-950">Short Qty in kg</td>
-                      <td className="py-2.5 px-6 text-right">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-200">
+                      <td className="py-2.5 px-4 sm:px-5 font-bold text-rose-950">Short Qty in kg</td>
+                      <td className="py-2.5 px-4 sm:px-5 text-right">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-200">
                           {Math.round(conclusionData.shortQtyKg).toLocaleString('en-US')} KG
                         </span>
                       </td>
@@ -2122,9 +2591,9 @@ export default function ProfitLoss({ salesRecords, products }) {
 
                     {/* Damage Qty in kg */}
                     <tr className="bg-rose-50/30 hover:bg-rose-50/50 transition-colors">
-                      <td className="py-2.5 px-6 font-bold text-rose-950">Damage Qty in kg</td>
-                      <td className="py-2.5 px-6 text-right">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-200">
+                      <td className="py-2.5 px-4 sm:px-5 font-bold text-rose-950">Damage Qty in kg</td>
+                      <td className="py-2.5 px-4 sm:px-5 text-right">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-200">
                           {Math.round(conclusionData.damageQtyKg || 0).toLocaleString('en-US')} KG
                         </span>
                       </td>
@@ -2132,50 +2601,50 @@ export default function ProfitLoss({ salesRecords, products }) {
 
                     {/* 12. Sales Qty in kg */}
                     <tr className="bg-orange-50/30 hover:bg-orange-50/50 transition-colors">
-                      <td className="py-2.5 px-6 font-bold text-orange-950">Sales Qty in kg</td>
-                      <td className="py-2.5 px-6 text-right font-black text-orange-800">
+                      <td className="py-2.5 px-4 sm:px-5 font-bold text-orange-950">Sales Qty in kg</td>
+                      <td className="py-2.5 px-4 sm:px-5 text-right font-black text-orange-800">
                         {Math.round(conclusionData.salesQtyKg).toLocaleString('en-US')} KG
                       </td>
                     </tr>
 
                     {/* 19. Sales Value/kg */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Sales Value/kg</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Sales Value/kg</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-bold text-gray-900">
                         ৳ {conclusionData.salesValuePerKg.toFixed(2)}
                       </td>
                     </tr>
 
                     {/* 18. Sales Value */}
                     <tr className="bg-amber-50/30 hover:bg-amber-50/50 transition-colors">
-                      <td className="py-2.5 px-6 font-black text-amber-950 text-sm sm:text-base">Sales Value</td>
-                      <td className="py-2.5 px-6 text-right font-black text-gray-900 text-sm sm:text-base">
+                      <td className="py-2.5 px-4 sm:px-5 font-black text-amber-950 text-sm sm:text-base">Sales Value</td>
+                      <td className="py-2.5 px-4 sm:px-5 text-right font-black text-gray-900 text-sm sm:text-base">
                         ৳ {Math.round(conclusionData.salesValue).toLocaleString('en-IN')}
                       </td>
                     </tr>
 
                     {/* 13. Unsold Stock in kg */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Unsold Stock in kg</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Unsold Stock in kg</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-bold text-gray-900">
                         {Math.round(conclusionData.unsoldStockKg).toLocaleString('en-US')} KG
                       </td>
                     </tr>
 
                     {/* 20. Unsold Stock Price (Appx) */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-2 px-6 font-semibold text-gray-700">Unsold Stock Price (Appx)</td>
-                      <td className="py-2 px-6 text-right font-bold text-gray-900">
+                      <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Unsold Stock Price (Appx)</td>
+                      <td className="py-2 px-4 sm:px-5 text-right font-bold text-gray-900">
                         {conclusionData.unsoldStockPriceAppx > 0 ? `৳ ${Math.round(conclusionData.unsoldStockPriceAppx).toLocaleString('en-IN')}` : '-'}
                       </td>
                     </tr>
 
                     {/* 21. Profit/Loss */}
                     <tr className="bg-slate-50 hover:bg-slate-100/80 transition-colors border-t-2 border-gray-200">
-                      <td className="py-3 px-6 font-black text-gray-900 text-sm sm:text-base uppercase tracking-wider">
+                      <td className="py-3 px-4 sm:px-5 font-black text-gray-900 text-sm sm:text-base uppercase tracking-wider">
                         {conclusionData.profitOrLoss >= 0 ? 'Profit' : 'Loss'}
                       </td>
-                      <td className="py-3 px-6 text-right">
+                      <td className="py-3 px-4 sm:px-5 text-right">
                         <span className={`text-base sm:text-lg font-black ${conclusionData.profitOrLoss >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {conclusionData.profitOrLoss < 0 ? `- ৳ ${Math.abs(Math.round(conclusionData.profitOrLoss)).toLocaleString('en-IN')}` : `৳ ${Math.round(conclusionData.profitOrLoss).toLocaleString('en-IN')}`}
                         </span>
@@ -2185,8 +2654,9 @@ export default function ProfitLoss({ salesRecords, products }) {
                 </table>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+      )}
 
       </div>
     </div>
