@@ -19,7 +19,11 @@ export { getLcMilestoneFinances };
 
 const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highlightId, isRequestedNotif, refreshPendingIndicators }) => {
     
-    const [payments, setPayments] = useState([]);
+    const recentStatusUpdatesRef = useRef(new Map());
+    const [payments, setPayments] = useState(() => {
+        const cached = queryClient.getQueryData(['insurance-payments']);
+        return Array.isArray(cached) && cached.length > 0 ? cached : [];
+    });
     const [employeesMap, setEmployeesMap] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
@@ -486,8 +490,15 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 queryKey: ['insurance-payments'],
                 queryFn: () => axios.get(`${API_BASE_URL}/api/insurance-payments?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
-            setPayments(data);
-            queryClient.setQueryData(['insurance-payments'], data);
+            const reconciledData = (Array.isArray(data) ? data : []).map(item => {
+                const recent = recentStatusUpdatesRef.current?.get(item._id);
+                if (recent && (Date.now() - recent.timestamp < 15000)) {
+                    return { ...item, status: recent.status };
+                }
+                return item;
+            });
+            setPayments(reconciledData);
+            queryClient.setQueryData(['insurance-payments'], reconciledData);
         } catch (error) {
             console.error('Error fetching insurance payments:', error);
         } finally {
@@ -789,6 +800,13 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 }
             }
 
+            if (isEditMode && editingPayment?._id) {
+                recentStatusUpdatesRef.current?.set(editingPayment._id, { status: initialStatus, timestamp: Date.now() });
+            }
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'insurance-payments', type: isEditMode ? 'edit' : 'create' }
+            }));
+
             setSubmitStatus('success');
             queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });
             queryClient.invalidateQueries({ queryKey: ['insurance'] });
@@ -807,6 +825,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
 
     const handleApprovePayment = async (payment) => {
         try {
+            recentStatusUpdatesRef.current?.set(payment._id, { status: 'Adjusted', timestamp: Date.now() });
             const updatedPayment = {
                 ...payment,
                 status: 'Adjusted'
@@ -817,6 +836,9 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 Array.isArray(old) ? old.map(p => p._id === payment._id ? updatedPayment : p) : []
             );
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'insurance-payments', type: 'approve', id: payment._id }
+            }));
 
             await axios.put(`${API_BASE_URL}/api/insurance-payments/${payment._id}`, updatedPayment);
             queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });
@@ -842,12 +864,16 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     const handleRejectPayment = async (payment) => {
         if (!window.confirm(`Are you sure you want to reject the payment request for ${payment.companyName}?`)) return;
         try {
+            recentStatusUpdatesRef.current?.delete(payment._id);
             // Instant optimistic update
             setPayments(prev => (prev || []).filter(p => p._id !== payment._id));
             queryClient.setQueryData(['insurance-payments'], (old = []) =>
                 Array.isArray(old) ? old.filter(p => p._id !== payment._id) : []
             );
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'insurance-payments', type: 'reject', id: payment._id }
+            }));
 
             await axios.delete(`${API_BASE_URL}/api/insurance-payments/${payment._id}`);
             queryClient.invalidateQueries({ queryKey: ['insurance-payments'] });

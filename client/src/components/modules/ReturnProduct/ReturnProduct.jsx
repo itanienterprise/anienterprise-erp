@@ -27,9 +27,18 @@ import { getSocket } from '../../../utils/socket';
 
 const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated }) => {
     const [showForm, setShowForm] = useState(false);
-    const [returns, setReturns] = useState([]);
-    const [sales, setSales] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [returns, setReturns] = useState(() => {
+        const cached = queryClient.getQueryData(['returns']);
+        return Array.isArray(cached) && cached.length > 0 ? cached : [];
+    });
+    const [sales, setSales] = useState(() => {
+        const cached = queryClient.getQueryData(['sales']);
+        return Array.isArray(cached) && cached.length > 0 ? cached : [];
+    });
+    const [isLoading, setIsLoading] = useState(() => {
+        const cached = queryClient.getQueryData(['returns']);
+        return !(Array.isArray(cached) && cached.length > 0);
+    });
     const [searchQuery, setSearchQuery] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -659,6 +668,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
             window.dispatchEvent(new CustomEvent('returnsUpdated'));
             window.dispatchEvent(new CustomEvent('stockUpdated'));
             window.dispatchEvent(new CustomEvent('warehousesUpdated'));
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'returns' } }));
         } catch (error) {
             console.error('Error saving return:', error);
             showToast('Error saving return record. Please try again.', 'error');
@@ -881,6 +891,7 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
             window.dispatchEvent(new CustomEvent('returnsUpdated'));
             window.dispatchEvent(new CustomEvent('stockUpdated'));
             window.dispatchEvent(new CustomEvent('warehousesUpdated'));
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'returns' } }));
         } catch (error) {
             console.error('Error deleting return:', error);
             showToast('Error deleting return record. Please try again.', 'error');

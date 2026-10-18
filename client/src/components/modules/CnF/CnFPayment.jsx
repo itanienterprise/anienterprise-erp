@@ -40,7 +40,11 @@ const formatFirstName = (nameStr) => {
 };
 
 const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId, isRequestedNotif, refreshPendingIndicators }) => {
-    const [payments, setPayments] = useState([]);
+    const recentStatusUpdatesRef = useRef(new Map());
+    const [payments, setPayments] = useState(() => {
+        const cached = queryClient.getQueryData(['cnf-payments']);
+        return Array.isArray(cached) && cached.length > 0 ? cached : [];
+    });
     const [employeesMap, setEmployeesMap] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
@@ -858,11 +862,26 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
             }
         }
         try {
-            const data = await queryClient.fetchQuery({
+            const rawData = await queryClient.fetchQuery({
                 queryKey: ['cnf-payments'],
                 queryFn: () => axios.get(`${API_BASE_URL}/api/cnf-payments?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
+            const now = Date.now();
+            const data = (rawData || []).map(p => {
+                const pId = String(p._id || p.id || '');
+                const recent = pId ? recentStatusUpdatesRef.current.get(pId) : null;
+                if (recent && (now - recent.time < 30000)) {
+                    return {
+                        ...p,
+                        ...(recent.status !== undefined ? { status: recent.status } : {}),
+                        ...(recent.firstApproved !== undefined ? { firstApproved: recent.firstApproved } : {}),
+                        ...(recent.secondApproved !== undefined ? { secondApproved: recent.secondApproved } : {})
+                    };
+                }
+                return p;
+            });
             setPayments(data);
+            queryClient.setQueryData(['cnf-payments'], data);
         } catch (error) {
             console.error('Error fetching C&F payments:', error);
         } finally {
@@ -1250,6 +1269,14 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                 };
             }
 
+            // Record in anti-rollback ref
+            recentStatusUpdatesRef.current.set(String(payment._id).trim(), {
+                status: updatedData.status,
+                firstApproved: updatedData.firstApproved,
+                secondApproved: updatedData.secondApproved,
+                time: Date.now()
+            });
+
             // Instant optimistic update
             setPayments(prev => (prev || []).map(p => p._id === payment._id ? { ...p, ...updatedData } : p));
             queryClient.setQueryData(['cnf-payments'], (old = []) =>
@@ -1258,6 +1285,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
             refreshPendingIndicators?.();
 
             await axios.put(`${API_BASE_URL}/api/cnf-payments/${payment._id}`, updatedData);
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'cnf-payments', action: 'status_update' } }));
             queryClient.invalidateQueries({ queryKey: ['cnf-payments'] });
             queryClient.invalidateQueries({ queryKey: ['cnfs'] });
             queryClient.invalidateQueries({ queryKey: ['banks'] });

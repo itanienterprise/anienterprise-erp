@@ -5251,8 +5251,10 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const activeHighlightId = highlightId || localHighlightId;
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [lcReportModalType, setLcReportModalType] = useState(null);
-    
-    const [lcRecords, setLcRecords] = useState([]);
+    const [lcRecords, setLcRecords] = useState(() => {
+        const cached = queryClient.getQueryData(['lc-management']);
+        return Array.isArray(cached) && cached.length > 0 ? cached : [];
+    });
     const [banks, setBanks] = useState([]);
     const [banksRaw, setBanksRaw] = useState([]);
     const [importers, setImporters] = useState([]);

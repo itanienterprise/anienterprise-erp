@@ -19,6 +19,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     const canShowEntryBy = hasPermission(currentUser, 'transfer', 'showEntryBy');
 
     // States
+    const recentStatusUpdatesRef = useRef(new Map());
     const [employeesMap, setEmployeesMap] = useState({});
     const [employeesFullNameMap, setEmployeesFullNameMap] = useState({});
     const [warehouseData, setWarehouseData] = useState([]);
@@ -26,9 +27,42 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     const [salesRecords, setSalesRecords] = useState([]);
     const [damagesRecords, setDamagesRecords] = useState([]);
     const [products, setProducts] = useState([]);
-    const [transferLogs, setTransferLogs] = useState([]);
+    const [transferLogs, setTransferLogs] = useState(() => {
+        try {
+            const cachedWh = queryClient.getQueryData(['warehouses']);
+            if (Array.isArray(cachedWh) && cachedWh.length > 0) {
+                const logs = [];
+                cachedWh.forEach(item => {
+                    let decrypted = item.data ? decryptData(item.data) : item;
+                    if (typeof decrypted === 'string') { try { decrypted = decryptData(decrypted); } catch (e) { } }
+                    if (!decrypted || typeof decrypted !== 'object') decrypted = item;
+                    if (decrypted.isTransferLog || (parseFloat(decrypted.transferQty) > 0 || parseFloat(decrypted.transferPkt) > 0)) {
+                        logs.push({
+                            ...decrypted,
+                            _id: item._id,
+                            createdAt: item.createdAt,
+                            updatedAt: item.updatedAt,
+                            date: decrypted.date || item.createdAt || new Date().toISOString()
+                        });
+                    }
+                });
+                logs.sort((a, b) => {
+                    const aReq = a.status === 'Requested';
+                    const bReq = b.status === 'Requested';
+                    if (aReq && !bReq) return -1;
+                    if (!aReq && bReq) return 1;
+                    return new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date);
+                });
+                return logs;
+            }
+        } catch { }
+        return [];
+    });
     const [activeBaseline, setActiveBaseline] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(() => {
+        const cachedWh = queryClient.getQueryData(['warehouses']);
+        return !(Array.isArray(cachedWh) && cachedWh.length > 0);
+    });
 
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -243,7 +277,14 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                 if (!aReq && bReq) return 1;
                 return new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date);
             });
-            setTransferLogs(logs);
+            const reconciledLogs = logs.map(l => {
+                const recent = recentStatusUpdatesRef.current?.get(l._id);
+                if (recent && (Date.now() - recent.timestamp < 15000)) {
+                    return { ...l, status: recent.status };
+                }
+                return l;
+            });
+            setTransferLogs(reconciledLogs);
 
         } catch (err) {
             console.error('Error loading transfer data:', err);
@@ -886,6 +927,9 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             }
 
             setSubmitStatus('success');
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'transfer', type: editingTransferId ? 'edit' : 'create' }
+            }));
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             queryClient.invalidateQueries({ queryKey: ['stock'] });
             setShowForm(false);
@@ -909,11 +953,16 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             return;
         }
 
+        recentStatusUpdatesRef.current?.set(item._id, { status: 'Approved', timestamp: Date.now() });
+
         // Instant optimistic update
         setTransferLogs(prev => (prev || []).map(l => l._id === item._id ? { ...l, status: 'Approved', approvedAt: new Date().toISOString(), approvedBy: currentUser?.username || 'admin' } : l));
         if (typeof refreshPendingIndicators === 'function') {
             refreshPendingIndicators();
         }
+        window.dispatchEvent(new CustomEvent('erp_data_updated', {
+            detail: { module: 'transfer', type: 'approve', id: item._id }
+        }));
 
         try {
             let transferQty = parseFloat(item.transferQty ?? item.whQty ?? item.inHouseQuantity ?? 0);
@@ -1016,11 +1065,16 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         }
 
         if (window.confirm('Are you sure you want to reject this transfer request?')) {
+            recentStatusUpdatesRef.current?.set(item._id, { status: 'Rejected', timestamp: Date.now() });
+
             // Instant optimistic update
             setTransferLogs(prev => (prev || []).map(l => l._id === item._id ? { ...l, status: 'Rejected', rejectedAt: new Date().toISOString(), rejectedBy: currentUser?.username || 'admin' } : l));
             if (typeof refreshPendingIndicators === 'function') {
                 refreshPendingIndicators();
             }
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'transfer', type: 'reject', id: item._id }
+            }));
 
             try {
                 const updatedLog = {

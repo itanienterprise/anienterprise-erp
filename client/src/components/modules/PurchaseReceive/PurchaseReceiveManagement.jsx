@@ -17,7 +17,11 @@ import '../Sale/SaleManagement.css';
 
 const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRecords, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
 
-    const [purchaseReceives, setPurchaseReceives] = useState([]);
+    const recentStatusUpdatesRef = useRef(new Map());
+    const [purchaseReceives, setPurchaseReceives] = useState(() => {
+        const cached = queryClient.getQueryData(['purchase-receives']);
+        return Array.isArray(cached) && cached.length > 0 ? cached : [];
+    });
     const [warehousesList, setWarehousesList] = useState(['HILI', 'DINAJPUR', 'CHATTOGRAM', 'DHAKA']);
     const [customersList, setCustomersList] = useState([]);
     const [productsList, setProductsList] = useState([]);
@@ -75,7 +79,10 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
     const [highlightedProductIdx, setHighlightedProductIdx] = useState(0);
     const [highlightedBrandIdx, setHighlightedBrandIdx] = useState(0);
     const [highlightedWhIdx, setHighlightedWhIdx] = useState(0);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(() => {
+        const cached = queryClient.getQueryData(['purchase-receives']);
+        return !(Array.isArray(cached) && cached.length > 0);
+    });
     const [searchQuery, setSearchQuery] = useState('');
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
@@ -433,24 +440,36 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
 
     const fetchPurchaseReceives = async (silent = false) => {
         const cached = queryClient.getQueryData(['purchase-receives']);
-        if (cached && Array.isArray(cached) && cached.length > 0) {
-            setPurchaseReceives(cached);
-        } else if (!silent) {
+        if ((!cached || cached.length === 0) && (!purchaseReceives || purchaseReceives.length === 0) && !silent) {
             setIsLoading(true);
         }
         try {
-            const data = await queryClient.fetchQuery({
-                queryKey: ['purchase-receives'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/purchase-receives?_t=${Date.now()}`).then(r => r.data || [])
+            const cacheBuster = `_t=${Date.now()}`;
+            const res = await axios.get(`${API_BASE_URL}/api/purchase-receives?${cacheBuster}`);
+            const rawData = Array.isArray(res.data) ? res.data : [];
+            const now = Date.now();
+            const data = rawData.map(p => {
+                const prId = String(p._id || p.id || '');
+                const prNo = String(p.purchaseReceiveNo || p.purchaseNo || '').trim().toUpperCase();
+                const recent = (prId && recentStatusUpdatesRef.current.get(prId)) || (prNo && recentStatusUpdatesRef.current.get(prNo));
+                if (recent && (now - recent.time < 30000)) {
+                    return {
+                        ...p,
+                        status: recent.status !== undefined ? recent.status : p.status,
+                        isEdited: recent.isEdited !== undefined ? recent.isEdited : p.isEdited
+                    };
+                }
+                return p;
             });
             setPurchaseReceives(data);
+            queryClient.setQueryData(['purchase-receives'], data);
             if (data.length > 0) {
                 syncPurchaseReceiveStock(data);
             }
         } catch (error) {
             console.error('Error fetching purchase receives:', error);
         } finally {
-            setIsLoading(false);
+            if (!silent) setIsLoading(false);
         }
     };
 
@@ -1485,6 +1504,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
             fetchPurchaseReceives(true);
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'purchase-receives', action: editingId ? 'update' : 'create' } }));
 
             (async () => {
                 try {
@@ -1546,6 +1566,20 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                 approvedByName: employeeDisplayName
             };
 
+            // Record status update in anti-rollback ref
+            recentStatusUpdatesRef.current.set(prId, {
+                status: newStatus,
+                isEdited: false,
+                time: Date.now()
+            });
+            if (prNo) {
+                recentStatusUpdatesRef.current.set(prNo, {
+                    status: newStatus,
+                    isEdited: false,
+                    time: Date.now()
+                });
+            }
+
             // Instant optimistic update (0ms disappearance from requested view)
             setPurchaseReceives(prev => {
                 if (isRequestedOnly) {
@@ -1561,6 +1595,8 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
             const res = await axios.put(`${API_BASE_URL}/api/purchase-receives/${purchase._id}`, updated);
             const savedPR = res.data || updated;
             setStatusUpdatingId(null);
+            fetchPurchaseReceives(true);
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'purchase-receives', action: 'status_update' } }));
 
             // Background stock and notification sync
             const statusLower = (newStatus || '').toLowerCase();

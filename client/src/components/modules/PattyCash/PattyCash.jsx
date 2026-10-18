@@ -463,9 +463,14 @@ const PattyCash = ({ currentUser = {}, onDeleteConfirm }) => {
         const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
         window.addEventListener('erp_data_updated', onCustomEvent);
 
+        const pollTimer = setInterval(() => {
+            fetchRecords(true);
+        }, 30000);
+
         return () => {
             if (socket) socket.off('data_updated', handleRealtimeUpdate);
             window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
         };
     }, []);
 

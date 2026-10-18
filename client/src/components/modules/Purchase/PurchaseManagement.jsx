@@ -18,7 +18,11 @@ import '../Sale/SaleManagement.css';
 
 const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
     
-    const [purchases, setPurchases] = useState([]);
+    const recentStatusUpdatesRef = useRef(new Map());
+    const [purchases, setPurchases] = useState(() => {
+        const cached = queryClient.getQueryData(['purchases']);
+        return Array.isArray(cached) && cached.length > 0 ? cached : [];
+    });
     const [warehousesList, setWarehousesList] = useState(['HILI', 'DINAJPUR', 'CHATTOGRAM', 'DHAKA']);
     const [customersList, setCustomersList] = useState([]);
     const [productsList, setProductsList] = useState([]);
@@ -73,7 +77,10 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
     const [highlightedProductIdx, setHighlightedProductIdx] = useState(0);
     const [highlightedBrandIdx, setHighlightedBrandIdx] = useState(0);
     const [highlightedWhIdx, setHighlightedWhIdx] = useState(0);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(() => {
+        const cached = queryClient.getQueryData(['purchases']);
+        return !(Array.isArray(cached) && cached.length > 0);
+    });
     const [searchQuery, setSearchQuery] = useState('');
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [purchaseReceivesList, setPurchaseReceivesList] = useState([]);
@@ -438,14 +445,29 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         } catch (e) { }
     };
 
-    const fetchPurchases = async () => {
+    const fetchPurchases = async (silent = false) => {
         const cached = queryClient.getQueryData(['purchases']);
-        if (cached && Array.isArray(cached) && cached.length > 0 && (!purchases || purchases.length === 0)) {
-            setPurchases(cached);
+        if ((!cached || cached.length === 0) && (!purchases || purchases.length === 0) && !silent) {
+            setIsLoading(true);
         }
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/purchases`);
-            const data = Array.isArray(res.data) ? res.data : [];
+            const cacheBuster = `_t=${Date.now()}`;
+            const res = await axios.get(`${API_BASE_URL}/api/purchases?${cacheBuster}`);
+            const rawData = Array.isArray(res.data) ? res.data : [];
+            const now = Date.now();
+            const data = rawData.map(p => {
+                const purId = String(p._id || p.id || '');
+                const purNo = String(p.purchaseNo || '').trim().toUpperCase();
+                const recent = (purId && recentStatusUpdatesRef.current.get(purId)) || (purNo && recentStatusUpdatesRef.current.get(purNo));
+                if (recent && (now - recent.time < 30000)) {
+                    return {
+                        ...p,
+                        status: recent.status !== undefined ? recent.status : p.status,
+                        isEdited: recent.isEdited !== undefined ? recent.isEdited : p.isEdited
+                    };
+                }
+                return p;
+            });
             setPurchases(data);
             queryClient.setQueryData(['purchases'], data);
             fetchPR();
@@ -455,17 +477,26 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         } catch (error) {
             console.error('Error fetching purchases:', error);
         } finally {
-            setIsLoading(false);
+            if (!silent) setIsLoading(false);
         }
     };
 
     // Real-time synchronization
     useEffect(() => {
         const socket = getSocket();
+        let debounceTimer = null;
+        const debouncedFetch = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchPurchases(true);
+                if (refreshPendingIndicators) refreshPendingIndicators();
+            }, 80);
+        };
+
         const handleRealtimeUpdate = (data) => {
-            const mod = data?.module;
-            if (!mod || mod === 'purchases' || mod === 'purchase-receives') {
-                fetchPurchases();
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['purchases', 'purchase', 'purchase-receives', 'purchasereceive', 'all'].includes(mod)) {
+                debouncedFetch();
             }
         };
 
@@ -475,11 +506,17 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
         window.addEventListener('erp_data_updated', onCustomEvent);
 
+        const pollTimer = setInterval(() => {
+            fetchPurchases(true);
+        }, 30000);
+
         return () => {
             if (socket) {
                 socket.off('data_updated', handleRealtimeUpdate);
             }
             window.removeEventListener('erp_data_updated', onCustomEvent);
+            if (debounceTimer) clearTimeout(debounceTimer);
+            clearInterval(pollTimer);
         };
     }, []);
 
@@ -1096,9 +1133,10 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
             queryClient.invalidateQueries({ queryKey: ['purchases'] });
             queryClient.invalidateQueries({ queryKey: ['stock'] });
             queryClient.invalidateQueries({ queryKey: ['purchase-receives'] });
-            fetchPurchases();
+            fetchPurchases(true);
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'purchases', action: editingId ? 'update' : 'create' } }));
 
             (async () => {
                 try {
@@ -1149,6 +1187,20 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                 approvedByName: employeeDisplayName
             };
 
+            // Record status update in anti-rollback ref
+            recentStatusUpdatesRef.current.set(purId, {
+                status: newStatus,
+                isEdited: false,
+                time: Date.now()
+            });
+            if (purNo) {
+                recentStatusUpdatesRef.current.set(purNo, {
+                    status: newStatus,
+                    isEdited: false,
+                    time: Date.now()
+                });
+            }
+
             // Instant optimistic update (0ms disappearance from requested view)
             setPurchases(prev => {
                 if (isRequestedOnly) {
@@ -1162,6 +1214,8 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
 
             await axios.put(`${API_BASE_URL}/api/purchases/${purchase._id}`, updated);
+            fetchPurchases(true);
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'purchases', action: 'status_update' } }));
 
             (async () => {
                 try {

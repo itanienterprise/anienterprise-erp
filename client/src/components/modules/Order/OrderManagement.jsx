@@ -51,15 +51,34 @@ const OrderManagement = ({
 }) => {
     
     // --- State Management ---
-    const [sales, setSales] = useState([]);
-    const [allSalesRecords, setAllSalesRecords] = useState([]);
-    const [returnsList, setReturnsList] = useState([]);
+    const recentStatusUpdatesRef = useRef(new Map());
+    const [allSalesRecords, setAllSalesRecords] = useState(() => {
+        const cached = queryClient.getQueryData(['sales']);
+        return Array.isArray(cached) && cached.length > 0 ? cached : [];
+    });
+    const [sales, setSales] = useState(() => {
+        const cached = queryClient.getQueryData(['sales']);
+        if (Array.isArray(cached) && cached.length > 0) {
+            return cached.filter(item => {
+                const sType = (item.saleType || '').toLowerCase();
+                const inv = (item.invoiceNo || item.orderNo || '').toUpperCase();
+                return sType === 'order' || inv.startsWith('ORD') || item.isOrderEntry === true;
+            });
+        }
+        return [];
+    });
+    const [returnsList, setReturnsList] = useState(() => {
+        const cached = queryClient.getQueryData(['returns']);
+        return Array.isArray(cached) ? cached : [];
+    });
     const [activeBaseline, setActiveBaseline] = useState(propActiveBaseline || null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(() => {
+        const cached = queryClient.getQueryData(['sales']);
+        return !(Array.isArray(cached) && cached.length > 0);
+    });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [employeesMap, setEmployeesMap] = useState({});
     const [employeesFullNameMap, setEmployeesFullNameMap] = useState({});
-    const recentStatusUpdatesRef = useRef(new Map());
 
     useEffect(() => {
         if (propActiveBaseline) {
@@ -767,11 +786,11 @@ const OrderManagement = ({
             const [salesData, returnsData] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['sales'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['returns'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/returns`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/returns?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
                 })
             ]);
             const rawData = Array.isArray(salesData) ? salesData : [];
@@ -1273,6 +1292,9 @@ const OrderManagement = ({
             }
 
             setShowForm(false);
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'sales', type: editingId ? 'edit' : 'create' }
+            }));
             queryClient.invalidateQueries({ queryKey: ['sales'] });
             queryClient.invalidateQueries({ queryKey: ['customers'] });
             queryClient.invalidateQueries({ queryKey: ['stock'] });
@@ -1377,6 +1399,9 @@ const OrderManagement = ({
                     addNotification(`Order ${order.invoiceNo || order.orderNo} ${newStatus.toLowerCase()} successfully!`, 'success');
                 }
             }
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'sales', type: newStatus.toLowerCase() }
+            }));
             queryClient.invalidateQueries({ queryKey: ['customers'] });
             queryClient.invalidateQueries({ queryKey: ['stock'] });
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
@@ -1416,6 +1441,9 @@ const OrderManagement = ({
         if (refreshPendingIndicators) refreshPendingIndicators();
         if (setSelectedItems) setSelectedItems(new Set());
         if (setIsSelectionMode) setIsSelectionMode(false);
+        window.dispatchEvent(new CustomEvent('erp_data_updated', {
+            detail: { module: 'sales', type: 'bulk_accept' }
+        }));
 
         try {
             await Promise.all(
@@ -1460,6 +1488,9 @@ const OrderManagement = ({
             Array.isArray(old) ? old.filter(o => !targetIds.has(o._id)) : []
         );
         if (refreshPendingIndicators) refreshPendingIndicators();
+        window.dispatchEvent(new CustomEvent('erp_data_updated', {
+            detail: { module: 'sales', type: 'bulk_reject' }
+        }));
 
         try {
             await Promise.all(
