@@ -33,6 +33,40 @@ const attUpload = multer ? multer({
   single: () => (req, res, next) => next()
 };
 
+// Filter out noisy raw internal logs from 3rd-party node-zklib library ('ok tcp', 'ok udp')
+const _origConsoleLog = console.log;
+console.log = function (...args) {
+  if (args.length === 1 && typeof args[0] === 'string') {
+    const trimmed = args[0].trim();
+    if (trimmed === 'ok tcp' || trimmed === 'ok udp') {
+      return;
+    }
+  }
+  return _origConsoleLog.apply(console, args);
+};
+
+// Safe error formatter for ZKTeco library errors (handles ZKError, Error, string, etc.)
+function formatZkError(err) {
+  if (!err) return 'Unknown error';
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.err && err.err.message) return err.err.message;
+  if (typeof err.toast === 'function') {
+    try {
+      const msg = err.toast();
+      if (msg) return msg;
+    } catch (_) {}
+  }
+  if (err.err && typeof err.err === 'string') return err.err;
+  if (err.code) return `Connection error (${err.code})`;
+  if (err.err && err.err.code) return `Connection error (${err.err.code})`;
+  try {
+    return JSON.stringify(err);
+  } catch (_) {
+    return String(err);
+  }
+}
+
 let ZKLib, ZKConstants, ZKUtils;
 try {
   ZKLib = require('node-zklib');
@@ -7841,143 +7875,147 @@ async function fetchZkAttendances(ip, port = 4370, timeout = 30000, options = {}
   const z = zk.zklibTcp;
 
   let users = [];
-  if (fetchUsers) {
-    try {
-      const userData = await zk.getUsers();
-      users = Array.isArray(userData?.data) ? userData.data : (Array.isArray(userData) ? userData : []);
-    } catch (_) {}
-  }
-
-  // Request attendance logs size
-  z.replyId++;
-  const buf = createTCPHeader(COMMANDS.CMD_DATA_WRRQ, z.sessionId, z.replyId, REQUEST_DATA.GET_ATTENDANCE_LOGS);
-  const reply = await z.requestData(buf);
-  const recvData = reply.subarray(16);
-  const size = recvData.readUIntLE(1, 4);
-
-  if (!size || size <= 4) {
-    await zk.disconnect();
-    return { records: [], users };
-  }
-
-  const totalRecords = Math.floor((size - 4) / 40);
-  // If buffer is large (>1500 records) and not explicit fullSync, fetch latest records to avoid network timeouts
-  const shouldFetchLatestOnly = latestOnly || (totalRecords > 1500 && !fullSync);
-
   let allPayload = Buffer.from([]);
+  let shouldFetchLatestOnly = false;
 
-  if (shouldFetchLatestOnly) {
-    const countToFetch = Math.min(totalRecords, limit || 1000);
-    const totalBytesToFetch = countToFetch * 40;
-    const startByte = 4 + (totalRecords - countToFetch) * 40;
-
-    const CHUNK_SIZE = 400 * 40; // 16,000 bytes per chunk (record-aligned)
-    let bytesRemaining = totalBytesToFetch;
-    let currentOffset = startByte;
-
-    while (bytesRemaining > 0) {
-      const fetchLen = Math.min(bytesRemaining, CHUNK_SIZE);
-      z.replyId++;
-      const reqData = Buffer.alloc(8);
-      reqData.writeUInt32LE(currentOffset, 0);
-      reqData.writeUInt32LE(fetchLen, 4);
-      const chunkBuf = createTCPHeader(COMMANDS.CMD_DATA_RDY, z.sessionId, z.replyId, reqData);
-
-      const chunkData = await new Promise((resolve, reject) => {
-        let bufferAcc = Buffer.from([]);
-        let chunkTimer = setTimeout(() => {
-          z.socket.off('data', onData);
-          reject(new Error(`Timeout receiving chunk at offset ${currentOffset}`));
-        }, 6000);
-
-        function onData(d) {
-          bufferAcc = Buffer.concat([bufferAcc, d]);
-          while (bufferAcc.length >= 8) {
-            if (bufferAcc.compare(Buffer.from([0x50, 0x50, 0x82, 0x7d]), 0, 4, 0, 4) !== 0) {
-              bufferAcc = bufferAcc.subarray(1);
-              continue;
-            }
-            const packetLen = bufferAcc.readUInt16LE(4);
-            const totalPacketLen = 8 + packetLen;
-            if (bufferAcc.length < totalPacketLen) break;
-
-            const packet = bufferAcc.subarray(0, totalPacketLen);
-            bufferAcc = bufferAcc.subarray(totalPacketLen);
-
-            const commandId = packet.readUInt16LE(8);
-            if (commandId === COMMANDS.CMD_DATA) {
-              clearTimeout(chunkTimer);
-              z.socket.off('data', onData);
-              resolve(packet.subarray(16));
-              return;
-            }
-          }
-        }
-
-        z.socket.on('data', onData);
-        z.socket.write(chunkBuf);
-      });
-
-      allPayload = Buffer.concat([allPayload, chunkData]);
-      currentOffset += fetchLen;
-      bytesRemaining -= fetchLen;
+  try {
+    if (fetchUsers) {
+      try {
+        const userData = await zk.getUsers();
+        users = Array.isArray(userData?.data) ? userData.data : (Array.isArray(userData) ? userData : []);
+      } catch (_) {}
     }
-  } else {
-    const MAX_CHUNK = 16 * 1024;
-    let remain = size % MAX_CHUNK;
-    let numberChunks = Math.floor(size / MAX_CHUNK);
-    let totalChunks = numberChunks + (remain > 0 ? 1 : 0);
 
-    for (let c = 0; c < totalChunks; c++) {
-      const start = c * MAX_CHUNK;
-      const chunkSize = (c === totalChunks - 1 && remain > 0) ? remain : MAX_CHUNK;
+    // Request attendance logs size
+    z.replyId++;
+    const buf = createTCPHeader(COMMANDS.CMD_DATA_WRRQ, z.sessionId, z.replyId, REQUEST_DATA.GET_ATTENDANCE_LOGS);
+    const reply = await z.requestData(buf);
+    const recvData = reply.subarray(16);
+    const size = recvData.readUIntLE(1, 4);
 
-      const chunkData = await new Promise((resolve, reject) => {
+    if (!size || size <= 4) {
+      return { records: [], users };
+    }
+
+    const totalRecords = Math.floor((size - 4) / 40);
+    // If buffer is large (>1500 records) and not explicit fullSync, fetch latest records to avoid network timeouts
+    shouldFetchLatestOnly = latestOnly || (totalRecords > 1500 && !fullSync);
+
+    if (shouldFetchLatestOnly) {
+      const countToFetch = Math.min(totalRecords, limit || 1000);
+      const totalBytesToFetch = countToFetch * 40;
+      const startByte = 4 + (totalRecords - countToFetch) * 40;
+
+      const CHUNK_SIZE = 400 * 40; // 16,000 bytes per chunk (record-aligned)
+      let bytesRemaining = totalBytesToFetch;
+      let currentOffset = startByte;
+
+      while (bytesRemaining > 0) {
+        const fetchLen = Math.min(bytesRemaining, CHUNK_SIZE);
         z.replyId++;
         const reqData = Buffer.alloc(8);
-        reqData.writeUInt32LE(start, 0);
-        reqData.writeUInt32LE(chunkSize, 4);
+        reqData.writeUInt32LE(currentOffset, 0);
+        reqData.writeUInt32LE(fetchLen, 4);
         const chunkBuf = createTCPHeader(COMMANDS.CMD_DATA_RDY, z.sessionId, z.replyId, reqData);
 
-        let bufferAcc = Buffer.from([]);
-        let chunkTimer = setTimeout(() => {
-          z.socket.off('data', onData);
-          reject(new Error(`Timeout receiving chunk ${c + 1}/${totalChunks}`));
-        }, 8000);
+        const chunkData = await new Promise((resolve, reject) => {
+          let bufferAcc = Buffer.from([]);
+          let chunkTimer = setTimeout(() => {
+            z.socket.off('data', onData);
+            reject(new Error(`Timeout receiving chunk at offset ${currentOffset}`));
+          }, 6000);
 
-        function onData(d) {
-          bufferAcc = Buffer.concat([bufferAcc, d]);
-          while (bufferAcc.length >= 8) {
-            if (bufferAcc.compare(Buffer.from([0x50, 0x50, 0x82, 0x7d]), 0, 4, 0, 4) !== 0) {
-              bufferAcc = bufferAcc.subarray(1);
-              continue;
-            }
-            const packetLen = bufferAcc.readUInt16LE(4);
-            const totalPacketLen = 8 + packetLen;
-            if (bufferAcc.length < totalPacketLen) break;
+          function onData(d) {
+            bufferAcc = Buffer.concat([bufferAcc, d]);
+            while (bufferAcc.length >= 8) {
+              if (bufferAcc.compare(Buffer.from([0x50, 0x50, 0x82, 0x7d]), 0, 4, 0, 4) !== 0) {
+                bufferAcc = bufferAcc.subarray(1);
+                continue;
+              }
+              const packetLen = bufferAcc.readUInt16LE(4);
+              const totalPacketLen = 8 + packetLen;
+              if (bufferAcc.length < totalPacketLen) break;
 
-            const packet = bufferAcc.subarray(0, totalPacketLen);
-            bufferAcc = bufferAcc.subarray(totalPacketLen);
+              const packet = bufferAcc.subarray(0, totalPacketLen);
+              bufferAcc = bufferAcc.subarray(totalPacketLen);
 
-            const commandId = packet.readUInt16LE(8);
-            if (commandId === COMMANDS.CMD_DATA) {
-              clearTimeout(chunkTimer);
-              z.socket.off('data', onData);
-              resolve(packet.subarray(16));
-              return;
+              const commandId = packet.readUInt16LE(8);
+              if (commandId === COMMANDS.CMD_DATA) {
+                clearTimeout(chunkTimer);
+                z.socket.off('data', onData);
+                resolve(packet.subarray(16));
+                return;
+              }
             }
           }
-        }
 
-        z.socket.on('data', onData);
-        z.socket.write(chunkBuf);
-      });
+          z.socket.on('data', onData);
+          z.socket.write(chunkBuf);
+        });
 
-      allPayload = Buffer.concat([allPayload, chunkData]);
+        allPayload = Buffer.concat([allPayload, chunkData]);
+        currentOffset += fetchLen;
+        bytesRemaining -= fetchLen;
+      }
+    } else {
+      const MAX_CHUNK = 16 * 1024;
+      let remain = size % MAX_CHUNK;
+      let numberChunks = Math.floor(size / MAX_CHUNK);
+      let totalChunks = numberChunks + (remain > 0 ? 1 : 0);
+
+      for (let c = 0; c < totalChunks; c++) {
+        const start = c * MAX_CHUNK;
+        const chunkSize = (c === totalChunks - 1 && remain > 0) ? remain : MAX_CHUNK;
+
+        const chunkData = await new Promise((resolve, reject) => {
+          z.replyId++;
+          const reqData = Buffer.alloc(8);
+          reqData.writeUInt32LE(start, 0);
+          reqData.writeUInt32LE(chunkSize, 4);
+          const chunkBuf = createTCPHeader(COMMANDS.CMD_DATA_RDY, z.sessionId, z.replyId, reqData);
+
+          let bufferAcc = Buffer.from([]);
+          let chunkTimer = setTimeout(() => {
+            z.socket.off('data', onData);
+            reject(new Error(`Timeout receiving chunk ${c + 1}/${totalChunks}`));
+          }, 8000);
+
+          function onData(d) {
+            bufferAcc = Buffer.concat([bufferAcc, d]);
+            while (bufferAcc.length >= 8) {
+              if (bufferAcc.compare(Buffer.from([0x50, 0x50, 0x82, 0x7d]), 0, 4, 0, 4) !== 0) {
+                bufferAcc = bufferAcc.subarray(1);
+                continue;
+              }
+              const packetLen = bufferAcc.readUInt16LE(4);
+              const totalPacketLen = 8 + packetLen;
+              if (bufferAcc.length < totalPacketLen) break;
+
+              const packet = bufferAcc.subarray(0, totalPacketLen);
+              bufferAcc = bufferAcc.subarray(totalPacketLen);
+
+              const commandId = packet.readUInt16LE(8);
+              if (commandId === COMMANDS.CMD_DATA) {
+                clearTimeout(chunkTimer);
+                z.socket.off('data', onData);
+                resolve(packet.subarray(16));
+                return;
+              }
+            }
+          }
+
+          z.socket.on('data', onData);
+          z.socket.write(chunkBuf);
+        });
+
+        allPayload = Buffer.concat([allPayload, chunkData]);
+      }
     }
+  } finally {
+    try {
+      await zk.disconnect();
+    } catch (_) {}
   }
-
-  await zk.disconnect();
 
   const logBuffer = shouldFetchLatestOnly ? allPayload : allPayload.subarray(4);
   const records = [];
@@ -8305,18 +8343,20 @@ class ZkLiveConnectionManager {
       console.log(`[ZKLive] Connected successfully to ZKTeco device at ${this.ip}:${this.port}. Auto-sync active.`);
       this.broadcastStatus();
 
-      // Poll every 5 seconds for new punches
-      this.startPolling(5000);
+      // Poll every 10 seconds for new punches (matching UI interval and giving device socket recycle time)
+      const pollIntervalMs = Number(process.env.ZK_LIVE_POLL_INTERVAL_MS) || 10000;
+      this.startPolling(pollIntervalMs);
 
       return this.getStatus();
     } catch (err) {
+      const errorMsg = formatZkError(err);
       this.status = 'error';
-      this.lastError = err.message;
+      this.lastError = errorMsg;
       this.broadcastStatus();
       if (this.shouldStayConnected) {
         this.scheduleReconnect();
       }
-      throw err;
+      throw new Error(errorMsg);
     }
   }
 
@@ -8361,12 +8401,15 @@ class ZkLiveConnectionManager {
       return { success: true, ...result };
     } catch (err) {
       this.consecutiveFailures++;
-      this.lastError = err.message;
-      console.warn(`[ZKLive] syncNow error (${this.consecutiveFailures}):`, err.message);
-      if (this.consecutiveFailures >= 3 && this.status === 'connected') {
-        this.status = 'error';
-        this.broadcastStatus();
-        this.scheduleReconnect();
+      const errorMsg = formatZkError(err);
+      this.lastError = errorMsg;
+      if (this.consecutiveFailures >= 3) {
+        console.warn(`[ZKLive] syncNow error (${this.consecutiveFailures}):`, errorMsg);
+        if (this.status === 'connected') {
+          this.status = 'error';
+          this.broadcastStatus();
+          this.scheduleReconnect();
+        }
       }
       return null;
     } finally {
@@ -8374,7 +8417,7 @@ class ZkLiveConnectionManager {
     }
   }
 
-  startPolling(intervalMs = 5000) {
+  startPolling(intervalMs = 10000) {
     if (this.pollInterval) clearInterval(this.pollInterval);
     this.pollInterval = setInterval(() => {
       if ((this.status === 'connected' || this.shouldStayConnected) && !this.isSyncing) {
@@ -8397,7 +8440,7 @@ class ZkLiveConnectionManager {
           }
         } catch (_) {}
       }
-    }, 6000);
+    }, 10000);
   }
 
   async disconnect(userInitiated = true) {
@@ -8430,10 +8473,10 @@ const defaultZkPort = Number(process.env.ZK_DEVICE_PORT) || 4370;
 setTimeout(() => {
   zkLiveManager.connect(defaultZkIp, defaultZkPort)
     .then(st => {
-      console.log(`[ZKLive] Auto-connected to ZKTeco device at ${defaultZkIp}:${defaultZkPort}. Continuous 5s auto-sync is LIVE.`);
+      console.log(`[ZKLive] Auto-connected to ZKTeco device at ${defaultZkIp}:${defaultZkPort}. Continuous auto-sync is LIVE.`);
     })
     .catch(err => {
-      console.warn(`[ZKLive] Initial auto-connect notice for ${defaultZkIp}:${defaultZkPort} (${err.message}). Background retries active.`);
+      console.warn(`[ZKLive] Initial auto-connect notice for ${defaultZkIp}:${defaultZkPort} (${formatZkError(err)}). Background retries active.`);
     });
 }, 2500);
 
@@ -8448,7 +8491,7 @@ apiRouter.post('/api/attendance/device/connect', verifyPermission('attendance', 
     const status = await zkLiveManager.connect(ip, port);
     res.json({ success: true, message: `Connected to ZKTeco device at ${ip}:${port}. Auto-sync active.`, status });
   } catch (err) {
-    res.status(500).json({ success: false, message: `Failed to connect: ${err.message}` });
+    res.status(500).json({ success: false, message: `Failed to connect: ${formatZkError(err)}` });
   }
 });
 
@@ -8457,7 +8500,7 @@ apiRouter.post('/api/attendance/device/disconnect', verifyPermission('attendance
     await zkLiveManager.disconnect(true);
     res.json({ success: true, message: 'Disconnected from ZKTeco device.', status: zkLiveManager.getStatus() });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: formatZkError(err) });
   }
 });
 
@@ -8496,10 +8539,11 @@ apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('attendance', 
       usersFound: users.length
     });
   } catch (err) {
-    console.error('[Attendance] ZK direct IP sync error:', err.message);
+    const errorMsg = formatZkError(err);
+    console.error('[Attendance] ZK direct IP sync error:', errorMsg);
     res.status(500).json({
       success: false,
-      message: `Failed to connect to device at ${ip}:${port}. Error: ${err.message || 'Connection timeout. Check network cable and IP.'}`
+      message: `Failed to connect to device at ${ip}:${port}. Error: ${errorMsg || 'Connection timeout. Check network cable and IP.'}`
     });
   }
 });
@@ -9053,15 +9097,29 @@ apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit')
           processed++;
         }
       } else {
-        // Ensure ABSENT record exists (don't overwrite manual corrections)
+        // Ensure record exists (don't overwrite manual corrections)
         const existing = await AttendanceLog.findOne({ employeeId: empObjId, date: targetDate });
         if (!existing) {
+          let empShift = null;
+          try {
+            const devMap = await DeviceMapping.findOne({ $or: [{ employeeId: empObjId }, { employeeId: String(empObjId) }] });
+            if (devMap && devMap.shiftId) empShift = await ShiftConfig.findById(devMap.shiftId);
+            if (!empShift) empShift = await ShiftConfig.findOne({ $or: [{ applicableTo: empObjId }, { applicableTo: String(empObjId) }] });
+            if (!empShift) empShift = await ShiftConfig.findOne({ isDefault: true }) || await ShiftConfig.findOne();
+          } catch (_) {}
+
+          const dObj = new Date(`${targetDate}T12:00:00.000+06:00`);
+          const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'Asia/Dhaka' }).format(dObj);
+          const isShiftHoliday = Array.isArray(empShift?.holidays) && empShift.holidays.includes(dayName);
+
           await AttendanceLog.create({
             employeeId: empObjId,
             employeeName: dec?.name || dec?.firstName || '',
             employeeEmpId: dec?.employeeId || '',
             date: targetDate,
-            status: 'ABSENT'
+            shiftId: empShift?._id || null,
+            shiftName: empShift?.shiftName || '',
+            status: isShiftHoliday ? 'WEEKEND' : 'ABSENT'
           });
         }
       }

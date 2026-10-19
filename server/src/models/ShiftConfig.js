@@ -7,7 +7,8 @@ const shiftConfigSchema = new mongoose.Schema({
   graceMinutes:    { type: Number, default: 15 },
   breakMinutes:    { type: Number, default: 60 },
   isDefault:       { type: Boolean, default: false },
-  applicableTo:    [{ type: mongoose.Schema.Types.ObjectId }] // Employee _ids; empty = all
+  applicableTo:    [{ type: mongoose.Schema.Types.ObjectId }], // Employee _ids; empty = all
+  holidays:        [{ type: String, default: ['Friday'] }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('ShiftConfig', shiftConfigSchema);

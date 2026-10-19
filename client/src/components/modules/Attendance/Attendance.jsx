@@ -1477,6 +1477,7 @@ const ShiftsTab = ({ shifts, loading, onRefresh, onAdd, onEdit, onDelete }) => (
               <th>End</th>
               <th>Grace (min)</th>
               <th>Break (min)</th>
+              <th>Holiday</th>
               <th>Default</th>
               {(onEdit || onDelete) && <th>Actions</th>}
             </tr>
@@ -1487,8 +1488,19 @@ const ShiftsTab = ({ shifts, loading, onRefresh, onAdd, onEdit, onDelete }) => (
                 <td style={{ fontWeight: 700 }}>{s.shiftName}</td>
                 <td style={{ fontFamily: 'monospace' }}>{s.startTime}</td>
                 <td style={{ fontFamily: 'monospace' }}>{s.endTime}</td>
-                <td style={{ textAlign: 'center' }}>{s.graceMinutes}</td>
-                <td style={{ textAlign: 'center' }}>{s.breakMinutes}</td>
+                <td style={{ fontFamily: 'monospace' }}>{s.graceMinutes}</td>
+                <td style={{ fontFamily: 'monospace' }}>{s.breakMinutes}</td>
+                <td>
+                  {Array.isArray(s.holidays) && s.holidays.length > 0 ? (
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {s.holidays.map(d => (
+                        <span key={d} className="att-badge holiday">{d}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span style={{ color: '#94a3b8' }}>—</span>
+                  )}
+                </td>
                 <td>{s.isDefault ? <span className="att-badge present">✓ Default</span> : '—'}</td>
                 {(onEdit || onDelete) && (
                   <td style={{ whiteSpace: 'nowrap' }}>
@@ -2291,7 +2303,13 @@ const DeviceTab = ({
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Shift Modal
+const DAYS_OF_WEEK = ['Friday', 'Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
+
 const ShiftModal = ({ mode, data, onSave, onClose }) => {
+  const initialHolidays = Array.isArray(data?.holidays)
+    ? data.holidays
+    : (typeof data?.holidays === 'string' && data.holidays ? [data.holidays] : ['Friday']);
+
   const [form, setForm] = useState({
     shiftName: data?.shiftName || '',
     startTime: data?.startTime || '09:00',
@@ -2299,8 +2317,32 @@ const ShiftModal = ({ mode, data, onSave, onClose }) => {
     graceMinutes: data?.graceMinutes ?? 15,
     breakMinutes: data?.breakMinutes ?? 60,
     isDefault: data?.isDefault ?? false,
+    holidays: initialHolidays,
   });
+  const [holidayDropdownOpen, setHolidayDropdownOpen] = useState(false);
+  const holidayRef = useRef(null);
+
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (holidayRef.current && !holidayRef.current.contains(e.target)) {
+        setHolidayDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleHoliday = (day) => {
+    setForm(prev => {
+      const current = prev.holidays || [];
+      const updated = current.includes(day)
+        ? current.filter(d => d !== day)
+        : [...current, day];
+      return { ...prev, holidays: updated };
+    });
+  };
 
   if (typeof document === 'undefined' || !document.body) return null;
 
@@ -2329,6 +2371,219 @@ const ShiftModal = ({ mode, data, onSave, onClose }) => {
             <label className="att-form-label">Break Time (min)</label>
             <input type="number" className="att-form-input" value={form.breakMinutes} onChange={e => set('breakMinutes', Number(e.target.value))} min={0} />
           </div>
+
+          {/* Holiday Selection Dropdown Button & Day Name Display */}
+          <div className="att-form-field" style={{ gridColumn: '1 / -1', position: 'relative' }} ref={holidayRef}>
+            <label className="att-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Weekly Holiday</span>
+              {form.holidays?.length > 0 && (
+                <span style={{ fontSize: '0.72rem', color: '#059669', textTransform: 'none', fontWeight: 600 }}>
+                  {form.holidays.length} {form.holidays.length === 1 ? 'day' : 'days'} selected
+                </span>
+              )}
+            </label>
+
+            <button
+              type="button"
+              onClick={() => setHolidayDropdownOpen(p => !p)}
+              className="att-form-input"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                textAlign: 'left',
+                height: 'auto',
+                minHeight: 42,
+                padding: '6px 12px',
+                background: holidayDropdownOpen ? '#f8fafc' : '#ffffff',
+                borderColor: holidayDropdownOpen ? '#3b82f6' : '#e2e8f0',
+                boxShadow: holidayDropdownOpen ? '0 0 0 3px rgba(59, 130, 246, 0.15)' : '0 1px 2px rgba(0, 0, 0, 0.05)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {form.holidays && form.holidays.length > 0 ? (
+                  form.holidays.map(day => (
+                    <span
+                      key={day}
+                      style={{
+                        background: '#ecfdf5',
+                        color: '#059669',
+                        border: '1px solid #a7f3d0',
+                        borderRadius: 6,
+                        padding: '2px 8px',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        lineHeight: 1.3
+                      }}
+                    >
+                      {day}
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ color: '#94a3b8', fontSize: '0.84rem' }}>Select holiday day(s)...</span>
+                )}
+              </div>
+
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  color: '#64748b',
+                  flexShrink: 0,
+                  transform: holidayDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease'
+                }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {holidayDropdownOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 4px)',
+                  left: 0,
+                  right: 0,
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 12,
+                  boxShadow: '0 12px 28px -4px rgba(15, 23, 42, 0.15), 0 4px 10px -2px rgba(15, 23, 42, 0.05)',
+                  zIndex: 9999,
+                  padding: '10px',
+                  animation: 'att-fade-in 0.15s ease-out'
+                }}
+              >
+                <div style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  color: '#64748b',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  marginBottom: 8,
+                  paddingLeft: 4
+                }}>
+                  Select Days of the Week
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+                  gap: 6
+                }}>
+                  {DAYS_OF_WEEK.map(day => {
+                    const isSelected = form.holidays?.includes(day);
+                    return (
+                      <div
+                        key={day}
+                        onClick={() => toggleHoliday(day)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '7px 10px',
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          background: isSelected ? '#ecfdf5' : '#ffffff',
+                          color: isSelected ? '#065f46' : '#334155',
+                          fontWeight: isSelected ? 600 : 500,
+                          fontSize: '0.82rem',
+                          border: `1px solid ${isSelected ? '#86efac' : '#f1f5f9'}`,
+                          transition: 'all 0.12s ease'
+                        }}
+                        onMouseEnter={e => {
+                          if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                        }}
+                        onMouseLeave={e => {
+                          if (!isSelected) e.currentTarget.style.background = '#ffffff';
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!isSelected}
+                          onChange={() => {}}
+                          style={{
+                            width: 15,
+                            height: 15,
+                            accentColor: '#10b981',
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <span>{day}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: 8,
+                  paddingTop: 8,
+                  borderTop: '1px solid #f1f5f9',
+                  fontSize: '0.74rem'
+                }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => set('holidays', ['Friday'])}
+                      style={{
+                        border: '1px solid #d1fae5',
+                        background: '#ecfdf5',
+                        color: '#059669',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: '3px 8px',
+                        borderRadius: 6
+                      }}
+                    >
+                      Friday Only
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => set('holidays', ['Friday', 'Saturday'])}
+                      style={{
+                        border: '1px solid #dbeafe',
+                        background: '#eff6ff',
+                        color: '#2563eb',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: '3px 8px',
+                        borderRadius: 6
+                      }}
+                    >
+                      Fri & Sat
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => set('holidays', [])}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      padding: '3px 6px',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="att-form-field" style={{ gridColumn: '1 / -1', flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 4 }}>
             <input type="checkbox" id="isDefault" checked={form.isDefault} onChange={e => set('isDefault', e.target.checked)} style={{ width: 16, height: 16 }} />
             <label htmlFor="isDefault" className="att-form-label" style={{ textTransform: 'none', fontSize: '0.84rem', cursor: 'pointer' }}>Set as default shift (applies to all unmapped employees)</label>
