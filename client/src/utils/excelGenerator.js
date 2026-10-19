@@ -2084,8 +2084,8 @@ export const generateStockReportExcel = (
 ) => {
     try {
         const rows = [];
-        const normalizedReportType = ['short', 'detailed', 'price'].includes(reportType) ? reportType : 'short';
-        const typeLabel = normalizedReportType === 'detailed' ? 'DETAILS REPORT' : (normalizedReportType === 'price' ? 'PRICE REPORT' : 'SHORT REPORT');
+        const normalizedReportType = ['short', 'detailed', 'price', 'group'].includes(reportType) ? reportType : 'short';
+        const typeLabel = normalizedReportType === 'detailed' ? 'DETAILS REPORT' : (normalizedReportType === 'price' ? 'PRICE REPORT' : (normalizedReportType === 'group' ? 'GROUP REPORT' : 'SHORT REPORT'));
 
         // 1. Company Header
         rows.push(['M/S ANI ENTERPRISE']);
@@ -2194,7 +2194,7 @@ export const generateStockReportExcel = (
                     if (normalizedReportType === 'short') {
                         return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                     }
-                    if (normalizedReportType === 'price') {
+                    if (normalizedReportType === 'price' || normalizedReportType === 'group') {
                         return Math.abs(b.inHouseQuantity || 0) > 0.001;
                     }
                     return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
@@ -2334,6 +2334,23 @@ export const generateStockReportExcel = (
                 { wch: 18 },
                 { wch: 18 }
             ];
+        } else if (normalizedReportType === 'group') {
+            tableHeaders = [
+                'SL',
+                'Product & Quality',
+                'Brand',
+                'LC No',
+                'Closing Bag',
+                'Closing Qty (KG)'
+            ];
+            colWidths = [
+                { wch: 6 },
+                { wch: 28 },
+                { wch: 20 },
+                { wch: 20 },
+                { wch: 18 },
+                { wch: 18 }
+            ];
         } else {
             tableHeaders = [
                 'SL',
@@ -2409,6 +2426,32 @@ export const generateStockReportExcel = (
                             formatPktStr(b.inHouseQuantity, b.packetSize || 30),
                             Math.round(b.inHouseQuantity || 0)
                         ]);
+                    } else if (normalizedReportType === 'group') {
+                        // Group Report row (no costing)
+                        const lcStr = (b.lcNos && b.lcNos.length > 0) ? b.lcNos.join(', ') : (b.lcNo || '—');
+                        rows.push([
+                            bIdx === 0 ? index + 1 : '',
+                            prodAndQ,
+                            brandStr,
+                            lcStr,
+                            formatPktStr(b.inHouseQuantity, b.packetSize || 30),
+                            Math.round(b.inHouseQuantity || 0)
+                        ]);
+
+                        const isLastOfBrand = (bIdx === brands.length - 1) || ((brands[bIdx + 1]?.brand || '').trim().toUpperCase() !== brandStr.toUpperCase());
+                        if (brandCounts[brandStr.toUpperCase()] > 1 && isLastOfBrand) {
+                            const matchingBrandRows = brands.filter(x => (x.brand || '').trim().toUpperCase() === brandStr.toUpperCase());
+                            const bTotalQty = matchingBrandRows.reduce((s, x) => s + Math.max(0, parseFloat(x.inHouseQuantity) || 0), 0);
+                            const bTotalBagStr = sumPktRemainder(matchingBrandRows, x => Math.max(0, parseFloat(x.inHouseQuantity) || 0), x => x.packetSize);
+                            rows.push([
+                                '',
+                                `${brandStr.toUpperCase()} TOTAL`,
+                                '',
+                                '',
+                                bTotalBagStr,
+                                Math.round(bTotalQty)
+                            ]);
+                        }
                     } else {
                         // Price Report row
                         const lcStr = (b.lcNos && b.lcNos.length > 0) ? b.lcNos.join(', ') : (b.lcNo || '—');
@@ -2469,6 +2512,15 @@ export const generateStockReportExcel = (
                         sumPktRemainder(brands, b => Math.max(0, parseFloat(b.inHouseQuantity) || 0), b => b.packetSize),
                         Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0))
                     ]);
+                } else if (normalizedReportType === 'group') {
+                    rows.push([
+                        '',
+                        `${prodName} TOTAL`,
+                        '',
+                        '',
+                        sumPktRemainder(brands, b => Math.max(0, parseFloat(b.inHouseQuantity) || 0), b => b.packetSize),
+                        Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0))
+                    ]);
                 } else {
                     rows.push([
                         '',
@@ -2518,6 +2570,15 @@ export const generateStockReportExcel = (
                         whInHouseBagStr,
                         Math.round(whTotalInHouseQty)
                     ]);
+                } else if (normalizedReportType === 'group') {
+                    rows.push([
+                        `${whItem.name.toUpperCase()} TOTAL`,
+                        '',
+                        '',
+                        '',
+                        whInHouseBagStr,
+                        Math.round(whTotalInHouseQty)
+                    ]);
                 } else {
                     rows.push([
                         `${whItem.name.toUpperCase()} TOTAL`,
@@ -2556,6 +2617,15 @@ export const generateStockReportExcel = (
                 Math.round(totalOpeningQty),
                 grandSalePktStr,
                 Math.round(totalSaleQty),
+                inHouseBagStr,
+                Math.round(totalInHouseQty)
+            ]);
+        } else if (normalizedReportType === 'group') {
+            rows.push([
+                'GRAND TOTAL',
+                '',
+                '',
+                '',
                 inHouseBagStr,
                 Math.round(totalInHouseQty)
             ]);
