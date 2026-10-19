@@ -285,9 +285,11 @@ export default function ProfitLoss({ salesRecords, products }) {
   const [costOfGoodsRecords, setCostOfGoodsRecords] = useState([]);
   const [useActualCog, setUseActualCog] = useState(true);
   const [cogProductFilter, setCogProductFilter] = useState('ALL');
+  const [salesProductFilter, setSalesProductFilter] = useState('ALL');
 
   useEffect(() => {
     setCogProductFilter('ALL');
+    setSalesProductFilter('ALL');
   }, [selectedLcNo]);
 
   useEffect(() => {
@@ -934,6 +936,27 @@ export default function ProfitLoss({ salesRecords, products }) {
 
     return list;
   }, [selectedLc, salesRecords, returnQtyMap]);
+
+  // Group Sales records by product for product tabs and filtering
+  const salesByProduct = useMemo(() => {
+    if (!selectedLcSales || selectedLcSales.length === 0) return [];
+    const map = {};
+    selectedLcSales.forEach(sale => {
+      const prodName = (sale.productName || 'Other Products').trim();
+      if (!map[prodName]) {
+        map[prodName] = {
+          productName: prodName,
+          records: [],
+          totalQty: 0,
+          totalAmount: 0
+        };
+      }
+      map[prodName].records.push(sale);
+      map[prodName].totalQty += parseFloat(sale.quantity) || 0;
+      map[prodName].totalAmount += parseFloat(sale.totalAmount) || 0;
+    });
+    return Object.values(map);
+  }, [selectedLcSales]);
 
   // Return sales records for the selected LC
   const selectedLcReturns = useMemo(() => {
@@ -1943,10 +1966,10 @@ export default function ProfitLoss({ salesRecords, products }) {
           </div>
         </div>
 
-        {/* Row 2: COG & LC Receive History (Left 50%) | Sales History & Product Stock (Right 50%) */}
-        <div className="flex flex-col lg:flex-row gap-4 mt-6 print:grid print:grid-cols-2 print:gap-3 print:mt-3 print:break-inside-avoid">
+        {/* Row 2: COG & Sales History (Left 50%) | LC Receive History & Product Stock (Right 50%) */}
+        <div className="flex flex-col lg:flex-row gap-4 mt-6 items-start print:grid print:grid-cols-2 print:gap-3 print:mt-3 print:break-inside-avoid">
 
-          {/* LEFT 50%: Cost of Goods (COG) Card + LC Receive History Card (directly under COG) */}
+          {/* LEFT 50%: Cost of Goods (COG) Card + Sales History Card (directly under COG) */}
           <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col gap-4">
 
             {/* Cost of Goods (COG) Card */}
@@ -2121,7 +2144,130 @@ export default function ProfitLoss({ salesRecords, products }) {
               </div>
             )}
 
-            {/* LC Receive History Card (Under COG) */}
+            {/* Sales History Card (Under COG on Left) */}
+            {selectedLc ? (
+              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
+                <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
+                  <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Sales History</h2>
+                  <p className="text-xs text-gray-500 font-medium">Sales records for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
+                </div>
+
+                {/* Product Filter Tabs (when multiple products exist) */}
+                {salesByProduct.length > 1 && (
+                  <div className="flex items-center gap-2 px-6 py-2.5 bg-slate-100/70 border-b border-gray-200 overflow-x-auto">
+                    <button
+                      type="button"
+                      onClick={() => setSalesProductFilter('ALL')}
+                      className={`px-3 py-1 rounded-full text-xs font-black transition-all ${
+                        salesProductFilter === 'ALL'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                      }`}
+                    >
+                      All Products ({selectedLcSales.length})
+                    </button>
+                    {salesByProduct.map(group => (
+                      <button
+                        key={`sales-tab-${group.productName}`}
+                        type="button"
+                        onClick={() => setSalesProductFilter(group.productName)}
+                        className={`px-3 py-1 rounded-full text-xs font-black transition-all ${
+                          salesProductFilter === group.productName
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                        }`}
+                      >
+                        {group.productName} ({group.records.length})
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {(() => {
+                  const displayedSales = (salesProductFilter === 'ALL' || !salesByProduct.some(g => g.productName === salesProductFilter))
+                    ? selectedLcSales
+                    : selectedLcSales.filter(s => (s.productName || '').trim().toLowerCase() === salesProductFilter.trim().toLowerCase());
+
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 z-10 bg-gray-50/95 backdrop-blur-sm">
+                          <tr className="border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                            <th className="py-2.5 px-4">Invoice / Customer</th>
+                            <th className="py-2.5 px-4">Product & Brand</th>
+                            <th className="py-2.5 px-4 text-right">Qty</th>
+                            <th className="py-2.5 px-4 text-right font-black">Total Revenue</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-medium">
+                          {displayedSales.length === 0 ? (
+                            <tr>
+                              <td colSpan="4" className="py-8 text-center text-gray-400 font-semibold">No sales history found for this LC.</td>
+                            </tr>
+                          ) : (
+                            displayedSales.map((sale, idx) => (
+                              <tr key={`sale-${sale._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
+                                <td className="py-2.5 px-4">
+                                  <div className="font-bold text-gray-950 break-words flex items-center gap-1.5 flex-wrap">
+                                    <span>{sale.invoiceNo}</span>
+                                    {sale.returnedQty > 0 && (
+                                      <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-black tracking-wide">
+                                        -{Math.round(sale.returnedQty).toLocaleString()} KG RETURNED
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-gray-400 font-medium break-words">{sale.customerName} • {formatDate(sale.date)}</div>
+                                </td>
+                                <td className="py-2.5 px-4">
+                                  <div className="font-bold text-gray-950 break-words">{sale.productName}</div>
+                                  <div className="text-[10px] text-gray-400 font-medium break-words">{sale.brandName}</div>
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-bold text-gray-900 whitespace-nowrap">
+                                  {sale.quantity.toLocaleString()}
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-black text-emerald-600 whitespace-nowrap">
+                                  ৳ {Math.round(sale.totalAmount).toLocaleString('en-IN')}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                        {displayedSales.length > 0 && (
+                          <tfoot className="bg-slate-50 border-t-2 border-gray-200">
+                            <tr className="text-xs">
+                              <td colSpan="2" className="py-3.5 px-4 font-black text-gray-500 uppercase tracking-wider text-[11px]">
+                                {salesProductFilter === 'ALL' ? 'Total Sales' : `Total Sales (${salesProductFilter})`}
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-black text-gray-900 whitespace-nowrap">
+                                {Math.round(displayedSales.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0)).toLocaleString('en-US')} KG
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-black text-emerald-600 whitespace-nowrap">
+                                ৳ {Math.round(displayedSales.reduce((sum, s) => sum + (parseFloat(s.totalAmount) || 0), 0)).toLocaleString('en-IN')}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  );
+                })()}
+
+              </div>
+            ) : (
+              <div className="bg-white p-8 print:p-3 print:py-4 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] print:min-h-0 flex-1 flex flex-col justify-center">
+                <div className="w-16 h-16 print:w-8 print:h-8 print:mb-2 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 mx-auto mb-4 animate-pulse">
+                  <TrendingUpIcon className="w-8 h-8 print:w-4 print:h-4" />
+                </div>
+                <h3 className="text-lg print:text-sm font-black text-gray-900 mb-1">Sales History</h3>
+                <p className="text-sm print:text-xs text-gray-500 max-w-sm mx-auto">Select an LC to view sales history.</p>
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT 50%: LC Receive History + Product Stock & Arrivals (stacked with full width) */}
+          <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col gap-4">
+
+            {/* LC Receive History Card (in Right Column with Product Stock) */}
             {selectedLc ? (
               <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col">
                 <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
@@ -2222,87 +2368,6 @@ export default function ProfitLoss({ salesRecords, products }) {
                 </div>
                 <h3 className="text-lg print:text-sm font-black text-gray-900 mb-1">LC Receive History</h3>
                 <p className="text-sm print:text-xs text-gray-500 max-w-sm mx-auto">Select an LC to view stock receive history.</p>
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT 50%: Sales History (25%) + Product Stock & Arrivals (25%) — side by side */}
-          <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col sm:flex-row gap-4">
-
-            {/* Sales History Card */}
-            {selectedLc ? (
-              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col">
-                <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
-                  <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Sales History</h2>
-                  <p className="text-xs text-gray-500 font-medium">Sales records for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-gray-50/50 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider">
-                        <th className="py-2.5 px-4">Invoice / Customer</th>
-                        <th className="py-2.5 px-4">Product & Brand</th>
-                        <th className="py-2.5 px-4 text-right">Qty</th>
-                        <th className="py-2.5 px-4 text-right font-black">Total Revenue</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-medium">
-                      {selectedLcSales.length === 0 ? (
-                        <tr>
-                          <td colSpan="4" className="py-8 text-center text-gray-400 font-semibold">No sales history found for this LC.</td>
-                        </tr>
-                      ) : (
-                        selectedLcSales.map((sale, idx) => (
-                          <tr key={`sale-${sale._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
-                            <td className="py-2.5 px-4">
-                              <div className="font-bold text-gray-950 break-words flex items-center gap-1.5 flex-wrap">
-                                <span>{sale.invoiceNo}</span>
-                                {sale.returnedQty > 0 && (
-                                  <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-black tracking-wide">
-                                    -{Math.round(sale.returnedQty).toLocaleString()} KG RETURNED
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] text-gray-400 font-medium break-words">{sale.customerName} • {formatDate(sale.date)}</div>
-                            </td>
-                            <td className="py-2.5 px-4">
-                              <div className="font-bold text-gray-950 break-words">{sale.productName}</div>
-                              <div className="text-[10px] text-gray-400 font-medium break-words">{sale.brandName}</div>
-                            </td>
-                            <td className="py-2.5 px-4 text-right font-bold text-gray-900 whitespace-nowrap">
-                              {sale.quantity.toLocaleString()}
-                            </td>
-                            <td className="py-2.5 px-4 text-right font-black text-emerald-600 whitespace-nowrap">
-                              ৳ {Math.round(sale.totalAmount).toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                    {selectedLcSales.length > 0 && (
-                      <tfoot className="bg-slate-50 border-t-2 border-gray-200">
-                        <tr className="text-xs">
-                          <td colSpan="2" className="py-3.5 px-4 font-black text-gray-500 uppercase tracking-wider text-[11px]">Total Sales</td>
-                          <td className="py-3.5 px-4 text-right font-black text-gray-900 whitespace-nowrap">
-                            {Math.round(totalLcSalesQty).toLocaleString('en-US')} KG
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-black text-emerald-600 whitespace-nowrap">
-                            ৳ {Math.round(totalLcSalesAmount).toLocaleString('en-IN')}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
-                </div>
-
-              </div>
-            ) : (
-              <div className="bg-white p-8 print:p-3 print:py-4 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] print:min-h-0 flex-1 flex flex-col justify-center">
-                <div className="w-16 h-16 print:w-8 print:h-8 print:mb-2 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 mx-auto mb-4 animate-pulse">
-                  <TrendingUpIcon className="w-8 h-8 print:w-4 print:h-4" />
-                </div>
-                <h3 className="text-lg print:text-sm font-black text-gray-900 mb-1">Sales History</h3>
-                <p className="text-sm print:text-xs text-gray-500 max-w-sm mx-auto">Select an LC to view sales history.</p>
               </div>
             )}
 
@@ -2566,8 +2631,10 @@ export default function ProfitLoss({ salesRecords, products }) {
                     {/* Total Rate/kg in BDT */}
                     <tr className="bg-emerald-50/40 hover:bg-emerald-50/60 transition-colors">
                       <td className="py-2.5 px-4 sm:px-5 font-bold text-emerald-950">Total Rate/kg in BDT</td>
-                      <td className="py-2.5 px-4 sm:px-5 text-right font-black text-emerald-700">
-                        ৳ {conclusionData.totalRatePerKgBdt.toFixed(2)}
+                      <td className="py-2.5 px-4 sm:px-5 text-right font-black text-emerald-700 break-words leading-relaxed">
+                        {conclusionData.isMultiProduct
+                          ? conclusionData.totalRatePerKgDisplay
+                          : (conclusionData.totalRatePerKgBdt > 0 ? `৳ ${conclusionData.totalRatePerKgBdt.toFixed(2)}` : '-')}
                       </td>
                     </tr>
 
@@ -2610,8 +2677,10 @@ export default function ProfitLoss({ salesRecords, products }) {
                     {/* 19. Sales Value/kg */}
                     <tr className="hover:bg-slate-50/60 transition-colors">
                       <td className="py-2 px-4 sm:px-5 font-semibold text-gray-700">Sales Value/kg</td>
-                      <td className="py-2 px-4 sm:px-5 text-right font-bold text-gray-900">
-                        ৳ {conclusionData.salesValuePerKg.toFixed(2)}
+                      <td className="py-2 px-4 sm:px-5 text-right font-bold text-gray-900 break-words leading-relaxed">
+                        {conclusionData.isMultiProduct
+                          ? conclusionData.salesValuePerKgDisplay
+                          : (conclusionData.salesValuePerKg > 0 ? `৳ ${conclusionData.salesValuePerKg.toFixed(2)}` : '-')}
                       </td>
                     </tr>
 

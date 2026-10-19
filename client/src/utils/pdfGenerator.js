@@ -9550,7 +9550,14 @@ export const generateProfitLossPDF = async (params) => {
                     ],
                     [
                         { content: 'Total Rate/kg in BDT', styles: { fillColor: [226, 239, 218], textColor: [0, 0, 0], fontStyle: 'bold' } },
-                        { content: `${tkSym} ${conc.totalRatePerKgBdt.toFixed(2)}`, styles: { fillColor: [226, 239, 218], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' } }
+                        {
+                            content: conc.isMultiProduct
+                                ? (conc.totalRatePerKgMultiline
+                                    ? conc.totalRatePerKgMultiline.replace(/৳\s*/g, `${tkSym} `)
+                                    : (conc.productWiseRates || []).map(p => `${p.productName} (${p.rateDisplay.replace(/৳\s*/g, `${tkSym} `)})`).join('\n'))
+                                : `${tkSym} ${conc.totalRatePerKgBdt.toFixed(2)}`,
+                            styles: { fillColor: [226, 239, 218], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'right' }
+                        }
                     ],
                     [
                         { content: 'Rcv Qty in kg', styles: { fontStyle: 'bold' } },
@@ -9570,7 +9577,14 @@ export const generateProfitLossPDF = async (params) => {
                     ],
                     [
                         { content: 'Sales Value/kg', styles: { fontStyle: 'bold' } },
-                        { content: `${tkSym} ${conc.salesValuePerKg.toFixed(2)}`, styles: { halign: 'right', fontStyle: 'bold' } }
+                        {
+                            content: conc.isMultiProduct
+                                ? (conc.salesValuePerKgMultiline
+                                    ? conc.salesValuePerKgMultiline.replace(/৳\s*/g, `${tkSym} `)
+                                    : (conc.productWiseRates || []).map(p => `${p.productName} (${p.salesValueDisplay.replace(/৳\s*/g, `${tkSym} `)})`).join('\n'))
+                                : `${tkSym} ${conc.salesValuePerKg.toFixed(2)}`,
+                            styles: { halign: 'right', fontStyle: 'bold' }
+                        }
                     ],
                     [
                         { content: 'Sales Value', styles: { fillColor: [255, 242, 204], textColor: [0, 0, 0], fontStyle: 'bold' } },

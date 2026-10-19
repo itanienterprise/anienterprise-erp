@@ -804,8 +804,9 @@ export const calculateLcConclusion = ({
     // 14. Sales Value/kg
     const salesValuePerKg = salesQtyKg > 0 ? (salesValue / salesQtyKg) : 0;
 
+    const clean = (val) => String(val || '').trim().toLowerCase();
+
     const getProductAvgCost = (prodName, p) => {
-        const clean = (val) => String(val || '').trim().toLowerCase();
         const targetClean = clean(prodName);
         if (selectedLcCostOfGoods && selectedLcCostOfGoods.length > 0) {
             const matchingCog = selectedLcCostOfGoods.filter(rec => clean(rec.product) === targetClean);
@@ -826,6 +827,17 @@ export const calculateLcConclusion = ({
         if (p) {
             if (p.inhouseQty > 0 && p.inhousePrice > 0) return p.inhousePrice / p.inhouseQty;
             if (p.purchaseQty > 0 && p.purchasePrice > 0) return p.purchasePrice / p.purchaseQty;
+        }
+        if (selectedLc?.productsList && Array.isArray(selectedLc.productsList)) {
+            const pItem = selectedLc.productsList.find(item => clean(item.productName || item.product || item.name) === targetClean);
+            if (pItem) {
+                const pRateUsd = parseFloat(pItem.rate) || 0;
+                const pDollarRate = dollarRate || 0;
+                if (pRateUsd > 0 && pDollarRate > 0) {
+                    const baseRateKg = (pRateUsd / 1000) * pDollarRate;
+                    return baseRateKg + (cnfAndOthersPerKg || 0);
+                }
+            }
         }
         return totalRatePerKgBdt > 0 ? totalRatePerKgBdt : (rcvQtyKg > 0 ? (totalRateKgBdt / rcvQtyKg) : 0);
     };
@@ -851,6 +863,87 @@ export const calculateLcConclusion = ({
     // 16. Profit/Loss
     const profitOrLoss = (salesValue + unsoldStockPriceAppx) - totalInvest;
 
+    // 17. Product-wise rates and sales values (for multi-product LCs)
+    const distinctProductNames = [];
+    const seenProds = new Set();
+    const registerProd = (name) => {
+        if (!name) return;
+        const trimmed = String(name).trim();
+        const key = clean(trimmed);
+        if (!key || seenProds.has(key)) return;
+        seenProds.add(key);
+        distinctProductNames.push(trimmed);
+    };
+
+    if (selectedLc?.productsList && Array.isArray(selectedLc.productsList)) {
+        selectedLc.productsList.forEach(p => registerProd(p.productName || p.product || p.name));
+    }
+    if (productSummary && Array.isArray(productSummary)) {
+        productSummary.forEach(p => registerProd(p.productName || p.product));
+    }
+    if (selectedLcCostOfGoods && Array.isArray(selectedLcCostOfGoods)) {
+        selectedLcCostOfGoods.forEach(c => registerProd(c.product));
+    }
+    if (selectedLcStocks && Array.isArray(selectedLcStocks)) {
+        selectedLcStocks.forEach(s => registerProd(s.productName || s.product));
+    }
+    if (selectedLcSales && Array.isArray(selectedLcSales)) {
+        selectedLcSales.forEach(s => registerProd(s.productName || s.product));
+    }
+    if (distinctProductNames.length === 0 && selectedLc?.productName) {
+        registerProd(selectedLc.productName);
+    }
+
+    const isMultiProduct = distinctProductNames.length > 1;
+
+    const productWiseRates = distinctProductNames.map(pName => {
+        const targetClean = clean(pName);
+        const summaryItem = (productSummary || []).find(p => clean(p.productName || p.product) === targetClean);
+        const rateKgBdt = getProductAvgCost(pName, summaryItem);
+
+        let pSalesQty = 0;
+        let pSalesAmount = 0;
+        if (summaryItem && parseFloat(summaryItem.saleQty) > 0) {
+            pSalesQty = parseFloat(summaryItem.saleQty) || 0;
+            pSalesAmount = parseFloat(summaryItem.salePrice) || 0;
+        } else if (selectedLcSales && selectedLcSales.length > 0) {
+            const matchingSales = selectedLcSales.filter(s => clean(s.productName || s.product) === targetClean);
+            matchingSales.forEach(s => {
+                const q = parseFloat(s.quantity) || 0;
+                const a = parseFloat(s.totalAmount) || (q * (parseFloat(s.unitPrice) || 0));
+                pSalesQty += q;
+                pSalesAmount += a;
+            });
+        }
+        const prodSalesValuePerKg = pSalesQty > 0 ? (pSalesAmount / pSalesQty) : 0;
+
+        return {
+            productName: pName,
+            rateKgBdt,
+            rateDisplay: rateKgBdt > 0 ? `৳ ${rateKgBdt.toFixed(2)}` : '-',
+            salesQty: pSalesQty,
+            salesAmount: pSalesAmount,
+            salesValuePerKg: prodSalesValuePerKg,
+            salesValueDisplay: (pSalesQty > 0 && prodSalesValuePerKg > 0) ? `৳ ${prodSalesValuePerKg.toFixed(2)}` : '-'
+        };
+    });
+
+    const totalRatePerKgDisplay = isMultiProduct
+        ? productWiseRates.map(p => `${p.productName} (${p.rateDisplay})`).join(' / ')
+        : (totalRatePerKgBdt > 0 ? `৳ ${totalRatePerKgBdt.toFixed(2)}` : '-');
+
+    const totalRatePerKgMultiline = isMultiProduct
+        ? productWiseRates.map(p => `${p.productName} (${p.rateDisplay})`).join('\n')
+        : (totalRatePerKgBdt > 0 ? `৳ ${totalRatePerKgBdt.toFixed(2)}` : '-');
+
+    const salesValuePerKgDisplay = isMultiProduct
+        ? productWiseRates.map(p => `${p.productName} (${p.salesValueDisplay})`).join(' / ')
+        : (salesValuePerKg > 0 ? `৳ ${salesValuePerKg.toFixed(2)}` : '-');
+
+    const salesValuePerKgMultiline = isMultiProduct
+        ? productWiseRates.map(p => `${p.productName} (${p.salesValueDisplay})`).join('\n')
+        : (salesValuePerKg > 0 ? `৳ ${salesValuePerKg.toFixed(2)}` : '-');
+
     return {
         lcNo,
         item,
@@ -866,6 +959,8 @@ export const calculateLcConclusion = ({
         cnfAndOthersPerKg,
         cnfAndOthersBdt,
         totalRatePerKgBdt,
+        totalRatePerKgDisplay,
+        totalRatePerKgMultiline,
         shortQtyKg,
         damageQtyKg,
         salesQtyKg,
@@ -875,6 +970,10 @@ export const calculateLcConclusion = ({
         totalInvest,
         salesValue,
         salesValuePerKg,
+        salesValuePerKgDisplay,
+        salesValuePerKgMultiline,
+        isMultiProduct,
+        productWiseRates,
         unsoldStockPriceAppx,
         profitOrLoss
     };
