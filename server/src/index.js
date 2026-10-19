@@ -7637,8 +7637,9 @@ const dayDiff = (from, to) => {
 // ─── Helper: compute AttendanceLog from punches for one employee on one date ──
 const processEmployeeDay = async (employeeId, date) => {
   try {
-    const dayStart = new Date(`${date}T00:00:00.000Z`);
-    const dayEnd = new Date(`${date}T23:59:59.999Z`);
+    // date is "YYYY-MM-DD" in Asia/Dhaka
+    const dayStart = new Date(`${date}T00:00:00.000+06:00`);
+    const dayEnd   = new Date(`${date}T23:59:59.999+06:00`);
 
     const punches = await AttendancePunch.find({
       employeeId,
@@ -7667,11 +7668,8 @@ const processEmployeeDay = async (employeeId, date) => {
     }
 
     if (shift) {
-      const [sh, sm] = shift.startTime.split(':').map(Number);
-      const shiftStart = new Date(firstIn);
-      shiftStart.setHours(sh, sm, 0, 0);
-
-      const lateMs = firstIn - shiftStart;
+      const shiftStart = new Date(`${date}T${shift.startTime}:00.000+06:00`);
+      const lateMs = firstIn.getTime() - shiftStart.getTime();
       const lateMin = lateMs / (1000 * 60);
 
       if (lateMin > (shift.graceMinutes + 240)) {
@@ -7680,10 +7678,9 @@ const processEmployeeDay = async (employeeId, date) => {
         status = 'LATE';
       }
 
-      const shiftHours = (() => {
-        const [eh, em] = shift.endTime.split(':').map(Number);
-        return eh + em / 60 - sh - sm / 60 - shift.breakMinutes / 60;
-      })();
+      const [sh, sm] = shift.startTime.split(':').map(Number);
+      const [eh, em] = shift.endTime.split(':').map(Number);
+      const shiftHours = eh + em / 60 - sh - sm / 60 - shift.breakMinutes / 60;
 
       if (totalHours > shiftHours) {
         overtimeHours = Math.round((totalHours - shiftHours) * 100) / 100;
@@ -7836,7 +7833,21 @@ async function fetchZkAttendances(ip, port = 4370, timeout = 30000) {
   const records = [];
   for (let i = 0; i <= logBuffer.length - 40; i += 40) {
     const slice = logBuffer.subarray(i, i + 40);
-    const r = decodeRecordData40(slice);
+    const userSn = slice.readUIntLE(0, 2);
+    const deviceUserId = slice.subarray(2, 11).toString('ascii').replace(/\0.*$/, '').trim();
+
+    // Decode 32-bit ZKTeco timestamp with explicit Asia/Dhaka (+06:00) UTC offset
+    let t = slice.readUInt32LE(27);
+    const second = t % 60; t = Math.floor(t / 60);
+    const minute = t % 60; t = Math.floor(t / 60);
+    const hour = t % 24; t = Math.floor(t / 24);
+    const day = (t % 31) + 1; t = Math.floor(t / 31);
+    const month = t % 12; t = Math.floor(t / 12);
+    const year = t + 2000;
+    // Machine clock ticks in Bangladesh Time (+06:00).
+    // Date.UTC produces pure UTC milliseconds; subtracting 6 hours gives the true UTC timestamp on ANY machine.
+    const recordTime = new Date(Date.UTC(year, month, day, hour, minute, second) - (6 * 3600 * 1000));
+
     const verifyByte = slice[26];
     const stateByte = slice[31];
 
@@ -7847,19 +7858,21 @@ async function fetchZkAttendances(ip, port = 4370, timeout = 30000) {
     else if (verifyByte === 1) verifyMode = 'FINGERPRINT';
 
     records.push({
-      ...r,
+      userSn,
+      deviceUserId,
+      recordTime,
       verifyMode,
       verifyByte,
       stateByte
     });
   }
 
-  // Calculate intelligent alternating punchType (IN / OUT / BREAK)
+  // Calculate intelligent alternating punchType (IN / OUT / BREAK) per user per Dhaka calendar day
   const byUserDay = new Map();
   records.forEach(r => {
     const d = r.recordTime instanceof Date ? r.recordTime : new Date(r.recordTime);
     if (isNaN(d.getTime())) return;
-    const dayStr = d.toISOString().split('T')[0];
+    const dayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(d);
     const key = String(r.deviceUserId || r.userSn) + '_' + dayStr;
     if (!byUserDay.has(key)) byUserDay.set(key, []);
     byUserDay.get(key).push(r);
@@ -7920,10 +7933,15 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
     const times = batch.map(b => b.punchTime.getTime());
     const minTime = new Date(Math.min(...times) - 60000);
     const maxTime = new Date(Math.max(...times) + 60000);
+    const minShifted = new Date(minTime.getTime() + 6 * 3600 * 1000);
+    const maxShifted = new Date(maxTime.getTime() + 6 * 3600 * 1000);
 
     const existingDocs = await AttendancePunch.find({
-      punchTime: { $gte: minTime, $lte: maxTime }
-    }, 'enrollId punchTime').lean();
+      $or: [
+        { punchTime: { $gte: minTime, $lte: maxTime } },
+        { punchTime: { $gte: minShifted, $lte: maxShifted } }
+      ]
+    }, '_id enrollId punchTime').lean();
 
     const toInsert = [];
 
@@ -7948,6 +7966,22 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
             { $set: { punchType: p.punchType, verifyMode: p.verifyMode } }
           ).catch(() => {});
         }
+        continue;
+      }
+
+      // Auto-heal any punch previously saved with a +6 hour UTC timezone shift error in production
+      const shiftedTargetTime = pTime + (6 * 3600 * 1000);
+      const shiftedDoc = existingDocs.find(e =>
+        Number(e.enrollId) === p.enrollId &&
+        Math.abs(new Date(e.punchTime).getTime() - shiftedTargetTime) <= 60000
+      );
+      if (shiftedDoc) {
+        await AttendancePunch.updateOne(
+          { _id: shiftedDoc._id },
+          { $set: { punchTime: p.punchTime, punchType: p.punchType, verifyMode: p.verifyMode } }
+        ).catch(() => {});
+        shiftedDoc.punchTime = p.punchTime;
+        skippedDuplicates++;
         continue;
       }
 
@@ -7981,11 +8015,11 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
     }
   }
 
-  // Auto-process today's attendance logs for any mapped employees who punched today
+  // Auto-process today's attendance logs for any mapped employees who punched today (Asia/Dhaka)
   try {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const dayStart = new Date(`${todayStr}T00:00:00.000Z`);
-    const dayEnd = new Date(`${todayStr}T23:59:59.999Z`);
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+    const dayStart = new Date(`${todayStr}T00:00:00.000+06:00`);
+    const dayEnd = new Date(`${todayStr}T23:59:59.999+06:00`);
     const todayEmps = await AttendancePunch.distinct('employeeId', {
       punchTime: { $gte: dayStart, $lte: dayEnd },
       employeeId: { $ne: null }
@@ -8231,7 +8265,10 @@ apiRouter.post('/api/attendance/device/upload-usb', verifyPermission('attendance
         stampStr = `${parts[1]} ${parts[2]}`;
       }
 
-      const punchTime = new Date(stampStr);
+      let punchTime = new Date(stampStr);
+      if (stampStr.includes(' ') && !stampStr.includes('+') && !stampStr.includes('Z')) {
+        punchTime = new Date(`${stampStr.replace(' ', 'T')}+06:00`);
+      }
       if (isNaN(punchTime.getTime()) || enrollId <= 0) continue;
 
       const verify = parts[2] || 'FINGERPRINT';
@@ -8582,7 +8619,7 @@ apiRouter.put('/api/attendance/logs/:id', verifyPermission('attendance', 'edit')
 // Today's summary counts
 apiRouter.get('/api/attendance/summary/today', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
     const canViewAll = await canUserViewAllAttendance(req.session.user);
 
     if (!canViewAll) {

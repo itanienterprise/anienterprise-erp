@@ -172,22 +172,22 @@ const fmt12 = (dt) => {
   if (!dt) return '—';
   const d = new Date(dt);
   if (isNaN(d)) return '—';
-  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return d.toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', hour12: true });
 };
 const fmtDate = (str) => {
   if (!str) return '—';
   const d = new Date(str);
   if (isNaN(d)) return str;
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric' });
 };
 const isTodayDate = (dt) => {
   if (!dt) return false;
   const d = new Date(dt);
   if (isNaN(d)) return false;
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  const dhakaFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' });
+  return dhakaFormatter.format(d) === dhakaFormatter.format(new Date());
 };
-const todayStr = () => new Date().toISOString().split('T')[0];
+const todayStr = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
 
 const StatusBadge = ({ status }) => {
   const map = {
@@ -1296,7 +1296,7 @@ const PunchesTab = ({
             {punches.map(p => (
               <tr key={p._id}>
                 <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                  {new Date(p.punchTime).toLocaleDateString('en-GB')} {fmt12(p.punchTime)}
+                  {new Date(p.punchTime).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka' })} {fmt12(p.punchTime)}
                 </td>
                 <td style={{ fontSize: '0.76rem', color: '#64748b' }}>{p.deviceId}</td>
                 <td><span className="att-enroll-badge">{p.enrollId}</span></td>

@@ -101,7 +101,19 @@ async function fetchAllLogs(ip, port) {
   const records = [];
   for (let i = 0; i <= logBuffer.length - 40; i += 40) {
     const slice = logBuffer.subarray(i, i + 40);
-    const r = decodeRecordData40(slice);
+    const userSn = slice.readUIntLE(0, 2);
+    const deviceUserId = slice.subarray(2, 11).toString('ascii').replace(/\0.*$/, '').trim();
+
+    // Decode 32-bit ZKTeco timestamp with explicit Asia/Dhaka (+06:00) UTC offset
+    let t = slice.readUInt32LE(27);
+    const second = t % 60; t = Math.floor(t / 60);
+    const minute = t % 60; t = Math.floor(t / 60);
+    const hour = t % 24; t = Math.floor(t / 24);
+    const day = (t % 31) + 1; t = Math.floor(t / 31);
+    const month = t % 12; t = Math.floor(t / 12);
+    const year = t + 2000;
+    const recordTime = new Date(Date.UTC(year, month, day, hour, minute, second) - (6 * 3600 * 1000));
+
     const verifyByte = slice[26];
     const stateByte = slice[31];
 
@@ -112,19 +124,21 @@ async function fetchAllLogs(ip, port) {
     else if (verifyByte === 1) verifyMode = 'FINGERPRINT';
 
     records.push({
-      ...r,
+      userSn,
+      deviceUserId,
+      recordTime,
       verifyMode,
       verifyByte,
       stateByte
     });
   }
 
-  // Calculate intelligent punchType (IN / OUT / BREAK)
+  // Calculate intelligent punchType (IN / OUT / BREAK) per Dhaka calendar day
   const byUserDay = new Map();
   records.forEach(r => {
-    const d = new Date(r.recordTime);
+    const d = r.recordTime instanceof Date ? r.recordTime : new Date(r.recordTime);
     if (isNaN(d.getTime())) return;
-    const dayStr = d.toISOString().split('T')[0];
+    const dayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(d);
     const key = String(r.deviceUserId || r.userSn) + '_' + dayStr;
     if (!byUserDay.has(key)) byUserDay.set(key, []);
     byUserDay.get(key).push(r);
