@@ -1048,7 +1048,12 @@ app.get('/', (req, res) => {
 });
 
 apiRouter.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', uptime: Math.floor(process.uptime()), timestamp: Date.now() });
+  res.json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    timestamp: Date.now(),
+    zk: zkLiveManager ? zkLiveManager.getStatus() : null
+  });
 });
 
 // Lightweight Pending Indicators Endpoint
@@ -7637,9 +7642,18 @@ const dayDiff = (from, to) => {
 // ─── Helper: compute AttendanceLog from punches for one employee on one date ──
 const processEmployeeDay = async (employeeId, date) => {
   try {
-    // date is "YYYY-MM-DD" in Asia/Dhaka
-    const dayStart = new Date(`${date}T00:00:00.000+06:00`);
-    const dayEnd   = new Date(`${date}T23:59:59.999+06:00`);
+    // Normalize date to "YYYY-MM-DD" in Asia/Dhaka
+    let dStr = (date || '').trim();
+    if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(dStr)) {
+      const [d, m, y] = dStr.split(/[-/]/);
+      dStr = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    if (!dStr) {
+      dStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+    }
+
+    const dayStart = new Date(`${dStr}T00:00:00.000+06:00`);
+    const dayEnd   = new Date(`${dStr}T23:59:59.999+06:00`);
 
     const punches = await AttendancePunch.find({
       employeeId,
@@ -7648,46 +7662,113 @@ const processEmployeeDay = async (employeeId, date) => {
 
     if (punches.length === 0) return null;
 
-    // Get shift for employee
-    const shift = await ShiftConfig.findOne({
-      $or: [{ applicableTo: employeeId }, { isDefault: true, applicableTo: { $size: 0 } }]
-    }).sort({ isDefault: 1 });
+    // Get shift for employee:
+    // 1. Check DeviceMapping explicit shiftId
+    // 2. Check ShiftConfig.applicableTo containing employeeId
+    // 3. Check ShiftConfig.isDefault
+    // 4. Fallback to any ShiftConfig
+    let shift = null;
+    const devMapping = await DeviceMapping.findOne({
+      $or: [{ employeeId }, { employeeId: String(employeeId) }]
+    });
+    if (devMapping && devMapping.shiftId) {
+      shift = await ShiftConfig.findById(devMapping.shiftId);
+    }
+    if (!shift) {
+      shift = await ShiftConfig.findOne({
+        $or: [
+          { applicableTo: employeeId },
+          { applicableTo: String(employeeId) }
+        ]
+      });
+    }
+    if (!shift) {
+      shift = await ShiftConfig.findOne({ isDefault: true });
+    }
+    if (!shift) {
+      shift = await ShiftConfig.findOne();
+    }
 
     const inPunches = punches.filter(p => p.punchType === 'IN' || p.punchType === 'UNKNOWN');
     const outPunches = punches.filter(p => p.punchType === 'OUT');
 
     const firstIn = inPunches[0]?.punchTime || punches[0].punchTime;
-    const lastOut = outPunches.length ? outPunches[outPunches.length - 1].punchTime : null;
+    let lastOut = outPunches.length ? outPunches[outPunches.length - 1].punchTime : null;
+
+    // If multiple punches exist but none explicitly marked OUT, use the latest punch as lastOut
+    if (!lastOut && punches.length > 1) {
+      lastOut = punches[punches.length - 1].punchTime;
+    }
 
     let totalHours = 0;
     let overtimeHours = 0;
+    let lateMinutes = 0;
     let status = 'PRESENT';
 
     if (firstIn && lastOut) {
-      totalHours = Math.round(((lastOut - firstIn) / (1000 * 60 * 60)) * 100) / 100;
+      const diffMs = new Date(lastOut).getTime() - new Date(firstIn).getTime();
+      totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
     }
 
     if (shift) {
-      const shiftStart = new Date(`${date}T${shift.startTime}:00.000+06:00`);
-      const lateMs = firstIn.getTime() - shiftStart.getTime();
-      const lateMin = lateMs / (1000 * 60);
+      const shiftStart = new Date(`${dStr}T${shift.startTime}:00.000+06:00`);
+      const shiftEnd = new Date(`${dStr}T${shift.endTime}:00.000+06:00`);
 
-      if (lateMin > (shift.graceMinutes + 240)) {
+      const lateMs = new Date(firstIn).getTime() - shiftStart.getTime();
+      const lateMin = lateMs / (1000 * 60);
+      const grace = Number(shift.graceMinutes) || 0;
+
+      if (lateMin > (grace + 240)) {
         status = 'HALF_DAY';
-      } else if (lateMin > shift.graceMinutes) {
+        lateMinutes = Math.max(0, Math.round(lateMin));
+      } else if (lateMin > grace) {
         status = 'LATE';
+        lateMinutes = Math.max(0, Math.round(lateMin));
       }
 
       const [sh, sm] = shift.startTime.split(':').map(Number);
       const [eh, em] = shift.endTime.split(':').map(Number);
-      const shiftHours = eh + em / 60 - sh - sm / 60 - shift.breakMinutes / 60;
+      const breakMins = Number(shift.breakMinutes) || 0;
+      const scheduledShiftHours = Math.max(0, (eh + em / 60) - (sh + sm / 60) - (breakMins / 60));
 
-      if (totalHours > shiftHours) {
-        overtimeHours = Math.round((totalHours - shiftHours) * 100) / 100;
+      // Calculate Overtime (OT) based on assigned shift:
+      if (lastOut) {
+        // 1. Time worked after scheduled shift end
+        let otAfterShiftEnd = 0;
+        if (new Date(lastOut) > shiftEnd) {
+          const diffMs = new Date(lastOut).getTime() - shiftEnd.getTime();
+          otAfterShiftEnd = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+        }
+
+        // 2. Total worked hours exceeding scheduled shift work hours
+        let otExcessHours = 0;
+        if (totalHours > scheduledShiftHours) {
+          otExcessHours = Math.round((totalHours - scheduledShiftHours) * 100) / 100;
+        }
+
+        // 3. Dedicated OT punches if present (punchType === 'OT_IN' / 'OT_OUT')
+        let otDedicated = 0;
+        const otIn = punches.filter(p => p.punchType === 'OT_IN');
+        const otOut = punches.filter(p => p.punchType === 'OT_OUT');
+        if (otIn.length && otOut.length) {
+          const otDiff = (new Date(otOut[otOut.length - 1].punchTime).getTime() - new Date(otIn[0].punchTime).getTime()) / (1000 * 3600);
+          if (otDiff > 0) otDedicated = Math.round(otDiff * 100) / 100;
+        }
+
+        overtimeHours = Math.max(0, otAfterShiftEnd, otExcessHours, otDedicated);
       }
     }
 
-    return { firstIn, lastOut, totalHours, overtimeHours, status, shiftId: shift?._id || null };
+    return {
+      firstIn,
+      lastOut,
+      totalHours,
+      overtimeHours,
+      lateMinutes: typeof lateMinutes !== 'undefined' ? lateMinutes : 0,
+      status,
+      shiftId: shift?._id || null,
+      shiftName: shift?.shiftName || ''
+    };
   } catch (e) {
     console.error('[Attendance] processEmployeeDay error:', e.message);
     return null;
@@ -7746,23 +7827,26 @@ app.post('/api/attendance/device/push', async (req, res) => {
   }
 });
 
-// ─── Robust ZKTeco Attendance Log Fetcher (Handles 50k+ logs without drops) ──
-async function fetchZkAttendances(ip, port = 4370, timeout = 30000) {
+// ─── Robust ZKTeco Attendance Log Fetcher (Fast & Handles 50k+ logs without timeout) ──
+async function fetchZkAttendances(ip, port = 4370, timeout = 30000, options = {}) {
   if (!ZKLib || !ZKConstants || !ZKUtils) {
     throw new Error('node-zklib is not installed or available on this server.');
   }
   const { COMMANDS, REQUEST_DATA } = ZKConstants;
-  const { createTCPHeader, decodeRecordData40 } = ZKUtils;
+  const { createTCPHeader } = ZKUtils;
+  const { latestOnly = false, limit = 1000, fetchUsers = true, fullSync = false } = options;
 
   const zk = new ZKLib(ip, Number(port) || 4370, Number(timeout) || 30000, 4000);
   await zk.createSocket();
   const z = zk.zklibTcp;
 
   let users = [];
-  try {
-    const userData = await zk.getUsers();
-    users = Array.isArray(userData?.data) ? userData.data : (Array.isArray(userData) ? userData : []);
-  } catch (_) {}
+  if (fetchUsers) {
+    try {
+      const userData = await zk.getUsers();
+      users = Array.isArray(userData?.data) ? userData.data : (Array.isArray(userData) ? userData : []);
+    } catch (_) {}
+  }
 
   // Request attendance logs size
   z.replyId++;
@@ -7771,65 +7855,131 @@ async function fetchZkAttendances(ip, port = 4370, timeout = 30000) {
   const recvData = reply.subarray(16);
   const size = recvData.readUIntLE(1, 4);
 
-  const MAX_CHUNK = 16 * 1024;
-  let remain = size % MAX_CHUNK;
-  let numberChunks = Math.floor(size / MAX_CHUNK);
-  let totalChunks = numberChunks + (remain > 0 ? 1 : 0);
+  if (!size || size <= 4) {
+    await zk.disconnect();
+    return { records: [], users };
+  }
+
+  const totalRecords = Math.floor((size - 4) / 40);
+  // If buffer is large (>1500 records) and not explicit fullSync, fetch latest records to avoid network timeouts
+  const shouldFetchLatestOnly = latestOnly || (totalRecords > 1500 && !fullSync);
 
   let allPayload = Buffer.from([]);
 
-  for (let c = 0; c < totalChunks; c++) {
-    const start = c * MAX_CHUNK;
-    const chunkSize = (c === totalChunks - 1 && remain > 0) ? remain : MAX_CHUNK;
+  if (shouldFetchLatestOnly) {
+    const countToFetch = Math.min(totalRecords, limit || 1000);
+    const totalBytesToFetch = countToFetch * 40;
+    const startByte = 4 + (totalRecords - countToFetch) * 40;
 
-    const chunkData = await new Promise((resolve, reject) => {
+    const CHUNK_SIZE = 400 * 40; // 16,000 bytes per chunk (record-aligned)
+    let bytesRemaining = totalBytesToFetch;
+    let currentOffset = startByte;
+
+    while (bytesRemaining > 0) {
+      const fetchLen = Math.min(bytesRemaining, CHUNK_SIZE);
       z.replyId++;
       const reqData = Buffer.alloc(8);
-      reqData.writeUInt32LE(start, 0);
-      reqData.writeUInt32LE(chunkSize, 4);
+      reqData.writeUInt32LE(currentOffset, 0);
+      reqData.writeUInt32LE(fetchLen, 4);
       const chunkBuf = createTCPHeader(COMMANDS.CMD_DATA_RDY, z.sessionId, z.replyId, reqData);
 
-      let bufferAcc = Buffer.from([]);
-      let chunkTimer = setTimeout(() => {
-        z.socket.off('data', onData);
-        reject(new Error(`Timeout receiving chunk ${c + 1}/${totalChunks}`));
-      }, 8000);
+      const chunkData = await new Promise((resolve, reject) => {
+        let bufferAcc = Buffer.from([]);
+        let chunkTimer = setTimeout(() => {
+          z.socket.off('data', onData);
+          reject(new Error(`Timeout receiving chunk at offset ${currentOffset}`));
+        }, 6000);
 
-      function onData(d) {
-        bufferAcc = Buffer.concat([bufferAcc, d]);
+        function onData(d) {
+          bufferAcc = Buffer.concat([bufferAcc, d]);
+          while (bufferAcc.length >= 8) {
+            if (bufferAcc.compare(Buffer.from([0x50, 0x50, 0x82, 0x7d]), 0, 4, 0, 4) !== 0) {
+              bufferAcc = bufferAcc.subarray(1);
+              continue;
+            }
+            const packetLen = bufferAcc.readUInt16LE(4);
+            const totalPacketLen = 8 + packetLen;
+            if (bufferAcc.length < totalPacketLen) break;
 
-        while (bufferAcc.length >= 8) {
-          if (bufferAcc.compare(Buffer.from([0x50, 0x50, 0x82, 0x7d]), 0, 4, 0, 4) !== 0) {
-            bufferAcc = bufferAcc.subarray(1);
-            continue;
-          }
-          const packetLen = bufferAcc.readUInt16LE(4);
-          const totalPacketLen = 8 + packetLen;
-          if (bufferAcc.length < totalPacketLen) break;
+            const packet = bufferAcc.subarray(0, totalPacketLen);
+            bufferAcc = bufferAcc.subarray(totalPacketLen);
 
-          const packet = bufferAcc.subarray(0, totalPacketLen);
-          bufferAcc = bufferAcc.subarray(totalPacketLen);
-
-          const commandId = packet.readUInt16LE(8);
-          if (commandId === COMMANDS.CMD_DATA) {
-            clearTimeout(chunkTimer);
-            z.socket.off('data', onData);
-            resolve(packet.subarray(16));
-            return;
+            const commandId = packet.readUInt16LE(8);
+            if (commandId === COMMANDS.CMD_DATA) {
+              clearTimeout(chunkTimer);
+              z.socket.off('data', onData);
+              resolve(packet.subarray(16));
+              return;
+            }
           }
         }
-      }
 
-      z.socket.on('data', onData);
-      z.socket.write(chunkBuf);
-    });
+        z.socket.on('data', onData);
+        z.socket.write(chunkBuf);
+      });
 
-    allPayload = Buffer.concat([allPayload, chunkData]);
+      allPayload = Buffer.concat([allPayload, chunkData]);
+      currentOffset += fetchLen;
+      bytesRemaining -= fetchLen;
+    }
+  } else {
+    const MAX_CHUNK = 16 * 1024;
+    let remain = size % MAX_CHUNK;
+    let numberChunks = Math.floor(size / MAX_CHUNK);
+    let totalChunks = numberChunks + (remain > 0 ? 1 : 0);
+
+    for (let c = 0; c < totalChunks; c++) {
+      const start = c * MAX_CHUNK;
+      const chunkSize = (c === totalChunks - 1 && remain > 0) ? remain : MAX_CHUNK;
+
+      const chunkData = await new Promise((resolve, reject) => {
+        z.replyId++;
+        const reqData = Buffer.alloc(8);
+        reqData.writeUInt32LE(start, 0);
+        reqData.writeUInt32LE(chunkSize, 4);
+        const chunkBuf = createTCPHeader(COMMANDS.CMD_DATA_RDY, z.sessionId, z.replyId, reqData);
+
+        let bufferAcc = Buffer.from([]);
+        let chunkTimer = setTimeout(() => {
+          z.socket.off('data', onData);
+          reject(new Error(`Timeout receiving chunk ${c + 1}/${totalChunks}`));
+        }, 8000);
+
+        function onData(d) {
+          bufferAcc = Buffer.concat([bufferAcc, d]);
+          while (bufferAcc.length >= 8) {
+            if (bufferAcc.compare(Buffer.from([0x50, 0x50, 0x82, 0x7d]), 0, 4, 0, 4) !== 0) {
+              bufferAcc = bufferAcc.subarray(1);
+              continue;
+            }
+            const packetLen = bufferAcc.readUInt16LE(4);
+            const totalPacketLen = 8 + packetLen;
+            if (bufferAcc.length < totalPacketLen) break;
+
+            const packet = bufferAcc.subarray(0, totalPacketLen);
+            bufferAcc = bufferAcc.subarray(totalPacketLen);
+
+            const commandId = packet.readUInt16LE(8);
+            if (commandId === COMMANDS.CMD_DATA) {
+              clearTimeout(chunkTimer);
+              z.socket.off('data', onData);
+              resolve(packet.subarray(16));
+              return;
+            }
+          }
+        }
+
+        z.socket.on('data', onData);
+        z.socket.write(chunkBuf);
+      });
+
+      allPayload = Buffer.concat([allPayload, chunkData]);
+    }
   }
 
   await zk.disconnect();
 
-  const logBuffer = allPayload.subarray(4);
+  const logBuffer = shouldFetchLatestOnly ? allPayload : allPayload.subarray(4);
   const records = [];
   for (let i = 0; i <= logBuffer.length - 40; i += 40) {
     const slice = logBuffer.subarray(i, i + 40);
@@ -7845,7 +7995,6 @@ async function fetchZkAttendances(ip, port = 4370, timeout = 30000) {
     const month = t % 12; t = Math.floor(t / 12);
     const year = t + 2000;
     // Machine clock ticks in Bangladesh Time (+06:00).
-    // Date.UTC produces pure UTC milliseconds; subtracting 6 hours gives the true UTC timestamp on ANY machine.
     const recordTime = new Date(Date.UTC(year, month, day, hour, minute, second) - (6 * 3600 * 1000));
 
     const verifyByte = slice[26];
@@ -7902,13 +8051,13 @@ async function fetchZkAttendances(ip, port = 4370, timeout = 30000) {
   return { records, users };
 }
 
-// ─── Multi-Method Ingestion Helper ──────────────────────────────────────────
+// ─── Punch Record Ingestion Pipeline ─────────────────────────────────────────
 async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
   if (!punches || punches.length === 0) return { newInserted: 0, skippedDuplicates: 0 };
 
   const allMappings = await DeviceMapping.find().lean();
   const mappingMap = new Map();
-  allMappings.forEach(m => mappingMap.set(Number(m.enrollId), m.employeeId));
+  allMappings.forEach(m => mappingMap.set(Number(m.enrollId), m));
 
   const validPunches = punches
     .map(p => ({
@@ -7994,7 +8143,8 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
         continue;
       }
 
-      const employeeId = mappingMap.get(p.enrollId) || null;
+      const mapping = mappingMap.get(p.enrollId);
+      const employeeId = mapping?.employeeId || null;
       toInsert.push({
         deviceId: p.deviceId,
         enrollId: p.enrollId,
@@ -8004,7 +8154,7 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
         verifyMode: p.verifyMode,
         rawPayload: p.rawPayload,
         processed: false,
-        unmatched: !employeeId
+        unmatched: !mapping
       });
       existingDocs.push({ enrollId: p.enrollId, punchTime: p.punchTime });
     }
@@ -8012,10 +8162,18 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
     if (toInsert.length > 0) {
       await AttendancePunch.insertMany(toInsert, { ordered: false });
       newInserted += toInsert.length;
+      try {
+        broadcastUpdate('attendance', 'punch_created', { count: toInsert.length });
+      } catch (_) {}
     }
   }
 
-  // Auto-process today's attendance logs for any mapped employees who punched today (Asia/Dhaka)
+  // If no new punches were inserted, return immediately to avoid re-triggering broadcasts
+  if (newInserted === 0) {
+    return { newInserted: 0, skippedDuplicates };
+  }
+
+  // Auto-process today's attendance logs ONLY when new punches were actually inserted
   try {
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
     const dayStart = new Date(`${todayStr}T00:00:00.000+06:00`);
@@ -8046,10 +8204,12 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
               employeeEmpId: dec?.employeeId || '',
               date: todayStr,
               shiftId: result.shiftId,
+              shiftName: result.shiftName || '',
               firstPunchIn: result.firstIn,
               lastPunchOut: result.lastOut,
               totalHours: result.totalHours,
               overtimeHours: result.overtimeHours,
+              lateMinutes: result.lateMinutes || 0,
               status: result.status,
               manualOverride: false
             }
@@ -8058,12 +8218,248 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
         );
       }
     }
+    if (todayEmps.length > 0) {
+      try {
+        broadcastUpdate('attendance', 'logs_updated', { count: todayEmps.length });
+      } catch (_) {}
+    }
   } catch (err) {
     console.warn('[Attendance] Auto-process today warning:', err.message);
   }
 
   return { newInserted, skippedDuplicates };
 }
+
+// ─── Persistent ZKTeco Live Connection Manager ───────────────────────────────
+class ZkLiveConnectionManager {
+  constructor() {
+    this.status = 'disconnected'; // 'disconnected' | 'connecting' | 'connected' | 'error'
+    this.ip = null;
+    this.port = 4370;
+    this.connectedAt = null;
+    this.lastSyncAt = null;
+    this.lastPunchAt = null;
+    this.totalPunchesSession = 0;
+    this.lastError = null;
+    this.pollInterval = null;
+    this.reconnectTimer = null;
+    this.isSyncing = false;
+    this.shouldStayConnected = false;
+    this.consecutiveFailures = 0;
+  }
+
+  getStatus() {
+    return {
+      connected: this.status === 'connected',
+      status: this.status,
+      ip: this.ip,
+      port: this.port,
+      connectedAt: this.connectedAt,
+      lastSyncAt: this.lastSyncAt,
+      lastPunchAt: this.lastPunchAt,
+      totalPunchesSession: this.totalPunchesSession,
+      lastError: this.lastError
+    };
+  }
+
+  broadcastStatus() {
+    try {
+      io.emit('zk_device_status', this.getStatus());
+    } catch (_) {}
+  }
+
+  async connect(ip, port = 4370) {
+    if (!ZKLib) {
+      throw new Error('node-zklib is not installed or available on this server.');
+    }
+    const cleanIp = (ip || '').trim();
+    const cleanPort = Number(port) || 4370;
+    if (!cleanIp) throw new Error('Device IP address is required.');
+
+    if (this.status === 'connected' && this.ip === cleanIp && this.port === cleanPort) {
+      return this.getStatus();
+    }
+
+    await this.disconnect(false);
+
+    this.ip = cleanIp;
+    this.port = cleanPort;
+    this.status = 'connecting';
+    this.shouldStayConnected = true;
+    this.lastError = null;
+    this.consecutiveFailures = 0;
+    this.broadcastStatus();
+
+    try {
+      // Immediate sync of recent punches on connection
+      const syncResult = await this.syncNow();
+      if (this.lastError && !syncResult) {
+        throw new Error(this.lastError);
+      }
+
+      this.status = 'connected';
+      this.connectedAt = new Date();
+      this.lastSyncAt = new Date();
+      this.lastError = null;
+      this.consecutiveFailures = 0;
+      console.log(`[ZKLive] Connected successfully to ZKTeco device at ${this.ip}:${this.port}. Auto-sync active.`);
+      this.broadcastStatus();
+
+      // Poll every 5 seconds for new punches
+      this.startPolling(5000);
+
+      return this.getStatus();
+    } catch (err) {
+      this.status = 'error';
+      this.lastError = err.message;
+      this.broadcastStatus();
+      if (this.shouldStayConnected) {
+        this.scheduleReconnect();
+      }
+      throw err;
+    }
+  }
+
+  async syncNow() {
+    if (this.isSyncing || !this.ip) return null;
+    this.isSyncing = true;
+    try {
+      const { records } = await fetchZkAttendances(this.ip, this.port, 10000, {
+        latestOnly: true,
+        limit: 1000,
+        fetchUsers: false
+      });
+
+      const punchesToIngest = records.map(r => ({
+        enrollId: parseInt(r.deviceUserId || r.userSn || 0),
+        punchTime: new Date(r.recordTime),
+        punchType: r.punchType || 'IN',
+        verifyMode: r.verifyMode || 'FINGERPRINT',
+        deviceId: `F8-${this.ip}`,
+        rawPayload: JSON.stringify(r)
+      })).filter(p => p.enrollId > 0 && !isNaN(p.punchTime.getTime()));
+
+      const result = await ingestPunchRecords(punchesToIngest, `F8-${this.ip}`);
+      this.lastSyncAt = new Date();
+      this.lastError = null;
+      this.consecutiveFailures = 0;
+
+      if (this.status !== 'connected' && this.shouldStayConnected) {
+        this.status = 'connected';
+      }
+
+      if (result.newInserted > 0) {
+        this.totalPunchesSession += result.newInserted;
+        this.lastPunchAt = new Date();
+        console.log(`[ZKLive] Auto-synced ${result.newInserted} new punch(es) from ${this.ip}! Total this session: ${this.totalPunchesSession}`);
+        io.emit('zk_live_punch', {
+          count: result.newInserted,
+          message: `${result.newInserted} new punch(es) captured from device`
+        });
+      }
+      this.broadcastStatus();
+      return { success: true, ...result };
+    } catch (err) {
+      this.consecutiveFailures++;
+      this.lastError = err.message;
+      console.warn(`[ZKLive] syncNow error (${this.consecutiveFailures}):`, err.message);
+      if (this.consecutiveFailures >= 3 && this.status === 'connected') {
+        this.status = 'error';
+        this.broadcastStatus();
+        this.scheduleReconnect();
+      }
+      return null;
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  startPolling(intervalMs = 5000) {
+    if (this.pollInterval) clearInterval(this.pollInterval);
+    this.pollInterval = setInterval(() => {
+      if ((this.status === 'connected' || this.shouldStayConnected) && !this.isSyncing) {
+        this.syncNow().catch(() => {});
+      }
+    }, intervalMs);
+  }
+
+  scheduleReconnect() {
+    if (!this.shouldStayConnected || this.reconnectTimer) return;
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      if (this.shouldStayConnected && this.ip) {
+        console.log(`[ZKLive] Attempting auto-reconnect to ${this.ip}:${this.port}...`);
+        try {
+          await this.syncNow();
+          if (this.consecutiveFailures === 0) {
+            this.status = 'connected';
+            this.broadcastStatus();
+          }
+        } catch (_) {}
+      }
+    }, 6000);
+  }
+
+  async disconnect(userInitiated = true) {
+    if (userInitiated) {
+      this.shouldStayConnected = false;
+    }
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.isSyncing = false;
+    if (userInitiated) {
+      this.status = 'disconnected';
+      this.connectedAt = null;
+      this.broadcastStatus();
+    }
+  }
+}
+
+const zkLiveManager = new ZkLiveConnectionManager();
+
+// Automatically establish persistent auto-sync on server boot
+const defaultZkIp = process.env.ZK_DEVICE_IP || '192.168.0.74';
+const defaultZkPort = Number(process.env.ZK_DEVICE_PORT) || 4370;
+
+setTimeout(() => {
+  zkLiveManager.connect(defaultZkIp, defaultZkPort)
+    .then(st => {
+      console.log(`[ZKLive] Auto-connected to ZKTeco device at ${defaultZkIp}:${defaultZkPort}. Continuous 5s auto-sync is LIVE.`);
+    })
+    .catch(err => {
+      console.warn(`[ZKLive] Initial auto-connect notice for ${defaultZkIp}:${defaultZkPort} (${err.message}). Background retries active.`);
+    });
+}, 2500);
+
+// ─── Live Device Connection Routes ───────────────────────────────────────────
+apiRouter.get('/api/attendance/device/live-status', verifyPermission('attendance', 'view'), (req, res) => {
+  res.json(zkLiveManager.getStatus());
+});
+
+apiRouter.post('/api/attendance/device/connect', verifyPermission('attendance', 'edit'), async (req, res) => {
+  const { ip, port = 4370 } = req.body;
+  try {
+    const status = await zkLiveManager.connect(ip, port);
+    res.json({ success: true, message: `Connected to ZKTeco device at ${ip}:${port}. Auto-sync active.`, status });
+  } catch (err) {
+    res.status(500).json({ success: false, message: `Failed to connect: ${err.message}` });
+  }
+});
+
+apiRouter.post('/api/attendance/device/disconnect', verifyPermission('attendance', 'edit'), async (req, res) => {
+  try {
+    await zkLiveManager.disconnect(true);
+    res.json({ success: true, message: 'Disconnected from ZKTeco device.', status: zkLiveManager.getStatus() });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // ─── Option 1: Direct LAN IP Sync (ZKTeco Protocol Port 4370) ────────────────
 apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('attendance', 'edit'), async (req, res) => {
@@ -8074,7 +8470,11 @@ apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('attendance', 
   if (!ip) return res.status(400).json({ message: 'Device IP address is required (e.g. 192.168.1.201).' });
 
   try {
-    const { records, users } = await fetchZkAttendances(ip, Number(port) || 4370, Number(timeout) || 30000);
+    const { records, users } = await fetchZkAttendances(ip, Number(port) || 4370, Number(timeout) || 30000, {
+      latestOnly: req.body.fullSync ? false : true,
+      limit: Number(req.body.limit) || 2000,
+      fullSync: !!req.body.fullSync
+    });
 
     const punchesToIngest = records.map(r => ({
       enrollId: parseInt(r.deviceUserId || r.userSn || 0),
@@ -8314,20 +8714,88 @@ apiRouter.get('/api/attendance/mappings', verifyPermission('attendance', 'view')
 
 apiRouter.post('/api/attendance/mappings', verifyPermission('attendance', 'add'), async (req, res) => {
   try {
-    const { enrollId, employeeId, employeeName, employeeEmpId, deviceId, notes } = req.body;
-    if (!enrollId || !employeeId) return res.status(400).json({ message: 'enrollId and employeeId are required' });
+    const { enrollId, employeeId, employeeName, employeeEmpId, deviceId, shiftId, shiftName, notes } = req.body;
+    if (enrollId === undefined || enrollId === null || enrollId === '') {
+      return res.status(400).json({ message: 'Enroll ID is required' });
+    }
+    const cleanName = (employeeName || '').trim();
+    if (!employeeId && !cleanName) {
+      return res.status(400).json({ message: 'Employee or Card name is required' });
+    }
+
+    let resolvedEmployeeId = (employeeId && mongoose.isValidObjectId(employeeId)) ? employeeId : null;
+    let resolvedEmployeeEmpId = employeeEmpId || '';
+
+    // If no valid employeeId was sent but a name was typed, try to match with existing ERP employees
+    if (!resolvedEmployeeId && cleanName) {
+      try {
+        const allEmps = await Employee.find();
+        for (const emp of allEmps) {
+          let dec;
+          try {
+            dec = decryptData(emp.data);
+            if (dec && dec.data && typeof dec.data === 'string' && !dec.employeeId) {
+              try { dec = decryptData(dec.data); } catch (_) {}
+            }
+          } catch (_) { continue; }
+          if (dec) {
+            const matchesName = dec.name && dec.name.trim().toLowerCase() === cleanName.toLowerCase();
+            const matchesEmpId = dec.employeeId && String(dec.employeeId).trim().toLowerCase() === cleanName.toLowerCase();
+            const matchesBoth = `${dec.name} (${dec.employeeId})`.toLowerCase() === cleanName.toLowerCase();
+            if (matchesName || matchesEmpId || matchesBoth) {
+              resolvedEmployeeId = emp._id;
+              if (!resolvedEmployeeEmpId && dec.employeeId) resolvedEmployeeEmpId = dec.employeeId;
+              break;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Attendance] Employee auto-match warning:', err.message);
+      }
+    }
+
+    let resolvedShiftName = shiftName || '';
+    const validShiftId = (shiftId && mongoose.isValidObjectId(shiftId)) ? shiftId : null;
+    if (validShiftId && !resolvedShiftName) {
+      const s = await ShiftConfig.findById(validShiftId);
+      if (s) resolvedShiftName = s.shiftName;
+    }
 
     // Upsert: update if exists, create if not
     const mapping = await DeviceMapping.findOneAndUpdate(
       { enrollId: Number(enrollId) },
-      { enrollId: Number(enrollId), employeeId, employeeName: employeeName || '', employeeEmpId: employeeEmpId || '', deviceId: deviceId || 'F8-DEFAULT', notes: notes || '' },
+      {
+        enrollId: Number(enrollId),
+        employeeId: resolvedEmployeeId,
+        employeeName: cleanName || (resolvedEmployeeId ? 'Employee' : 'Card'),
+        employeeEmpId: resolvedEmployeeEmpId,
+        deviceId: deviceId || 'F8-DEFAULT',
+        shiftId: validShiftId,
+        shiftName: resolvedShiftName,
+        notes: notes || ''
+      },
       { upsert: true, returnDocument: 'after' }
     );
 
+    // If shiftId is provided and employeeId is resolved, sync ShiftConfig.applicableTo
+    if (validShiftId && resolvedEmployeeId) {
+      await ShiftConfig.updateMany(
+        { _id: { $ne: validShiftId }, applicableTo: resolvedEmployeeId },
+        { $pull: { applicableTo: resolvedEmployeeId } }
+      );
+      await ShiftConfig.findByIdAndUpdate(validShiftId, {
+        $addToSet: { applicableTo: resolvedEmployeeId }
+      });
+    }
+
     // Retroactively link any punches for this enrollId
+    const punchUpdate = { unmatched: false };
+    if (resolvedEmployeeId) {
+      punchUpdate.employeeId = resolvedEmployeeId;
+    }
     await AttendancePunch.updateMany(
       { enrollId: { $in: [Number(enrollId), String(enrollId)] } },
-      { employeeId, unmatched: false }
+      punchUpdate
     );
 
     res.json(mapping);
@@ -8338,6 +8806,11 @@ apiRouter.delete('/api/attendance/mappings/:id', verifyPermission('attendance', 
   try {
     const mapping = await DeviceMapping.findByIdAndDelete(req.params.id);
     if (mapping) {
+      if (mapping.shiftId && mapping.employeeId) {
+        await ShiftConfig.findByIdAndUpdate(mapping.shiftId, {
+          $pull: { applicableTo: mapping.employeeId }
+        });
+      }
       await AttendancePunch.updateMany(
         { enrollId: { $in: [Number(mapping.enrollId), String(mapping.enrollId)] } },
         { employeeId: null, unmatched: true }
@@ -8485,23 +8958,48 @@ apiRouter.get('/api/attendance/punches', verifyPermission('attendance', 'view'),
     } else {
       if (employeeId) query.employeeId = employeeId;
       if (unmatched === 'true') {
-        query.$or = [{ unmatched: true }, { employeeId: null }];
+        query.unmatched = true;
       }
     }
 
-    const punches = await AttendancePunch.find(query).sort({ punchTime: -1 }).limit(Number(limit));
-    res.json(punches);
+    const punches = await AttendancePunch.find(query).sort({ punchTime: -1 }).limit(Number(limit)).lean();
+    
+    // Enrich with employeeEmpId and employeeName from mappings
+    const mappings = await DeviceMapping.find({}).lean();
+    const mapByEnroll = new Map();
+    mappings.forEach(m => {
+      if (m.enrollId != null) {
+        mapByEnroll.set(Number(m.enrollId), m);
+      }
+    });
+
+    const enriched = punches.map(p => {
+      const m = mapByEnroll.get(Number(p.enrollId));
+      return {
+        ...p,
+        employeeEmpId: m ? m.employeeEmpId : '',
+        employeeName: m ? m.employeeName : ''
+      };
+    });
+
+    res.json(enriched);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 // ─── 4. Process daily logs (manual trigger or scheduled) ──────────────────────
 apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit'), async (req, res) => {
   try {
-    const { date } = req.body; // "YYYY-MM-DD", defaults to today
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const { date } = req.body; // "YYYY-MM-DD" or "DD/MM/YYYY", defaults to today
+    let targetDate = (date || '').trim();
+    if (!targetDate) {
+      targetDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+    } else if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(targetDate)) {
+      const [d, m, y] = targetDate.split(/[-/]/);
+      targetDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
 
-    const dayStart = new Date(`${targetDate}T00:00:00.000Z`);
-    const dayEnd = new Date(`${targetDate}T23:59:59.999Z`);
+    const dayStart = new Date(`${targetDate}T00:00:00.000+06:00`);
+    const dayEnd   = new Date(`${targetDate}T23:59:59.999+06:00`);
 
     // Get all unique employeeIds that punched on this date
     const uniqueEmployees = await AttendancePunch.distinct('employeeId', {
@@ -8511,7 +9009,7 @@ apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit')
 
     let processed = 0;
 
-    // Also ensure ABSENT records for all known employees
+    // Also ensure records for all known employees
     const allEmployees = await Employee.find({});
 
     for (const emp of allEmployees) {
@@ -8537,10 +9035,12 @@ apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit')
               employeeEmpId: dec?.employeeId || '',
               date: targetDate,
               shiftId: result.shiftId,
+              shiftName: result.shiftName || '',
               firstPunchIn: result.firstIn,
               lastPunchOut: result.lastOut,
               totalHours: result.totalHours,
               overtimeHours: result.overtimeHours,
+              lateMinutes: result.lateMinutes || 0,
               status: result.status,
               manualOverride: false
             },
@@ -8567,7 +9067,7 @@ apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit')
       }
     }
 
-    res.json({ message: `Processed ${processed} employees for ${targetDate}`, date: targetDate });
+    res.json({ message: `Processed ${processed} employee(s) for ${targetDate}`, date: targetDate });
   } catch (err) {
     console.error('[Attendance] Process error:', err.message);
     res.status(500).json({ message: err.message });
@@ -8577,15 +9077,35 @@ apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit')
 // ─── 5. Attendance Logs ───────────────────────────────────────────────────────
 apiRouter.get('/api/attendance/logs', verifyPermission('attendance', 'view'), async (req, res) => {
   try {
-    const { date, fromDate, toDate, employeeId, status, limit = 500 } = req.query;
+    const { date, fromDate, toDate, employeeId, status, limit = 1000 } = req.query;
     const query = {};
 
-    if (date) {
-      query.date = date;
-    } else if (fromDate && toDate) {
-      query.date = { $gte: fromDate, $lte: toDate };
-    } else if (fromDate) {
-      query.date = { $gte: fromDate };
+    const normalizeDateStr = (raw) => {
+      if (!raw || typeof raw !== 'string') return '';
+      const d = raw.trim();
+      if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(d)) {
+        const [day, m, y] = d.split(/[-/]/);
+        return `${y}-${m.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      }
+      return d;
+    };
+
+    const normFrom = normalizeDateStr(fromDate);
+    const normTo = normalizeDateStr(toDate);
+    const normDate = normalizeDateStr(date);
+
+    if (normFrom && normTo) {
+      if (normFrom === normTo) {
+        query.date = normFrom;
+      } else {
+        query.date = { $gte: normFrom, $lte: normTo };
+      }
+    } else if (normFrom) {
+      query.date = { $gte: normFrom };
+    } else if (normTo) {
+      query.date = { $lte: normTo };
+    } else if (normDate) {
+      query.date = normDate;
     }
 
     const canViewAll = await canUserViewAllAttendance(req.session.user);
@@ -8698,8 +9218,15 @@ apiRouter.get('/api/attendance/report/monthly', verifyPermission('attendance', '
       else if (s === 'HALF_DAY') byEmp[key].halfDay++;
       else if (s === 'LEAVE') byEmp[key].leave++;
       byEmp[key].totalHours = Math.round((byEmp[key].totalHours + (log.totalHours || 0)) * 100) / 100;
-      byEmp[key].overtimeHours = Math.round((byEmp[key].overtimeHours + (log.overtimeHours || 0)) * 100) / 100;
-      byEmp[key].logs.push({ date: log.date, status: log.status, firstPunchIn: log.firstPunchIn, lastPunchOut: log.lastPunchOut, totalHours: log.totalHours });
+      byEmp[key].logs.push({
+        date: log.date,
+        status: log.status,
+        firstPunchIn: log.firstPunchIn,
+        lastPunchOut: log.lastPunchOut,
+        totalHours: log.totalHours,
+        overtimeHours: log.overtimeHours || 0,
+        lateMinutes: log.lateMinutes || 0
+      });
     }
 
     res.json({ month: m, year: y, fromDate, toDate, summary: Object.values(byEmp) });
@@ -8923,8 +9450,22 @@ apiRouter.get('/api/attendance/live', verifyPermission('attendance', 'view'), as
     if (!canViewAll) {
       filter.$or = await buildOwnEmployeeFilter(req.session.user);
     }
-    const punches = await AttendancePunch.find(filter).sort({ punchTime: -1 }).limit(30);
-    res.json(punches);
+    const punches = await AttendancePunch.find(filter).sort({ punchTime: -1 }).limit(35).lean();
+
+    const allMappings = await DeviceMapping.find().lean();
+    const mapByEnroll = new Map();
+    allMappings.forEach(m => mapByEnroll.set(Number(m.enrollId), m));
+
+    const enriched = punches.map(p => {
+      const mapping = mapByEnroll.get(Number(p.enrollId));
+      return {
+        ...p,
+        employeeEmpId: mapping?.employeeEmpId || '',
+        employeeName: mapping?.employeeName || (p.unmatched ? '' : '')
+      };
+    });
+
+    res.json(enriched);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 

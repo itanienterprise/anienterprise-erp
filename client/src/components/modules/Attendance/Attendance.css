@@ -455,17 +455,13 @@
 }
 .att-btn svg { width: 15px; height: 15px; }
 
-/* ── Live Feed Pulse ──────────────────────────────────── */
+/* ── Live Feed Indicator ─────────────────────────────────── */
 .att-live-dot {
   width: 8px; height: 8px;
   border-radius: 50%;
   background: #22c55e;
-  animation: att-pulse 1.5s infinite;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
   flex-shrink: 0;
-}
-@keyframes att-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.4); }
 }
 
 /* ── Form ─────────────────────────────────────────────── */

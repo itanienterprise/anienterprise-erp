@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { getSocket } from '../../../utils/socket';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { ChevronDownIcon, SearchIcon, CheckIcon, EditIcon, TrashIcon, XIcon } from '../../Icons';
 import './Attendance.css';
@@ -189,11 +190,21 @@ const isTodayDate = (dt) => {
 };
 const todayStr = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
 
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, lateMinutes = 0 }) => {
+  let lateLabel = '● Late';
+  if (lateMinutes > 0) {
+    if (lateMinutes >= 60) {
+      const h = Math.floor(lateMinutes / 60);
+      const m = lateMinutes % 60;
+      lateLabel = `● Late (${h}h${m > 0 ? ` ${m}m` : ''})`;
+    } else {
+      lateLabel = `● Late (${lateMinutes}m)`;
+    }
+  }
   const map = {
-    PRESENT: ['present', '●  Present'],
+    PRESENT: ['present', '● Present'],
     ABSENT:  ['absent',  '● Absent'],
-    LATE:    ['late',    '● Late'],
+    LATE:    ['late',    lateLabel],
     HALF_DAY:['half',    '● Half Day'],
     LEAVE:   ['leave',   '● On Leave'],
     WEEKEND: ['weekend', '● Weekend'],
@@ -257,7 +268,8 @@ const Attendance = ({ currentUser }) => {
   const [processing, setProcessing] = useState(false);
 
   // Filters
-  const [logDate, setLogDate] = useState(todayStr());
+  const [logFromDate, setLogFromDate] = useState(todayStr());
+  const [logToDate, setLogToDate] = useState(todayStr());
   const [logEmpId, setLogEmpId] = useState('');
   const [logStatus, setLogStatus] = useState('');
   const [leaveStatus, setLeaveStatus] = useState('');
@@ -297,25 +309,26 @@ const Attendance = ({ currentUser }) => {
   }, [employees, currentUser]);
 
   // ── API calls ──────────────────────────────────────────────────────────────
-  const load = useCallback(async (key, fn) => {
-    setLoading(p => ({ ...p, [key]: true }));
+  const load = useCallback(async (key, fn, silent = false) => {
+    if (!silent) setLoading(p => ({ ...p, [key]: true }));
     try { await fn(); } catch (e) { console.error(e); }
-    finally { setLoading(p => ({ ...p, [key]: false })); }
+    finally { if (!silent) setLoading(p => ({ ...p, [key]: false })); }
   }, []);
 
-  const fetchSummary = () => load('summary', async () => {
+  const fetchSummary = (silent = false) => load('summary', async () => {
     const r = await axios.get(`${API_BASE_URL}/api/attendance/summary/today`);
     setSummary(r.data);
-  });
+  }, silent);
 
-  const fetchLive = () => load('live', async () => {
+  const fetchLive = (silent = false) => load('live', async () => {
     const r = await axios.get(`${API_BASE_URL}/api/attendance/live`);
     setLivePunches(r.data || []);
-  });
+  }, silent);
 
-  const fetchLogs = () => load('logs', async () => {
+  const fetchLogs = (silent = false) => load('logs', async () => {
     const params = new URLSearchParams();
-    if (logDate) params.set('date', logDate);
+    if (logFromDate) params.set('fromDate', logFromDate);
+    if (logToDate) params.set('toDate', logToDate);
     if (!canViewAll) {
       if (myEmployee?._id) params.set('employeeId', myEmployee._id);
     } else {
@@ -324,7 +337,7 @@ const Attendance = ({ currentUser }) => {
     if (logStatus) params.set('status', logStatus);
     const r = await axios.get(`${API_BASE_URL}/api/attendance/logs?${params}`);
     setLogs(r.data || []);
-  });
+  }, silent);
 
   const fetchShifts = () => load('shifts', async () => {
     const r = await axios.get(`${API_BASE_URL}/api/attendance/shifts`);
@@ -341,7 +354,7 @@ const Attendance = ({ currentUser }) => {
     setLeaves(r.data || []);
   });
 
-  const fetchPunches = () => load('punches', async () => {
+  const fetchPunches = (silent = false) => load('punches', async () => {
     const params = new URLSearchParams();
     if (punchDate && punchDate.trim()) params.set('date', punchDate.trim());
     if (punchUnmatchedOnly) params.set('unmatched', 'true');
@@ -351,42 +364,152 @@ const Attendance = ({ currentUser }) => {
     }
     const r = await axios.get(`${API_BASE_URL}/api/attendance/punches?${params}`);
     setPunches(r.data || []);
-  });
+  }, silent);
 
   const fetchMappings = () => load('mappings', async () => {
     const r = await axios.get(`${API_BASE_URL}/api/attendance/mappings`);
     setMappings(r.data || []);
   });
 
-  const fetchUnmappedEnrolls = () => load('unmapped', async () => {
+  const fetchUnmappedEnrolls = (silent = false) => load('unmapped', async () => {
     try {
       const r = await axios.get(`${API_BASE_URL}/api/attendance/unmapped-enrolls`);
       setUnmappedEnrolls(r.data || []);
     } catch (e) {
       console.warn('Could not fetch unmapped enrolls:', e);
     }
-  });
+  }, silent);
 
   const fetchEmployees = () => load('employees', async () => {
     const r = await axios.get(`${API_BASE_URL}/api/employees`);
     setEmployees(r.data || []);
   });
 
+  // Live ZKTeco Device state
+  const [deviceLiveStatus, setDeviceLiveStatus] = useState({ connected: false, status: 'disconnected' });
+  const [connectingLive, setConnectingLive] = useState(false);
+  const [livePunchToast, setLivePunchToast] = useState(null);
+
+  const fetchDeviceLiveStatus = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/attendance/device/live-status`);
+      setDeviceLiveStatus(res.data || { connected: false, status: 'disconnected' });
+    } catch (_) {}
+  };
+
+  const handleConnectLive = async (ip, port = 4370) => {
+    setConnectingLive(true);
+    try {
+      const cleanIp = ip || '192.168.0.74';
+      const cleanPort = Number(port) || 4370;
+      const res = await axios.post(`${API_BASE_URL}/api/attendance/device/connect`, { ip: cleanIp, port: cleanPort });
+      setDeviceLiveStatus(res.data.status || { connected: true, status: 'connected', ip: cleanIp, port: cleanPort });
+      localStorage.setItem('zk_device_ip', cleanIp);
+      localStorage.setItem('zk_auto_connect', 'true');
+      fetchLive();
+      fetchSummary();
+      return res.data;
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to connect to device');
+      throw err;
+    } finally {
+      setConnectingLive(false);
+    }
+  };
+
+  const handleDisconnectLive = async () => {
+    setConnectingLive(true);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/attendance/device/disconnect`);
+      setDeviceLiveStatus(res.data.status || { connected: false, status: 'disconnected' });
+      localStorage.removeItem('zk_auto_connect');
+      return res.data;
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to disconnect from device');
+      throw err;
+    } finally {
+      setConnectingLive(false);
+    }
+  };
+
   // ── Initial load ───────────────────────────────────────────────────────────
   useEffect(() => {
     fetchSummary();
     fetchLive();
     fetchEmployees();
+    fetchShifts();
+    fetchMappings();
     fetchUnmappedEnrolls();
-    const iv = setInterval(() => { fetchSummary(); fetchLive(); }, 10000);
-    return () => clearInterval(iv);
-  }, []);
+    fetchDeviceLiveStatus();
 
-  useEffect(() => { if (activeTab === 'logs')    { fetchLogs();    } }, [activeTab, logDate, logStatus, logEmpId, canViewAll, myEmployee]);
+    const autoConn = localStorage.getItem('zk_auto_connect');
+    const savedIp = localStorage.getItem('zk_device_ip') || '192.168.0.74';
+    if (autoConn === 'true' && savedIp && canEdit) {
+      handleConnectLive(savedIp, 4370).catch(() => {});
+    }
+
+    // Auto-refresh live feed and summary silently every 4 seconds
+    const iv = setInterval(() => { fetchSummary(true); fetchLive(true); }, 4000);
+    return () => clearInterval(iv);
+  }, [canEdit]);
+
+  // Real-time synchronization via Socket.IO
+  useEffect(() => {
+    const socket = getSocket();
+    const handleRealtimeUpdate = (data) => {
+      const mod = (data?.module || '').toLowerCase().trim();
+      if (!mod || ['attendance', 'attendances', 'all'].includes(mod)) {
+        fetchSummary(true);
+        fetchLive(true);
+        if (activeTab === 'logs') fetchLogs(true);
+        if (activeTab === 'punches') fetchPunches(true);
+        if (activeTab === 'device') fetchUnmappedEnrolls(true);
+      }
+    };
+
+    const handleDeviceStatus = (st) => {
+      if (st) setDeviceLiveStatus(st);
+    };
+
+    const handleLivePunch = (p) => {
+      fetchSummary(true);
+      fetchLive(true);
+      if (activeTab === 'logs') fetchLogs(true);
+      if (activeTab === 'punches') fetchPunches(true);
+      if (p && p.message) {
+        setLivePunchToast({
+          message: p.message,
+          employeeName: p.employeeName,
+          punchTime: p.punchTime || new Date(),
+          id: Date.now()
+        });
+        setTimeout(() => setLivePunchToast(null), 6000);
+      }
+    };
+
+    if (socket) {
+      socket.on('data_updated', handleRealtimeUpdate);
+      socket.on('zk_device_status', handleDeviceStatus);
+      socket.on('zk_live_punch', handleLivePunch);
+    }
+    const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+    window.addEventListener('erp_data_updated', onCustomEvent);
+
+    return () => {
+      if (socket) {
+        socket.off('data_updated', handleRealtimeUpdate);
+        socket.off('zk_device_status', handleDeviceStatus);
+        socket.off('zk_live_punch', handleLivePunch);
+      }
+      window.removeEventListener('erp_data_updated', onCustomEvent);
+    };
+  }, [activeTab, logFromDate, logToDate, logStatus, logEmpId]);
+
+  useEffect(() => { if (activeTab === 'logs')    { fetchLogs();    } }, [activeTab, logFromDate, logToDate, logStatus, logEmpId, canViewAll, myEmployee]);
   useEffect(() => { if (activeTab === 'shifts' && canViewAll)  { fetchShifts();  } }, [activeTab, canViewAll]);
   useEffect(() => { if (activeTab === 'leaves')  { fetchLeaves();  } }, [activeTab, leaveStatus, canViewAll, myEmployee]);
-  useEffect(() => { if (activeTab === 'punches' && canViewAll) { fetchPunches(); } }, [activeTab, punchDate, punchUnmatchedOnly, canViewAll, myEmployee]);
-  useEffect(() => { if (activeTab === 'device' && canViewAll)  { fetchMappings(); fetchEmployees(); fetchUnmappedEnrolls(); } }, [activeTab, canViewAll]);
+  useEffect(() => { if (activeTab === 'punches' && canViewAll) { fetchPunches(); fetchMappings(); } }, [activeTab, punchDate, punchUnmatchedOnly, canViewAll, myEmployee]);
+  useEffect(() => { if (activeTab === 'device' && canViewAll)  { fetchMappings(); fetchEmployees(); fetchUnmappedEnrolls(); fetchShifts(); } }, [activeTab, canViewAll]);
 
   useEffect(() => {
     if (!canViewAll && (activeTab === 'shifts' || activeTab === 'punches' || activeTab === 'device')) {
@@ -417,7 +540,8 @@ const Attendance = ({ currentUser }) => {
   const handleProcess = async (date) => {
     setProcessing(true);
     try {
-      const r = await axios.post(`${API_BASE_URL}/api/attendance/process`, { date: date || logDate });
+      const targetDate = date || logToDate || logFromDate || todayStr();
+      const r = await axios.post(`${API_BASE_URL}/api/attendance/process`, { date: targetDate });
       alert(r.data.message);
       fetchLogs();
       fetchSummary();
@@ -523,12 +647,94 @@ const Attendance = ({ currentUser }) => {
   return (
     <div className="attendance-module">
       {/* Header */}
-      <div className="att-header">
-        <h1 className="att-header-title">
-          <span style={{ marginRight: 8 }}>👆</span>Attendance Management
-        </h1>
-        <p className="att-header-sub">ZKTech F8 Biometric Integration · Real-time Tracking</p>
+      <div className="att-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 className="att-header-title">
+            <span style={{ marginRight: 8 }}>👆</span>Attendance Management
+          </h1>
+          <p className="att-header-sub">ZKTech F8 Biometric Integration · Real-time Tracking</p>
+        </div>
+        {canViewAll && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {deviceLiveStatus?.connected ? (
+              <div
+                onClick={() => setActiveTab('device')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  background: '#ecfdf5',
+                  border: '1px solid #a7f3d0',
+                  color: '#047857',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}
+                title="Device is live connected. Auto-receiving punches in real time. Click to manage."
+              >
+                <span className="att-live-dot" style={{ width: 8, height: 8 }} />
+                <span>F8 Live: Connected ({deviceLiveStatus.ip})</span>
+              </div>
+            ) : (
+              <div
+                onClick={() => setActiveTab('device')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  color: '#64748b',
+                  fontSize: '0.8rem',
+                  fontWeight: 500,
+                  cursor: 'pointer'
+                }}
+                title="Device is offline. Click to connect."
+              >
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8' }} />
+                <span>F8 Device: Disconnected</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Live Punch Toast Notification */}
+      {livePunchToast && (
+        <div style={{
+          position: 'fixed',
+          top: 24,
+          right: 24,
+          zIndex: 9999,
+          background: '#065f46',
+          color: '#ffffff',
+          padding: '14px 20px',
+          borderRadius: 12,
+          boxShadow: '0 12px 28px rgba(0,0,0,0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          animation: 'fadeIn 0.25s ease-out',
+          border: '1px solid #34d399'
+        }}>
+          <span style={{ fontSize: '1.4rem' }}>⚡</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', letterSpacing: '0.01em' }}>Live Punch Detected</div>
+            <div style={{ fontSize: '0.8rem', color: '#a7f3d0', marginTop: 2 }}>{livePunchToast.message}</div>
+          </div>
+          <button
+            onClick={() => setLivePunchToast(null)}
+            style={{ background: 'transparent', border: 'none', color: '#a7f3d0', cursor: 'pointer', marginLeft: 12, fontSize: '1.1rem' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="att-tabs">
@@ -550,6 +756,7 @@ const Attendance = ({ currentUser }) => {
         <DashboardTab
           summary={summary}
           livePunches={livePunches}
+          mappings={mappings}
           loadingLive={loading.live}
           onRefresh={() => { fetchSummary(); fetchLive(); }}
           onProcess={() => handleProcess(todayStr())}
@@ -566,7 +773,8 @@ const Attendance = ({ currentUser }) => {
         <LogsTab
           logs={logs}
           loading={loading.logs}
-          logDate={logDate} setLogDate={setLogDate}
+          logFromDate={logFromDate} setLogFromDate={setLogFromDate}
+          logToDate={logToDate} setLogToDate={setLogToDate}
           logStatus={logStatus} setLogStatus={setLogStatus}
           logEmpId={logEmpId} setLogEmpId={setLogEmpId}
           employees={employees}
@@ -622,7 +830,7 @@ const Attendance = ({ currentUser }) => {
           setPunchDate={setPunchDate}
           punchUnmatchedOnly={punchUnmatchedOnly}
           setPunchUnmatchedOnly={setPunchUnmatchedOnly}
-          onRefresh={fetchPunches}
+          onRefresh={() => { fetchPunches(); fetchMappings(); }}
           onAddMapping={canEdit ? (enrollId) => setMappingModal({ enrollId: String(enrollId) }) : null}
           mappings={mappings}
         />
@@ -634,10 +842,16 @@ const Attendance = ({ currentUser }) => {
           mappings={mappings}
           loading={loading.mappings}
           employees={employees}
+          shifts={shifts}
           summary={summary}
           unmappedEnrolls={unmappedEnrolls}
-          onRefresh={() => { fetchMappings(); fetchUnmappedEnrolls(); }}
+          deviceLiveStatus={deviceLiveStatus}
+          onConnectLive={handleConnectLive}
+          onDisconnectLive={handleDisconnectLive}
+          connectingLive={connectingLive}
+          onRefresh={() => { fetchMappings(); fetchUnmappedEnrolls(); fetchShifts(); }}
           onAdd={canEdit ? (init) => setMappingModal(typeof init === 'object' && init !== null ? init : true) : null}
+          onEdit={canEdit ? (mapping) => setMappingModal(mapping) : null}
           onDelete={canEdit ? handleMappingDelete : null}
         />
       )}
@@ -668,6 +882,7 @@ const Attendance = ({ currentUser }) => {
       {mappingModal && (
         <MappingModal
           employees={employees}
+          shifts={shifts}
           initialData={typeof mappingModal === 'object' ? mappingModal : null}
           onSave={handleMappingSave}
           onClose={() => setMappingModal(null)}
@@ -687,7 +902,14 @@ const Attendance = ({ currentUser }) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Dashboard Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess, onQuickSync, syncingDevice, processing, canEdit, canViewAll }) => (
+const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefresh, onProcess, onQuickSync, syncingDevice, processing, canEdit, canViewAll }) => {
+  const mappingMap = useMemo(() => {
+    const map = new Map();
+    (mappings || []).forEach(m => map.set(Number(m.enrollId), m));
+    return map;
+  }, [mappings]);
+
+  return (
   <>
     {/* Warning: unmatched punches */}
     {canViewAll && summary.unmatchedPunches > 0 && (
@@ -786,7 +1008,7 @@ const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess,
         </div>
       </div>
       <div className="att-panel-body att-table-wrap">
-        {loadingLive ? (
+        {loadingLive && livePunches.length === 0 ? (
           <div style={{ padding: 24 }}>
             {[...Array(5)].map((_, i) => (
               <div key={i} className="att-skeleton" style={{ height: 36, marginBottom: 8, borderRadius: 8 }} />
@@ -804,6 +1026,8 @@ const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess,
               <tr>
                 <th>Time & Date</th>
                 <th>Enroll ID</th>
+                <th>ERP ID</th>
+                <th>Name</th>
                 <th>Type</th>
                 <th>Verify</th>
                 <th>Status</th>
@@ -812,6 +1036,9 @@ const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess,
             <tbody>
               {livePunches.map(p => {
                 const today = isTodayDate(p.punchTime);
+                const mapping = mappingMap.get(Number(p.enrollId));
+                const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
+                const empName = p.employeeName || mapping?.employeeName || '';
                 return (
                   <tr key={p._id}>
                     <td style={{ fontFamily: 'monospace' }}>
@@ -823,6 +1050,28 @@ const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess,
                       </div>
                     </td>
                     <td><span className="att-enroll-badge">{p.enrollId}</span></td>
+                    <td>
+                      {erpId ? (
+                        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', padding: '3px 8px', borderRadius: 6, fontSize: '0.82rem', border: '1px solid #dbeafe' }}>
+                          {erpId}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {empName ? (
+                        <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.88rem' }}>
+                          {empName}
+                        </div>
+                      ) : p.unmatched ? (
+                        <span style={{ color: '#dc2626', fontSize: '0.78rem', fontStyle: 'italic' }}>
+                          Unmapped Card
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>—</span>
+                      )}
+                    </td>
                     <td><PunchTypeBadge type={p.punchType} /></td>
                     <td><VerifyModeBadge mode={p.verifyMode} /></td>
                     <td>
@@ -839,22 +1088,47 @@ const DashboardTab = ({ summary, livePunches, loadingLive, onRefresh, onProcess,
       </div>
     </div>
   </>
-);
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Logs Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, logEmpId, setLogEmpId, employees, onRefresh, onProcess, processing, canEdit, canViewAll, onEdit }) => (
+const LogsTab = ({ logs, loading, logFromDate, setLogFromDate, logToDate, setLogToDate, logStatus, setLogStatus, logEmpId, setLogEmpId, employees, onRefresh, onProcess, processing, canEdit, canViewAll, onEdit }) => (
   <div className="att-panel">
     <div className="att-panel-header">
       <h2 className="att-panel-title">{canViewAll ? 'Attendance Logs' : 'My Attendance Logs'}</h2>
       <div className="att-controls">
-        <div className="att-date-wrap">
-          <CustomDatePicker
-            value={logDate}
-            onChange={e => setLogDate(e.target.value)}
-            compact={true}
-          />
+        <button
+          type="button"
+          className={`att-btn ${logFromDate === todayStr() && logToDate === todayStr() ? 'att-btn-primary' : 'att-btn-secondary'}`}
+          style={{ padding: '6px 12px', fontSize: '0.8rem', height: 40, borderRadius: 12 }}
+          onClick={() => {
+            setLogFromDate(todayStr());
+            setLogToDate(todayStr());
+          }}
+        >
+          Today
+        </button>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <div className="att-date-wrap" title="From Date">
+            <CustomDatePicker
+              placeholder="From Date"
+              value={logFromDate}
+              onChange={e => setLogFromDate(e.target.value)}
+              compact={true}
+            />
+          </div>
+          <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>to</span>
+          <div className="att-date-wrap" title="To Date">
+            <CustomDatePicker
+              placeholder="To Date"
+              value={logToDate}
+              onChange={e => setLogToDate(e.target.value)}
+              compact={true}
+              rightAlign={true}
+            />
+          </div>
         </div>
         {canViewAll && (
           <ERPSelect
@@ -879,9 +1153,9 @@ const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, 
           }))}
         />
         {canEdit && (
-          <button className="att-btn att-btn-primary" onClick={() => onProcess(logDate)} disabled={processing}>
+          <button className="att-btn att-btn-primary" onClick={() => onProcess(logToDate || logFromDate || todayStr())} disabled={processing}>
             <IcoRefresh />
-            <span>{processing ? 'Processing…' : 'Process This Date'}</span>
+            <span>{processing ? 'Processing…' : 'Process Date'}</span>
           </button>
         )}
         <button className="att-btn att-btn-secondary" onClick={onRefresh}>
@@ -891,15 +1165,21 @@ const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, 
       </div>
     </div>
     <div className="att-table-wrap">
-      {loading ? (
+      {loading && logs.length === 0 ? (
         <div style={{ padding: 24 }}>
           {[...Array(6)].map((_, i) => <div key={i} className="att-skeleton" style={{ height: 40, marginBottom: 8 }} />)}
         </div>
       ) : logs.length === 0 ? (
         <div className="att-empty">
           <IcoList />
-          <div className="att-empty-title">No records for this date</div>
-          <div className="att-empty-sub">Click "Process This Date" to compute attendance from device punches</div>
+          <div className="att-empty-title">
+            {logFromDate && logToDate && logFromDate !== logToDate
+              ? `No records between ${fmtDate(logFromDate)} and ${fmtDate(logToDate)}`
+              : (logFromDate || logToDate)
+                ? `No records for date: ${fmtDate(logFromDate || logToDate)}`
+                : 'No records found'}
+          </div>
+          <div className="att-empty-sub">Click "Process Date" to compute attendance from device punches</div>
         </div>
       ) : (
         <table className="att-table">
@@ -912,24 +1192,64 @@ const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, 
               <th>Hours</th>
               <th>OT</th>
               <th>Status</th>
+              <th>Shift</th>
               {onEdit && <th>Action</th>}
             </tr>
           </thead>
           <tbody>
-            {logs.map(log => (
-              <tr key={log._id}>
-                <td style={{ fontWeight: 600 }}>{log.employeeName || '—'}</td>
-                <td style={{ fontFamily: 'monospace', color: '#64748b' }}>{log.employeeEmpId || '—'}</td>
-                <td style={{ fontFamily: 'monospace' }}>{fmt12(log.firstPunchIn)}</td>
-                <td style={{ fontFamily: 'monospace' }}>{fmt12(log.lastPunchOut)}</td>
-                <td style={{ fontWeight: 600 }}>{log.totalHours ? `${log.totalHours}h` : '—'}</td>
-                <td style={{ color: log.overtimeHours > 0 ? '#d97706' : '#94a3b8' }}>
-                  {log.overtimeHours > 0 ? `+${log.overtimeHours}h` : '—'}
-                </td>
-                <td>
-                  <StatusBadge status={log.status} />
-                  {log.manualOverride && <span title={`Corrected by ${log.overriddenBy}`} style={{ marginLeft: 4, fontSize: '0.68rem', color: '#6366f1' }}>✎</span>}
-                </td>
+            {logs.map(log => {
+              const displayShift = log.shiftName
+                ? (/shift/i.test(log.shiftName) ? log.shiftName : `${log.shiftName} Shift`)
+                : '';
+
+              return (
+                <tr key={log._id}>
+                  <td>
+                    <div style={{ fontWeight: 600, color: '#0f172a' }}>{log.employeeName || '—'}</div>
+                    {logFromDate !== logToDate && log.date && (
+                      <div style={{ fontSize: '0.72rem', color: '#2563eb', marginTop: 2, fontWeight: 500, fontFamily: 'monospace' }}>
+                        📅 {fmtDate(log.date)}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ fontFamily: 'monospace', color: '#64748b' }}>{log.employeeEmpId || '—'}</td>
+                  <td style={{ fontFamily: 'monospace' }}>{fmt12(log.firstPunchIn)}</td>
+                  <td style={{ fontFamily: 'monospace' }}>{fmt12(log.lastPunchOut)}</td>
+                  <td style={{ fontWeight: 600 }}>{log.totalHours ? `${log.totalHours}h` : (log.status === 'PRESENT' || log.status === 'LATE' ? '0h' : '—')}</td>
+                  <td>
+                    {log.overtimeHours > 0 ? (
+                      <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-xs">
+                        +{log.overtimeHours}h
+                      </span>
+                    ) : (log.firstPunchIn || log.status === 'PRESENT' || log.status === 'LATE') ? (
+                      <span className="text-gray-400 font-mono text-xs">0h</span>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <StatusBadge status={log.status} lateMinutes={log.lateMinutes} />
+                    {log.manualOverride && <span title={`Corrected by ${log.overriddenBy}`} style={{ marginLeft: 4, fontSize: '0.68rem', color: '#6366f1' }}>✎</span>}
+                  </td>
+                  <td>
+                    {displayShift ? (
+                      <span style={{
+                        display: 'inline-block',
+                        fontSize: '0.75rem',
+                        color: '#047857',
+                        backgroundColor: '#f0fdf4',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontWeight: 500,
+                        border: '1px solid #bbf7d0',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {displayShift}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>—</span>
+                    )}
+                  </td>
                 {onEdit && (
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <div className="flex items-center space-x-1.5">
@@ -945,7 +1265,8 @@ const LogsTab = ({ logs, loading, logDate, setLogDate, logStatus, setLogStatus, 
                   </td>
                 )}
               </tr>
-            ))}
+            );
+          })}
           </tbody>
         </table>
       )}
@@ -1214,126 +1535,183 @@ const PunchesTab = ({
   punchUnmatchedOnly,
   setPunchUnmatchedOnly,
   onRefresh,
-  onAddMapping
-}) => (
-  <div className="att-panel">
-    <div className="att-panel-header">
-      <h2 className="att-panel-title">Raw Device Punches</h2>
-      <div className="att-controls" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          className={`att-btn ${!punchDate ? 'att-btn-primary' : 'att-btn-secondary'}`}
-          style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-          onClick={() => setPunchDate('')}
-        >
-          All Dates
-        </button>
-        <button
-          type="button"
-          className={`att-btn ${punchDate === todayStr() ? 'att-btn-primary' : 'att-btn-secondary'}`}
-          style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-          onClick={() => setPunchDate(todayStr())}
-        >
-          Today
-        </button>
-        <div className="att-date-wrap">
-          <CustomDatePicker
-            value={punchDate}
-            onChange={e => setPunchDate(e.target.value)}
-            compact={true}
-          />
+  onAddMapping,
+  mappings = []
+}) => {
+  const mappingMap = useMemo(() => {
+    const map = new Map();
+    (mappings || []).forEach(m => {
+      if (m.enrollId != null) {
+        map.set(Number(m.enrollId), m);
+      }
+    });
+    return map;
+  }, [mappings]);
+
+  return (
+    <div className="att-panel">
+      <div className="att-panel-header">
+        <h2 className="att-panel-title">Raw Device Punches</h2>
+        <div className="att-controls" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`att-btn ${!punchDate ? 'att-btn-primary' : 'att-btn-secondary'}`}
+            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+            onClick={() => setPunchDate('')}
+          >
+            All Dates
+          </button>
+          <button
+            type="button"
+            className={`att-btn ${punchDate === todayStr() ? 'att-btn-primary' : 'att-btn-secondary'}`}
+            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+            onClick={() => setPunchDate(todayStr())}
+          >
+            Today
+          </button>
+          <div className="att-date-wrap">
+            <CustomDatePicker
+              value={punchDate}
+              onChange={e => setPunchDate(e.target.value)}
+              compact={true}
+            />
+          </div>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, color: punchUnmatchedOnly ? '#dc2626' : '#64748b' }}>
+            <input
+              type="checkbox"
+              checked={punchUnmatchedOnly}
+              onChange={e => setPunchUnmatchedOnly(e.target.checked)}
+              style={{ width: 15, height: 15, cursor: 'pointer' }}
+            />
+            <span>Unmapped Only</span>
+          </label>
+          <button className="att-btn att-btn-secondary" onClick={onRefresh}>
+            <IcoRefresh />
+            <span>Refresh</span>
+          </button>
         </div>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, color: punchUnmatchedOnly ? '#dc2626' : '#64748b' }}>
-          <input
-            type="checkbox"
-            checked={punchUnmatchedOnly}
-            onChange={e => setPunchUnmatchedOnly(e.target.checked)}
-            style={{ width: 15, height: 15, cursor: 'pointer' }}
-          />
-          <span>Unmapped Only</span>
-        </label>
-        <button className="att-btn att-btn-secondary" onClick={onRefresh}>
-          <IcoRefresh />
-          <span>Refresh</span>
-        </button>
+      </div>
+      <div className="att-table-wrap">
+        {loading ? (
+          <div style={{ padding: 24 }}>
+            {[...Array(5)].map((_, i) => <div key={i} className="att-skeleton" style={{ height: 36, marginBottom: 8 }} />)}
+          </div>
+        ) : punches.length === 0 ? (
+          <div className="att-empty">
+            <IcoClock />
+            <div className="att-empty-title">{punchDate ? `No punches for date: ${punchDate}` : 'No punches found'}</div>
+            {punchDate && (
+              <div style={{ marginTop: 10 }}>
+                <button
+                  className="att-btn att-btn-secondary"
+                  style={{ fontSize: '0.8rem' }}
+                  onClick={() => setPunchDate('')}
+                >
+                  View Punches for All Dates
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <table className="att-table">
+            <thead>
+              <tr>
+                <th>Date & Time</th>
+                <th>Device ID</th>
+                <th>Enroll ID</th>
+                <th>ERP ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Verify</th>
+                <th>Linked</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {punches.map(p => {
+                const mapping = mappingMap.get(Number(p.enrollId));
+                const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
+                const empName = p.employeeName || mapping?.employeeName || '';
+                return (
+                  <tr key={p._id}>
+                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                      {new Date(p.punchTime).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka' })} {fmt12(p.punchTime)}
+                    </td>
+                    <td style={{ fontSize: '0.76rem', color: '#64748b' }}>{p.deviceId}</td>
+                    <td><span className="att-enroll-badge">{p.enrollId}</span></td>
+                    <td>
+                      {erpId ? (
+                        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', padding: '3px 8px', borderRadius: 6, fontSize: '0.82rem', border: '1px solid #dbeafe' }}>
+                          {erpId}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {empName ? (
+                        <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.88rem' }}>
+                          {empName}
+                        </div>
+                      ) : p.unmatched ? (
+                        <span style={{ color: '#dc2626', fontSize: '0.78rem', fontStyle: 'italic' }}>
+                          Unmapped Card
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>—</span>
+                      )}
+                    </td>
+                    <td><PunchTypeBadge type={p.punchType} /></td>
+                    <td><VerifyModeBadge mode={p.verifyMode} /></td>
+                    <td>{p.unmatched ? <span className="att-badge absent">⚠ Unmapped</span> : <span className="att-badge present">✓ Linked</span>}</td>
+                    <td>
+                      {p.unmatched && onAddMapping ? (
+                        <button
+                          className="att-btn att-btn-primary"
+                          style={{ padding: '3px 8px', fontSize: '0.74rem' }}
+                          onClick={() => onAddMapping(p.enrollId)}
+                        >
+                          + Link ID {p.enrollId}
+                        </button>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
-    <div className="att-table-wrap">
-      {loading ? (
-        <div style={{ padding: 24 }}>
-          {[...Array(5)].map((_, i) => <div key={i} className="att-skeleton" style={{ height: 36, marginBottom: 8 }} />)}
-        </div>
-      ) : punches.length === 0 ? (
-        <div className="att-empty">
-          <IcoClock />
-          <div className="att-empty-title">{punchDate ? `No punches for date: ${punchDate}` : 'No punches found'}</div>
-          {punchDate && (
-            <div style={{ marginTop: 10 }}>
-              <button
-                className="att-btn att-btn-secondary"
-                style={{ fontSize: '0.8rem' }}
-                onClick={() => setPunchDate('')}
-              >
-                View Punches for All Dates
-              </button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <table className="att-table">
-          <thead>
-            <tr>
-              <th>Date & Time</th>
-              <th>Device ID</th>
-              <th>Enroll ID</th>
-              <th>Type</th>
-              <th>Verify</th>
-              <th>Linked</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {punches.map(p => (
-              <tr key={p._id}>
-                <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                  {new Date(p.punchTime).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka' })} {fmt12(p.punchTime)}
-                </td>
-                <td style={{ fontSize: '0.76rem', color: '#64748b' }}>{p.deviceId}</td>
-                <td><span className="att-enroll-badge">{p.enrollId}</span></td>
-                <td><PunchTypeBadge type={p.punchType} /></td>
-                <td><VerifyModeBadge mode={p.verifyMode} /></td>
-                <td>{p.unmatched ? <span className="att-badge absent">⚠ Unmapped</span> : <span className="att-badge present">✓ Linked</span>}</td>
-                <td>
-                  {p.unmatched && onAddMapping ? (
-                    <button
-                      className="att-btn att-btn-primary"
-                      style={{ padding: '3px 8px', fontSize: '0.74rem' }}
-                      onClick={() => onAddMapping(p.enrollId)}
-                    >
-                      + Link ID {p.enrollId}
-                    </button>
-                  ) : (
-                    <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  </div>
-);
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Device / Mapping Tab — Multi-Method Integration Hub
 // ═══════════════════════════════════════════════════════════════════════════════
-const DeviceTab = ({ mappings, loading, employees, summary, unmappedEnrolls = [], onRefresh, onAdd, onDelete }) => {
+const DeviceTab = ({
+  mappings,
+  loading,
+  employees,
+  shifts = [],
+  summary,
+  unmappedEnrolls = [],
+  deviceLiveStatus,
+  onConnectLive,
+  onDisconnectLive,
+  connectingLive,
+  onRefresh,
+  onAdd,
+  onEdit,
+  onDelete
+}) => {
   const [activeMethod, setActiveMethod] = useState('lan'); // 'lan' | 'usb' | 'agent' | 'cloud'
   
   // LAN IP Sync state
-  const [deviceIp, setDeviceIp] = useState(() => localStorage.getItem('zk_device_ip') || '192.168.1.201');
-  const [devicePort, setDevicePort] = useState('4370');
+  const [deviceIp, setDeviceIp] = useState(() => localStorage.getItem('zk_device_ip') || '192.168.0.74');
+  const [devicePort, setDevicePort] = useState(() => localStorage.getItem('zk_device_port') || '4370');
   const [testingIp, setTestingIp] = useState(false);
   const [syncingIp, setSyncingIp] = useState(false);
   const [ipStatus, setIpStatus] = useState(null); // { type: 'success' | 'error' | 'info', message: '' }
@@ -1486,26 +1864,111 @@ const DeviceTab = ({ mappings, loading, employees, summary, unmappedEnrolls = []
                   style={{ width: '100%' }}
                 />
               </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="att-btn att-btn-secondary"
                   onClick={handleTestIp}
-                  disabled={testingIp || syncingIp}
+                  disabled={testingIp || syncingIp || connectingLive}
                 >
                   {testingIp ? 'Testing...' : 'Test Connection'}
                 </button>
+
+                {deviceLiveStatus?.connected ? (
+                  <button
+                    type="button"
+                    className="att-btn"
+                    style={{
+                      background: '#ef4444',
+                      color: '#ffffff',
+                      border: '1px solid #dc2626',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontWeight: 600,
+                      boxShadow: '0 1px 3px rgba(239, 68, 68, 0.25)'
+                    }}
+                    onClick={onDisconnectLive}
+                    disabled={connectingLive}
+                    title="Disconnect from device"
+                  >
+                    <span style={{ fontSize: '0.85rem' }}>⏹</span>
+                    <span>{connectingLive ? 'Disconnecting...' : 'Disconnect'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="att-btn"
+                    style={{
+                      background: '#10b981',
+                      color: '#ffffff',
+                      border: '1px solid #059669',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontWeight: 600,
+                      boxShadow: '0 1px 3px rgba(16, 185, 129, 0.25)'
+                    }}
+                    onClick={() => {
+                      localStorage.setItem('zk_device_ip', deviceIp);
+                      localStorage.setItem('zk_device_port', devicePort);
+                      onConnectLive(deviceIp, devicePort);
+                    }}
+                    disabled={connectingLive || testingIp || syncingIp}
+                    title="Connect and stay connected to automatically receive new punches"
+                  >
+                    <span style={{ fontSize: '0.85rem' }}>⚡</span>
+                    <span>{connectingLive ? 'Connecting...' : 'Connect (Stay Online)'}</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   className="att-btn att-btn-primary"
                   onClick={handleSyncIp}
-                  disabled={syncingIp || testingIp}
+                  disabled={syncingIp || testingIp || connectingLive}
+                  title="Manual on-demand sync of all punches"
                 >
                   <IcoRefresh className={syncingIp ? "animate-spin" : ""} />
                   <span>{syncingIp ? 'Fetching Punches...' : 'Sync Now'}</span>
                 </button>
               </div>
             </div>
+
+            {deviceLiveStatus?.connected && (
+              <div style={{
+                marginTop: 14,
+                padding: '12px 16px',
+                background: '#f0fdf4',
+                border: '1px solid #86efac',
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span className="att-live-dot" style={{ width: 10, height: 10, background: '#16a34a', boxShadow: '0 0 0 3px rgba(22, 163, 74, 0.25)' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#14532d', fontSize: '0.88rem' }}>
+                      Device Live Connected: {deviceLiveStatus.ip}:{deviceLiveStatus.port}
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: '#166534', marginTop: 2 }}>
+                      Auto-receiving real-time biometric punches & auto-syncing every 10s · Session punches captured: <strong>{deviceLiveStatus.totalPunchesSession || 0}</strong>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#15803d', fontFamily: 'monospace' }}>
+                    Connected at: {deviceLiveStatus.connectedAt ? new Date(deviceLiveStatus.connectedAt).toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka' }) : '—'}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#166534', marginTop: 2 }}>
+                    Last Sync: {deviceLiveStatus.lastSyncAt ? new Date(deviceLiveStatus.lastSyncAt).toLocaleTimeString('en-US', { timeZone: 'Asia/Dhaka' }) : 'Just now'}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {ipStatus && (
               <div className={`att-alert-box ${ipStatus.type}`}>
@@ -1759,9 +2222,10 @@ const DeviceTab = ({ mappings, loading, employees, summary, unmappedEnrolls = []
                   <th>ZK Enroll ID</th>
                   <th>Employee Name</th>
                   <th>ERP ID</th>
+                  <th>Shift</th>
                   <th>Device</th>
                   <th>Notes</th>
-                  {onDelete && <th>Action</th>}
+                  {(onEdit || onDelete) && <th>Action</th>}
                 </tr>
               </thead>
               <tbody>
@@ -1769,20 +2233,45 @@ const DeviceTab = ({ mappings, loading, employees, summary, unmappedEnrolls = []
                   <tr key={m._id}>
                     <td><span className="att-enroll-badge">{m.enrollId}</span></td>
                     <td style={{ fontWeight: 600 }}>{m.employeeName || '—'}</td>
-                    <td style={{ fontFamily: 'monospace', color: '#3b82f6' }}>{m.employeeEmpId || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', color: '#3b82f6' }}>
+                      {m.employeeEmpId || (!m.employeeId ? (
+                        <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-sans font-medium">
+                          Card / Custom
+                        </span>
+                      ) : '—')}
+                    </td>
+                    <td>
+                      {m.shiftName ? (
+                        <span className="att-badge present" style={{ fontSize: '0.74rem' }}>{m.shiftName}</span>
+                      ) : (
+                        <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>Default</span>
+                      )}
+                    </td>
                     <td style={{ fontSize: '0.76rem', color: '#64748b' }}>{m.deviceId}</td>
                     <td style={{ fontSize: '0.76rem', color: '#94a3b8' }}>{m.notes || '—'}</td>
-                    {onDelete && (
+                    {(onEdit || onDelete) && (
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <div className="flex items-center space-x-1.5">
-                          <button
-                            className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center"
-                            onClick={() => onDelete(m._id)}
-                            title="Remove Mapping"
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
-                          >
-                            <TrashIcon className="w-5 h-5" />
-                          </button>
+                          {onEdit && (
+                            <button
+                              className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center cursor-pointer"
+                              onClick={() => onEdit(m)}
+                              title="Edit Mapping"
+                              style={{ border: 'none', background: 'transparent' }}
+                            >
+                              <EditIcon className="w-4 h-4" />
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center cursor-pointer"
+                              onClick={() => onDelete(m._id)}
+                              title="Remove Mapping"
+                              style={{ border: 'none', background: 'transparent' }}
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     )}
@@ -1983,19 +2472,98 @@ const LeaveModal = ({ mode = 'add', data = null, employees, onSave, onClose, can
 };
 
 // Mapping Modal
-const MappingModal = ({ employees, initialData, onSave, onClose }) => {
+const MappingModal = ({ employees = [], shifts = [], initialData, onSave, onClose }) => {
   const [form, setForm] = useState({
     enrollId: initialData?.enrollId ? String(initialData.enrollId) : '',
     employeeId: initialData?.employeeId || '',
+    employeeName: initialData?.employeeName || '',
+    employeeEmpId: initialData?.employeeEmpId || '',
     deviceId: initialData?.deviceId || 'F8-DEFAULT',
+    shiftId: initialData?.shiftId || '',
+    shiftName: initialData?.shiftName || '',
     notes: initialData?.notes || ''
   });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const handleEmpChange = (id) => {
-    const emp = employees.find(e => e._id === id);
-    set('employeeId', id);
-    if (emp) { setForm(p => ({ ...p, employeeId: id, employeeName: emp.name || '', employeeEmpId: emp.employeeId || '' })); }
+  // Shift list state (passed from parent or fetched)
+  const [shiftList, setShiftList] = useState(shifts || []);
+  useEffect(() => {
+    if (shifts && shifts.length > 0) {
+      setShiftList(shifts);
+    } else {
+      axios.get(`${API_BASE_URL}/api/attendance/shifts`)
+        .then(res => setShiftList(res.data || []))
+        .catch(err => console.warn('Could not load shifts:', err));
+    }
+  }, [shifts]);
+
+  // Editable Employee Search & Dropdown State
+  const initialEmpDisplay = useMemo(() => {
+    if (initialData?.employeeName) {
+      return `${initialData.employeeName}${initialData.employeeEmpId ? ` (${initialData.employeeEmpId})` : ''}`;
+    }
+    if (initialData?.employeeId) {
+      const match = (employees || []).find(e => e._id === initialData.employeeId);
+      if (match) return `${match.name} (${match.employeeId})`;
+    }
+    return '';
+  }, [initialData, employees]);
+
+  const [empSearch, setEmpSearch] = useState(initialEmpDisplay);
+  const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
+  const empDropdownRef = useRef(null);
+
+  // Close employee dropdown on click outside
+  useEffect(() => {
+    if (!empDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (empDropdownRef.current && !empDropdownRef.current.contains(e.target)) {
+        setEmpDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [empDropdownOpen]);
+
+  // Filter employees based on search
+  const filteredEmployees = useMemo(() => {
+    if (!empSearch.trim()) return employees;
+    const q = empSearch.toLowerCase().trim();
+    return (employees || []).filter(emp =>
+      (emp.name && emp.name.toLowerCase().includes(q)) ||
+      (emp.employeeId && String(emp.employeeId).toLowerCase().includes(q)) ||
+      (emp.department && emp.department.toLowerCase().includes(q)) ||
+      (emp.designation && emp.designation.toLowerCase().includes(q))
+    );
+  }, [employees, empSearch]);
+
+  const handleSelectEmployee = (emp) => {
+    if (!emp) {
+      setForm(p => ({ ...p, employeeId: '', employeeName: '', employeeEmpId: '' }));
+      setEmpSearch('');
+      return;
+    }
+    // Check if this employee already has an assigned shift in shiftList
+    const existingShift = shiftList.find(s => (s.applicableTo || []).some(id => String(id) === String(emp._id)));
+    setForm(p => ({
+      ...p,
+      employeeId: emp._id,
+      employeeName: emp.name || '',
+      employeeEmpId: emp.employeeId || '',
+      shiftId: p.shiftId || existingShift?._id || '',
+      shiftName: p.shiftName || existingShift?.shiftName || ''
+    }));
+    setEmpSearch(`${emp.name} (${emp.employeeId})`);
+    setEmpDropdownOpen(false);
+  };
+
+  const handleShiftSelect = (sId) => {
+    const selectedShift = shiftList.find(s => String(s._id) === String(sId));
+    setForm(p => ({
+      ...p,
+      shiftId: sId || '',
+      shiftName: selectedShift ? selectedShift.shiftName : ''
+    }));
   };
 
   if (typeof document === 'undefined' || !document.body) return null;
@@ -2010,22 +2578,161 @@ const MappingModal = ({ employees, initialData, onSave, onClose }) => {
         <div className="att-form-grid">
           <div className="att-form-field">
             <label className="att-form-label">ZK Enroll ID (Device Number)</label>
-            <input type="number" className="att-form-input" value={form.enrollId} onChange={e => set('enrollId', e.target.value)} placeholder="e.g. 42" min={1} />
+            <input
+              type="number"
+              className="att-form-input"
+              value={form.enrollId}
+              onChange={e => set('enrollId', e.target.value)}
+              placeholder="e.g. 42"
+              min={1}
+            />
           </div>
           <div className="att-form-field">
             <label className="att-form-label">Device ID (optional)</label>
-            <input className="att-form-input" value={form.deviceId} onChange={e => set('deviceId', e.target.value)} placeholder="F8-DEFAULT" />
-          </div>
-          <div className="att-form-field" style={{ gridColumn: '1 / -1' }}>
-            <label className="att-form-label">ERP Employee</label>
-            <ERPSelect
-              value={form.employeeId}
-              onChange={e => handleEmpChange(e.target.value)}
-              placeholder="— Select Employee —"
-              className="w-full"
-              options={employees.map(e => ({ value: e._id, label: `${e.name} (${e.employeeId})` }))}
+            <input
+              className="att-form-input"
+              value={form.deviceId}
+              onChange={e => set('deviceId', e.target.value)}
+              placeholder="F8-DEFAULT"
             />
           </div>
+
+          {/* Editable ERP Employee / Card Name Field with Dropdown Button */}
+          <div className="att-form-field" style={{ gridColumn: '1 / -1' }}>
+            <label className="att-form-label flex items-center justify-between">
+              <span>ERP Employee or Card Name <span className="text-red-500">*</span></span>
+              {form.employeeEmpId ? (
+                <span className="text-[11px] text-blue-600 font-mono font-bold">
+                  ID: {form.employeeEmpId}
+                </span>
+              ) : empSearch?.trim() ? (
+                <span className="text-[11px] text-amber-600 font-medium">
+                  Card / Custom Name
+                </span>
+              ) : null}
+            </label>
+            <div className="relative" ref={empDropdownRef}>
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  className="att-form-input pr-16 font-medium"
+                  value={empSearch}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setEmpSearch(val);
+                    setEmpDropdownOpen(true);
+                    const exact = (employees || []).find(emp =>
+                      emp.name?.toLowerCase().trim() === val.toLowerCase().trim() ||
+                      String(emp.employeeId).toLowerCase().trim() === val.toLowerCase().trim() ||
+                      `${emp.name} (${emp.employeeId})`.toLowerCase().trim() === val.toLowerCase().trim()
+                    );
+                    if (exact) {
+                      handleSelectEmployee(exact);
+                    } else {
+                      setForm(p => ({ ...p, employeeName: val, employeeId: '', employeeEmpId: '' }));
+                    }
+                  }}
+                  onFocus={() => setEmpDropdownOpen(true)}
+                  placeholder="Type employee name or card name (e.g. Card)..."
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-gray-400">
+                  {empSearch && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectEmployee(null)}
+                      className="p-1 hover:text-red-500 rounded cursor-pointer"
+                      title="Clear"
+                    >
+                      <XIcon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEmpDropdownOpen(prev => !prev)}
+                    className="p-1 hover:text-blue-600 rounded cursor-pointer transition-transform"
+                    title="Toggle employee list"
+                  >
+                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${empDropdownOpen ? 'rotate-180 text-blue-600' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Floating Dropdown List */}
+              {empDropdownOpen && (
+                <div className="absolute left-0 top-full mt-1.5 w-full z-50 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-56 overflow-y-auto py-1 animate-in fade-in duration-150">
+                  {filteredEmployees.length === 0 ? (
+                    <div className="px-4 py-3 text-xs text-gray-500 text-center">
+                      No matching employee found in ERP.
+                      <div className="mt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm(p => ({ ...p, employeeName: empSearch.trim(), employeeId: '', employeeEmpId: '' }));
+                            setEmpDropdownOpen(false);
+                          }}
+                          className="text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
+                        >
+                          Use "{empSearch.trim()}" as Card / Custom Name
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    filteredEmployees.map(emp => {
+                      const isSelected = String(form.employeeId) === String(emp._id);
+                      return (
+                        <div
+                          key={emp._id}
+                          onClick={() => handleSelectEmployee(emp)}
+                          className={`px-3.5 py-2 text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                            isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-slate-50 text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-900">{emp.name}</span>
+                            <span className="font-mono text-[11px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                              {emp.employeeId}
+                            </span>
+                            {(emp.designation || emp.department) && (
+                              <span className="text-gray-400 text-[11px]">
+                                · {emp.designation || emp.department}
+                              </span>
+                            )}
+                          </div>
+                          {isSelected && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Shift with Dropdown Button */}
+          <div className="att-form-field" style={{ gridColumn: '1 / -1' }}>
+            <label className="att-form-label flex items-center justify-between">
+              <span>Shift (optional)</span>
+              {form.shiftId && (
+                <span className="text-[11px] text-emerald-600 font-bold">
+                  {shiftList.find(s => String(s._id) === String(form.shiftId))?.startTime} – {shiftList.find(s => String(s._id) === String(form.shiftId))?.endTime}
+                </span>
+              )}
+            </label>
+            <ERPSelect
+              value={form.shiftId}
+              onChange={e => handleShiftSelect(e.target.value)}
+              placeholder="— Select Shift (or Default) —"
+              className="w-full"
+              options={[
+                { value: '', label: '— Default Shift (Auto) —' },
+                ...shiftList.map(s => ({
+                  value: s._id,
+                  label: `${s.shiftName} (${s.startTime} – ${s.endTime}${s.isDefault ? ' · Default' : ''})`
+                }))
+              ]}
+            />
+          </div>
+
           <div className="att-form-field" style={{ gridColumn: '1 / -1' }}>
             <label className="att-form-label">Notes (optional)</label>
             <input className="att-form-input" value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Any notes about this mapping" />
@@ -2033,7 +2740,27 @@ const MappingModal = ({ employees, initialData, onSave, onClose }) => {
         </div>
         <div className="att-form-actions">
           <button className="att-btn att-btn-secondary" onClick={onClose}><IcoX />Cancel</button>
-          <button className="att-btn att-btn-primary" disabled={!form.enrollId || !form.employeeId} onClick={() => onSave(form)}><IcoCheck />Save Mapping</button>
+          <button
+            className="att-btn att-btn-primary"
+            disabled={!form.enrollId || (!form.employeeId && !form.employeeName?.trim() && !empSearch?.trim())}
+            onClick={() => {
+              const nameToSave = (form.employeeName || empSearch || '').trim();
+              if (!form.enrollId) {
+                alert('Enroll ID is required');
+                return;
+              }
+              if (!form.employeeId && !nameToSave) {
+                alert('Please enter an employee or card name');
+                return;
+              }
+              onSave({
+                ...form,
+                employeeName: nameToSave
+              });
+            }}
+          >
+            <IcoCheck />Save Mapping
+          </button>
         </div>
       </div>
     </div>,
@@ -2047,6 +2774,8 @@ const EditLogModal = ({ log, onSave, onClose }) => {
     status: log.status || 'PRESENT',
     firstPunchIn: log.firstPunchIn ? new Date(log.firstPunchIn).toISOString().slice(0,16) : '',
     lastPunchOut: log.lastPunchOut ? new Date(log.lastPunchOut).toISOString().slice(0,16) : '',
+    overtimeHours: log.overtimeHours !== undefined ? log.overtimeHours : 0,
+    lateMinutes: log.lateMinutes !== undefined ? log.lateMinutes : 0,
     remarks: log.remarks || '',
   });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -2057,7 +2786,9 @@ const EditLogModal = ({ log, onSave, onClose }) => {
     <div className="att-modal-overlay" onClick={onClose}>
       <div className="att-modal" onClick={e => e.stopPropagation()}>
         <h3 className="att-modal-title">Manual Correction — {log.employeeName}</h3>
-        <div style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: 16 }}>{log.date}</div>
+        <div style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: 16 }}>
+          {log.date}{log.shiftName ? ` · ${log.shiftName} Shift` : ''}
+        </div>
         <div className="att-form-grid">
           <div className="att-form-field" style={{ gridColumn: '1 / -1' }}>
             <label className="att-form-label">Status</label>
@@ -2076,7 +2807,32 @@ const EditLogModal = ({ log, onSave, onClose }) => {
             <label className="att-form-label">Last Punch Out</label>
             <input type="datetime-local" className="att-form-input" value={form.lastPunchOut} onChange={e => set('lastPunchOut', e.target.value)} />
           </div>
-          <div className="att-form-field" style={{ gridColumn: '1 / -1' }}>
+          <div className="att-form-field">
+            <label className="att-form-label">Overtime Hours (OT)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              className="att-form-input font-semibold text-amber-700"
+              value={form.overtimeHours}
+              onChange={e => set('overtimeHours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
+              placeholder="0.0"
+            />
+          </div>
+          {form.status === 'LATE' && (
+            <div className="att-form-field">
+              <label className="att-form-label">Late Duration (Minutes)</label>
+              <input
+                type="number"
+                min="0"
+                className="att-form-input font-semibold text-amber-700"
+                value={form.lateMinutes}
+                onChange={e => set('lateMinutes', e.target.value === '' ? 0 : parseInt(e.target.value, 10))}
+                placeholder="e.g. 25"
+              />
+            </div>
+          )}
+          <div className="att-form-field" style={{ gridColumn: form.status === 'LATE' ? 'span 1' : '1 / -1' }}>
             <label className="att-form-label">Remarks</label>
             <input className="att-form-input" value={form.remarks} onChange={e => set('remarks', e.target.value)} placeholder="Reason for correction" />
           </div>
