@@ -87,32 +87,25 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
 
             if (isFirstApprover) return false;
-        }
 
-        // Users with full/final approve authority can always approve pending requests
-        if (hasFullApprovePerm) {
-            return true;
-        }
-
-        // CASE A: Entry created by Sales Manager (Status: Pending Approval)
-        // Requires 2nd/Final approval (Head of Sales / Incharge / Admin / secondApprove)
-        if (isCreatorSalesManager && !smApproved) {
-            if (currentUserRole === 'sales manager') return false;
-            return currentUserRole === 'head of sales' || currentUserRole === 'incharge' || hasSecondApprovePerm || canApprove;
-        }
-
-        // CASE B: 1st Approval Step for Data Entry / Account Manager entries (Status: Pending 1st Approval)
-        if (!smApproved) {
-            return hasFirstApprovePerm;
-        }
-
-        // CASE C: 2nd Approval Step for Data Entry / Account Manager entries (Status: Pending 2nd Approval)
-        if (smApproved) {
+            // Stage 2: 2nd / Final Approval
+            if (userModulePerms && typeof userModulePerms.secondApprove === 'boolean') {
+                return userModulePerms.secondApprove === true;
+            }
             if (currentUserRole === 'sales manager') return false;
             return currentUserRole === 'incharge' || currentUserRole === 'head of sales' || currentUserRole === 'accounts manager' || currentUserRole === 'account manager' || hasSecondApprovePerm || canApprove;
         }
 
-        return false;
+        // Stage 1: 1st Approval Step (smApproved is false)
+        // If current user is pure 2nd approver without 1st approve permission, they cannot approve stage 1
+        if (userModulePerms && typeof userModulePerms.firstApprove === 'boolean') {
+            return userModulePerms.firstApprove === true;
+        }
+        if (currentUserRole === 'sales manager') return true;
+        if (canApproveFirst) return true;
+        if (currentUserRole === 'incharge' || currentUserRole === 'head of sales') return true;
+        if (hasSecondApprovePerm && !hasFirstApprovePerm) return false;
+        return canApprove;
     };
 
     const canUserActOnGroup = (group) => {
@@ -151,18 +144,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         return (myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName));
     };
     const getStatusBadgeText = (group) => {
+        if (!group) return '';
+        if (group.isEdited === true) return 'Edit Requested';
         if (group.status === 'Requested') {
-            const entryRole = (group.items?.[0]?.entryByRole || '').toLowerCase();
-            const smApproved = group.items?.[0]?.smApproved === true;
-            const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-
-            if (isCreatorAccountsOrDataEntry) {
-                return smApproved ? 'Pending 2nd Approval' : 'Pending 1st Approval';
-            }
-            if (entryRole === 'sales manager') {
-                return 'Pending Approval';
-            }
-            return 'Requested';
+            const smApproved = group.items?.[0]?.smApproved === true || group.smApproved === true;
+            return smApproved ? 'Pending 2nd Approval' : 'Pending 1st Approval';
         }
         return group.status || 'Accepted';
     };
@@ -762,10 +748,18 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     let pStatus = payment.status;
                     let pIsEdited = payment.isEdited;
                     let pSmApproved = payment.smApproved;
+                    let pSmApprovedBy = payment.smApprovedBy;
+                    let pSmApprovedByName = payment.smApprovedByName;
+                    let pApprovedBy = payment.approvedBy;
+                    let pApprovedByName = payment.approvedByName;
                     if (recent && (now - recent.time < 30000)) {
                         pStatus = recent.status;
                         pIsEdited = recent.isEdited;
                         if (recent.smApproved !== undefined) pSmApproved = recent.smApproved;
+                        if (recent.smApprovedBy !== undefined) pSmApprovedBy = recent.smApprovedBy;
+                        if (recent.smApprovedByName !== undefined) pSmApprovedByName = recent.smApprovedByName;
+                        if (recent.approvedBy !== undefined) pApprovedBy = recent.approvedBy;
+                        if (recent.approvedByName !== undefined) pApprovedByName = recent.approvedByName;
                     }
 
                     allPayments.push({
@@ -773,6 +767,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         status: pStatus,
                         isEdited: pIsEdited,
                         smApproved: pSmApproved,
+                        smApprovedBy: pSmApprovedBy,
+                        smApprovedByName: pSmApprovedByName,
+                        approvedBy: pApprovedBy,
+                        approvedByName: pApprovedByName,
                         customerId: customer._id,
                         customerName: customer.customerName,
                         companyName: customer.companyName,
@@ -1275,16 +1273,20 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             return false;
         };
 
-        const entryRole = (paymentGroup.items?.[0]?.entryByRole || item.entryByRole || '').toLowerCase();
-        const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-        const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !hasFullApprovePerm;
-
-        const statusToSet = isSMApprovalStep ? item.status : (newStatus === 'Rejected' ? 'Rejected' : 'Accepted');
+        const isSMApprovalStep = !smApproved && newStatus === 'Accepted';
+        const statusToSet = newStatus === 'Rejected' ? 'Rejected' : (isSMApprovalStep ? item.status : 'Accepted');
         const nowMs = Date.now();
+        const currentUsername = currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin';
+        const currentName = currentUser?.name || currentUser?.username || 'Admin';
+
         groupItemIds.forEach(id => {
             recentStatusUpdatesRef.current.set(String(id), {
                 status: statusToSet,
-                smApproved: isSMApprovalStep ? true : true,
+                smApproved: isSMApprovalStep ? true : smApproved,
+                smApprovedBy: isSMApprovalStep ? currentUsername : (item.smApprovedBy || paymentGroup.smApprovedBy),
+                smApprovedByName: isSMApprovalStep ? currentName : (item.smApprovedByName || paymentGroup.smApprovedByName),
+                approvedBy: !isSMApprovalStep && newStatus === 'Accepted' ? currentUsername : item.approvedBy,
+                approvedByName: !isSMApprovalStep && newStatus === 'Accepted' ? currentName : item.approvedByName,
                 isEdited: false,
                 time: nowMs
             });
@@ -1292,7 +1294,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         if (groupReceiptNo) {
             recentStatusUpdatesRef.current.set(groupReceiptNo, {
                 status: statusToSet,
-                smApproved: isSMApprovalStep ? true : true,
+                smApproved: isSMApprovalStep ? true : smApproved,
+                smApprovedBy: isSMApprovalStep ? currentUsername : (item.smApprovedBy || paymentGroup.smApprovedBy),
+                smApprovedByName: isSMApprovalStep ? currentName : (item.smApprovedByName || paymentGroup.smApprovedByName),
+                approvedBy: !isSMApprovalStep && newStatus === 'Accepted' ? currentUsername : item.approvedBy,
+                approvedByName: !isSMApprovalStep && newStatus === 'Accepted' ? currentName : item.approvedByName,
                 isEdited: false,
                 time: nowMs
             });
@@ -1308,14 +1314,25 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             } else {
                 return (prev || []).map(p => {
                     if (isItemMatch(p)) {
-                        return {
-                            ...p,
-                            status: isSMApprovalStep ? p.status : 'Accepted',
-                            smApproved: true,
-                            isEdited: false,
-                            approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                            approvedByName: currentUser?.name || currentUser?.username || 'Admin'
-                        };
+                        if (isSMApprovalStep) {
+                            return {
+                                ...p,
+                                status: p.status,
+                                smApproved: true,
+                                smApprovedBy: currentUsername,
+                                smApprovedByName: currentName,
+                                isEdited: false
+                            };
+                        } else {
+                            return {
+                                ...p,
+                                status: 'Accepted',
+                                smApproved: true,
+                                isEdited: false,
+                                approvedBy: currentUsername,
+                                approvedByName: currentName
+                            };
+                        }
                     }
                     return p;
                 });
@@ -1359,8 +1376,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                             return {
                                 ...rest,
                                 smApproved: true,
-                                smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                                smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                                smApprovedBy: currentUsername,
+                                smApprovedByName: currentName
                             };
                         } else {
                             return {
@@ -1368,8 +1385,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                 status: 'Accepted',
                                 smApproved: true,
                                 isEdited: false,
-                                approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                                approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                                approvedBy: currentUsername,
+                                approvedByName: currentName
                             };
                         }
                     }
@@ -1438,8 +1455,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                             return {
                                 ...rest,
                                 smApproved: true,
-                                smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                                smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                                smApprovedBy: currentUsername,
+                                smApprovedByName: currentName
                             };
                         } else {
                             return {
@@ -1447,8 +1464,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                 status: 'Accepted',
                                 smApproved: true,
                                 isEdited: false,
-                                approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                                approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                                approvedBy: currentUsername,
+                                approvedByName: currentName
                             };
                         }
                     }
@@ -1593,39 +1610,60 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             const acceptItemIds = new Set();
             validGroups.forEach(g => (g.items || []).forEach(i => { if (i.id) acceptItemIds.add(String(i.id).trim()); }));
 
-            const nowMs = Date.now();
-            acceptItemIds.forEach(id => {
-                recentStatusUpdatesRef.current.set(String(id), {
-                    status: 'Accepted',
-                    smApproved: true,
-                    isEdited: false,
-                    time: nowMs
-                });
-            });
-            acceptGroupReceipts.forEach(rc => {
-                recentStatusUpdatesRef.current.set(rc, {
-                    status: 'Accepted',
-                    smApproved: true,
-                    isEdited: false,
-                    time: nowMs
+            // Mark recent status updates for deduplication/protection against racing GET requests
+            const nowBulkMs = Date.now();
+            const currentUsername = currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin';
+            const currentName = currentUser?.name || currentUser?.username || 'Admin';
+
+            validGroups.forEach(g => {
+                const groupSmApproved = g.smApproved === true || g.items?.[0]?.smApproved === true;
+                const statusForThisGroup = groupSmApproved ? 'Accepted' : 'Requested';
+                const rcpt = String(g.receiptNo || '').trim().toUpperCase();
+                if (rcpt) {
+                    recentStatusUpdatesRef.current.set(rcpt, {
+                        status: statusForThisGroup,
+                        smApproved: true,
+                        smApprovedBy: !groupSmApproved ? currentUsername : g.items?.[0]?.smApprovedBy,
+                        smApprovedByName: !groupSmApproved ? currentName : g.items?.[0]?.smApprovedByName,
+                        approvedBy: groupSmApproved ? currentUsername : undefined,
+                        approvedByName: groupSmApproved ? currentName : undefined,
+                        isEdited: false,
+                        time: nowBulkMs
+                    });
+                }
+                (g.items || []).forEach(item => {
+                    const id = String(item.id || '').trim();
+                    if (id) {
+                        recentStatusUpdatesRef.current.set(id, {
+                            status: statusForThisGroup,
+                            smApproved: true,
+                            smApprovedBy: !groupSmApproved ? currentUsername : item.smApprovedBy,
+                            smApprovedByName: !groupSmApproved ? currentName : item.smApprovedByName,
+                            approvedBy: groupSmApproved ? currentUsername : undefined,
+                            approvedByName: groupSmApproved ? currentName : undefined,
+                            isEdited: false,
+                            time: nowBulkMs
+                        });
+                    }
                 });
             });
 
+            // Instant optimistic update
             setPayments(prev => (prev || []).map(p => {
                 const pId = String(p.id || '').trim();
                 const pReceipt = String(p.receiptNo || '').trim().toUpperCase();
-                if ((pId && acceptItemIds.has(pId)) || (pReceipt && acceptGroupReceipts.has(pReceipt))) {
-                    const entryRole = (p.entryByRole || '').toLowerCase();
+                const matches = (pId && acceptItemIds.has(pId)) || (pReceipt && acceptGroupReceipts.has(pReceipt));
+                if (matches) {
                     const smApproved = p.smApproved === true;
-                    const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                    const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !hasFullApprovePerm;
+                    const isSMApprovalStep = !smApproved;
 
                     if (isSMApprovalStep) {
                         return {
                             ...p,
                             smApproved: true,
-                            smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                            smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            smApprovedBy: currentUsername,
+                            smApprovedByName: currentName,
+                            isEdited: false
                         };
                     } else {
                         const smApprovedBy = String(p.smApprovedBy || '').toLowerCase().trim();
@@ -1640,8 +1678,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                             status: 'Accepted',
                             smApproved: true,
                             isEdited: false,
-                            approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                            approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            approvedBy: currentUsername,
+                            approvedByName: currentName
                         };
                     }
                 }
@@ -1683,17 +1721,16 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         const matchesReceipt = pReceipt && targetReceiptNos.has(pReceipt);
                         if (matchesId || matchesReceipt) {
                             const { originalData, ...rest } = p;
-                            const entryRole = (p.entryByRole || '').toLowerCase();
                             const smApproved = p.smApproved === true;
-                            const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                            const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !hasFullApprovePerm;
+                            const isSMApprovalStep = !smApproved;
 
                             if (isSMApprovalStep) {
                                 return {
                                     ...rest,
                                     smApproved: true,
-                                    smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                                    smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                                    smApprovedBy: currentUsername,
+                                    smApprovedByName: currentName,
+                                    isEdited: false
                                 };
                             } else {
                                 const smApprovedBy = String(p.smApprovedBy || '').toLowerCase().trim();
@@ -1708,8 +1745,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                     status: 'Accepted',
                                     smApproved: true,
                                     isEdited: false,
-                                    approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                                    approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                                    approvedBy: currentUsername,
+                                    approvedByName: currentName
                                 };
                             }
                         }
@@ -3173,7 +3210,13 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                 Edit Requested
                                                             </span>
                                                         ) : (
-                                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${group.status === 'Requested' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'}`}>
+                                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                                                                group.status === 'Requested' 
+                                                                    ? (getStatusBadgeText(group) === 'Pending 2nd Approval'
+                                                                        ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                                        : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                                                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                                                            }`}>
                                                                 {getStatusBadgeText(group)}
                                                             </span>
                                                         )}
@@ -3193,14 +3236,14 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                             ✎ {getEditedByName(group.editedBy, group.editedByName)}
                                                                         </span>
                                                                     )}
-                                                                {group.items?.[0]?.smApprovedByName && (
-                                                                    <span className="text-[10px] text-blue-600 font-medium" title="1st Approval (SM)">
-                                                                        ✓ {getFirstNameFromIdentifier(group.items[0].smApprovedByName || group.items[0].smApprovedBy)}
+                                                                {(group.items?.[0]?.smApprovedByName || group.items?.[0]?.smApprovedBy || group.smApprovedByName || group.smApprovedBy) && (
+                                                                    <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
+                                                                        ✓ {getFirstNameFromIdentifier(group.items?.[0]?.smApprovedByName || group.items?.[0]?.smApprovedBy || group.smApprovedByName || group.smApprovedBy)}
                                                                     </span>
                                                                 )}
-                                                                {group.items?.[0]?.approvedByName && (
+                                                                {(group.items?.[0]?.approvedByName || group.items?.[0]?.approvedBy || group.approvedByName || group.approvedBy) && (
                                                                     <span className="text-[10px] text-emerald-600 font-semibold" title="Final Approval">
-                                                                        ✓✓ {getFirstNameFromIdentifier(group.items[0].approvedByName || group.items[0].approvedBy)}
+                                                                        ✓✓ {getFirstNameFromIdentifier(group.items?.[0]?.approvedByName || group.items?.[0]?.approvedBy || group.approvedByName || group.approvedBy)}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -3229,7 +3272,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                     <button
                                                                         onClick={() => handleStatusUpdate(group, 'Accepted')}
                                                                         className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
-                                                                        title="Accept Collection"
+                                                                        title={group.items?.[0]?.smApproved === true || group.smApproved === true ? "Accept (Final Approval)" : "Accept (1st Approval)"}
                                                                     >
                                                                         <CheckIcon className="w-5 h-5" />
                                                                     </button>
@@ -3386,6 +3429,21 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                     <span className="font-bold text-blue-600">
                                                         ৳{Number(totalAmount).toLocaleString('en-IN')}
                                                     </span>
+                                                    {group.isEdited === true ? (
+                                                        <span className="text-[9px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200/60 rounded font-bold">
+                                                            Edit Requested
+                                                        </span>
+                                                    ) : (
+                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                                            group.status === 'Requested'
+                                                                ? (group.items?.[0]?.smApproved === true || group.smApproved === true
+                                                                    ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                                    : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                                                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                                                        }`}>
+                                                            {getStatusBadgeText(group)}
+                                                        </span>
+                                                    )}
                                                     {groupDiscount > 0 && (
                                                         <span className="text-[9px] px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200/60 rounded font-bold">
                                                             Discount ({Number(groupDiscount).toLocaleString('en-IN')})
@@ -3454,14 +3512,14 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                                         ✎ {getEditedByName(group.editedBy, group.editedByName)}
                                                                                     </span>
                                                                                 )}
-                                                                            {group.items?.[0]?.smApprovedByName && (
-                                                                                <span className="text-[10px] text-blue-600 font-medium" title="1st Approval (SM)">
-                                                                                    ✓ {getFirstNameFromIdentifier(group.items[0].smApprovedByName || group.items[0].smApprovedBy)}
+                                                                            {(group.items?.[0]?.smApprovedByName || group.items?.[0]?.smApprovedBy || group.smApprovedByName || group.smApprovedBy) && (
+                                                                                <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
+                                                                                    ✓ {getFirstNameFromIdentifier(group.items?.[0]?.smApprovedByName || group.items?.[0]?.smApprovedBy || group.smApprovedByName || group.smApprovedBy)}
                                                                                 </span>
                                                                             )}
-                                                                            {group.items?.[0]?.approvedByName && (
+                                                                            {(group.items?.[0]?.approvedByName || group.items?.[0]?.approvedBy || group.approvedByName || group.approvedBy) && (
                                                                                 <span className="text-[10px] text-emerald-600 font-semibold" title="Final Approval">
-                                                                                    ✓✓ {getFirstNameFromIdentifier(group.items[0].approvedByName || group.items[0].approvedBy)}
+                                                                                    ✓✓ {getFirstNameFromIdentifier(group.items?.[0]?.approvedByName || group.items?.[0]?.approvedBy || group.approvedByName || group.approvedBy)}
                                                                                 </span>
                                                                             )}
                                                                         </div>
@@ -3478,7 +3536,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                                 <EditIcon className="w-4 h-4" /> Edit
                                                                             </button>
                                                                         )}
-                                                                        {canDelete && (
+                                                                        {group.status !== 'Requested' && !group.isEdited && canDelete && (
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); handleDeletePayment(item); }}
                                                                                 className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-4 hover:bg-red-100 transition-colors"
@@ -3492,7 +3550,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                         ))}
 
                                                         {/* Card-level actions */}
-                                                        <div className="mobile-card-actions pt-3 border-t border-gray-100 flex gap-2">
+                                                        <div className="mobile-card-actions pt-3 border-t border-gray-100 flex flex-wrap gap-2">
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
@@ -3502,6 +3560,32 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                             >
                                                                 <FileTextIcon className="w-4 h-4" /> Money Receipt
                                                             </button>
+                                                            {((group.status === 'Requested' ? showRequestedApprovalButtons(group) : (group.isEdited === true && (canApproveEditRequest || canApprove)))) && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleStatusUpdate(group, 'Accepted');
+                                                                        }}
+                                                                        className="flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold px-3 transition-colors shadow-sm"
+                                                                        title={group.items?.[0]?.smApproved === true || group.smApproved === true ? "Accept (Final Approval)" : "Accept (1st Approval)"}
+                                                                    >
+                                                                        <CheckIcon className="w-4 h-4" />
+                                                                        <span>{group.items?.[0]?.smApproved === true || group.smApproved === true ? "Accept (2nd)" : "Accept (1st)"}</span>
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleStatusUpdate(group, 'Rejected');
+                                                                        }}
+                                                                        className="flex items-center justify-center gap-1.5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold px-3 transition-colors shadow-sm"
+                                                                        title="Reject Collection"
+                                                                    >
+                                                                        <XIcon className="w-4 h-4" />
+                                                                        <span>Reject</span>
+                                                                    </button>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>

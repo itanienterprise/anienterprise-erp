@@ -86,32 +86,25 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
 
             if (isFirstApprover) return false;
-        }
 
-        // Users with full/final approval authority can always approve pending requests
-        if (hasFullApprovePerm) {
-            return true;
-        }
-
-        // CASE A: Entry created by Sales Manager (Status: Pending Approval)
-        // Requires 2nd/Final approval (Head of Sales / Incharge / Admin / secondApprove)
-        if (isCreatorSalesManager && !smApproved) {
-            if (currentUserRole === 'sales manager') return false;
-            return currentUserRole === 'head of sales' || currentUserRole === 'incharge' || hasSecondApprovePerm || canApprove;
-        }
-
-        // CASE B: 1st Approval Step for Data Entry / Account Manager entries (Status: Pending 1st Approval)
-        if (!smApproved) {
-            return hasFirstApprovePerm;
-        }
-
-        // CASE C: 2nd Approval Step for Data Entry / Account Manager entries (Status: Pending 2nd Approval)
-        if (smApproved) {
+            // Stage 2: 2nd / Final Approval
+            if (userModulePerms && typeof userModulePerms.secondApprove === 'boolean') {
+                return userModulePerms.secondApprove === true;
+            }
             if (currentUserRole === 'sales manager') return false;
             return currentUserRole === 'incharge' || currentUserRole === 'head of sales' || currentUserRole === 'accounts manager' || currentUserRole === 'account manager' || hasSecondApprovePerm || canApprove;
         }
 
-        return false;
+        // Stage 1: 1st Approval Step (smApproved is false)
+        // If current user is pure 2nd approver without 1st approve permission, they cannot approve stage 1
+        if (userModulePerms && typeof userModulePerms.firstApprove === 'boolean') {
+            return userModulePerms.firstApprove === true;
+        }
+        if (currentUserRole === 'sales manager') return true;
+        if (canApproveFirst) return true;
+        if (currentUserRole === 'incharge' || currentUserRole === 'head of sales') return true;
+        if (hasSecondApprovePerm && !hasFirstApprovePerm) return false;
+        return canApprove;
     };
 
     const canUserActOnGroup = (group) => {
@@ -151,18 +144,11 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
     };
 
     const getStatusBadgeText = (group) => {
+        if (!group) return '';
+        if (group.isEdited === true) return 'Edit Requested';
         if (group.status === 'Requested') {
-            const entryRole = (group.items?.[0]?.entryByRole || '').toLowerCase();
-            const smApproved = group.items?.[0]?.smApproved === true;
-            const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-            
-            if (isCreatorAccountsOrDataEntry) {
-                return smApproved ? 'Pending 2nd Approval' : 'Pending 1st Approval';
-            }
-            if (entryRole === 'sales manager') {
-                return 'Pending Approval';
-            }
-            return 'Requested';
+            const smApproved = group.items?.[0]?.smApproved === true || group.smApproved === true;
+            return smApproved ? 'Pending 2nd Approval' : 'Pending 1st Approval';
         }
         return group.status || 'Accepted';
     };
@@ -759,10 +745,18 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                     let pStatus = payment.status;
                     let pIsEdited = payment.isEdited;
                     let pSmApproved = payment.smApproved;
+                    let pSmApprovedBy = payment.smApprovedBy;
+                    let pSmApprovedByName = payment.smApprovedByName;
+                    let pApprovedBy = payment.approvedBy;
+                    let pApprovedByName = payment.approvedByName;
                     if (recent && (now - recent.time < 30000)) {
                         pStatus = recent.status;
                         pIsEdited = recent.isEdited;
                         if (recent.smApproved !== undefined) pSmApproved = recent.smApproved;
+                        if (recent.smApprovedBy !== undefined) pSmApprovedBy = recent.smApprovedBy;
+                        if (recent.smApprovedByName !== undefined) pSmApprovedByName = recent.smApprovedByName;
+                        if (recent.approvedBy !== undefined) pApprovedBy = recent.approvedBy;
+                        if (recent.approvedByName !== undefined) pApprovedByName = recent.approvedByName;
                     }
 
                     allPayments.push({
@@ -770,6 +764,10 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                         status: pStatus,
                         isEdited: pIsEdited,
                         smApproved: pSmApproved,
+                        smApprovedBy: pSmApprovedBy,
+                        smApprovedByName: pSmApprovedByName,
+                        approvedBy: pApprovedBy,
+                        approvedByName: pApprovedByName,
                         customerId: customer._id,
                         customerName: customer.customerName,
                         companyName: customer.companyName,
@@ -1257,16 +1255,20 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             return false;
         };
 
-        const entryRole = (paymentGroup.items?.[0]?.entryByRole || item.entryByRole || '').toLowerCase();
-        const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-        const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !hasFullApprovePerm;
-
-        const statusToSet = isSMApprovalStep ? item.status : (newStatus === 'Rejected' ? 'Rejected' : 'Accepted');
+        const isSMApprovalStep = !smApproved && newStatus === 'Accepted';
+        const statusToSet = newStatus === 'Rejected' ? 'Rejected' : (isSMApprovalStep ? item.status : 'Accepted');
         const nowMs = Date.now();
+        const currentUsername = currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin';
+        const currentName = currentUser?.name || currentUser?.username || 'Admin';
+
         groupItemIds.forEach(id => {
             recentStatusUpdatesRef.current.set(String(id), {
                 status: statusToSet,
-                smApproved: isSMApprovalStep ? true : true,
+                smApproved: isSMApprovalStep ? true : smApproved,
+                smApprovedBy: isSMApprovalStep ? currentUsername : (item.smApprovedBy || paymentGroup.smApprovedBy),
+                smApprovedByName: isSMApprovalStep ? currentName : (item.smApprovedByName || paymentGroup.smApprovedByName),
+                approvedBy: !isSMApprovalStep && newStatus === 'Accepted' ? currentUsername : item.approvedBy,
+                approvedByName: !isSMApprovalStep && newStatus === 'Accepted' ? currentName : item.approvedByName,
                 isEdited: false,
                 time: nowMs
             });
@@ -1274,7 +1276,11 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
         if (groupReceiptNo) {
             recentStatusUpdatesRef.current.set(groupReceiptNo, {
                 status: statusToSet,
-                smApproved: isSMApprovalStep ? true : true,
+                smApproved: isSMApprovalStep ? true : smApproved,
+                smApprovedBy: isSMApprovalStep ? currentUsername : (item.smApprovedBy || paymentGroup.smApprovedBy),
+                smApprovedByName: isSMApprovalStep ? currentName : (item.smApprovedByName || paymentGroup.smApprovedByName),
+                approvedBy: !isSMApprovalStep && newStatus === 'Accepted' ? currentUsername : item.approvedBy,
+                approvedByName: !isSMApprovalStep && newStatus === 'Accepted' ? currentName : item.approvedByName,
                 isEdited: false,
                 time: nowMs
             });
@@ -1290,14 +1296,25 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             } else {
                 return (prev || []).map(p => {
                     if (isItemMatch(p)) {
-                        return {
-                            ...p,
-                            status: isSMApprovalStep ? p.status : 'Accepted',
-                            smApproved: true,
-                            isEdited: false,
-                            approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                            approvedByName: currentUser?.name || currentUser?.username || 'Admin'
-                        };
+                        if (isSMApprovalStep) {
+                            return {
+                                ...p,
+                                status: p.status,
+                                smApproved: true,
+                                smApprovedBy: currentUsername,
+                                smApprovedByName: currentName,
+                                isEdited: false
+                            };
+                        } else {
+                            return {
+                                ...p,
+                                status: 'Accepted',
+                                smApproved: true,
+                                isEdited: false,
+                                approvedBy: currentUsername,
+                                approvedByName: currentName
+                            };
+                        }
                     }
                     return p;
                 });
@@ -1576,20 +1593,39 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
 
             // Mark recent status updates for deduplication/protection against racing GET requests
             const nowBulkMs = Date.now();
-            acceptItemIds.forEach(id => {
-                recentStatusUpdatesRef.current.set(String(id), {
-                    status: 'Accepted',
-                    smApproved: true,
-                    isEdited: false,
-                    time: nowBulkMs
-                });
-            });
-            acceptGroupReceipts.forEach(rcpt => {
-                recentStatusUpdatesRef.current.set(rcpt, {
-                    status: 'Accepted',
-                    smApproved: true,
-                    isEdited: false,
-                    time: nowBulkMs
+            const currentUsername = currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin';
+            const currentName = currentUser?.name || currentUser?.username || 'Admin';
+
+            validGroups.forEach(g => {
+                const groupSmApproved = g.smApproved === true || g.items?.[0]?.smApproved === true;
+                const statusForThisGroup = groupSmApproved ? 'Accepted' : 'Requested';
+                const rcpt = String(g.receiptNo || '').trim().toUpperCase();
+                if (rcpt) {
+                    recentStatusUpdatesRef.current.set(rcpt, {
+                        status: statusForThisGroup,
+                        smApproved: true,
+                        smApprovedBy: !groupSmApproved ? currentUsername : g.items?.[0]?.smApprovedBy,
+                        smApprovedByName: !groupSmApproved ? currentName : g.items?.[0]?.smApprovedByName,
+                        approvedBy: groupSmApproved ? currentUsername : undefined,
+                        approvedByName: groupSmApproved ? currentName : undefined,
+                        isEdited: false,
+                        time: nowBulkMs
+                    });
+                }
+                (g.items || []).forEach(item => {
+                    const id = String(item.id || '').trim();
+                    if (id) {
+                        recentStatusUpdatesRef.current.set(id, {
+                            status: statusForThisGroup,
+                            smApproved: true,
+                            smApprovedBy: !groupSmApproved ? currentUsername : item.smApprovedBy,
+                            smApprovedByName: !groupSmApproved ? currentName : item.smApprovedByName,
+                            approvedBy: groupSmApproved ? currentUsername : undefined,
+                            approvedByName: groupSmApproved ? currentName : undefined,
+                            isEdited: false,
+                            time: nowBulkMs
+                        });
+                    }
                 });
             });
 
@@ -1599,17 +1635,16 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 const pReceipt = String(p.receiptNo || '').trim().toUpperCase();
                 const matches = (pId && acceptItemIds.has(pId)) || (pReceipt && acceptGroupReceipts.has(pReceipt));
                 if (matches) {
-                    const entryRole = (p.entryByRole || '').toLowerCase();
                     const smApproved = p.smApproved === true;
-                    const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                    const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !hasFullApprovePerm;
+                    const isSMApprovalStep = !smApproved;
 
                     if (isSMApprovalStep) {
                         return {
                             ...p,
                             smApproved: true,
-                            smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                            smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            smApprovedBy: currentUsername,
+                            smApprovedByName: currentName,
+                            isEdited: false
                         };
                     } else {
                         const smApprovedBy = String(p.smApprovedBy || '').toLowerCase().trim();
@@ -1624,8 +1659,8 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                             status: 'Accepted',
                             smApproved: true,
                             isEdited: false,
-                            approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                            approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            approvedBy: currentUsername,
+                            approvedByName: currentName
                         };
                     }
                 }
@@ -1668,17 +1703,16 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                     const matchesReceipt = pReceipt && targetReceiptNos.has(pReceipt);
                     if (matchesId || matchesReceipt) {
                         const { originalData, ...rest } = p;
-                        const entryRole = (p.entryByRole || '').toLowerCase();
                         const smApproved = p.smApproved === true;
-                        const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                        const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !hasFullApprovePerm;
+                        const isSMApprovalStep = !smApproved;
 
                         if (isSMApprovalStep) {
                             return {
                                 ...rest,
                                 smApproved: true,
-                                smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                                smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                                smApprovedBy: currentUsername,
+                                smApprovedByName: currentName,
+                                isEdited: false
                             };
                         } else {
                             const smApprovedBy = String(p.smApprovedBy || '').toLowerCase().trim();
@@ -1693,8 +1727,8 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                 status: 'Accepted',
                                 smApproved: true,
                                 isEdited: false,
-                                approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                                approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                                approvedBy: currentUsername,
+                                approvedByName: currentName
                             };
                         }
                     }
@@ -1729,6 +1763,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             window.dispatchEvent(new CustomEvent('erp_data_updated', {
                 detail: { module: 'customers', action: 'update' }
             }));
+            refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error performing bulk accept:', error);
             setConfirmModalConfig({
@@ -1862,7 +1897,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             if (addNotification) {
                 await addNotification(
                     'Bulk Pay To Customer Rejected',
-                    `${dateStr} | ${timeStr} | ${actorName} bulk rejected ${validGroups.length} payment collection request(s)`,
+                    `${dateStr} | ${timeStr} | ${actorName} bulk rejected ${validGroups.length} payout request(s)`,
                     ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
                     [],
                     true,
@@ -2540,108 +2575,112 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             )}
 
             {!showAddModal && (
-                <div className="bg-white/60 backdrop-blur-xl border border-white/50 rounded-2xl shadow-sm overflow-hidden">
-                    {/* Top Floating Bulk Action Bar */}
+                <div className="space-y-4">
+                    {/* Bulk Action Bar */}
                     {selectedItems.size > 0 && (
-                        <div className="bulk-action-bar-container animate-in slide-in-from-top duration-200">
-                            <div className="bulk-action-bar flex items-center justify-between gap-4 bg-white/95 backdrop-blur border border-blue-100 rounded-2xl shadow-xl px-5 py-3.5 mb-4">
-                                <div className="flex items-center gap-3">
-                                    <span className="flex items-center justify-center w-7 h-7 bg-blue-600 text-white rounded-full text-xs font-bold shadow-sm">
-                                        {selectedItems.size}
-                                    </span>
-                                    <span className="text-sm font-semibold text-gray-700">Item(s) Selected</span>
-                                    <button
-                                        onClick={() => setSelectedItems(new Set())}
-                                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold hover:underline cursor-pointer ml-1"
-                                    >
-                                        Deselect All
-                                    </button>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={handleBulkAccept}
-                                        disabled={isSubmitting}
-                                        className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-                                    >
-                                        <CheckIcon className="w-4 h-4" />
-                                        <span>Accept Selected</span>
-                                    </button>
-                                    <button
-                                        onClick={handleBulkReject}
-                                        disabled={isSubmitting}
-                                        className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-                                    >
-                                        <XIcon className="w-4 h-4" />
-                                        <span>Reject Selected</span>
-                                    </button>
-                                </div>
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4 animate-in fade-in duration-200">
+                            <div className="flex items-center gap-3">
+                                <span className="inline-flex items-center justify-center bg-blue-600 text-white font-extrabold text-xs px-3 py-1 rounded-full shadow-sm">
+                                    {selectedItems.size} Selected
+                                </span>
+                                <span className="text-xs font-semibold text-gray-700">
+                                    Pay To Customer entries selected
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                    onClick={handleBulkAccept}
+                                    disabled={isSubmitting}
+                                    className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                                    title="Accept all selected payout requests"
+                                >
+                                    <CheckIcon className="w-4 h-4" />
+                                    <span>Bulk Accept ({selectedItems.size})</span>
+                                </button>
+                                <button
+                                    onClick={handleBulkReject}
+                                    disabled={isSubmitting}
+                                    className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-red-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                                    title="Reject all selected payout requests"
+                                >
+                                    <XIcon className="w-4 h-4" />
+                                    <span>Bulk Reject ({selectedItems.size})</span>
+                                </button>
+                                <button
+                                    onClick={() => setSelectedItems(new Set())}
+                                    className="px-3.5 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
+                                >
+                                    Deselect All
+                                </button>
                             </div>
                         </div>
                     )}
 
-                    <div className="sale-mgmt-table-container">
+                    <div className="bg-white/60 backdrop-blur-xl border border-white/50 rounded-2xl shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="sale-mgmt-table hidden md:table">
-                            <thead>
-                                <tr>
-                                    {selectedItems.size > 0 && (
-                                        <th className="sale-mgmt-th w-10 text-center">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectableGroups.length > 0 && selectableGroups.every(g => selectedItems.has(g.key))}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) {
-                                                        setSelectedItems(new Set(selectableGroups.map(g => g.key)));
-                                                    } else {
-                                                        setSelectedItems(new Set());
-                                                    }
-                                                }}
-                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                            />
+                                <thead>
+                                    <tr>
+                                        {selectedItems.size > 0 && (
+                                            <th className="sale-mgmt-th w-10 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectableGroups.length > 0 && selectableGroups.every(g => selectedItems.has(g.key))}
+                                                    disabled={selectableGroups.length === 0}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedItems(new Set(selectableGroups.map(g => g.key)));
+                                                        } else {
+                                                            setSelectedItems(new Set());
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                                />
+                                            </th>
+                                        )}
+                                        <th className="sale-mgmt-th w-12 text-center">SL</th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
+                                            <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
-                                    )}
-                                    <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
-                                        <div className="flex items-center">Date {renderSortIcon('date')}</div>
-                                    </th>
-                                    <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('receiptNo')}>
-                                        <div className="flex items-center">Receipt No {renderSortIcon('receiptNo')}</div>
-                                    </th>
-                                    <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('customerName')}>
-                                        <div className="flex items-center">Party {renderSortIcon('customerName')}</div>
-                                    </th>
-                                    <th className="sale-mgmt-th">Location</th>
-                                    <th className="sale-mgmt-th">Payment Method</th>
-                                    <th className="sale-mgmt-th">Bank Name</th>
-                                    <th className="sale-mgmt-th">Branch</th>
-                                    <th className="sale-mgmt-th">Account Number</th>
-                                    <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('amount')}>
-                                        <div className="flex items-center justify-center">Amount {renderSortIcon('amount')}</div>
-                                    </th>
-                                    <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
-                                        <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
-                                    </th>
-                                    {canShowEntryBy && (
-                                        <th className="sale-mgmt-th text-center">Entry By</th>
-                                    )}
-                                    <th className="sale-mgmt-th text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {isLoading ? (
-                                    Array(5).fill(0).map((_, i) => (
-                                        <tr key={i} className="animate-pulse">
-                                            <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center">
-                                                <div className="flex flex-col items-center gap-2">
-                                                    <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
-                                                        <DollarSignIcon className="w-6 h-6 text-blue-500" />
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('receiptNo')}>
+                                            <div className="flex items-center">Receipt No {renderSortIcon('receiptNo')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('customerName')}>
+                                            <div className="flex items-center">Party {renderSortIcon('customerName')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th">Location</th>
+                                        <th className="sale-mgmt-th">Payment Method</th>
+                                        <th className="sale-mgmt-th">Bank Name</th>
+                                        <th className="sale-mgmt-th">Branch</th>
+                                        <th className="sale-mgmt-th">Account Number</th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('amount')}>
+                                            <div className="flex items-center justify-center">Amount {renderSortIcon('amount')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
+                                            <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
+                                        </th>
+                                        {canShowEntryBy && (
+                                            <th className="sale-mgmt-th text-center">Entry By</th>
+                                        )}
+                                        <th className="sale-mgmt-th text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {isLoading ? (
+                                        Array(5).fill(0).map((_, i) => (
+                                            <tr key={i} className="animate-pulse">
+                                                <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 12 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center">
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
+                                                            <DollarSignIcon className="w-6 h-6 text-blue-500" />
+                                                        </div>
+                                                        <p className="text-gray-500 font-medium">Loading payout history...</p>
                                                     </div>
-                                                    <p className="text-gray-500 font-medium">Loading payout history...</p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : displayedGroups.length > 0 ? (
-                                    displayedGroups.map((group) => {
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : displayedGroups.length > 0 ? (
+                                        displayedGroups.map((group, index) => {
                                         const isMultiple = group.items.length > 1;
                                         const isExpanded = expandedRows.has(group.key);
                                         const totalAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
@@ -2678,8 +2717,8 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                 className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle select-none ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''} ${selectedItems.has(group.key) ? 'bg-blue-50/70 font-medium' : ''} ${highlightId && ((group.receiptNo && String(group.receiptNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) || (group.ids && group.ids.some(id => String(id) === String(highlightId)))) ? "notif-row-highlight" : ""}`}
                                                 ref={el => { if (group.receiptNo) rowRefs.current[group.receiptNo] = el; }}
                                                     style={highlightId && ((group.receiptNo && String(group.receiptNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) || (group.ids && group.ids.some(id => String(id) === String(highlightId)))) ? { borderLeft: '5px solid #f59e0b' } : undefined}
-                                            >
-                                                {selectedItems.size > 0 && (
+                                                >
+                                                    {selectedItems.size > 0 && (
                                                     <td className="px-3 py-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>
                                                         {canAct ? (
                                                             <input
@@ -2697,10 +2736,13 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                             />
                                                         ) : (
-                                                            <span className="text-gray-300 text-xs select-none">—</span>
+                                                            <span className="text-gray-300 text-xs select-none" title="Not available for approval by you">—</span>
                                                         )}
                                                     </td>
                                                 )}
+                                                <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center whitespace-nowrap`}>
+                                                    <div className="text-xs font-bold text-gray-500">{index + 1}</div>
+                                                </td>
                                                 <td className="px-3 py-4 whitespace-nowrap">
                                                     <div className="text-sm font-medium text-gray-600 leading-tight">{formatDate(group.date)}</div>
                                                 </td>
@@ -2798,7 +2840,13 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                             Edit Requested
                                                         </span>
                                                     ) : (
-                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${group.status === 'Requested' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'}`}>
+                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                                                            group.status === 'Requested'
+                                                                ? (group.items?.[0]?.smApproved === true || group.smApproved === true
+                                                                    ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                                    : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                                                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                                                        }`}>
                                                             {getStatusBadgeText(group)}
                                                         </span>
                                                     )}
@@ -2818,20 +2866,20 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                                     ✎ {getEditedByName(group.editedBy, group.editedByName)}
                                                                 </span>
                                                             )}
-                                                            {group.items?.[0]?.smApprovedByName && (
-                                                                <span className="text-[10px] text-blue-600 font-medium" title="1st Approval (SM)">
-                                                                    ✓ {getFirstNameFromIdentifier(group.items[0].smApprovedByName || group.items[0].smApprovedBy)}
+                                                            {(group.items?.[0]?.smApprovedByName || group.items?.[0]?.smApprovedBy || group.smApprovedByName || group.smApprovedBy) && (
+                                                                <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
+                                                                    ✓ {getFirstNameFromIdentifier(group.items?.[0]?.smApprovedByName || group.items?.[0]?.smApprovedBy || group.smApprovedByName || group.smApprovedBy)}
                                                                 </span>
                                                             )}
-                                                            {group.items?.[0]?.approvedByName && (
+                                                            {(group.items?.[0]?.approvedByName || group.items?.[0]?.approvedBy || group.approvedByName || group.approvedBy) && (
                                                                 <span className="text-[10px] text-emerald-600 font-semibold" title="Final Approval">
-                                                                    ✓✓ {getFirstNameFromIdentifier(group.items[0].approvedByName || group.items[0].approvedBy)}
+                                                                    ✓✓ {getFirstNameFromIdentifier(group.items?.[0]?.approvedByName || group.items?.[0]?.approvedBy || group.approvedByName || group.approvedBy)}
                                                                 </span>
                                                             )}
                                                         </div>
                                                     </td>
                                                 )}
-                                                <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                                <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center`} onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-center gap-1.5">
                                                         <button
                                                             onClick={() => handleGenerateReceipt(group.items[0], totalAmount, group.items)}
@@ -2840,40 +2888,40 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                         >
                                                             <FileTextIcon className="w-5 h-5" />
                                                         </button>
-                                                        {(group.status === 'Requested' ? showRequestedApprovalButtons(group) : (group.isEdited && canApproveEditRequest)) && (
+                                                        {(canEdit || (group.status === 'Requested' && canEditBeforeApproval(group))) && (
+                                                            <button
+                                                                onClick={() => handleEditInitiation(group.items[0])}
+                                                                className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                title="Edit Receipt"
+                                                            >
+                                                                <EditIcon className="w-5 h-5" />
+                                                            </button>
+                                                        )}
+                                                        {((group.status === 'Requested' ? showRequestedApprovalButtons(group) : (group.isEdited === true && (canApproveEditRequest || canApprove)))) && (
                                                             <>
                                                                 <button
                                                                     onClick={() => handleStatusUpdate(group, 'Accepted')}
                                                                     className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
-                                                                    title="Accept"
+                                                                    title={group.items?.[0]?.smApproved === true || group.smApproved === true ? "Accept (Final Approval)" : "Accept (1st Approval)"}
                                                                 >
                                                                     <CheckIcon className="w-5 h-5" />
                                                                 </button>
                                                                 <button
                                                                     onClick={() => handleStatusUpdate(group, 'Rejected')}
                                                                     className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                                                    title="Reject"
+                                                                    title="Reject Payout"
                                                                 >
                                                                     <XIcon className="w-5 h-5" />
                                                                 </button>
                                                             </>
                                                         )}
-                                                        {(canEdit || (group.status === 'Requested' && canEditBeforeApproval(group))) && (
-                                                            <button
-                                                                onClick={() => handleEditInitiation(group.items[0])}
-                                                                className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                                                                title="Edit"
-                                                            >
-                                                                <EditIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        {canDelete && (
+                                                        {group.status !== 'Requested' && !group.isEdited && canDelete && (
                                                             <button
                                                                 onClick={() => handleDeletePayment(group.items[0])}
                                                                 className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                                                title="Delete"
+                                                                title="Delete Receipt"
                                                             >
-                                                                <TrashIcon className="w-4 h-4" />
+                                                                <TrashIcon className="w-5 h-5" />
                                                             </button>
                                                         )}
                                                     </div>
@@ -2883,7 +2931,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11} className="px-6 py-12 text-center">
+                                        <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 12 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center gap-2">
                                                 <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
                                                     <SearchIcon className="w-6 h-6 text-gray-400" />
@@ -2920,6 +2968,293 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                         </table>
                         </div>
                         <TableScrollNav className="hidden md:flex" count={displayedGroups.length} />
+
+                        {/* Mobile Card View */}
+                        <div className="block md:hidden px-1 py-4 space-y-3">
+                            {isLoading ? (
+                                Array(3).fill(0).map((_, i) => (
+                                    <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-xl p-4 space-y-3">
+                                        <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                                        <div className="h-6 bg-gray-200 rounded w-full"></div>
+                                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                                    </div>
+                                ))
+                            ) : displayedGroups.length > 0 ? (
+                                displayedGroups.map((group) => {
+                                    const isExpanded = expandedMobileCards === group.key;
+                                    const paidAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                                    const groupDiscount = group.items.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+                                    const totalAmount = paidAmount;
+
+                                    return (
+                                        <div
+                                            key={group.key}
+                                            className={`mobile-card transition-all duration-300 select-none ${isExpanded ? 'expanded' : 'collapsed'} ${selectedItems.has(group.key) ? 'ring-2 ring-blue-500 bg-blue-50/30' : ''}`}
+                                            onMouseDown={() => handleLongPressStart(group)}
+                                            onMouseUp={handleLongPressEnd}
+                                            onMouseLeave={handleLongPressEnd}
+                                            onTouchStart={() => handleLongPressStart(group)}
+                                            onTouchEnd={handleLongPressEnd}
+                                            onTouchMove={handleLongPressEnd}
+                                            onClick={(e) => {
+                                                if (isLongPressRef.current) {
+                                                    e.stopPropagation();
+                                                    return;
+                                                }
+                                                if (selectedItems.size > 0) {
+                                                    e.stopPropagation();
+                                                    if (!canUserActOnGroup(group)) return;
+                                                    const newSelected = new Set(selectedItems);
+                                                    if (newSelected.has(group.key)) {
+                                                        newSelected.delete(group.key);
+                                                    } else {
+                                                        newSelected.add(group.key);
+                                                    }
+                                                    setSelectedItems(newSelected);
+                                                    return;
+                                                }
+                                                setExpandedMobileCards(isExpanded ? null : group.key);
+                                            }}
+                                        >
+                                            <div className="mobile-card-header">
+                                                {selectedItems.size > 0 && (
+                                                    <div onClick={(e) => e.stopPropagation()} className="pr-2 flex items-center">
+                                                        {canUserActOnGroup(group) ? (
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedItems.has(group.key)}
+                                                                onChange={(e) => {
+                                                                    const newSelected = new Set(selectedItems);
+                                                                    if (e.target.checked) {
+                                                                        newSelected.add(group.key);
+                                                                    } else {
+                                                                        newSelected.delete(group.key);
+                                                                    }
+                                                                    setSelectedItems(newSelected);
+                                                                }}
+                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            />
+                                                        ) : (
+                                                            <span className="text-gray-300 text-xs select-none">—</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0 pr-2">
+                                                    <div className="mobile-card-title truncate">{group.companyName || group.customerName}</div>
+                                                    {group.partyType && (
+                                                        <div className="mt-0.5">
+                                                            <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide ${group.partyType === 'Party Customer'
+                                                                ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                                                : 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                                }`}>
+                                                                {group.partyType}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                                                        {formatDate(group.date)} | {group.receiptNo || '—'}
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1 shrink-0">
+                                                    <span className="font-bold text-blue-600">
+                                                        ৳{Number(totalAmount).toLocaleString('en-IN')}
+                                                    </span>
+                                                    {group.isEdited === true ? (
+                                                        <span className="text-[9px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200/60 rounded font-bold">
+                                                            Edit Requested
+                                                        </span>
+                                                    ) : (
+                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                                            group.status === 'Requested'
+                                                                ? (group.items?.[0]?.smApproved === true || group.smApproved === true
+                                                                    ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                                    : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                                                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                                                        }`}>
+                                                            {getStatusBadgeText(group)}
+                                                        </span>
+                                                    )}
+                                                    {groupDiscount > 0 && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200/60 rounded font-bold">
+                                                            Discount ({Number(groupDiscount).toLocaleString('en-IN')})
+                                                        </span>
+                                                    )}
+                                                    {group.items.length > 1 && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-bold">
+                                                            {group.items.length} Items
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {isExpanded && (
+                                                <div className="animate-in slide-in-from-top-2 duration-300">
+                                                    <div className="space-y-4 mt-4">
+                                                        {group.items.map((item, idx) => (
+                                                            <div key={idx} className={`space-y-2 ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-4' : ''}`}>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Location:</span>
+                                                                    <span className="mobile-card-value line-clamp-1">{group.customerAddress || '—'}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Method:</span>
+                                                                    <span className="mobile-card-value font-bold text-gray-900">{item.method || '—'}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">{item.method === 'Cash' ? 'Receive By' : 'Bank Name'}:</span>
+                                                                    <span className="mobile-card-value line-clamp-1">{item.method === 'Cash' ? (item.receiveBy || '—') : (item.bankName || '—')}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">{item.method === 'Cash' ? 'Place' : 'Branch'}:</span>
+                                                                    <span className="mobile-card-value line-clamp-1">{item.method === 'Cash' ? (item.place || '—') : (item.branch || '—')}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Account No:</span>
+                                                                    <span className="mobile-card-value font-mono">{item.accountNo || '—'}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label text-blue-600">Amount:</span>
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span className="mobile-card-value font-black text-blue-600">
+                                                                            ৳{Number(parseFloat(item.amount) || 0).toLocaleString('en-IN')}
+                                                                        </span>
+                                                                        {parseFloat(item.discount) > 0 && (
+                                                                            <span className="text-[9px] text-rose-700 bg-rose-50 border border-rose-200/60 px-1 rounded font-bold mt-0.5">
+                                                                                Discount ({Number(item.discount).toLocaleString('en-IN')})
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {canShowEntryBy && idx === group.items.length - 1 && (
+                                                                    <div className="mobile-card-row">
+                                                                        <span className="mobile-card-label">Entry By:</span>
+                                                                        <div className="flex flex-col items-end">
+                                                                            <span className="mobile-card-value font-semibold text-gray-700">
+                                                                                {getEntryByName(group.entryBy, group.entryByName)}
+                                                                            </span>
+                                                                            {(group.editedBy || group.editedByName) &&
+                                                                                (group.editedBy || '').toLowerCase() !== 'admin' &&
+                                                                                (group.editedByName || '').toLowerCase() !== 'admin' &&
+                                                                                (group.items?.[0]?.editedByRole || '').toLowerCase() !== 'admin' &&
+                                                                                (group.isEdited || !group.items?.[0]?.originalData) && (
+                                                                                    <span className="text-[10px] text-amber-600 font-medium">
+                                                                                        ✎ {getEditedByName(group.editedBy, group.editedByName)}
+                                                                                    </span>
+                                                                                )}
+                                                                            {(group.items?.[0]?.smApprovedByName || group.items?.[0]?.smApprovedBy || group.smApprovedByName || group.smApprovedBy) && (
+                                                                                <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
+                                                                                    ✓ {getFirstNameFromIdentifier(group.items?.[0]?.smApprovedByName || group.items?.[0]?.smApprovedBy || group.smApprovedByName || group.smApprovedBy)}
+                                                                                </span>
+                                                                            )}
+                                                                            {(group.items?.[0]?.approvedByName || group.items?.[0]?.approvedBy || group.approvedByName || group.approvedBy) && (
+                                                                                <span className="text-[10px] text-emerald-600 font-semibold" title="Final Approval">
+                                                                                    ✓✓ {getFirstNameFromIdentifier(group.items?.[0]?.approvedByName || group.items?.[0]?.approvedBy || group.approvedByName || group.approvedBy)}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {canManage && (
+                                                                    <div className="mobile-card-actions pt-2">
+                                                                        {(canEdit || (group.status === 'Requested' && canEditBeforeApproval(group))) && (
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleEditInitiation(item); }}
+                                                                                className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
+                                                                            >
+                                                                                <EditIcon className="w-4 h-4" /> Edit
+                                                                            </button>
+                                                                        )}
+                                                                        {group.status !== 'Requested' && !group.isEdited && canDelete && (
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleDeletePayment(item); }}
+                                                                                className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-4 hover:bg-red-100 transition-colors"
+                                                                            >
+                                                                                <TrashIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+
+                                                        {/* Card-level actions */}
+                                                        <div className="mobile-card-actions pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleGenerateReceipt(group.items[0], totalAmount, group.items);
+                                                                }}
+                                                                className="flex items-center justify-center gap-1.5 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold flex-1 transition-colors"
+                                                            >
+                                                                <FileTextIcon className="w-4 h-4" /> Voucher Receipt
+                                                            </button>
+                                                            {((group.status === 'Requested' ? showRequestedApprovalButtons(group) : (group.isEdited === true && (canApproveEditRequest || canApprove)))) && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleStatusUpdate(group, 'Accepted');
+                                                                        }}
+                                                                        className="flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold px-3 transition-colors shadow-sm"
+                                                                        title={group.items?.[0]?.smApproved === true || group.smApproved === true ? "Accept (Final Approval)" : "Accept (1st Approval)"}
+                                                                    >
+                                                                        <CheckIcon className="w-4 h-4" />
+                                                                        <span>{group.items?.[0]?.smApproved === true || group.smApproved === true ? "Accept (2nd)" : "Accept (1st)"}</span>
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleStatusUpdate(group, 'Rejected');
+                                                                        }}
+                                                                        className="flex items-center justify-center gap-1.5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold px-3 transition-colors shadow-sm"
+                                                                        title="Reject Payout"
+                                                                    >
+                                                                        <XIcon className="w-4 h-4" />
+                                                                        <span>Reject</span>
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })) : (
+                                <div className="text-center py-8">
+                                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-50 mb-3">
+                                        <SearchIcon className="w-6 h-6 text-gray-400" />
+                                    </div>
+                                    {isRequestedOnly ? (
+                                        <div className="flex flex-col items-center gap-1">
+                                            <p className="text-gray-800 font-semibold text-sm">No pending payout requests</p>
+                                            <p className="text-xs text-gray-400 max-w-xs">All requested customer payouts have been accepted.</p>
+                                            <button
+                                                onClick={() => { setIsRequestedOnly(false); setIsEditRequestedOnly(false); }}
+                                                className="mt-2 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200"
+                                            >
+                                                View All Payouts →
+                                            </button>
+                                        </div>
+                                    ) : isEditRequestedOnly ? (
+                                        <div className="flex flex-col items-center gap-1">
+                                            <p className="text-gray-800 font-semibold text-sm">No pending edit requests</p>
+                                            <p className="text-xs text-gray-400 max-w-xs">All edit requests have been reviewed.</p>
+                                            <button
+                                                onClick={() => { setIsRequestedOnly(false); setIsEditRequestedOnly(false); }}
+                                                className="mt-2 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200"
+                                            >
+                                                View All Payouts →
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <p className="text-gray-500 font-medium text-sm">No payouts found</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
