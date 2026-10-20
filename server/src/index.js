@@ -9260,13 +9260,27 @@ apiRouter.get('/api/attendance/summary/today', verifyPermission('attendance', 'v
       });
     }
 
-    const [present, absent, late, halfDay, onLeave] = await Promise.all([
-      AttendanceLog.countDocuments({ date: today, status: 'PRESENT' }),
+    const dayStart = new Date(`${today}T00:00:00.000+06:00`);
+    const dayEnd = new Date(`${today}T23:59:59.999+06:00`);
+
+    const [presentLogsCount, absent, late, halfDay, onLeave, punchedEmpIds] = await Promise.all([
+      AttendanceLog.countDocuments({
+        date: today,
+        $or: [
+          { status: { $in: ['PRESENT', 'LATE', 'HALF_DAY'] } },
+          { firstPunchIn: { $ne: null } }
+        ]
+      }),
       AttendanceLog.countDocuments({ date: today, status: 'ABSENT' }),
       AttendanceLog.countDocuments({ date: today, status: 'LATE' }),
       AttendanceLog.countDocuments({ date: today, status: 'HALF_DAY' }),
       AttendanceLog.countDocuments({ date: today, status: 'LEAVE' }),
+      AttendancePunch.distinct('employeeId', {
+        punchTime: { $gte: dayStart, $lte: dayEnd },
+        employeeId: { $ne: null }
+      })
     ]);
+    const present = Math.max(presentLogsCount, (punchedEmpIds || []).length);
     const totalEmployees = await Employee.countDocuments({});
     const unmatchedPunches = await AttendancePunch.countDocuments({ unmatched: true });
 

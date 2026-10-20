@@ -329,7 +329,12 @@ const Attendance = ({ currentUser }) => {
 
   const fetchSummary = (silent = false) => load('summary', async () => {
     const r = await axios.get(`${API_BASE_URL}/api/attendance/summary/today`);
-    setSummary(r.data);
+    const data = r.data || {};
+    const presentVal = Math.max(Number(data.present) || 0, (Number(data.late) || 0) + (Number(data.halfDay) || 0));
+    setSummary({
+      ...data,
+      present: presentVal
+    });
   }, silent);
 
   const fetchLive = (silent = false) => load('live', async () => {
@@ -948,7 +953,7 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
         </div>
         <div className="att-card green">
           <div className="att-card-label">Present Today</div>
-          <div className="att-card-value">{summary.present}</div>
+          <div className="att-card-value">{Math.max(Number(summary.present) || 0, (Number(summary.late) || 0) + (Number(summary.halfDay) || 0))}</div>
         </div>
         <div className="att-card red">
           <div className="att-card-label">Absent</div>
