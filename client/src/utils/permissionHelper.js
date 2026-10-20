@@ -19,6 +19,7 @@ export const MODULES_LIST = [
             { key: 'addShift', label: 'Add Shift' },
             { key: 'editShift', label: 'Edit Shift' },
             { key: 'deleteShift', label: 'Delete Shift' },
+            { key: 'deviceMapping', label: 'Device / Mapping Tab' },
             { key: 'addMapping', label: 'Add Mapping' },
             { key: 'editMapping', label: 'Edit Mapping' },
             { key: 'deleteMapping', label: 'Delete Mapping' },
@@ -514,6 +515,8 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
             if (checkAction === 'deleteMapping' && (att.delete !== undefined || att.edit !== undefined)) return !!(att.delete || att.edit);
             if (checkAction === 'editLeave' && att.edit !== undefined) return !!att.edit;
             if (checkAction === 'editLog' && att.edit !== undefined) return !!att.edit;
+            if (checkAction === 'deviceMapping' && att.deviceMapping !== undefined) return !!att.deviceMapping;
+            if (checkAction === 'deviceMapping') return hasPermission(currentUser, 'attendance', 'viewAll');
         }
         if (currentUser.permissions && currentUser.permissions.employees && currentUser.permissions.employees[checkAction] !== undefined) {
             return !!currentUser.permissions.employees[checkAction];

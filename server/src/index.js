@@ -1298,6 +1298,7 @@ const getDefaultPermissionsForRole = (role) => {
       approveLeave: false, editLeave: false, deleteLeave: false,
       editLog: false,
       addShift: false, editShift: false, deleteShift: false,
+      deviceMapping: false,
       addMapping: false, editMapping: false, deleteMapping: false,
       openingBalance: false
     };
@@ -1310,6 +1311,7 @@ const getDefaultPermissionsForRole = (role) => {
         approveLeave: true, editLeave: true, deleteLeave: true,
         editLog: true,
         addShift: true, editShift: true, deleteShift: true,
+        deviceMapping: true,
         addMapping: true, editMapping: true, deleteMapping: true,
         openingBalance: true
       };
@@ -1322,6 +1324,7 @@ const getDefaultPermissionsForRole = (role) => {
           approveLeave: false, editLeave: false, deleteLeave: false,
           editLog: true,
           addShift: true, editShift: true, deleteShift: true,
+          deviceMapping: true,
           addMapping: true, editMapping: true, deleteMapping: true
         };
       }
@@ -1472,6 +1475,7 @@ const verifyPermission = (moduleName, action = 'view') => {
       if (action === 'deleteMapping' && (att.delete || att.edit)) return next();
       if (action === 'editLeave' && att.edit) return next();
       if (action === 'editLog' && att.edit) return next();
+      if (action === 'deviceMapping' && (att.deviceMapping !== undefined ? att.deviceMapping : att.view)) return next();
     }
 
     // Fallback: If checking attendance, allow if user has employees permission for backwards compatibility
@@ -8515,7 +8519,7 @@ setTimeout(() => {
 }, 2500);
 
 // ─── Live Device Connection Routes ───────────────────────────────────────────
-apiRouter.get('/api/attendance/device/live-status', verifyPermission('attendance', 'view'), (req, res) => {
+apiRouter.get('/api/attendance/device/live-status', verifyPermission('attendance', 'deviceMapping'), (req, res) => {
   res.json(zkLiveManager.getStatus());
 });
 
@@ -8783,7 +8787,7 @@ apiRouter.post('/api/attendance/device/upload-usb', verifyPermission('attendance
 });
 
 // ─── 2. Device Mapping CRUD ───────────────────────────────────────────────────
-apiRouter.get('/api/attendance/mappings', verifyPermission('attendance', 'view'), async (req, res) => {
+apiRouter.get('/api/attendance/mappings', verifyPermission('attendance', 'deviceMapping'), async (req, res) => {
   try {
     const mappings = await DeviceMapping.find().sort({ enrollId: 1 });
     res.json(mappings);
@@ -8971,7 +8975,7 @@ const buildOwnEmployeeFilter = async (user) => {
 };
 
 // ─── 2b. Unmapped Enroll IDs on Biometric Devices ──────────────────────────
-apiRouter.get('/api/attendance/unmapped-enrolls', verifyPermission('attendance', 'view'), async (req, res) => {
+apiRouter.get('/api/attendance/unmapped-enrolls', verifyPermission('attendance', 'deviceMapping'), async (req, res) => {
   try {
     const existingMappings = await DeviceMapping.find({}, 'enrollId').lean();
     const mappedIds = existingMappings.flatMap(m => {

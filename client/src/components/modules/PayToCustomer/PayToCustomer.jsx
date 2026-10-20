@@ -3461,7 +3461,8 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             <PayToCustomerReport
                 isOpen={showReport}
                 onClose={() => setShowReport(false)}
-                payments={payments}
+                payments={filteredPayments}
+                customers={rawCustomers}
             />
 
             {confirmModalConfig && (

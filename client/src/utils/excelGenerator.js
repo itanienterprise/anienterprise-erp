@@ -3666,6 +3666,7 @@ export const generatePayToCustomerReportExcel = (payments = [], filters = {}, da
         ]);
 
         const filterBadges = [];
+        if (filters?.customerType && filters.customerType !== 'All Customer') filterBadges.push(`Customer Type: ${filters.customerType}`);
         if (filters?.method) filterBadges.push(`Method: ${filters.method}`);
         if (filters?.customer) filterBadges.push(`Customer: ${filters.customer}`);
         if (filters?.bankName) filterBadges.push(`Bank: ${filters.bankName}`);
@@ -3692,39 +3693,151 @@ export const generatePayToCustomerReportExcel = (payments = [], filters = {}, da
             'Status',
             'Remark'
         ];
-        rows.push(headers);
+        const isSingleCustomerType = Boolean(filters?.customerType && filters.customerType !== 'All Customer');
+        if (isSingleCustomerType) {
+            rows.push(headers);
+        }
 
         // 4. Data Rows & Calculations
-        let grandTotal = 0;
-        const sortedPayments = [...payments].sort((a, b) => new Date(a.date) - new Date(b.date));
+        let sumTotalAmount = 0;
 
-        sortedPayments.forEach((p, idx) => {
-            const amount = parseFloat(p.amount) || 0;
-            grandTotal += amount;
+        const getDateKey = (dateVal) => {
+            if (!dateVal) return 'no-date';
+            if (typeof dateVal === 'string') return dateVal.split('T')[0];
+            try {
+                const d = new Date(dateVal);
+                return isNaN(d.getTime()) ? 'invalid-date' : d.toISOString().split('T')[0];
+            } catch {
+                return String(dateVal);
+            }
+        };
 
-            const bankOrPaidBy = p.method === 'Cash'
-                ? (p.receiveBy || '-')
-                : (p.bankName || '-');
-            const branchOrPlace = p.method === 'Cash'
-                ? (p.place || '-')
-                : (p.branch || '-');
+        const buildExcelSectionRows = (sectionPayments, sectionTitle, startSl = 1) => {
+            const sectionRows = [];
+            let secTotal = 0;
 
-            rows.push([
-                idx + 1,
-                p.date ? formatDate(p.date) : '-',
-                p.receiptNo || '-',
-                p.companyName || p.customerName || '-',
-                p.customerType || '-',
-                p.place || p.customerAddress || '-',
-                p.method || '-',
-                bankOrPaidBy,
-                branchOrPlace,
-                p.accountNo || '-',
-                Math.round(amount),
-                p.status || 'Accepted',
-                (p.reference || p.remarks || p.note || '').trim() || '-'
-            ]);
-        });
+            const sorted = [...sectionPayments].sort((a, b) => {
+                const dateA = getDateKey(a.date);
+                const dateB = getDateKey(b.date);
+                if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+                const partyA = (a.companyName || a.customerName || '').trim().toLowerCase();
+                const partyB = (b.companyName || b.customerName || '').trim().toLowerCase();
+                if (partyA !== partyB) return partyA.localeCompare(partyB);
+
+                const timeA = new Date(a.createdAt || a.date || 0).getTime();
+                const timeB = new Date(b.createdAt || b.date || 0).getTime();
+                if (timeA !== timeB && timeA && timeB) return timeA - timeB;
+
+                return String(a._id || a.id || '').localeCompare(String(b._id || b.id || ''));
+            });
+
+            const grouped = [];
+            const groupMap = new Map();
+
+            sorted.forEach((p, idx) => {
+                const dateKey = getDateKey(p.date);
+                const rawParty = p.companyName || p.customerName;
+                const partyName = rawParty ? rawParty.trim() : '-';
+                const partyKey = rawParty ? partyName.toLowerCase() : `__unknown_${p._id || p.id || idx}`;
+                const key = `${dateKey}___${partyKey}`;
+
+                if (!groupMap.has(key)) {
+                    const group = {
+                        date: p.date,
+                        partyName,
+                        payments: []
+                    };
+                    groupMap.set(key, group);
+                    grouped.push(group);
+                }
+                groupMap.get(key).payments.push(p);
+            });
+
+            if (sectionTitle) {
+                sectionRows.push([
+                    `${sectionTitle.toUpperCase()} (${sectionPayments.length} ${sectionPayments.length === 1 ? 'Record' : 'Records'})`,
+                    '', '', '', '', '', '', '', '', '', '', '', ''
+                ]);
+                sectionRows.push(headers);
+            }
+
+            let slCount = startSl;
+            grouped.forEach((group) => {
+                const sl = slCount++;
+                const dateFormatted = group.date ? formatDate(group.date) : '-';
+
+                group.payments.forEach((p, pIdx) => {
+                    const amount = parseFloat(p.amount) || 0;
+                    secTotal += amount;
+
+                    const remark = (p.reference || p.remarks || p.note || '').trim();
+                    const bankOrPaidBy = p.method === 'Cash'
+                        ? (p.receiveBy || p.paidBy || '-')
+                        : (p.bankName || '-');
+                    const branchOrPlace = p.method === 'Cash'
+                        ? (p.place || '-')
+                        : (p.branch || '-');
+
+                    const isFirstRow = pIdx === 0;
+
+                    sectionRows.push([
+                        isFirstRow ? sl : '',
+                        isFirstRow ? dateFormatted : '',
+                        p.receiptNo || '-',
+                        isFirstRow ? group.partyName : '',
+                        p.customerType || '-',
+                        p.place || p.customerAddress || '-',
+                        p.method || '-',
+                        bankOrPaidBy,
+                        branchOrPlace,
+                        p.accountNo || '-',
+                        Math.round(amount),
+                        p.status || 'Accepted',
+                        remark || '-'
+                    ]);
+                });
+            });
+
+            if (sectionTitle) {
+                sectionRows.push([
+                    `Subtotal (${sectionTitle})`,
+                    '', '', '', '', '', '', '', '', '',
+                    Math.round(secTotal),
+                    '', ''
+                ]);
+                sectionRows.push([]); // blank row
+            }
+
+            return {
+                rows: sectionRows,
+                total: secTotal,
+                nextSl: slCount
+            };
+        };
+
+        if (isSingleCustomerType) {
+            const singleRes = buildExcelSectionRows(payments, null, 1);
+            rows.push(...singleRes.rows);
+            sumTotalAmount = singleRes.total;
+        } else {
+            const generalList = payments.filter(p => !p.customerType || p.customerType === 'General Customer');
+            const partyList = payments.filter(p => p.customerType === 'Party Customer');
+
+            let currentSl = 1;
+            if (generalList.length > 0) {
+                const genRes = buildExcelSectionRows(generalList, 'General Customer Payouts', currentSl);
+                rows.push(...genRes.rows);
+                sumTotalAmount += genRes.total;
+                currentSl = genRes.nextSl;
+            }
+
+            if (partyList.length > 0) {
+                const partyRes = buildExcelSectionRows(partyList, 'Party Customer Payouts', currentSl);
+                rows.push(...partyRes.rows);
+                sumTotalAmount += partyRes.total;
+            }
+        }
 
         // 5. Grand Total Row
         rows.push([
@@ -3738,7 +3851,7 @@ export const generatePayToCustomerReportExcel = (payments = [], filters = {}, da
             '',
             '',
             '',
-            Math.round(grandTotal),
+            Math.round(sumTotalAmount),
             '',
             ''
         ]);

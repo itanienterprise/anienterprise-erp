@@ -308,6 +308,7 @@ const Attendance = ({ currentUser }) => {
   const canAddMapping = isAdmin || hasPermission(currentUser, 'attendance', 'addMapping');
   const canEditMapping = isAdmin || hasPermission(currentUser, 'attendance', 'editMapping');
   const canDeleteMapping = isAdmin || hasPermission(currentUser, 'attendance', 'deleteMapping');
+  const canAccessDeviceTab = isAdmin || (currentUser?.role || '').toLowerCase() === 'incharge' || hasPermission(currentUser, 'attendance', 'deviceMapping');
 
   const myEmployee = useMemo(() => {
     const curEmpId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
@@ -520,13 +521,16 @@ const Attendance = ({ currentUser }) => {
   useEffect(() => { if (activeTab === 'shifts' && canViewAll)  { fetchShifts();  } }, [activeTab, canViewAll]);
   useEffect(() => { if (activeTab === 'leaves')  { fetchLeaves();  } }, [activeTab, leaveStatus, canViewAll, myEmployee]);
   useEffect(() => { if (activeTab === 'punches' && canViewAll) { fetchPunches(); fetchMappings(); } }, [activeTab, punchDate, punchUnmatchedOnly, canViewAll, myEmployee]);
-  useEffect(() => { if (activeTab === 'device' && canViewAll)  { fetchMappings(); fetchEmployees(); fetchUnmappedEnrolls(); fetchShifts(); } }, [activeTab, canViewAll]);
+  useEffect(() => { if (activeTab === 'device' && canAccessDeviceTab)  { fetchMappings(); fetchEmployees(); fetchUnmappedEnrolls(); fetchShifts(); } }, [activeTab, canAccessDeviceTab]);
 
   useEffect(() => {
-    if (!canViewAll && (activeTab === 'shifts' || activeTab === 'punches' || activeTab === 'device')) {
+    if (!canViewAll && (activeTab === 'shifts' || activeTab === 'punches')) {
       setActiveTab('dashboard');
     }
-  }, [canViewAll, activeTab]);
+    if (!canAccessDeviceTab && activeTab === 'device') {
+      setActiveTab('dashboard');
+    }
+  }, [canViewAll, canAccessDeviceTab, activeTab]);
 
   // ── Process attendance ─────────────────────────────────────────────────────
   const [syncingDevice, setSyncingDevice] = useState(false);
@@ -651,6 +655,8 @@ const Attendance = ({ currentUser }) => {
     ...(canViewAll ? [
       { id: 'shifts',    label: 'Shifts', icon: <IcoShift /> },
       { id: 'punches',   label: 'Raw Punches', icon: <IcoClock /> },
+    ] : []),
+    ...(canAccessDeviceTab ? [
       { id: 'device',    label: 'Device / Mapping', icon: <IcoDevice />, badge: summary.unmatchedPunches || 0 },
     ] : [])
   ];
@@ -665,7 +671,7 @@ const Attendance = ({ currentUser }) => {
           </h1>
           <p className="att-header-sub">ZKTech F8 Biometric Integration · Real-time Tracking</p>
         </div>
-        {canViewAll && (
+        {canAccessDeviceTab && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {deviceLiveStatus?.connected ? (
               <div
@@ -850,7 +856,7 @@ const Attendance = ({ currentUser }) => {
       )}
 
       {/* ── Device / Mapping ────────────────────────────────────────────────── */}
-      {activeTab === 'device' && (
+      {activeTab === 'device' && canAccessDeviceTab && (
         <DeviceTab
           mappings={mappings}
           loading={loading.mappings}
