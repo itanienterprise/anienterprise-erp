@@ -438,7 +438,7 @@ const RoleCreation = ({ setCurrentUser }) => {
                                                     {/* Special checkbox */}
                                                     <td className="px-3 py-3 text-center">
                                                         {mod.specialLabels && Array.isArray(mod.specialLabels) ? (
-                                                            <div className="flex items-center justify-center gap-4">
+                                                            <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-xl mx-auto py-1">
                                                                 {mod.specialLabels.map(sItem => (
                                                                     <div key={sItem.key} className="flex flex-col items-center gap-0.5">
                                                                         <input

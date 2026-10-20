@@ -11,9 +11,17 @@ export const MODULES_LIST = [
         label: 'Attendance',
         specialLabels: [
             { key: 'viewAll', label: 'View All Records' },
+            { key: 'special', label: 'Process Attendance' },
+            { key: 'editLog', label: 'Edit Attendance Log' },
             { key: 'approveLeave', label: 'Accept / Reject Leave' },
             { key: 'editLeave', label: 'Edit Leave' },
-            { key: 'special', label: 'Process Attendance' },
+            { key: 'deleteLeave', label: 'Delete Leave' },
+            { key: 'addShift', label: 'Add Shift' },
+            { key: 'editShift', label: 'Edit Shift' },
+            { key: 'deleteShift', label: 'Delete Shift' },
+            { key: 'addMapping', label: 'Add Mapping' },
+            { key: 'editMapping', label: 'Edit Mapping' },
+            { key: 'deleteMapping', label: 'Delete Mapping' },
             { key: 'deviceSync', label: 'Device & IP Sync' }
         ]
     },
@@ -325,7 +333,7 @@ export const getDefaultPermissionsForRole = (role) => {
                 };
                 if (mod.specialLabels) {
                     mod.specialLabels.forEach(sItem => {
-                        permsObj[sItem.key] = sItem.key === 'openingBalance' ? false : !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave');
+                        permsObj[sItem.key] = sItem.key === 'openingBalance' ? false : !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate' || sItem.key === 'approveLeave' || sItem.key === 'editLeave' || sItem.key === 'deleteLeave');
                     });
                 }
                 defaults[mod.key] = permsObj;
@@ -493,6 +501,19 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
     if (moduleName === 'attendance') {
         if (currentUser.permissions && currentUser.permissions.attendance && currentUser.permissions.attendance[checkAction] !== undefined) {
             return !!currentUser.permissions.attendance[checkAction];
+        }
+        // Fallback for specific action options to broader actions
+        if (currentUser.permissions && currentUser.permissions.attendance) {
+            const att = currentUser.permissions.attendance;
+            if (checkAction === 'deleteLeave' && att.delete !== undefined) return !!att.delete;
+            if (checkAction === 'addShift' && (att.add !== undefined || att.edit !== undefined)) return !!(att.add || att.edit);
+            if (checkAction === 'editShift' && att.edit !== undefined) return !!att.edit;
+            if (checkAction === 'deleteShift' && (att.delete !== undefined || att.edit !== undefined)) return !!(att.delete || att.edit);
+            if (checkAction === 'addMapping' && (att.add !== undefined || att.edit !== undefined)) return !!(att.add || att.edit);
+            if (checkAction === 'editMapping' && att.edit !== undefined) return !!att.edit;
+            if (checkAction === 'deleteMapping' && (att.delete !== undefined || att.edit !== undefined)) return !!(att.delete || att.edit);
+            if (checkAction === 'editLeave' && att.edit !== undefined) return !!att.edit;
+            if (checkAction === 'editLog' && att.edit !== undefined) return !!att.edit;
         }
         if (currentUser.permissions && currentUser.permissions.employees && currentUser.permissions.employees[checkAction] !== undefined) {
             return !!currentUser.permissions.employees[checkAction];

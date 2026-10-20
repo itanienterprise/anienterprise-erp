@@ -297,6 +297,17 @@ const Attendance = ({ currentUser }) => {
   const canDelete = isAdmin || hasPermission(currentUser, 'attendance', 'delete') || hasPermission(currentUser, 'employees', 'delete');
   const canApproveLeave = isAdmin || hasPermission(currentUser, 'attendance', 'approveLeave');
   const canEditLeave = isAdmin || hasPermission(currentUser, 'attendance', 'editLeave') || hasPermission(currentUser, 'attendance', 'edit');
+  const canDeleteLeave = isAdmin || hasPermission(currentUser, 'attendance', 'deleteLeave');
+  const canEditLog = isAdmin || hasPermission(currentUser, 'attendance', 'editLog');
+  const canProcessAttendance = isAdmin || hasPermission(currentUser, 'attendance', 'special') || canEdit;
+
+  const canAddShift = isAdmin || hasPermission(currentUser, 'attendance', 'addShift');
+  const canEditShift = isAdmin || hasPermission(currentUser, 'attendance', 'editShift');
+  const canDeleteShift = isAdmin || hasPermission(currentUser, 'attendance', 'deleteShift');
+
+  const canAddMapping = isAdmin || hasPermission(currentUser, 'attendance', 'addMapping');
+  const canEditMapping = isAdmin || hasPermission(currentUser, 'attendance', 'editMapping');
+  const canDeleteMapping = isAdmin || hasPermission(currentUser, 'attendance', 'deleteMapping');
 
   const myEmployee = useMemo(() => {
     const curEmpId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
@@ -781,9 +792,10 @@ const Attendance = ({ currentUser }) => {
           onRefresh={fetchLogs}
           onProcess={handleProcess}
           processing={processing}
-          canEdit={canEdit}
+          canEdit={canEditLog}
+          canProcess={canProcessAttendance}
           canViewAll={canViewAll}
-          onEdit={canEdit ? (log) => setEditLogModal(log) : null}
+          onEdit={canEditLog ? (log) => setEditLogModal(log) : null}
         />
       )}
 
@@ -797,11 +809,12 @@ const Attendance = ({ currentUser }) => {
           onAction={handleLeaveAction}
           onAdd={() => setLeaveModal({ mode: 'add' })}
           onEdit={(l) => setLeaveModal({ mode: 'edit', data: l })}
-          onDelete={canDelete ? handleLeaveDelete : null}
+          onDelete={canDeleteLeave ? handleLeaveDelete : null}
           canEdit={canEdit}
-          canDelete={canDelete}
+          canDelete={canDeleteLeave}
           canApproveLeave={canApproveLeave}
           canEditLeave={canEditLeave}
+          canDeleteLeave={canDeleteLeave}
           canViewAll={canViewAll}
           employees={employees}
           currentUser={currentUser}
@@ -815,9 +828,9 @@ const Attendance = ({ currentUser }) => {
           shifts={shifts}
           loading={loading.shifts}
           onRefresh={fetchShifts}
-          onAdd={canEdit ? () => setShiftModal({ mode: 'add' }) : null}
-          onEdit={canEdit ? (s) => setShiftModal({ mode: 'edit', data: s }) : null}
-          onDelete={canEdit ? handleShiftDelete : null}
+          onAdd={canAddShift ? () => setShiftModal({ mode: 'add' }) : null}
+          onEdit={canEditShift ? (s) => setShiftModal({ mode: 'edit', data: s }) : null}
+          onDelete={canDeleteShift ? handleShiftDelete : null}
         />
       )}
 
@@ -831,7 +844,7 @@ const Attendance = ({ currentUser }) => {
           punchUnmatchedOnly={punchUnmatchedOnly}
           setPunchUnmatchedOnly={setPunchUnmatchedOnly}
           onRefresh={() => { fetchPunches(); fetchMappings(); }}
-          onAddMapping={canEdit ? (enrollId) => setMappingModal({ enrollId: String(enrollId) }) : null}
+          onAddMapping={canAddMapping ? (enrollId) => setMappingModal({ enrollId: String(enrollId) }) : null}
           mappings={mappings}
         />
       )}
@@ -850,9 +863,9 @@ const Attendance = ({ currentUser }) => {
           onDisconnectLive={handleDisconnectLive}
           connectingLive={connectingLive}
           onRefresh={() => { fetchMappings(); fetchUnmappedEnrolls(); fetchShifts(); }}
-          onAdd={canEdit ? (init) => setMappingModal(typeof init === 'object' && init !== null ? init : true) : null}
-          onEdit={canEdit ? (mapping) => setMappingModal(mapping) : null}
-          onDelete={canEdit ? handleMappingDelete : null}
+          onAdd={canAddMapping ? (init) => setMappingModal(typeof init === 'object' && init !== null ? init : true) : null}
+          onEdit={canEditMapping ? (mapping) => setMappingModal(mapping) : null}
+          onDelete={canDeleteMapping ? handleMappingDelete : null}
         />
       )}
 
@@ -1094,7 +1107,7 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
 // ═══════════════════════════════════════════════════════════════════════════════
 // Logs Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const LogsTab = ({ logs, loading, logFromDate, setLogFromDate, logToDate, setLogToDate, logStatus, setLogStatus, logEmpId, setLogEmpId, employees, onRefresh, onProcess, processing, canEdit, canViewAll, onEdit }) => (
+const LogsTab = ({ logs, loading, logFromDate, setLogFromDate, logToDate, setLogToDate, logStatus, setLogStatus, logEmpId, setLogEmpId, employees, onRefresh, onProcess, processing, canEdit, canProcess, canViewAll, onEdit }) => (
   <div className="att-panel">
     <div className="att-panel-header">
       <h2 className="att-panel-title">{canViewAll ? 'Attendance Logs' : 'My Attendance Logs'}</h2>
@@ -1152,7 +1165,7 @@ const LogsTab = ({ logs, loading, logFromDate, setLogFromDate, logToDate, setLog
             label: s.replace('_', ' ')
           }))}
         />
-        {canEdit && (
+        {(canProcess ?? canEdit) && (
           <button className="att-btn att-btn-primary" onClick={() => onProcess(logToDate || logFromDate || todayStr())} disabled={processing}>
             <IcoRefresh />
             <span>{processing ? 'Processing…' : 'Process Date'}</span>
@@ -1291,6 +1304,7 @@ const LeavesTab = ({
   canDelete,
   canApproveLeave,
   canEditLeave,
+  canDeleteLeave,
   canViewAll,
   employees,
   currentUser,
@@ -1369,7 +1383,7 @@ const LeavesTab = ({
               <th>To</th>
               <th>Days</th>
               <th>Status</th>
-              {(canApproveLeave || canEditLeave || canDelete || leaves.some(l => canEditItem(l))) && <th style={{ textAlign: 'center' }}>Action</th>}
+              {(canApproveLeave || canEditLeave || canDeleteLeave || canDelete || leaves.some(l => canEditItem(l))) && <th style={{ textAlign: 'center' }}>Action</th>}
             </tr>
           </thead>
           <tbody>
@@ -1381,7 +1395,7 @@ const LeavesTab = ({
                 <td>{fmtDate(l.toDate)}</td>
                 <td style={{ fontWeight: 700, textAlign: 'center' }}>{l.totalDays}</td>
                 <td><StatusBadge status={l.status} /></td>
-                {(canApproveLeave || canEditLeave || canDelete || canEditItem(l)) && (
+                {(canApproveLeave || canEditLeave || canDeleteLeave || canDelete || canEditItem(l)) && (
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <div className="flex items-center justify-center space-x-1.5">
                       {canApproveLeave && l.status === 'PENDING' && (

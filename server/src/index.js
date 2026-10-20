@@ -1293,17 +1293,37 @@ const getDefaultPermissionsForRole = (role) => {
   ];
 
   modules.forEach(m => {
-    defaults[m] = { view: false, add: false, edit: false, delete: false, special: false, showRate: false, approveLeave: false, editLeave: false, openingBalance: false };
+    defaults[m] = {
+      view: false, add: false, edit: false, delete: false, special: false, showRate: false,
+      approveLeave: false, editLeave: false, deleteLeave: false,
+      editLog: false,
+      addShift: false, editShift: false, deleteShift: false,
+      addMapping: false, editMapping: false, deleteMapping: false,
+      openingBalance: false
+    };
   });
 
   if (roleLower === 'admin') {
     modules.forEach(m => {
-      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: true, approveLeave: true, editLeave: true, openingBalance: true };
+      defaults[m] = {
+        view: true, add: true, edit: true, delete: true, special: true, showRate: true,
+        approveLeave: true, editLeave: true, deleteLeave: true,
+        editLog: true,
+        addShift: true, editShift: true, deleteShift: true,
+        addMapping: true, editMapping: true, deleteMapping: true,
+        openingBalance: true
+      };
     });
   } else if (roleLower === 'incharge') {
     modules.forEach(m => {
       if (m !== 'backupRestore' && m !== 'log') {
-        defaults[m] = { view: true, add: true, edit: true, delete: m !== 'employees', special: true, showRate: true, approveLeave: false, editLeave: false };
+        defaults[m] = {
+          view: true, add: true, edit: true, delete: m !== 'employees', special: true, showRate: true,
+          approveLeave: false, editLeave: false, deleteLeave: false,
+          editLog: true,
+          addShift: true, editShift: true, deleteShift: true,
+          addMapping: true, editMapping: true, deleteMapping: true
+        };
       }
     });
   } else if (roleLower === 'lc manager') {
@@ -1438,6 +1458,20 @@ const verifyPermission = (moduleName, action = 'view') => {
 
     if (resolvedPerms && resolvedPerms[moduleName] && resolvedPerms[moduleName][action]) {
       return next();
+    }
+
+    // Granular fallbacks for attendance sub-actions
+    if (moduleName === 'attendance' && resolvedPerms && resolvedPerms['attendance']) {
+      const att = resolvedPerms['attendance'];
+      if (action === 'deleteLeave' && att.delete) return next();
+      if (action === 'addShift' && (att.add || att.edit)) return next();
+      if (action === 'editShift' && att.edit) return next();
+      if (action === 'deleteShift' && (att.delete || att.edit)) return next();
+      if (action === 'addMapping' && (att.add || att.edit)) return next();
+      if (action === 'editMapping' && att.edit) return next();
+      if (action === 'deleteMapping' && (att.delete || att.edit)) return next();
+      if (action === 'editLeave' && att.edit) return next();
+      if (action === 'editLog' && att.edit) return next();
     }
 
     // Fallback: If checking attendance, allow if user has employees permission for backwards compatibility
@@ -8756,7 +8790,7 @@ apiRouter.get('/api/attendance/mappings', verifyPermission('attendance', 'view')
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-apiRouter.post('/api/attendance/mappings', verifyPermission('attendance', 'add'), async (req, res) => {
+apiRouter.post('/api/attendance/mappings', verifyPermission('attendance', 'addMapping'), async (req, res) => {
   try {
     const { enrollId, employeeId, employeeName, employeeEmpId, deviceId, shiftId, shiftName, notes } = req.body;
     if (enrollId === undefined || enrollId === null || enrollId === '') {
@@ -8846,7 +8880,7 @@ apiRouter.post('/api/attendance/mappings', verifyPermission('attendance', 'add')
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-apiRouter.delete('/api/attendance/mappings/:id', verifyPermission('attendance', 'delete'), async (req, res) => {
+apiRouter.delete('/api/attendance/mappings/:id', verifyPermission('attendance', 'deleteMapping'), async (req, res) => {
   try {
     const mapping = await DeviceMapping.findByIdAndDelete(req.params.id);
     if (mapping) {
@@ -9180,7 +9214,7 @@ apiRouter.get('/api/attendance/logs', verifyPermission('attendance', 'view'), as
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-apiRouter.put('/api/attendance/logs/:id', verifyPermission('attendance', 'edit'), async (req, res) => {
+apiRouter.put('/api/attendance/logs/:id', verifyPermission('attendance', 'editLog'), async (req, res) => {
   try {
     const user = req.session.user;
     const update = {
@@ -9299,7 +9333,7 @@ apiRouter.get('/api/attendance/shifts', verifyPermission('attendance', 'view'), 
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-apiRouter.post('/api/attendance/shifts', verifyPermission('attendance', 'add'), async (req, res) => {
+apiRouter.post('/api/attendance/shifts', verifyPermission('attendance', 'addShift'), async (req, res) => {
   try {
     const shift = new ShiftConfig(req.body);
     const saved = await shift.save();
@@ -9307,7 +9341,7 @@ apiRouter.post('/api/attendance/shifts', verifyPermission('attendance', 'add'), 
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-apiRouter.put('/api/attendance/shifts/:id', verifyPermission('attendance', 'edit'), async (req, res) => {
+apiRouter.put('/api/attendance/shifts/:id', verifyPermission('attendance', 'editShift'), async (req, res) => {
   try {
     const shift = await ShiftConfig.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
     if (!shift) return res.status(404).json({ message: 'Shift not found' });
@@ -9315,7 +9349,7 @@ apiRouter.put('/api/attendance/shifts/:id', verifyPermission('attendance', 'edit
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-apiRouter.delete('/api/attendance/shifts/:id', adminOnly, async (req, res) => {
+apiRouter.delete('/api/attendance/shifts/:id', verifyPermission('attendance', 'deleteShift'), async (req, res) => {
   try {
     await ShiftConfig.findByIdAndDelete(req.params.id);
     res.json({ message: 'Shift deleted' });
@@ -9484,7 +9518,7 @@ apiRouter.put('/api/attendance/leaves/:id', async (req, res) => {
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-apiRouter.delete('/api/attendance/leaves/:id', verifyPermission('attendance', 'delete'), async (req, res) => {
+apiRouter.delete('/api/attendance/leaves/:id', verifyPermission('attendance', 'deleteLeave'), async (req, res) => {
   try {
     const leave = await LeaveRequest.findByIdAndDelete(req.params.id);
     if (leave && leave.status === 'APPROVED') {
