@@ -196,7 +196,10 @@ const Customer = ({
 
         if (activeHistoryTab === 'sales') {
             (viewData.salesHistory || []).forEach(item => {
-                if (type === 'lcNo' && item.invoiceNo) uniqueOptions.add(item.invoiceNo);
+                if (type === 'lcNo') {
+                    if (item.invoiceNo) uniqueOptions.add(item.invoiceNo);
+                    if (item.lcNo) uniqueOptions.add(item.lcNo);
+                }
                 if (type === 'product' && item.product) uniqueOptions.add(item.product);
             });
         } else if (activeHistoryTab === 'payment') {
@@ -818,9 +821,29 @@ const Customer = ({
                                                 ((parseFloat(entry.quantity) || 0) + (parseFloat(entry.returnQty) || 0)) || 
                                                 parseFloat(entry.quantity) || 
                                                 parseFloat(vhMatch?.quantity || vhMatch?.qty) || 0;
-                                    const amt = (qty > 0 && rate > 0)
-                                        ? (qty * rate)
-                                        : (parseFloat(entry.originalAmount) || parseFloat(entry.totalAmount || entry.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                    const isBorderSale = (s.saleType || '').toLowerCase() === 'border' ||
+                                                         (s.invoiceNo || '').toUpperCase().startsWith('BS') ||
+                                                         s.isBorderSale === true ||
+                                                         (viewData?.customerType || '').toLowerCase().includes('party') ||
+                                                         (s.customerType || '').toLowerCase().includes('party');
+                                    const activeUOM = (entry.uom || product.uom || s.uom || (isBorderSale ? 'Truck' : 'QTY')).toString().toUpperCase();
+
+                                    let amt = 0;
+                                    if (isBorderSale || activeUOM === 'TRUCK') {
+                                        amt = parseFloat(entry.originalAmount) ||
+                                              parseFloat(entry.totalAmount !== undefined && entry.totalAmount !== null && entry.totalAmount !== '' ? entry.totalAmount : entry.amount) ||
+                                              ((parseFloat(entry.truck || s.truck || 1) || 1) * rate) ||
+                                              parseFloat(vhMatch?.amount || vhMatch?.totalAmount || 0);
+                                    } else if (activeUOM === 'BAG') {
+                                        const bagCount = parseFloat(entry.bag || 0) || 0;
+                                        amt = (bagCount > 0 && rate > 0)
+                                            ? (bagCount * rate)
+                                            : (parseFloat(entry.originalAmount) || parseFloat(entry.totalAmount || entry.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                    } else {
+                                        amt = (qty > 0 && rate > 0)
+                                            ? (qty * rate)
+                                            : (parseFloat(entry.originalAmount) || parseFloat(entry.totalAmount || entry.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                    }
                                     const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
                                     const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
                                     const due = isFirstEntry ? (parseFloat(s.dueAmount || s.due) || Math.max(0, amt - paid - discount)) : amt;
@@ -853,9 +876,29 @@ const Customer = ({
                                             ((parseFloat(product.quantity || s.quantity) || 0) + (parseFloat(product.returnQty || s.returnQty) || 0)) || 
                                             parseFloat(product.quantity || s.quantity) || 
                                             parseFloat(vhMatch?.quantity || vhMatch?.qty) || 0;
-                                const amt = (qty > 0 && rate > 0)
-                                    ? (qty * rate)
-                                    : (parseFloat(product.originalAmount || s.originalAmount) || parseFloat(product.totalAmount || product.amount || s.totalAmount || s.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                const isBorderSale = (s.saleType || '').toLowerCase() === 'border' ||
+                                                     (s.invoiceNo || '').toUpperCase().startsWith('BS') ||
+                                                     s.isBorderSale === true ||
+                                                     (viewData?.customerType || '').toLowerCase().includes('party') ||
+                                                     (s.customerType || '').toLowerCase().includes('party');
+                                const activeUOM = (product.uom || s.uom || (isBorderSale ? 'Truck' : 'QTY')).toString().toUpperCase();
+
+                                let amt = 0;
+                                if (isBorderSale || activeUOM === 'TRUCK') {
+                                    amt = parseFloat(product.originalAmount || s.originalAmount) ||
+                                          parseFloat(product.totalAmount !== undefined && product.totalAmount !== null && product.totalAmount !== '' ? product.totalAmount : (product.amount || s.totalAmount || s.amount)) ||
+                                          ((parseFloat(product.truck || s.truck || 1) || 1) * rate) ||
+                                          parseFloat(vhMatch?.amount || vhMatch?.totalAmount || 0);
+                                } else if (activeUOM === 'BAG') {
+                                    const bagCount = parseFloat(product.bag || s.bag || 0) || 0;
+                                    amt = (bagCount > 0 && rate > 0)
+                                        ? (bagCount * rate)
+                                        : (parseFloat(product.originalAmount || s.originalAmount) || parseFloat(product.totalAmount || product.amount || s.totalAmount || s.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                } else {
+                                    amt = (qty > 0 && rate > 0)
+                                        ? (qty * rate)
+                                        : (parseFloat(product.originalAmount || s.originalAmount) || parseFloat(product.totalAmount || product.amount || s.totalAmount || s.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                }
                                 const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
                                 const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
                                 const due = isFirstEntry ? (parseFloat(s.dueAmount || s.due) || Math.max(0, amt - paid - discount)) : amt;
@@ -921,7 +964,7 @@ const Customer = ({
             const matchesFilters =
                 (!historyFilters.startDate || new Date(item.date) >= new Date(historyFilters.startDate)) &&
                 (!historyFilters.endDate || new Date(item.date) <= new Date(historyFilters.endDate)) &&
-                (!historyFilters.lcNo || item.invoiceNo === historyFilters.lcNo) &&
+                (!historyFilters.lcNo || item.invoiceNo === historyFilters.lcNo || item.lcNo === historyFilters.lcNo) &&
                 (!historyFilters.product || item.product === historyFilters.product) &&
                 (!historyFilters.truck || item.truck === historyFilters.truck) &&
                 (!historyFilters.status || item.status === historyFilters.status);
@@ -2759,30 +2802,32 @@ const Customer = ({
 
                                 <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 min-h-0">
                                     {/* Global Summary Cards */}
-                                    <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 md:grid-cols-5' : (activeHistoryTab === 'sales' ? (viewData.customerType?.includes('Party') ? 'grid-cols-2 md:grid-cols-7' : 'grid-cols-2 md:grid-cols-6') : (activeHistoryTab === 'gp' ? 'grid-cols-2 md:grid-cols-2' : 'grid-cols-2 md:grid-cols-5'))} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
+                                    <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5' : (activeHistoryTab === 'sales' ? (viewData.customerType?.includes('Party') ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-6') : (activeHistoryTab === 'gp' ? 'grid-cols-2 md:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5'))} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
                                         {activeHistoryTab === 'sales' && (
                                             <>
                                                 {viewData.customerType?.includes('Party') && (
-                                                    <div className="bg-blue-50/50 p-3 md:p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md">
-                                                        <p className="text-[9px] md:text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1">Total Truck</p>
-                                                        <p className="text-base md:text-lg font-black text-blue-700">{totalTruck}</p>
+                                                    <div className="bg-blue-50/50 p-3 md:p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
+                                                        <p className="text-[9px] md:text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1 truncate">Total Truck</p>
+                                                        <p className="text-base md:text-lg font-black text-blue-700 truncate" title={String(totalTruck)}>{Number(totalTruck || 0).toLocaleString('en-US')}</p>
                                                     </div>
                                                 )}
-                                                <div className="bg-emerald-50/50 p-3 md:p-4 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[9px] md:text-[10px] text-emerald-500 font-bold uppercase tracking-wider mb-1">Total Quantity</p>
-                                                    <p className="text-base md:text-lg font-black text-emerald-700">{totalQuantity}</p>
+                                                <div className="bg-emerald-50/50 p-3 md:p-4 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
+                                                    <p className="text-[9px] md:text-[10px] text-emerald-500 font-bold uppercase tracking-wider mb-1 truncate">Total Quantity</p>
+                                                    <p className="text-base md:text-lg font-black text-emerald-700 truncate" title={String(totalQuantity)}>
+                                                        {Number(totalQuantity || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                    </p>
                                                 </div>
                                             </>
                                         )}
                                         {activeHistoryTab === 'gp' && (
                                             <>
-                                                <div className="bg-blue-50/50 p-3 md:p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[9px] md:text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1">Total G.P Qty</p>
-                                                    <p className="text-base md:text-lg font-black text-blue-700">{totalGpQuantity.toLocaleString('en-US')} Kg</p>
+                                                <div className="bg-blue-50/50 p-3 md:p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
+                                                    <p className="text-[9px] md:text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1 truncate">Total G.P Qty</p>
+                                                    <p className="text-base md:text-lg font-black text-blue-700 truncate">{Number(totalGpQuantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} Kg</p>
                                                 </div>
-                                                <div className="bg-emerald-50/50 p-3 md:p-4 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[9px] md:text-[10px] text-emerald-500 font-bold uppercase tracking-wider mb-1">Total G.P Value</p>
-                                                    <p className="text-base md:text-lg font-black text-emerald-700">৳{totalGpValue.toLocaleString('en-IN')}</p>
+                                                <div className="bg-emerald-50/50 p-3 md:p-4 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
+                                                    <p className="text-[9px] md:text-[10px] text-emerald-500 font-bold uppercase tracking-wider mb-1 truncate">Total G.P Value</p>
+                                                    <p className="text-base md:text-lg font-black text-emerald-700 truncate">৳{Number(totalGpValue || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
                                                 </div>
                                             </>
                                         )}
@@ -2790,27 +2835,47 @@ const Customer = ({
                                             <>
                                                 {(() => {
                                                     const isPurchaseMode = activeHistoryTab === 'purchase' || (activeHistoryTab === 'payment' && paymentSubTab === 'paid');
+                                                    const displayTotalAmount = isPurchaseMode ? purchaseTotalAmount : totalAmount;
+                                                    const displayTotalPaid = isPurchaseMode ? purchaseTotalPaid : ((viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? totalTruck : totalSalesPaid);
+                                                    const displayPaymentCollection = isPurchaseMode ? totalPayToCustomer : totalHistoryPaid;
+                                                    const displayTotalDiscount = isPurchaseMode ? purchaseTotalDiscount : totalDiscount;
+                                                    const displayTotalBalance = isPurchaseMode ? purchaseTotalBalance : (activeHistoryTab === 'all' && combinedHistory.length > 0 ? combinedHistory[combinedHistory.length - 1].runningBalance : totalDueCalculated);
+
                                                     return (
                                                         <>
-                                                            <div className="bg-violet-50/50 p-3 md:p-4 rounded-2xl border border-violet-100 shadow-sm transition-all hover:shadow-md">
-                                                                <p className="text-[9px] md:text-[10px] text-violet-500 font-bold uppercase tracking-wider mb-1">Total Amount</p>
-                                                                <p className="text-base md:text-lg font-black text-violet-700">৳{(isPurchaseMode ? purchaseTotalAmount : totalAmount).toLocaleString('en-IN')}</p>
+                                                            <div className="bg-violet-50/50 p-3 md:p-4 rounded-2xl border border-violet-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
+                                                                <p className="text-[9px] md:text-[10px] text-violet-500 font-bold uppercase tracking-wider mb-1 truncate">Total Amount</p>
+                                                                <p className="text-base md:text-lg font-black text-violet-700 truncate" title={`৳${Number(displayTotalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}>
+                                                                    ৳{Number(displayTotalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                                </p>
                                                             </div>
-                                                            <div className="bg-teal-50/50 p-3 md:p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md">
-                                                                <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">{(viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? 'Total Truck Fare' : 'Total Paid'}</p>
-                                                                <p className="text-base md:text-lg font-black text-teal-700">৳{(isPurchaseMode ? purchaseTotalPaid : ((viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? totalTruck : totalSalesPaid)).toLocaleString('en-IN')}</p>
+                                                            <div className="bg-teal-50/50 p-3 md:p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
+                                                                <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1 truncate">
+                                                                    {(viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? 'Total Truck Fare' : 'Total Paid'}
+                                                                </p>
+                                                                <p className="text-base md:text-lg font-black text-teal-700 truncate" title={`৳${Number(displayTotalPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}>
+                                                                    ৳{Number(displayTotalPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                                </p>
                                                             </div>
-                                                            <div className="bg-indigo-50/50 p-3 md:p-4 rounded-2xl border border-indigo-100 shadow-sm transition-all hover:shadow-md">
-                                                                <p className="text-[9px] md:text-[10px] text-indigo-500 font-bold uppercase tracking-wider mb-1">{isPurchaseMode ? 'Paid To Customer' : 'Payment Collection'}</p>
-                                                                <p className="text-base md:text-lg font-black text-indigo-700">৳{(isPurchaseMode ? totalPayToCustomer : totalHistoryPaid).toLocaleString('en-IN')}</p>
+                                                            <div className="bg-indigo-50/50 p-3 md:p-4 rounded-2xl border border-indigo-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
+                                                                <p className="text-[9px] md:text-[10px] text-indigo-500 font-bold uppercase tracking-wider mb-1 truncate">
+                                                                    {isPurchaseMode ? 'Paid To Customer' : 'Payment Collection'}
+                                                                </p>
+                                                                <p className="text-base md:text-lg font-black text-indigo-700 truncate" title={`৳${Number(displayPaymentCollection || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}>
+                                                                    ৳{Number(displayPaymentCollection || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                                </p>
                                                             </div>
-                                                            <div className="bg-pink-50/50 p-3 md:p-4 rounded-2xl border border-pink-100 shadow-sm transition-all hover:shadow-md">
-                                                                <p className="text-[9px] md:text-[10px] text-pink-500 font-bold uppercase tracking-wider mb-1">Total Discount</p>
-                                                                <p className="text-base md:text-lg font-black text-pink-700">৳{(isPurchaseMode ? purchaseTotalDiscount : totalDiscount).toLocaleString('en-IN')}</p>
+                                                            <div className="bg-pink-50/50 p-3 md:p-4 rounded-2xl border border-pink-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
+                                                                <p className="text-[9px] md:text-[10px] text-pink-500 font-bold uppercase tracking-wider mb-1 truncate">Total Discount</p>
+                                                                <p className="text-base md:text-lg font-black text-pink-700 truncate" title={`৳${Number(displayTotalDiscount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}>
+                                                                    ৳{Number(displayTotalDiscount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                                </p>
                                                             </div>
-                                                            <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md">
-                                                                <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Total Balance</p>
-                                                                <p className="text-base md:text-lg font-black text-orange-700">৳{(isPurchaseMode ? purchaseTotalBalance : (activeHistoryTab === 'all' && combinedHistory.length > 0 ? combinedHistory[combinedHistory.length - 1].runningBalance : totalDueCalculated)).toLocaleString('en-IN')}</p>
+                                                            <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
+                                                                <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1 truncate">Total Balance</p>
+                                                                <p className="text-base md:text-lg font-black text-orange-700 truncate" title={`৳${Number(displayTotalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}>
+                                                                    ৳{Number(displayTotalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                                </p>
                                                             </div>
                                                         </>
                                                     );
@@ -3102,6 +3167,12 @@ const Customer = ({
                                                                         <SortIcon config={historySortConfig} columnKey="date" />
                                                                     </div>
                                                                 </th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('invoiceNo')}>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span>Invoice No</span>
+                                                                        <SortIcon config={historySortConfig} columnKey="invoiceNo" />
+                                                                    </div>
+                                                                </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('lcNo')}>
                                                                     <div className="flex items-center gap-1">
                                                                         <span>LC No</span>
@@ -3166,10 +3237,10 @@ const Customer = ({
                                                                         <SortIcon config={historySortConfig} columnKey="date" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('lcNo')}>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('invoiceNo')}>
                                                                     <div className="flex items-center gap-1">
                                                                         <span>Invoice No</span>
-                                                                        <SortIcon config={historySortConfig} columnKey="lcNo" />
+                                                                        <SortIcon config={historySortConfig} columnKey="invoiceNo" />
                                                                     </div>
                                                                 </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('product')}>
@@ -3263,7 +3334,7 @@ const Customer = ({
                                                                     }
                                                                 };
                                                                 const isParty = viewData?.customerType?.toLowerCase().includes('party');
-                                                                const colSpan = isParty ? "11" : "11";
+                                                                const colSpan = isParty ? "12" : "11";
 
                                                                 return (
                                                                     <React.Fragment key={index}>
@@ -3283,8 +3354,13 @@ const Customer = ({
                                                                                 </div>
                                                                             </td>
                                                                             <td className="px-4 py-4 text-gray-900 font-bold uppercase tracking-tight">
-                                                                                {isParty ? (group.lcNo || group.invoiceNo) : (group.invoiceNo)}
+                                                                                {group.invoiceNo || '-'}
                                                                             </td>
+                                                                            {isParty && (
+                                                                                <td className="px-4 py-4 text-gray-900 font-bold uppercase tracking-tight">
+                                                                                    {group.lcNo || '-'}
+                                                                                </td>
+                                                                            )}
                                                                             <td className="px-4 py-4">
                                                                                 {isMulti ? (
                                                                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700 uppercase tracking-wider">
@@ -3296,7 +3372,7 @@ const Customer = ({
                                                                             </td>
                                                                             {/* Column 4: Qty (Party) or Brand (General) */}
                                                                             {isParty ? (
-                                                                                <td className="px-4 py-4 text-left font-bold text-gray-900">{group.totalQty.toLocaleString('en-US')}</td>
+                                                                                <td className="px-4 py-4 text-left font-bold text-gray-900">{Number(group.totalQty || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
                                                                             ) : (
                                                                                 <td className="px-4 py-4">
                                                                                     {isMulti ? (
@@ -3314,7 +3390,7 @@ const Customer = ({
                                                                                     {isMulti ? (group.trucks.size > 0 ? group.trucks.size : '-') : (group.items[0]?.truck || '-')}
                                                                                 </td>
                                                                             ) : (
-                                                                                <td className="px-4 py-4 text-left font-bold text-gray-900">{group.totalQty.toLocaleString('en-US')}</td>
+                                                                                <td className="px-4 py-4 text-left font-bold text-gray-900">{Number(group.totalQty || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
                                                                             )}
                                                                             {/* Column 6: Rate */}
                                                                             <td className="px-4 py-4 text-left font-bold text-gray-500">
@@ -3322,12 +3398,12 @@ const Customer = ({
                                                                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700 uppercase tracking-wider">
                                                                                         Multiple
                                                                                     </span>
-                                                                                ) : (group.items[0]?.rate ? `৳${parseFloat(group.items[0].rate).toLocaleString('en-US')}` : (group.totalQty > 0 ? `৳${(group.totalAmount / group.totalQty).toFixed(2)}` : '-'))}
+                                                                                ) : (group.items[0]?.rate ? `৳${parseFloat(group.items[0].rate).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : (group.totalQty > 0 ? `৳${(group.totalAmount / group.totalQty).toFixed(2)}` : '-'))}
                                                                             </td>
-                                                                            <td className="px-4 py-4 text-left font-black text-violet-700">৳{group.totalAmount.toLocaleString('en-IN')}</td>
-                                                                            <td className="px-4 py-4 text-left font-bold text-pink-600">৳{group.totalDiscount.toLocaleString('en-IN')}</td>
-                                                                            <td className="px-4 py-4 text-left font-bold text-teal-600">৳{group.totalPaid.toLocaleString('en-IN')}</td>
-                                                                            <td className="px-4 py-4 text-left font-bold text-orange-600">৳{Math.max(0, group.totalAmount - group.totalDiscount - group.totalPaid).toLocaleString('en-IN')}</td>
+                                                                            <td className="px-4 py-4 text-left font-black text-violet-700">৳{Number(group.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                                                            <td className="px-4 py-4 text-left font-bold text-pink-600">৳{Number(group.totalDiscount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                                                            <td className="px-4 py-4 text-left font-bold text-teal-600">৳{Number(group.totalPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                                                            <td className="px-4 py-4 text-left font-bold text-orange-600">৳{Number(Math.max(0, group.totalAmount - group.totalDiscount - group.totalPaid) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
                                                                             <td className="px-4 py-4 text-left">
                                                                                 <button
                                                                                     onClick={(e) => {
@@ -3363,10 +3439,13 @@ const Customer = ({
                                                                         {isExpanded && group.items.map((item, idx) => (
                                                                             <tr key={`${index}-${idx}`} className="bg-blue-50/10 border-b border-gray-50/50">
                                                                                 <td className="px-4 py-3 pl-10 text-xs text-gray-400"></td>
-                                                                                <td className="px-4 py-3 text-xs text-gray-500 italic">{item.lcNo || '-'}</td>
+                                                                                <td className="px-4 py-3 text-xs text-gray-500 italic">{item.invoiceNo || '-'}</td>
+                                                                                {isParty && (
+                                                                                    <td className="px-4 py-3 text-xs text-gray-500 italic">{item.lcNo || '-'}</td>
+                                                                                )}
                                                                                 <td className="px-4 py-3 text-xs text-gray-900 font-medium">{item.product}</td>
                                                                                 {isParty ? (
-                                                                                    <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString('en-US')}</td>
+                                                                                    <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{Number(item.quantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
                                                                                 ) : (
                                                                                     <td className="px-4 py-3 text-xs text-gray-600">{item.brand || '-'}</td>
                                                                                 )}
@@ -3375,13 +3454,13 @@ const Customer = ({
                                                                                         <td className="px-4 py-3 text-left text-xs text-gray-900 font-medium">{item.truck || '-'}</td>
                                                                                     ) : null
                                                                                 ) : (
-                                                                                    <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString('en-US')}</td>
+                                                                                    <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{Number(item.quantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
                                                                                 )}
-                                                                                <td className="px-4 py-3 text-left text-xs text-gray-500">৳{parseFloat(item.rate).toLocaleString('en-IN')}</td>
-                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-violet-600">৳{parseFloat(item.amount).toLocaleString('en-IN')}</td>
-                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-pink-500">৳{parseFloat(item.discount || 0).toLocaleString('en-IN')}</td>
-                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-teal-500">৳{parseFloat(item.paid || 0).toLocaleString('en-IN')}</td>
-                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-orange-500">৳{Math.max(0, parseFloat(item.amount || 0) - parseFloat(item.discount || 0) - parseFloat(item.paid || 0)).toLocaleString('en-IN')}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs text-gray-500">৳{Number(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-violet-600">৳{Number(item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-pink-500">৳{Number(item.discount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-teal-500">৳{Number(item.paid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                                                                <td className="px-4 py-3 text-left text-xs font-bold text-orange-500">৳{Number(Math.max(0, parseFloat(item.amount || 0) - parseFloat(item.discount || 0) - parseFloat(item.paid || 0)) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
                                                                                 <td className="px-4 py-3"></td>
                                                                             </tr>
                                                                         ))}
@@ -3390,7 +3469,7 @@ const Customer = ({
                                                             })
                                                         ) : (
                                                             <tr>
-                                                                <td colSpan="11" className="px-4 py-8 text-left text-gray-400 font-medium italic">No sales history found matching filters</td>
+                                                                <td colSpan={isParty ? "12" : "11"} className="px-4 py-8 text-left text-gray-400 font-medium italic">No sales history found matching filters</td>
                                                             </tr>
                                                         )}
                                                     </tbody>
@@ -3439,7 +3518,12 @@ const Customer = ({
                                                                     <div className="mobile-card-header">
                                                                         <div>
                                                                             <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{formatDate(group.date)}</div>
-                                                                            <div className="text-sm font-black text-gray-900">{isParty ? (group.lcNo || group.invoiceNo) : (group.invoiceNo)}</div>
+                                                                            <div className="text-sm font-black text-gray-900">
+                                                                                {group.invoiceNo || '-'}
+                                                                                {isParty && group.lcNo && (
+                                                                                    <span className="text-xs font-semibold text-gray-500 ml-1.5">(LC: {group.lcNo})</span>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                         <div className="flex items-center gap-2">
                                                                             <span className={`customer-status-badge ${group.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -3447,7 +3531,7 @@ const Customer = ({
                                                                                     <span className="shrink-0">{group.status}</span>
                                                                                 ) : (
                                                                                     <span className="font-bold">
-                                                                                        ৳{group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                                                                        ৳{Number(group.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                                                                                     </span>
                                                                                 )}
                                                                             </span>
@@ -3457,6 +3541,16 @@ const Customer = ({
                                                                     <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[800px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
                                                                         <div className="space-y-1">
                                                                             <div className="flex justify-between text-xs">
+                                                                                <span className="text-gray-500">Invoice No:</span>
+                                                                                <span className="font-bold text-gray-900">{group.invoiceNo || '-'}</span>
+                                                                            </div>
+                                                                            {isParty && group.lcNo && (
+                                                                                <div className="flex justify-between text-xs">
+                                                                                    <span className="text-gray-500">LC No:</span>
+                                                                                    <span className="font-bold text-gray-900">{group.lcNo}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            <div className="flex justify-between text-xs">
                                                                                 <span className="text-gray-500">Products:</span>
                                                                                 <span className="font-bold text-gray-900">
                                                                                     {group.items.length > 1 ? `${group.items.length} Items` : group.items[0]?.product}
@@ -3464,19 +3558,19 @@ const Customer = ({
                                                                             </div>
                                                                             <div className="flex justify-between text-xs">
                                                                                 <span className="text-gray-500">Total Qty:</span>
-                                                                                <span className="font-bold text-gray-900">{group.totalQty.toLocaleString('en-US')}</span>
+                                                                                <span className="font-bold text-gray-900">{Number(group.totalQty || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
                                                                             </div>
                                                                             <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
                                                                                 <span className="text-gray-500">Amount:</span>
-                                                                                <span className="font-black text-violet-700">৳{group.totalAmount.toLocaleString('en-IN')}</span>
+                                                                                <span className="font-black text-violet-700">৳{Number(group.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                                                                             </div>
                                                                             <div className="flex justify-between text-xs">
                                                                                 <span className="text-gray-500">{viewData?.customerType === 'General Customer' ? 'Truck Fare:' : 'Paid:'}</span>
-                                                                                <span className="font-bold text-teal-700">৳{group.totalPaid.toLocaleString('en-IN')}</span>
+                                                                                <span className="font-bold text-teal-700">৳{Number(group.totalPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                                                                             </div>
                                                                             <div className="flex justify-between text-xs">
                                                                                 <span className="text-gray-500">Balance:</span>
-                                                                                <span className="font-bold text-orange-700">৳{Math.max(0, group.totalAmount - group.totalDiscount - group.totalPaid).toLocaleString('en-IN')}</span>
+                                                                                <span className="font-bold text-orange-700">৳{Number(Math.max(0, group.totalAmount - group.totalDiscount - group.totalPaid) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                                                                             </div>
                                                                         </div>
 

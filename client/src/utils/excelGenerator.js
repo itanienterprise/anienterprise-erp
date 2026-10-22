@@ -3099,7 +3099,10 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
             setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         } else if (isSales) {
-            const headers = ['SL', 'Date', 'Invoice No', 'Product', 'Brand', 'Quantity (KG)', 'Rate', 'Total Amount', 'Paid', 'Due'];
+            const isParty = (customer?.customerType || '').toLowerCase().includes('party');
+            const headers = isParty
+                ? ['SL', 'Date', 'Invoice No', 'LC No', 'Product', 'Truck', 'Quantity (KG)', 'Rate', 'Total Amount', 'Paid', 'Due']
+                : ['SL', 'Date', 'Invoice No', 'Product', 'Brand', 'Quantity (KG)', 'Rate', 'Total Amount', 'Paid', 'Due'];
             rows.push(headers);
 
             let sumQty = 0;
@@ -3119,35 +3122,79 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                 sumPaid += paid;
                 sumDue += due;
 
-                rows.push([
-                    idx + 1,
-                    item.date ? formatDate(item.date) : '-',
-                    item.invoiceNo || '-',
-                    item.product || '-',
-                    item.brand || '-',
-                    qty,
-                    rate > 0 ? rate : '-',
-                    Math.round(total),
-                    Math.round(paid),
-                    Math.round(due)
-                ]);
+                if (isParty) {
+                    rows.push([
+                        idx + 1,
+                        item.date ? formatDate(item.date) : '-',
+                        item.invoiceNo || '-',
+                        item.lcNo || '-',
+                        item.product || '-',
+                        item.truck || '-',
+                        qty,
+                        rate > 0 ? rate : '-',
+                        Math.round(total),
+                        Math.round(paid),
+                        Math.round(due)
+                    ]);
+                } else {
+                    rows.push([
+                        idx + 1,
+                        item.date ? formatDate(item.date) : '-',
+                        item.invoiceNo || '-',
+                        item.product || '-',
+                        item.brand || '-',
+                        qty,
+                        rate > 0 ? rate : '-',
+                        Math.round(total),
+                        Math.round(paid),
+                        Math.round(due)
+                    ]);
+                }
             });
 
-            rows.push([
-                'TOTAL',
-                '',
-                '',
-                '',
-                '',
-                sumQty,
-                '',
-                Math.round(sumTotal),
-                Math.round(sumPaid),
-                Math.round(sumDue)
-            ]);
+            if (isParty) {
+                rows.push([
+                    'TOTAL',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    sumQty,
+                    '',
+                    Math.round(sumTotal),
+                    Math.round(sumPaid),
+                    Math.round(sumDue)
+                ]);
+            } else {
+                rows.push([
+                    'TOTAL',
+                    '',
+                    '',
+                    '',
+                    '',
+                    sumQty,
+                    '',
+                    Math.round(sumTotal),
+                    Math.round(sumPaid),
+                    Math.round(sumDue)
+                ]);
+            }
 
             const ws = XLSX.utils.aoa_to_sheet(rows);
-            ws['!cols'] = [
+            ws['!cols'] = isParty ? [
+                { wch: 8 },  // SL
+                { wch: 14 }, // Date
+                { wch: 18 }, // Invoice No
+                { wch: 16 }, // LC No
+                { wch: 22 }, // Product
+                { wch: 14 }, // Truck
+                { wch: 16 }, // Quantity
+                { wch: 12 }, // Rate
+                { wch: 18 }, // Total Amount
+                { wch: 16 }, // Paid
+                { wch: 16 }  // Due
+            ] : [
                 { wch: 8 },  // SL
                 { wch: 14 }, // Date
                 { wch: 18 }, // Invoice No

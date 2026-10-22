@@ -2186,13 +2186,33 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
                                 brandEntries.forEach((entry, eIdx) => {
                                     const isFirstEntry = pIdx === 0 && eIdx === 0;
                                     const rate = parseFloat(entry.unitPrice !== undefined && entry.unitPrice !== null && entry.unitPrice !== '' ? entry.unitPrice : (entry.rate || 0)) || (parseFloat(vhMatch?.rate) || 0);
-                                    const qty = parseFloat(entry.originalQuantity) || 
-                                                ((parseFloat(entry.quantity) || 0) + (parseFloat(entry.returnQty) || 0)) || 
-                                                parseFloat(entry.quantity) || 
-                                                parseFloat(vhMatch?.quantity || vhMatch?.qty) || 0;
-                                    const amt = (qty > 0 && rate > 0)
-                                        ? (qty * rate)
-                                        : (parseFloat(entry.originalAmount) || parseFloat(entry.totalAmount || entry.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                    const qty = parseFloat(entry.originalQuantity) ||
+                                        ((parseFloat(entry.quantity) || 0) + (parseFloat(entry.returnQty) || 0)) ||
+                                        parseFloat(entry.quantity) ||
+                                        parseFloat(vhMatch?.quantity || vhMatch?.qty) || 0;
+                                    const isBorderSale = (s.saleType || '').toLowerCase() === 'border' ||
+                                        (s.invoiceNo || '').toUpperCase().startsWith('BS') ||
+                                        s.isBorderSale === true ||
+                                        (customer?.customerType || '').toLowerCase().includes('party') ||
+                                        (s.customerType || '').toLowerCase().includes('party');
+                                    const activeUOM = (entry.uom || product.uom || s.uom || (isBorderSale ? 'Truck' : 'QTY')).toString().toUpperCase();
+
+                                    let amt = 0;
+                                    if (isBorderSale || activeUOM === 'TRUCK') {
+                                        amt = parseFloat(entry.originalAmount) ||
+                                            parseFloat(entry.totalAmount !== undefined && entry.totalAmount !== null && entry.totalAmount !== '' ? entry.totalAmount : entry.amount) ||
+                                            ((parseFloat(entry.truck || s.truck || 1) || 1) * rate) ||
+                                            parseFloat(vhMatch?.amount || vhMatch?.totalAmount || 0);
+                                    } else if (activeUOM === 'BAG') {
+                                        const bagCount = parseFloat(entry.bag || 0) || 0;
+                                        amt = (bagCount > 0 && rate > 0)
+                                            ? (bagCount * rate)
+                                            : (parseFloat(entry.originalAmount) || parseFloat(entry.totalAmount || entry.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                    } else {
+                                        amt = (qty > 0 && rate > 0)
+                                            ? (qty * rate)
+                                            : (parseFloat(entry.originalAmount) || parseFloat(entry.totalAmount || entry.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                    }
                                     const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
                                     const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
 
@@ -2202,9 +2222,11 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
                                         createdAt: s.createdAt,
                                         invoiceNo: s.invoiceNo,
                                         orderNo: s.orderNo || '',
+                                        lcNo: entry.lcNo || product.lcNo || s.lcNo || '',
                                         product: product.productName || product.product || '',
                                         brand: entry.brand || entry.brandName || product.brand || product.brandName || s.brand || '',
                                         quantity: qty,
+                                        truck: entry.truck || s.truck || '',
                                         rate: rate,
                                         amount: amt,
                                         paid: paid,
@@ -2215,13 +2237,33 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
                             } else {
                                 const isFirstEntry = pIdx === 0;
                                 const rate = parseFloat(product.unitPrice || product.rate || s.unitPrice || 0) || (parseFloat(vhMatch?.rate) || 0);
-                                const qty = parseFloat(product.originalQuantity || s.originalQuantity) || 
-                                            ((parseFloat(product.quantity || s.quantity) || 0) + (parseFloat(product.returnQty || s.returnQty) || 0)) || 
-                                            parseFloat(product.quantity || s.quantity) || 
-                                            parseFloat(vhMatch?.quantity || vhMatch?.qty) || 0;
-                                const amt = (qty > 0 && rate > 0)
-                                    ? (qty * rate)
-                                    : (parseFloat(product.originalAmount || s.originalAmount) || parseFloat(product.totalAmount || product.amount || s.totalAmount || s.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                const qty = parseFloat(product.originalQuantity || s.originalQuantity) ||
+                                    ((parseFloat(product.quantity || s.quantity) || 0) + (parseFloat(product.returnQty || s.returnQty) || 0)) ||
+                                    parseFloat(product.quantity || s.quantity) ||
+                                    parseFloat(vhMatch?.quantity || vhMatch?.qty) || 0;
+                                const isBorderSale = (s.saleType || '').toLowerCase() === 'border' ||
+                                    (s.invoiceNo || '').toUpperCase().startsWith('BS') ||
+                                    s.isBorderSale === true ||
+                                    (customer?.customerType || '').toLowerCase().includes('party') ||
+                                    (s.customerType || '').toLowerCase().includes('party');
+                                const activeUOM = (product.uom || s.uom || (isBorderSale ? 'Truck' : 'QTY')).toString().toUpperCase();
+
+                                let amt = 0;
+                                if (isBorderSale || activeUOM === 'TRUCK') {
+                                    amt = parseFloat(product.originalAmount || s.originalAmount) ||
+                                        parseFloat(product.totalAmount !== undefined && product.totalAmount !== null && product.totalAmount !== '' ? product.totalAmount : (product.amount || s.totalAmount || s.amount)) ||
+                                        ((parseFloat(product.truck || s.truck || 1) || 1) * rate) ||
+                                        parseFloat(vhMatch?.amount || vhMatch?.totalAmount || 0);
+                                } else if (activeUOM === 'BAG') {
+                                    const bagCount = parseFloat(product.bag || s.bag || 0) || 0;
+                                    amt = (bagCount > 0 && rate > 0)
+                                        ? (bagCount * rate)
+                                        : (parseFloat(product.originalAmount || s.originalAmount) || parseFloat(product.totalAmount || product.amount || s.totalAmount || s.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                } else {
+                                    amt = (qty > 0 && rate > 0)
+                                        ? (qty * rate)
+                                        : (parseFloat(product.originalAmount || s.originalAmount) || parseFloat(product.totalAmount || product.amount || s.totalAmount || s.amount) || parseFloat(vhMatch?.amount || vhMatch?.totalAmount) || 0);
+                                }
                                 const paid = isFirstEntry ? (parseFloat(s.paidAmount || s.paid) || 0) : 0;
                                 const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
 
@@ -2231,9 +2273,11 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
                                     createdAt: s.createdAt,
                                     invoiceNo: s.invoiceNo,
                                     orderNo: s.orderNo || '',
+                                    lcNo: product.lcNo || s.lcNo || '',
                                     product: product.productName || product.product || '',
                                     brand: product.brand || product.brandName || s.brand || '',
                                     quantity: qty,
+                                    truck: product.truck || s.truck || '',
                                     rate: rate,
                                     amount: amt,
                                     paid: paid,
@@ -5823,12 +5867,13 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             const invoiceGroups = [];
             sortedHistoryData.forEach(item => {
                 const dateStr = formatDate(item.date);
-                const invNo = item.lcNo || item.invoiceNo || '-';
-                const key = `${dateStr}_${invNo}`;
+                const invNo = item.invoiceNo || '-';
+                const lcNo = item.lcNo || '-';
+                const key = isParty ? `${dateStr}_${invNo}_${lcNo}` : `${dateStr}_${invNo}`;
 
                 let ig = invoiceGroups.find(g => g.key === key);
                 if (!ig) {
-                    ig = { key, dateStr, invNo, products: [] };
+                    ig = { key, dateStr, invNo, lcNo, products: [] };
                     invoiceGroups.push(ig);
                 }
                 const prodKey = item.product || '-';
@@ -5860,11 +5905,14 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
 
                         const row = [];
 
-                        // Merged SL, Date and Invoice
+                        // Merged SL, Date and Invoice (and LC for party)
                         if (isFirstRowOfInv) {
                             row.push({ content: slIndex++, rowSpan: totalRowsForInv, styles: { halign: 'center', valign: 'middle' } });
                             row.push({ content: ig.dateStr, rowSpan: totalRowsForInv, styles: { halign: 'center', valign: 'middle' } });
                             row.push({ content: ig.invNo, rowSpan: totalRowsForInv, styles: { valign: 'middle' } });
+                            if (isParty) {
+                                row.push({ content: ig.lcNo, rowSpan: totalRowsForInv, styles: { valign: 'middle' } });
+                            }
                         }
 
                         // Merged Product
@@ -5895,7 +5943,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
 
             // Add Grand Total row
             tableRows.push([
-                { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: 'GRAND TOTAL', colSpan: isParty ? 5 : 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: isParty ? totalTrucksCount.toLocaleString('en-US') : '', styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: '', styles: { fillColor: [240, 240, 240] } },
@@ -5904,7 +5952,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             ]);
 
             const headers = isParty
-                ? [['SL', 'Date', 'LC No', 'Product', 'Truck', 'Qty(kg)', 'Rate(TK)', 'Amount', 'Disc']]
+                ? [['SL', 'Date', 'Invoice No', 'LC No', 'Product', 'Truck', 'Qty(kg)', 'Rate(TK)', 'Amount', 'Disc']]
                 : [['SL', 'Date', 'Invoice No', 'Product', 'Brand', 'Qty(KG)', 'Rate(TK)', 'Amount', 'Disc']];
 
             autoTable(doc, {
@@ -5914,16 +5962,27 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 theme: 'grid',
                 styles: { fontSize: 9, cellPadding: 1.2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
-                columnStyles: {
+                columnStyles: isParty ? {
+                    0: { halign: 'center', cellWidth: 10 },   // SL
+                    1: { cellWidth: 20, halign: 'center' },   // Date
+                    2: { cellWidth: 22 },                     // Invoice No
+                    3: { cellWidth: 25 },                     // LC No
+                    4: { cellWidth: 25 },                     // Product
+                    5: { halign: 'left', cellWidth: 12 },     // Truck
+                    6: { halign: 'right', cellWidth: 24 },    // Qty
+                    7: { halign: 'right', cellWidth: 18 },    // Rate
+                    8: { halign: 'right', cellWidth: 24 },    // Amount
+                    9: { halign: 'right', cellWidth: 14 }     // Disc
+                } : {
                     0: { halign: 'center', cellWidth: 10 },   // SL
                     1: { cellWidth: 22, halign: 'center' },   // Date
-                    2: { cellWidth: 25 },                     // LC No / Invoice No
+                    2: { cellWidth: 25 },                     // Invoice No
                     3: { cellWidth: 25 },                     // Product
-                    4: { halign: 'left', cellWidth: 38 },     // Brand / Truck
+                    4: { halign: 'left', cellWidth: 38 },     // Brand
                     5: { halign: 'right', cellWidth: 20 },    // Qty
                     6: { halign: 'right', cellWidth: 18 },    // Rate
                     7: { halign: 'right', cellWidth: 25 },    // Amount
-                    8: { halign: 'right', cellWidth: 18 }     // Disc -> Total 200mm
+                    8: { halign: 'right', cellWidth: 18 }     // Disc
                 },
                 margin: { left: margin, right: margin }
             });
