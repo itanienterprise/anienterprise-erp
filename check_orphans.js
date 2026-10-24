@@ -13,6 +13,7 @@ async function checkOrphans() {
         await mongoose.connect(MONGO_URI);
         console.log('Connected to MongoDB');
 
+
         const customers = await Customer.find();
         console.log(`Found ${customers.length} customers.`);
 
@@ -20,7 +21,7 @@ async function checkOrphans() {
             const customer = decryptData(record.data);
             if (customer && customer.salesHistory && customer.salesHistory.length > 0) {
                 console.log(`Checking customer: ${customer.companyName || customer.customerName} (${customer.customerId})`);
-                
+
                 const uniqueInvoices = [...new Set(customer.salesHistory.map(h => h.invoiceNo))];
                 console.log(`  History has ${customer.salesHistory.length} entries with ${uniqueInvoices.length} unique invoices.`);
 
@@ -34,7 +35,7 @@ async function checkOrphans() {
                                 found = true;
                                 break;
                             }
-                        } catch (e) {}
+                        } catch (e) { }
                     }
 
                     if (!found) {

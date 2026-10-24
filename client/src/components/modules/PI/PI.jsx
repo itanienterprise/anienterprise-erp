@@ -30,9 +30,9 @@ function PI({
     currentUser,
     highlightId
 }) {
-    
-    const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation is unrestricted in any Bank in India.\nAll Foreign Bank Charges outside India are on account of Importer.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
-    const DEFAULT_DECLARATION = "1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.";
+
+    const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation is unrestricted in any Bank in India.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
+    const DEFAULT_DECLARATION = "1. Deliveries are quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.";
     const STYLE2_DECLARATION = "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.\nWe do certify that we have no local agent in Bangladesh and the quoted price is net and no commission is payable.";
 
     // Authorization check for administrative actions
@@ -346,7 +346,7 @@ function PI({
     useEffect(() => {
         try {
             localStorage.removeItem('pi_showIndHsCode_default');
-        } catch {}
+        } catch { }
     }, []);
 
     useEffect(() => {
@@ -386,7 +386,7 @@ function PI({
                 let d = emp;
                 if (emp && emp.data) {
                     if (typeof emp.data === 'string') {
-                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) { }
                     } else if (typeof emp.data === 'object') {
                         d = { ...emp.data, _id: emp._id };
                     }
@@ -2788,7 +2788,7 @@ function PI({
                         view: 'pi-section'
                     }
                 );
-            } catch (actErr) {}
+            } catch (actErr) { }
         }
         setShowTenPercentForm(false);
         setSelectedTenPercentPiId('');
@@ -2857,7 +2857,7 @@ function PI({
                     view: 'pi-section'
                 }
             );
-        } catch (actErr) {}
+        } catch (actErr) { }
 
         const timeline = getHistoryTimeline(pi).filter(t => !t.isTenPercent);
         const activeVersion = timeline.find(t => (t.reviseNo || '').trim().toLowerCase() === (revisionNo || '').trim().toLowerCase()) || timeline[0] || {};
@@ -3025,7 +3025,7 @@ function PI({
                     view: 'pi-section'
                 }
             );
-        } catch (actErr) {}
+        } catch (actErr) { }
         handleSelectPiForTenPercent(selectedPiForTenPercent, revNo);
     };
 
@@ -3156,7 +3156,7 @@ function PI({
                         view: 'pi-section'
                     }
                 );
-            } catch (actErr) {}
+            } catch (actErr) { }
 
             showToast('10% PI record saved successfully!', 'success');
             fetchRecords(false);
@@ -3225,7 +3225,7 @@ function PI({
                     view: 'pi-section'
                 }
             );
-        } catch (actErr) {}
+        } catch (actErr) { }
 
         showToast('10% PI PDF generated successfully!', 'success');
     };
@@ -3845,7 +3845,7 @@ function PI({
         // Advanced Filters
         if (piFilters.startDate && record.date && record.date < piFilters.startDate) return false;
         if (piFilters.endDate && record.date && record.date > piFilters.endDate) return false;
-        
+
         // Quick range filtering
         if (piFilters.quickRange && piFilters.quickRange !== 'all' && piFilters.quickRange !== 'custom') {
             const parseLocalDate = (dVal) => {
@@ -3897,7 +3897,7 @@ function PI({
                 }
             }
         }
-        
+
         if (piFilters.port) {
             const filterPort = piFilters.port.trim().toLowerCase();
             const recordPort = (record.port || '').trim().toLowerCase();
@@ -4374,8 +4374,8 @@ function PI({
                         )}
                     </div>
                 ) || (
-                    <div className="hidden md:block md:flex-1"></div>
-                )}
+                        <div className="hidden md:block md:flex-1"></div>
+                    )}
             </div>
 
             {showForm && (
@@ -5792,7 +5792,7 @@ function PI({
                                             name="mtdr"
                                             checked={Boolean(formData.mtdr)}
                                             onClick={() => setFormData(prev => ({ ...prev, mtdr: !prev.mtdr }))}
-                                            onChange={() => {}}
+                                            onChange={() => { }}
                                             className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
                                         />
                                         <span className="text-sm font-semibold text-gray-700">MTDR</span>
@@ -6520,395 +6520,395 @@ function PI({
                 <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
                     <div className="bg-white w-full max-w-[95vw] 2xl:max-w-[1550px] xl:max-w-[1450px] max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-y-auto border border-gray-100 animate-in zoom-in-95 duration-200 p-5 md:p-8 my-auto text-left relative">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
-                        <div className="flex items-center gap-3 shrink-0">
-                            <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
-                                <FileTextIcon className="w-5 h-5 text-blue-600" />
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-base font-black text-gray-800">10% Value Added PI</span>
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
-                                        QTY +10%
-                                    </span>
+                            <div className="flex items-center gap-3 shrink-0">
+                                <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                                    <FileTextIcon className="w-5 h-5 text-blue-600" />
                                 </div>
-                                <p className="text-xs text-gray-500 font-medium">Edit, Save & Print 10% Record • Original PI stays untouched</p>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-base font-black text-gray-800">10% Value Added PI</span>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
+                                            QTY +10%
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 font-medium">Edit, Save & Print 10% Record • Original PI stays untouched</p>
+                                </div>
                             </div>
+
+                            {/* Dropdown to select PI */}
+                            <div className="flex-1 max-w-md w-full relative dropdown-container" ref={tenPercentPiRef}>
+                                <div className="relative w-full">
+                                    <input
+                                        type="text"
+                                        placeholder="Search or select PI number..."
+                                        value={tenPercentSearchQuery}
+                                        onChange={(e) => {
+                                            setTenPercentSearchQuery(e.target.value);
+                                            setActiveDropdown('tenPercentPi');
+                                            setHighlightedIndex(-1);
+                                        }}
+                                        onFocus={() => {
+                                            setActiveDropdown('tenPercentPi');
+                                            setHighlightedIndex(-1);
+                                        }}
+                                        className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-center text-sm shadow-sm h-[38px]"
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                        <ChevronDownIcon className="w-4 h-4" />
+                                    </div>
+                                </div>
+                                {activeDropdown === 'tenPercentPi' && filteredPiRecordsForTenPercent.length > 0 && (
+                                    <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {filteredPiRecordsForTenPercent.map((pi) => (
+                                            <button
+                                                key={pi._id}
+                                                type="button"
+                                                onClick={() => handleSelectPiForTenPercent(pi, 'Original PI')}
+                                                className="w-full px-4 py-2 text-center text-sm flex justify-between items-center hover:bg-blue-50 text-gray-700 font-semibold"
+                                            >
+                                                <span className="flex-1 text-center font-bold text-gray-800">{pi.piNumber}</span>
+                                                <span className="text-xs text-gray-400 font-normal pr-4">{pi.partyName || '-'}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={resetTenPercentForm}
+                                className="p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
+                                title="Close Form"
+                            >
+                                <XIcon className="w-5 h-5 text-gray-400 group-hover:text-rose-500" />
+                            </button>
                         </div>
 
-                        {/* Dropdown to select PI */}
-                        <div className="flex-1 max-w-md w-full relative dropdown-container" ref={tenPercentPiRef}>
-                            <div className="relative w-full">
-                                <input
-                                    type="text"
-                                    placeholder="Search or select PI number..."
-                                    value={tenPercentSearchQuery}
-                                    onChange={(e) => {
-                                        setTenPercentSearchQuery(e.target.value);
-                                        setActiveDropdown('tenPercentPi');
-                                        setHighlightedIndex(-1);
-                                    }}
-                                    onFocus={() => {
-                                        setActiveDropdown('tenPercentPi');
-                                        setHighlightedIndex(-1);
-                                    }}
-                                    className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-center text-sm shadow-sm h-[38px]"
-                                />
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                                    <ChevronDownIcon className="w-4 h-4" />
-                                </div>
-                            </div>
-                            {activeDropdown === 'tenPercentPi' && filteredPiRecordsForTenPercent.length > 0 && (
-                                <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                    {filteredPiRecordsForTenPercent.map((pi) => (
-                                        <button
-                                            key={pi._id}
-                                            type="button"
-                                            onClick={() => handleSelectPiForTenPercent(pi, 'Original PI')}
-                                            className="w-full px-4 py-2 text-center text-sm flex justify-between items-center hover:bg-blue-50 text-gray-700 font-semibold"
-                                        >
-                                            <span className="flex-1 text-center font-bold text-gray-800">{pi.piNumber}</span>
-                                            <span className="text-xs text-gray-400 font-normal pr-4">{pi.partyName || '-'}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        {selectedTenPercentPiId && selectedPiForTenPercent ? (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full text-left">
+                                {/* Revision Selector if PI has revisions */}
+                                {(() => {
+                                    const baseTimeline = getHistoryTimeline(selectedPiForTenPercent).filter(t => !t.isTenPercent);
+                                    if (baseTimeline.length <= 1) return null;
+                                    return (
+                                        <div className="flex flex-wrap items-center gap-2 bg-blue-50/50 p-3 rounded-xl border border-blue-200/50">
+                                            <span className="text-xs font-black text-blue-900 uppercase tracking-wider mr-2">Select Version / Revision:</span>
+                                            {baseTimeline.map((item, idx) => {
+                                                const isSelected = selectedTenPercentRevisionNo.trim().toLowerCase() === (item.reviseNo || '').trim().toLowerCase();
+                                                const hasSaved = (selectedPiForTenPercent.tenPercentRecords || (selectedPiForTenPercent.tenPercentRecord ? [selectedPiForTenPercent.tenPercentRecord] : [])).some(r => ((r.sourceRevisionNo || 'Original PI').trim().toLowerCase() === (item.reviseNo || '').trim().toLowerCase()));
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => handleSwitchTenPercentRevision(item.reviseNo)}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${isSelected ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-blue-100 border border-blue-200'}`}
+                                                    >
+                                                        <span>{item.reviseNo}</span>
+                                                        {hasSaved && (
+                                                            <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-extrabold ${isSelected ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700 border border-purple-200'}`}>
+                                                                Saved
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })()}
 
-                        <button
-                            type="button"
-                            onClick={resetTenPercentForm}
-                            className="p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
-                            title="Close Form"
-                        >
-                            <XIcon className="w-5 h-5 text-gray-400 group-hover:text-rose-500" />
-                        </button>
-                    </div>
+                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                                    {/* Left Column: Reference Details */}
+                                    <div className="lg:col-span-1 space-y-4 bg-gray-50/50 border border-gray-100 rounded-2xl p-5">
+                                        <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">Selected PI Info</h4>
+                                        <div className="space-y-3 text-xs">
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">PI Number</span>
+                                                <p className="font-bold text-gray-800">{selectedPiForTenPercent.piNumber}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">Version</span>
+                                                <p className="font-bold text-blue-700">{selectedTenPercentRevisionNo}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">Importer</span>
+                                                <p className="font-semibold text-gray-700">{selectedPiForTenPercent.partyName || 'N/A'}</p>
+                                            </div>
+                                            <div className="border-b border-gray-200/50 pb-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">Exporter</span>
+                                                <p className="font-semibold text-gray-700">{selectedPiForTenPercent.exporterName || 'N/A'}</p>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 border-b border-gray-200/50 pb-2">
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">PI Date</span>
+                                                    <p className="font-medium text-gray-700">{formatDate(tenPercentFormData.date)}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Validity</span>
+                                                    <p className="font-medium text-gray-700">{formatDate(tenPercentFormData.validityDate)}</p>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">IP Number(s)</span>
+                                                <p className="font-medium text-gray-700 break-words">{tenPercentFormData.ipNumber || 'N/A'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                    {selectedTenPercentPiId && selectedPiForTenPercent ? (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full text-left">
-                            {/* Revision Selector if PI has revisions */}
-                            {(() => {
-                                const baseTimeline = getHistoryTimeline(selectedPiForTenPercent).filter(t => !t.isTenPercent);
-                                if (baseTimeline.length <= 1) return null;
-                                return (
-                                    <div className="flex flex-wrap items-center gap-2 bg-blue-50/50 p-3 rounded-xl border border-blue-200/50">
-                                        <span className="text-xs font-black text-blue-900 uppercase tracking-wider mr-2">Select Version / Revision:</span>
-                                        {baseTimeline.map((item, idx) => {
-                                            const isSelected = selectedTenPercentRevisionNo.trim().toLowerCase() === (item.reviseNo || '').trim().toLowerCase();
-                                            const hasSaved = (selectedPiForTenPercent.tenPercentRecords || (selectedPiForTenPercent.tenPercentRecord ? [selectedPiForTenPercent.tenPercentRecord] : [])).some(r => ((r.sourceRevisionNo || 'Original PI').trim().toLowerCase() === (item.reviseNo || '').trim().toLowerCase()));
-                                            return (
+                                    {/* Middle & Right Columns: Editable 10% PI Details */}
+                                    <div className="lg:col-span-3 space-y-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                                        {/* 10% Value Stat Card */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-blue-50/50 border border-blue-100">
+                                            <div>
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Original Qty</span>
+                                                <p className="text-base font-bold text-gray-600">
+                                                    {parseFloat(selectedVersionBaseInfo.grandTotalQuantity || 0).toLocaleString('en-US')} kg
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Total Qty</span>
+                                                <p className="text-base font-black text-blue-600">
+                                                    {parseFloat(tenPercentFormData.grandTotalQuantity || 0).toLocaleString('en-US')} kg
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Original Total</span>
+                                                <p className="text-base font-bold text-gray-600">
+                                                    ${parseFloat(selectedVersionBaseInfo.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Grand Total</span>
+                                                <p className="text-lg font-black text-emerald-600">
+                                                    ${parseFloat(tenPercentFormData.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Top Form Fields */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">PI Number (PDF)</label>
+                                                <input
+                                                    type="text"
+                                                    value={tenPercentFormData.piNumber}
+                                                    onChange={(e) => setTenPercentFormData(prev => ({ ...prev, piNumber: e.target.value }))}
+                                                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-gray-800"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <CustomDatePicker
+                                                    label="PI Date"
+                                                    value={tenPercentFormData.date}
+                                                    onChange={(e) => setTenPercentFormData(prev => ({ ...prev, date: e.target.value }))}
+                                                    compact={true}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <CustomDatePicker
+                                                    label="Validity Date"
+                                                    value={tenPercentFormData.validityDate}
+                                                    onChange={(e) => setTenPercentFormData(prev => ({ ...prev, validityDate: e.target.value }))}
+                                                    compact={true}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Products Table with Qty + 10% */}
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <h5 className="text-[11px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                                                    <span>Products & Pricing</span>
+                                                    <span className="text-[10px] font-normal text-blue-600">(Editable for Print)</span>
+                                                </h5>
                                                 <button
-                                                    key={idx}
                                                     type="button"
-                                                    onClick={() => handleSwitchTenPercentRevision(item.reviseNo)}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${isSelected ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-blue-100 border border-blue-200'}`}
+                                                    onClick={() => handleSelectPiForTenPercent(selectedPiForTenPercent, selectedTenPercentRevisionNo, true)}
+                                                    className="text-xs font-bold text-blue-700 hover:text-blue-800 underline flex items-center gap-1"
                                                 >
-                                                    <span>{item.reviseNo}</span>
-                                                    {hasSaved && (
-                                                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-extrabold ${isSelected ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700 border border-purple-200'}`}>
-                                                            Saved
-                                                        </span>
+                                                    ↻ Reset to Original
+                                                </button>
+                                            </div>
+
+                                            <div className="overflow-x-auto rounded-xl border border-gray-200">
+                                                <table className="w-full text-left text-xs">
+                                                    <thead>
+                                                        <tr className="bg-gray-50 text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                                                            <th className="px-3 py-2.5">Product Name</th>
+                                                            <th className="px-3 py-2.5">HS Code</th>
+                                                            <th className="px-3 py-2.5">Orig Qty (kg)</th>
+                                                            <th className="px-3 py-2.5 text-blue-700 bg-blue-50/50">Qty (kg) *</th>
+                                                            <th className="px-3 py-2.5">Rate ($)</th>
+                                                            <th className="px-3 py-2.5">Freight ($)</th>
+                                                            <th className="px-3 py-2.5">Total Freight ($)</th>
+                                                            <th className="px-3 py-2.5 font-black text-right">Amount ($)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {(tenPercentFormData.productsList || []).map((prod, idx) => (
+                                                            <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                                                                <td className="px-3 py-2 font-bold text-gray-800">{prod.productName || '-'}</td>
+                                                                <td className="px-3 py-2">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={prod.hsCode || ''}
+                                                                        onChange={(e) => handleTenPercentProductChange(idx, 'hsCode', e.target.value)}
+                                                                        className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-xs"
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-2 font-medium text-gray-400">
+                                                                    {parseFloat(prod.origQuantity || 0).toLocaleString('en-US')} kg
+                                                                </td>
+                                                                <td className="px-3 py-2 bg-blue-50/30">
+                                                                    <input
+                                                                        type="number"
+                                                                        value={prod.quantity || ''}
+                                                                        onChange={(e) => handleTenPercentProductChange(idx, 'quantity', e.target.value)}
+                                                                        className="w-28 px-2 py-1 border border-blue-300 bg-white font-bold text-blue-800 rounded-lg text-xs focus:ring-1 focus:ring-blue-500"
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-2">
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.0001"
+                                                                        value={prod.rate || ''}
+                                                                        onChange={(e) => handleTenPercentProductChange(idx, 'rate', e.target.value)}
+                                                                        className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-xs font-semibold"
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-2">
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.0001"
+                                                                        value={prod.freight || ''}
+                                                                        onChange={(e) => handleTenPercentProductChange(idx, 'freight', e.target.value)}
+                                                                        className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs"
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-2 font-medium text-gray-600">
+                                                                    ${parseFloat(prod.totalFreight || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                                </td>
+                                                                <td className="px-3 py-2 font-extrabold text-blue-700 text-right">
+                                                                    ${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        {/* Additional Logistics / Options */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Place of Receipt</label>
+                                                <input
+                                                    type="text"
+                                                    value={tenPercentFormData.placeOfReceipt || ''}
+                                                    onChange={(e) => setTenPercentFormData(prev => ({ ...prev, placeOfReceipt: e.target.value }))}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Port of Loading</label>
+                                                <input
+                                                    type="text"
+                                                    value={tenPercentFormData.portOfLoading || ''}
+                                                    onChange={(e) => setTenPercentFormData(prev => ({ ...prev, portOfLoading: e.target.value }))}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Port of Discharge</label>
+                                                <input
+                                                    type="text"
+                                                    value={tenPercentFormData.portOfDischarge || ''}
+                                                    onChange={(e) => setTenPercentFormData(prev => ({ ...prev, portOfDischarge: e.target.value }))}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Invoice Style & Remarks */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Invoice Style</label>
+                                                <select
+                                                    value={tenPercentFormData.invoiceStyle || 'Style 1 SAA'}
+                                                    onChange={(e) => setTenPercentFormData(prev => ({ ...prev, invoiceStyle: e.target.value }))}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold bg-white"
+                                                >
+                                                    <option value="Style 1 SAA">Style 1 SAA</option>
+                                                    <option value="Style 2 AAS">Style 2 AAS</option>
+                                                    <option value="Style 3">Style 3</option>
+                                                </select>
+                                            </div>
+                                            <div className="sm:col-span-2 space-y-1">
+                                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Remarks / Special Conditions</label>
+                                                <input
+                                                    type="text"
+                                                    value={tenPercentFormData.remarks || ''}
+                                                    onChange={(e) => setTenPercentFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                                                    placeholder="e.g. VALUE & QUANTITY ± 10% ACCEPTABLE."
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Bottom Actions */}
+                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-100">
+                                            <span className="text-xs text-blue-700 font-bold flex items-center gap-1.5">
+                                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                                                Save or Print 10% copy • Original data stays untouched
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={resetTenPercentForm}
+                                                    className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs rounded-xl transition-all active:scale-95"
+                                                >
+                                                    Close
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSaveTenPercentRecord}
+                                                    disabled={isTenPercentSaving}
+                                                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {isTenPercentSaving ? (
+                                                        <>
+                                                            <svg className="animate-spin -ml-1 mr-1.5 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                            </svg>
+                                                            <span>Saving...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <SaveIcon className="w-4 h-4 text-white" />
+                                                            <span>Save 10% PI</span>
+                                                        </>
                                                     )}
                                                 </button>
-                                            );
-                                        })}
-                                    </div>
-                                );
-                            })()}
-
-                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                                {/* Left Column: Reference Details */}
-                                <div className="lg:col-span-1 space-y-4 bg-gray-50/50 border border-gray-100 rounded-2xl p-5">
-                                    <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">Selected PI Info</h4>
-                                    <div className="space-y-3 text-xs">
-                                        <div className="border-b border-gray-200/50 pb-2">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase">PI Number</span>
-                                            <p className="font-bold text-gray-800">{selectedPiForTenPercent.piNumber}</p>
-                                        </div>
-                                        <div className="border-b border-gray-200/50 pb-2">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase">Version</span>
-                                            <p className="font-bold text-blue-700">{selectedTenPercentRevisionNo}</p>
-                                        </div>
-                                        <div className="border-b border-gray-200/50 pb-2">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase">Importer</span>
-                                            <p className="font-semibold text-gray-700">{selectedPiForTenPercent.partyName || 'N/A'}</p>
-                                        </div>
-                                        <div className="border-b border-gray-200/50 pb-2">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase">Exporter</span>
-                                            <p className="font-semibold text-gray-700">{selectedPiForTenPercent.exporterName || 'N/A'}</p>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2 border-b border-gray-200/50 pb-2">
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase">PI Date</span>
-                                                <p className="font-medium text-gray-700">{formatDate(tenPercentFormData.date)}</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={handlePrintTenPercentPdf}
+                                                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs rounded-xl shadow-lg shadow-blue-500/20 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-1.5"
+                                                >
+                                                    <PDFIcon className="w-4 h-4 text-white" />
+                                                    <span>Print 10% PI PDF</span>
+                                                </button>
                                             </div>
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase">Validity</span>
-                                                <p className="font-medium text-gray-700">{formatDate(tenPercentFormData.validityDate)}</p>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase">IP Number(s)</span>
-                                            <p className="font-medium text-gray-700 break-words">{tenPercentFormData.ipNumber || 'N/A'}</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Middle & Right Columns: Editable 10% PI Details */}
-                                <div className="lg:col-span-3 space-y-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                                    {/* 10% Value Stat Card */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-blue-50/50 border border-blue-100">
-                                        <div>
-                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Original Qty</span>
-                                            <p className="text-base font-bold text-gray-600">
-                                                {parseFloat(selectedVersionBaseInfo.grandTotalQuantity || 0).toLocaleString('en-US')} kg
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Total Qty</span>
-                                            <p className="text-base font-black text-blue-600">
-                                                {parseFloat(tenPercentFormData.grandTotalQuantity || 0).toLocaleString('en-US')} kg
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Original Total</span>
-                                            <p className="text-base font-bold text-gray-600">
-                                                ${parseFloat(selectedVersionBaseInfo.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Grand Total</span>
-                                            <p className="text-lg font-black text-emerald-600">
-                                                ${parseFloat(tenPercentFormData.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Top Form Fields */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">PI Number (PDF)</label>
-                                            <input
-                                                type="text"
-                                                value={tenPercentFormData.piNumber}
-                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, piNumber: e.target.value }))}
-                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-gray-800"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <CustomDatePicker
-                                                label="PI Date"
-                                                value={tenPercentFormData.date}
-                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, date: e.target.value }))}
-                                                compact={true}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <CustomDatePicker
-                                                label="Validity Date"
-                                                value={tenPercentFormData.validityDate}
-                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, validityDate: e.target.value }))}
-                                                compact={true}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Products Table with Qty + 10% */}
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <h5 className="text-[11px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                                                <span>Products & Pricing</span>
-                                                <span className="text-[10px] font-normal text-blue-600">(Editable for Print)</span>
-                                            </h5>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleSelectPiForTenPercent(selectedPiForTenPercent, selectedTenPercentRevisionNo, true)}
-                                                className="text-xs font-bold text-blue-700 hover:text-blue-800 underline flex items-center gap-1"
-                                            >
-                                                ↻ Reset to Original
-                                            </button>
-                                        </div>
-
-                                        <div className="overflow-x-auto rounded-xl border border-gray-200">
-                                            <table className="w-full text-left text-xs">
-                                                <thead>
-                                                    <tr className="bg-gray-50 text-[10px] font-black text-gray-500 uppercase tracking-wider">
-                                                        <th className="px-3 py-2.5">Product Name</th>
-                                                        <th className="px-3 py-2.5">HS Code</th>
-                                                        <th className="px-3 py-2.5">Orig Qty (kg)</th>
-                                                        <th className="px-3 py-2.5 text-blue-700 bg-blue-50/50">Qty (kg) *</th>
-                                                        <th className="px-3 py-2.5">Rate ($)</th>
-                                                        <th className="px-3 py-2.5">Freight ($)</th>
-                                                        <th className="px-3 py-2.5">Total Freight ($)</th>
-                                                        <th className="px-3 py-2.5 font-black text-right">Amount ($)</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {(tenPercentFormData.productsList || []).map((prod, idx) => (
-                                                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                                                            <td className="px-3 py-2 font-bold text-gray-800">{prod.productName || '-'}</td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={prod.hsCode || ''}
-                                                                    onChange={(e) => handleTenPercentProductChange(idx, 'hsCode', e.target.value)}
-                                                                    className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-xs"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2 font-medium text-gray-400">
-                                                                {parseFloat(prod.origQuantity || 0).toLocaleString('en-US')} kg
-                                                            </td>
-                                                            <td className="px-3 py-2 bg-blue-50/30">
-                                                                <input
-                                                                    type="number"
-                                                                    value={prod.quantity || ''}
-                                                                    onChange={(e) => handleTenPercentProductChange(idx, 'quantity', e.target.value)}
-                                                                    className="w-28 px-2 py-1 border border-blue-300 bg-white font-bold text-blue-800 rounded-lg text-xs focus:ring-1 focus:ring-blue-500"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="number"
-                                                                    step="0.0001"
-                                                                    value={prod.rate || ''}
-                                                                    onChange={(e) => handleTenPercentProductChange(idx, 'rate', e.target.value)}
-                                                                    className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-xs font-semibold"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="number"
-                                                                    step="0.0001"
-                                                                    value={prod.freight || ''}
-                                                                    onChange={(e) => handleTenPercentProductChange(idx, 'freight', e.target.value)}
-                                                                    className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2 font-medium text-gray-600">
-                                                                ${parseFloat(prod.totalFreight || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                            </td>
-                                                            <td className="px-3 py-2 font-extrabold text-blue-700 text-right">
-                                                                ${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    {/* Additional Logistics / Options */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Place of Receipt</label>
-                                            <input
-                                                type="text"
-                                                value={tenPercentFormData.placeOfReceipt || ''}
-                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, placeOfReceipt: e.target.value }))}
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Port of Loading</label>
-                                            <input
-                                                type="text"
-                                                value={tenPercentFormData.portOfLoading || ''}
-                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, portOfLoading: e.target.value }))}
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Port of Discharge</label>
-                                            <input
-                                                type="text"
-                                                value={tenPercentFormData.portOfDischarge || ''}
-                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, portOfDischarge: e.target.value }))}
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Invoice Style & Remarks */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Invoice Style</label>
-                                            <select
-                                                value={tenPercentFormData.invoiceStyle || 'Style 1 SAA'}
-                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, invoiceStyle: e.target.value }))}
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold bg-white"
-                                            >
-                                                <option value="Style 1 SAA">Style 1 SAA</option>
-                                                <option value="Style 2 AAS">Style 2 AAS</option>
-                                                <option value="Style 3">Style 3</option>
-                                            </select>
-                                        </div>
-                                        <div className="sm:col-span-2 space-y-1">
-                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Remarks / Special Conditions</label>
-                                            <input
-                                                type="text"
-                                                value={tenPercentFormData.remarks || ''}
-                                                onChange={(e) => setTenPercentFormData(prev => ({ ...prev, remarks: e.target.value }))}
-                                                placeholder="e.g. VALUE & QUANTITY ± 10% ACCEPTABLE."
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Bottom Actions */}
-                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-100">
-                                        <span className="text-xs text-blue-700 font-bold flex items-center gap-1.5">
-                                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                                            Save or Print 10% copy • Original data stays untouched
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={resetTenPercentForm}
-                                                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs rounded-xl transition-all active:scale-95"
-                                            >
-                                                Close
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handleSaveTenPercentRecord}
-                                                disabled={isTenPercentSaving}
-                                                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                {isTenPercentSaving ? (
-                                                    <>
-                                                        <svg className="animate-spin -ml-1 mr-1.5 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                        </svg>
-                                                        <span>Saving...</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <SaveIcon className="w-4 h-4 text-white" />
-                                                        <span>Save 10% PI</span>
-                                                    </>
-                                                )}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handlePrintTenPercentPdf}
-                                                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs rounded-xl shadow-lg shadow-blue-500/20 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-1.5"
-                                            >
-                                                <PDFIcon className="w-4 h-4 text-white" />
-                                                <span>Print 10% PI PDF</span>
-                                            </button>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="py-16 text-center text-gray-400">
-                            <FileTextIcon className="w-12 h-12 mx-auto mb-3 text-blue-400/60" />
-                            <p className="text-sm font-bold text-gray-600">Select a PI from the dropdown above to load and edit its 10% Value Added copy</p>
-                            <p className="text-xs text-gray-400 mt-1">Both Original PI and Revisions can be selected and modified with +10% rate</p>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="py-16 text-center text-gray-400">
+                                <FileTextIcon className="w-12 h-12 mx-auto mb-3 text-blue-400/60" />
+                                <p className="text-sm font-bold text-gray-600">Select a PI from the dropdown above to load and edit its 10% Value Added copy</p>
+                                <p className="text-xs text-gray-400 mt-1">Both Original PI and Revisions can be selected and modified with +10% rate</p>
+                            </div>
+                        )}
                     </div>
                 </div>,
                 document.body
@@ -8060,7 +8060,7 @@ function PI({
                         {/* Delete Revision Confirmation Modal Card */}
                         {showDeleteRevisionConfirm && (
                             <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
-                                <div 
+                                <div
                                     className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
                                     onClick={() => {
                                         if (deleteRevisionStatus !== 'loading') {
@@ -8165,10 +8165,10 @@ function PI({
 
             {/* Empty Fields Alert Modal */}
             {emptyFieldsModal.isOpen && createPortal(
-                <div 
+                <div
                     className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
                 >
-                    <div 
+                    <div
                         className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200 text-left"
                         role="dialog"
                         aria-modal="true"
@@ -8211,7 +8211,7 @@ function PI({
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 {emptyFieldsModal.emptyFields.map((field, idx) => (
-                                    <div 
+                                    <div
                                         key={idx}
                                         className="flex items-center gap-2 px-3 py-2 bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 transition-colors"
                                     >
