@@ -599,7 +599,6 @@ export const generatePIPDF = (record) => {
         "Insurance to be covered by the opener.",
         "Partial Bill & Partial Payment be allowed.",
         "Negotiation is unrestricted in any Bank in India.",
-        "All Foreign Bank Charges outside Bangladesh are on account of Beneficiary.",
         "",
         "TRANSHIPMENT: ALLOWED",
         "PARTIAL SHIPMENT: ALLOWED"
@@ -951,7 +950,7 @@ export const generatePIPDF = (record) => {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5); // Increased from 7
     const declLines = [
-        "1.   Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.",
+        "1.   Deliveries are quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.",
         "2.   We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct."
     ];
     doc.text(declLines[0], margin + 5, y + 11);
