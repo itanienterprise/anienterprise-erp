@@ -2923,11 +2923,29 @@ function App() {
         );
       case 'payment-collection-section':
         return (
-          <PaymentCollection addNotification={addNotification} currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} highlightId={notifHighlightId} isRequestedNotif={notifIsRequested} />
+          <PaymentCollection
+            addNotification={addNotification}
+            currentUser={currentUser}
+            refreshPendingIndicators={fetchPendingEntries}
+            highlightId={notifHighlightId}
+            isRequestedNotif={notifIsRequested}
+            salesRecords={salesRecords}
+            returnsList={returnsList}
+            fetchSalesGlobal={fetchSales}
+          />
         );
       case 'pay-to-customer-section':
         return (
-          <PayToCustomer addNotification={addNotification} currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} highlightId={notifHighlightId} isRequestedNotif={notifIsRequested} />
+          <PayToCustomer
+            addNotification={addNotification}
+            currentUser={currentUser}
+            refreshPendingIndicators={fetchPendingEntries}
+            highlightId={notifHighlightId}
+            isRequestedNotif={notifIsRequested}
+            salesRecords={salesRecords}
+            returnsList={returnsList}
+            fetchSalesGlobal={fetchSales}
+          />
         );
       case 'warehouse-section':
         return (
