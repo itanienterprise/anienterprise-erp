@@ -112,9 +112,15 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
         // This ensures newly-added modules get their role-default values
         // even if the stored permissions object pre-dates those modules.
         const roleDefaults = getDefaultPermissionsForRole(emp.role || 'General Staff');
-        const merged = emp.permissions && Object.keys(emp.permissions).length > 0
-            ? { ...roleDefaults, ...emp.permissions }
-            : roleDefaults;
+        let merged = { ...roleDefaults };
+        if (emp.permissions && Object.keys(emp.permissions).length > 0) {
+            Object.keys(emp.permissions).forEach(modKey => {
+                merged[modKey] = {
+                    ...(roleDefaults[modKey] || {}),
+                    ...emp.permissions[modKey]
+                };
+            });
+        }
         setPermissions(merged);
         
         setSearchQuery(`${emp.name} (${emp.employeeId})`);

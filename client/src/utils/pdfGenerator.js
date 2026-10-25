@@ -4,8 +4,7 @@ import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
 import { preloadBengaliFont, ensureBengaliFont } from './bengaliFontLoader';
 import { computeCustomerBalance, compareTransactions, getIsoDateString, calculatePurchaseRemainingQty } from './helpers';
-import { api } from './api';
-import { getAdjustedLcValues, getRecCostingKg, getLcMilestoneFinances, calculateLcConclusion } from './lcValueUtils';
+import { getAdjustedLcValues, getRecCostingKg, getLcMilestoneFinances, calculateLcConclusion, getLcOpenCostMap, getLcOpenCost } from './lcValueUtils';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -704,9 +703,10 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
     }
 };
 
-export const generateStockReportPDF = async (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products, damages = [], searchQuery = '', activeBaseline = null) => {
+export const generateStockReportPDF = async (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products, damages = [], searchQuery = '', activeBaseline = null, lcRecords = []) => {
     try {
         const doc = new jsPDF();
+        const lcCostMap = getLcOpenCostMap(lcRecords);
 
         const displayUnit = filters?.displayUnit || (typeof localStorage !== 'undefined' ? localStorage.getItem('stock_displayUnit_default') : null) || 'BOTH';
         const showBag = displayUnit === 'BOTH' || displayUnit === 'BAG';
@@ -965,7 +965,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     if (reportType === 'short') {
                         return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                     }
-                    if (reportType === 'price' || reportType === 'group') {
+                    if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
                         return Math.abs(b.inHouseQuantity || 0) > 0.001;
                     }
                     return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
@@ -1084,9 +1084,18 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     }
 
                     // Price & Group Report Columns
-                    if (reportType === 'price') {
+                    if (reportType === 'price' || reportType === 'lc_price') {
                         row.push({ content: ent.lcNo || '—', styles: { halign: 'left' } });
-                        row.push({ content: ent.purchasedPrice ? `TK ${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—', styles: { halign: 'right' } });
+                        const isLcPrice = reportType === 'lc_price';
+                        const costVal = isLcPrice
+                            ? getLcOpenCost(ent.lcNo, item.productName, lcCostMap)
+                            : ent.purchasedPrice;
+                        row.push({
+                            content: (costVal && parseFloat(costVal) > 0)
+                                ? (isLcPrice ? `$${parseFloat(costVal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `TK ${parseFloat(costVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+                                : '—',
+                            styles: { halign: 'right' }
+                        });
                     } else if (reportType === 'group') {
                         row.push({ content: ent.lcNo || '—', styles: { halign: 'left' } });
                     }
@@ -1096,7 +1105,12 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     const rSize = parseFloat(ent.packetSize) || 0;
                     const { whole: rW, remainder: rR } = calculatePktRemainderLocal(rQty, rSize);
                     if (showBag) row.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right' } });
-                    if (showQty) row.push({ content: Math.round(rQty).toLocaleString('en-US'), styles: { halign: 'right' } });
+                    if (showQty) {
+                        const qtyText = reportType === 'lc_price'
+                            ? (rQty / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+                            : Math.round(rQty).toLocaleString('en-US');
+                        row.push({ content: qtyText, styles: { halign: 'right' } });
+                    }
 
                     // Order & Saleable Data for Short Report
                     if (reportType === 'short') {
@@ -1122,7 +1136,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     const isLastOfBrandGroup = bIdx === startIdx + bSpanInfo.span - 1;
                     const hasMultipleLcs = bSpanInfo.span > 1;
 
-                    if ((reportType === 'price' || reportType === 'group') && hasMultipleLcs && isLastOfBrandGroup) {
+                    if ((reportType === 'price' || reportType === 'lc_price' || reportType === 'group') && hasMultipleLcs && isLastOfBrandGroup) {
                         const brandGroup = brands.slice(startIdx, startIdx + bSpanInfo.span);
                         const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
                         const pktSize = ent.packetSize || 30;
@@ -1132,7 +1146,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                         brandTotalRow.push({ content: '', styles: { lineWidth: 0 } });
                         brandTotalRow.push({
                             content: `${displayBrand} TOTAL`,
-                            colSpan: reportType === 'price' ? 4 : 3,
+                            colSpan: (reportType === 'price' || reportType === 'lc_price') ? 4 : 3,
                             styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248], lineWidth: 0 }
                         });
                         if (showBag) {
@@ -1142,8 +1156,11 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                             });
                         }
                         if (showQty) {
+                            const bQtyText = reportType === 'lc_price'
+                                ? (totalQty / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+                                : Math.round(totalQty).toLocaleString('en-US');
                             brandTotalRow.push({
-                                content: Math.round(totalQty).toLocaleString('en-US'),
+                                content: bQtyText,
                                 styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
                             });
                         }
@@ -1159,7 +1176,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                 subRow.push({ content: '', styles: { fillColor: [248, 248, 248], lineWidth: 0 } });
                 subRow.push({
                     content: 'SUB TOTAL',
-                    colSpan: reportType === 'price' ? 4 : (reportType === 'group' ? 3 : 2),
+                    colSpan: (reportType === 'price' || reportType === 'lc_price') ? 4 : (reportType === 'group' ? 3 : 2),
                     styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248], lineWidth: 0 }
                 });
 
@@ -1185,7 +1202,12 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                 if (pktSizeR > 0 && Math.abs(rR2) >= pktSizeR) { const ex = Math.floor(Math.abs(rR2) / pktSizeR); rW2 += rR2 >= 0 ? ex : -ex; rR2 = rR2 % pktSizeR; }
                 if (showBag) subRow.push({ content: `${rW2}${rR2 !== 0 ? ` - ${Math.abs(rR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 const subInHouseQty = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.inHouseQuantity) || 0), 0);
-                if (showQty) subRow.push({ content: Math.round(subInHouseQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                if (showQty) {
+                    const subQtyText = reportType === 'lc_price'
+                        ? (subInHouseQty / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+                        : Math.round(subInHouseQty).toLocaleString('en-US');
+                    subRow.push({ content: subQtyText, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                }
 
                 if (reportType === 'short') {
                     let ordW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.orderQuantity) || 0), ent.packetSize).whole, 0);
@@ -1245,7 +1267,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
 
             // Append Grand Total Row
             const grandTotalRow = [
-                { content: 'GRAND TOTAL', colSpan: reportType === 'price' ? 5 : (reportType === 'group' ? 4 : 3), styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], lineWidth: 0 } } // SL + Product Name + Brand
+                { content: 'GRAND TOTAL', colSpan: (reportType === 'price' || reportType === 'lc_price') ? 5 : (reportType === 'group' ? 4 : 3), styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], lineWidth: 0 } } // SL + Product Name + Brand
             ];
 
             const grandTotalOpeningQty = currentStockData.totalTotalInHouseQty !== undefined
@@ -1264,7 +1286,12 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                 : currentStockData.displayRecords.reduce((sum, item) => sum + getGroupedBrandList(item.brandList).reduce((s, ent) => s + Math.max(0, parseFloat(ent.inHouseQuantity) || 0), 0), 0);
 
             if (showBag) grandTotalRow.push({ content: whInHousePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
-            if (showQty) grandTotalRow.push({ content: Math.round(grandInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+            if (showQty) {
+                const grandQtyText = reportType === 'lc_price'
+                    ? (grandInHouseQty / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+                    : Math.round(grandInHouseQty).toString();
+                grandTotalRow.push({ content: grandQtyText, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+            }
 
             if (reportType === 'short') {
                 if (showBag) grandTotalRow.push({ content: whOrderPktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
@@ -1279,10 +1306,10 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
 
             // --- Table ---
             const headCols = ['SL', 'PRODUCT NAME', 'BRAND'];
-            if (reportType === 'price') {
-                headCols.push('LC NO', 'COSTING');
+            if (reportType === 'price' || reportType === 'lc_price') {
+                headCols.push('LC NO', reportType === 'lc_price' ? 'LC RATE $' : 'COSTING');
                 if (showBag) headCols.push('BAG');
-                if (showQty) headCols.push('QTY (KG)');
+                if (showQty) headCols.push(reportType === 'lc_price' ? 'QTY (TON)' : 'QTY (KG)');
             } else if (reportType === 'group') {
                 headCols.push('LC NO');
                 if (showBag) headCols.push('BAG');
@@ -1331,7 +1358,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                         styles[colIdx++] = { cellWidth: 35, halign: 'right' };
                     }
                     return styles;
-                } else if (reportType === 'price') {
+                } else if (reportType === 'price' || reportType === 'lc_price') {
                     const styles = {
                         0: { cellWidth: 7, halign: 'center', lineWidth: 0 },
                         1: { cellWidth: 36, lineWidth: 0 },
@@ -1389,7 +1416,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                 theme: 'plain',
                 rowPageBreak: 'auto',
                 styles: {
-                    fontSize: reportType === 'detailed' ? 8 : ((reportType === 'price' || reportType === 'group') ? 9 : 8.8),
+                    fontSize: reportType === 'detailed' ? 8 : ((reportType === 'price' || reportType === 'lc_price' || reportType === 'group') ? 9 : 8.8),
                     cellPadding: reportType === 'detailed' ? 1.2 : 1.3,
                     lineColor: [0, 0, 0],
                     lineWidth: 0.1,
@@ -1415,7 +1442,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                         // Disable default borders for SL, Product/Quality, and Brand columns on subtotal/grand total rows
                         // to prevent vertical lines from cutting through colSpan/spanned cells.
                         if (data.row.raw && (data.row.raw.isSubTotal || data.row.raw.isBrandTotal)) {
-                            const maxColIdx = reportType === 'price' ? 4 : (reportType === 'group' ? 3 : 2);
+                            const maxColIdx = (reportType === 'price' || reportType === 'lc_price') ? 4 : (reportType === 'group' ? 3 : 2);
                             if (data.column.index <= maxColIdx) {
                                 data.cell.styles.lineWidth = 0;
                             }

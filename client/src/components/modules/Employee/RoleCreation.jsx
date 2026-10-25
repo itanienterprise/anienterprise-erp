@@ -42,7 +42,17 @@ const RoleCreation = ({ setCurrentUser }) => {
     const selectCustomRoleForEditing = (cr) => {
         setSelectedCustomRole(cr);
         setSelectedStaticRole(null);
-        setPermissions(cr.permissions || getDefaultPermissionsForRole('General Staff'));
+        const defaults = getDefaultPermissionsForRole('General Staff');
+        let merged = { ...defaults };
+        if (cr.permissions && Object.keys(cr.permissions).length > 0) {
+            Object.keys(cr.permissions).forEach(modKey => {
+                merged[modKey] = {
+                    ...(defaults[modKey] || {}),
+                    ...cr.permissions[modKey]
+                };
+            });
+        }
+        setPermissions(merged);
         setAlertMsg(null);
     };
 
@@ -51,11 +61,19 @@ const RoleCreation = ({ setCurrentUser }) => {
         setSelectedCustomRole(null);
         
         // Load custom override if exists, else static defaults
+        const defaults = getDefaultPermissionsForRole(rName);
         const override = customRoles.find(cr => cr.name === rName);
-        if (override) {
-            setPermissions(override.permissions);
+        if (override && override.permissions && Object.keys(override.permissions).length > 0) {
+            let merged = { ...defaults };
+            Object.keys(override.permissions).forEach(modKey => {
+                merged[modKey] = {
+                    ...(defaults[modKey] || {}),
+                    ...override.permissions[modKey]
+                };
+            });
+            setPermissions(merged);
         } else {
-            setPermissions(getDefaultPermissionsForRole(rName));
+            setPermissions(defaults);
         }
         setAlertMsg(null);
     };

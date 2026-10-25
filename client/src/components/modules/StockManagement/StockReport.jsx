@@ -5,9 +5,11 @@ import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateStockReportPDF } from '../../../utils/pdfGenerator';
 import { generateStockReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
-import { formatDate } from '../../../utils/helpers';
+import { formatDate, API_BASE_URL } from '../../../utils/helpers';
+import axios from '../../../utils/api';
 import { calculateStockData, calculatePktRemainder, getGroupedBrandList } from '../../../utils/stockHelpers';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { getLcOpenCostMap, getLcOpenCost } from '../../../utils/lcValueUtils';
 
 const StockReport = ({
     isOpen,
@@ -26,6 +28,33 @@ const StockReport = ({
 }) => {
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const canShowRate = hasPermission(currentUser, 'stock', 'showRate');
+    const canShowLcPrice = hasPermission(currentUser, 'stock', 'lcPriceReport');
+
+    const [lcRecords, setLcRecords] = useState([]);
+
+    useEffect(() => {
+        if (isOpen) {
+            axios.get(`${API_BASE_URL}/api/lc-management`)
+                .then(res => {
+                    if (Array.isArray(res.data)) {
+                        setLcRecords(res.data);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching LC records for StockReport:', err);
+                });
+        }
+    }, [isOpen]);
+
+    const lcCostMap = React.useMemo(() => getLcOpenCostMap(lcRecords), [lcRecords]);
+
+    const getCostingDisplay = (ent, pName) => {
+        if (reportType === 'lc_price') {
+            const lcCost = getLcOpenCost(ent.lcNo, ent.productName || pName, lcCostMap);
+            return lcCost > 0 ? `$${lcCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+        }
+        return ent.purchasedPrice ? `৳${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+    };
 
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
@@ -65,7 +94,10 @@ const StockReport = ({
         if (!canShowRate && reportType === 'price') {
             setReportType('short');
         }
-    }, [canShowRate, reportType]);
+        if (!canShowLcPrice && reportType === 'lc_price') {
+            setReportType('short');
+        }
+    }, [canShowRate, canShowLcPrice, reportType]);
 
     const selectedProductsList = React.useMemo(() => {
         if (!stockFilters.productName) return [];
@@ -160,10 +192,10 @@ const StockReport = ({
                         selectedBrands.includes((b.brand || '').toLowerCase().trim())
                     );
                     if (filteredBrands.length > 0) {
-                        const inHouseQuantity = (reportType === 'price' || reportType === 'group')
+                        const inHouseQuantity = (reportType === 'price' || reportType === 'lc_price' || reportType === 'group')
                             ? filteredBrands.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0)
                             : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
-                        const totalInHouseQuantity = (reportType === 'price' || reportType === 'group')
+                        const totalInHouseQuantity = (reportType === 'price' || reportType === 'lc_price' || reportType === 'group')
                             ? filteredBrands.reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0)
                             : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0);
                         const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
@@ -199,10 +231,10 @@ const StockReport = ({
 
             if (filteredBrands.length > 0) {
                 // IMPORTANT: Recalculate item-level totals for the filtered brands
-                const inHouseQuantity = (reportType === 'price' || reportType === 'group')
+                const inHouseQuantity = (reportType === 'price' || reportType === 'lc_price' || reportType === 'group')
                     ? filteredBrands.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0)
                     : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
-                const totalInHouseQuantity = (reportType === 'price' || reportType === 'group')
+                const totalInHouseQuantity = (reportType === 'price' || reportType === 'lc_price' || reportType === 'group')
                     ? filteredBrands.reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0)
                     : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0);
                 const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
@@ -340,7 +372,7 @@ const StockReport = ({
                 if (reportType === 'short') {
                     return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                 }
-                if (reportType === 'price' || reportType === 'group') {
+                if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
                     return Math.abs(b.inHouseQuantity || 0) > 0.001;
                 }
                 return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
@@ -373,11 +405,13 @@ const StockReport = ({
                                 <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[4%] text-center" rowSpan={2}>SL</th>
                                 <th className={`border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider ${reportType === 'group' ? 'w-[22%]' : 'w-[16%]'}`} rowSpan={2}>Product & Quality</th>
                                 <th className={`border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider ${reportType === 'group' ? 'w-[20%]' : 'w-[15%]'}`} rowSpan={2}>Brand</th>
-                                {(reportType === 'price' || reportType === 'group') && (
+                                {(reportType === 'price' || reportType === 'lc_price' || reportType === 'group') && (
                                     <th className={`border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider ${reportType === 'group' ? 'w-[20%]' : 'w-[15%]'}`} rowSpan={2}>LC No</th>
                                 )}
-                                {reportType === 'price' && (
-                                    <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%]" rowSpan={2}>Costing</th>
+                                {(reportType === 'price' || reportType === 'lc_price') && (
+                                    <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%]" rowSpan={2}>
+                                        {reportType === 'lc_price' ? 'Lc Rate $' : 'Costing'}
+                                    </th>
                                 )}
                                 {reportType === 'detailed' && (
                                     <>
@@ -416,7 +450,11 @@ const StockReport = ({
                                 ) : (
                                     <>
                                         {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">BAG</th>}
-                                        {showQty && <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">QTY (KG)</th>}
+                                        {showQty && (
+                                            <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">
+                                                {reportType === 'lc_price' ? 'QTY (TON)' : 'QTY (KG)'}
+                                            </th>
+                                        )}
                                     </>
                                 )}
                             </tr>
@@ -461,7 +499,7 @@ const StockReport = ({
                                     });
 
                                     let totalRows = brands.length + 1; // +1 for Sub Total row
-                                    if (reportType === 'price' || reportType === 'group') {
+                                    if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
                                         brandSpans.forEach((bSpan, bIdx) => {
                                             if (bSpan && bSpan.span > 1) {
                                                 totalRows++;
@@ -515,14 +553,14 @@ const StockReport = ({
                                                                     <div className="leading-tight uppercase font-medium">{(ent.brand || 'No Brand').trim()}</div>
                                                                 </td>
                                                             )}
-                                                            {(reportType === 'price' || reportType === 'group') && (
+                                                            {(reportType === 'price' || reportType === 'lc_price' || reportType === 'group') && (
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top uppercase">
                                                                     {ent.lcNo || '—'}
                                                                 </td>
                                                             )}
-                                                            {reportType === 'price' && (
+                                                            {(reportType === 'price' || reportType === 'lc_price') && (
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top font-bold whitespace-nowrap">
-                                                                    {ent.purchasedPrice ? `৳${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                                    {getCostingDisplay(ent, item.productName)}
                                                                 </td>
                                                             )}
                                                             {reportType === 'detailed' ? (
@@ -556,7 +594,9 @@ const StockReport = ({
                                                             )}
                                                             {showQty && (
                                                                 <td className={`${reportType === 'short' ? 'border-r border-gray-900' : ''} px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap font-black`}>
-                                                                    {Math.round(ent.inHouseQuantity || 0).toLocaleString('en-US')}
+                                                                    {reportType === 'lc_price'
+                                                                        ? ((parseFloat(ent.inHouseQuantity || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
+                                                                        : Math.round(ent.inHouseQuantity || 0).toLocaleString('en-US')}
                                                                 </td>
                                                             )}
                                                             {reportType === 'short' && (
@@ -590,14 +630,14 @@ const StockReport = ({
                                                                 </>
                                                             )}
                                                         </tr>
-                                                        {(reportType === 'price' || reportType === 'group') && hasMultipleLcs && isLastOfBrandGroup && (() => {
+                                                        {(reportType === 'price' || reportType === 'lc_price' || reportType === 'group') && hasMultipleLcs && isLastOfBrandGroup && (() => {
                                                             const brandGroup = brands.slice(startIdx, startIdx + spanInfo.span);
                                                             const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
                                                             const pktSize = ent.packetSize || 30;
                                                             const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
                                                             return (
                                                                 <tr className="bg-gray-100/50 font-bold border-b border-gray-900 last:border-b-0">
-                                                                    <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 font-extrabold uppercase" colSpan={reportType === 'price' ? 3 : 2}>
+                                                                    <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 font-extrabold uppercase" colSpan={(reportType === 'price' || reportType === 'lc_price') ? 3 : 2}>
                                                                         {(ent.brand || 'No Brand').trim()} Total
                                                                     </td>
                                                                     {showBag && (
@@ -607,7 +647,9 @@ const StockReport = ({
                                                                     )}
                                                                     {showQty && (
                                                                         <td className="px-2 py-1 text-[13px] text-right text-gray-900 font-black whitespace-nowrap">
-                                                                            {Math.round(totalQty).toLocaleString('en-US')}
+                                                                            {reportType === 'lc_price'
+                                                                                ? ((parseFloat(totalQty || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
+                                                                                : Math.round(totalQty).toLocaleString('en-US')}
                                                                         </td>
                                                                     )}
                                                                 </tr>
@@ -618,7 +660,7 @@ const StockReport = ({
                                             })}
                                             {/* Sub Total Row */}
                                             <tr className="bg-gray-100/50 border-b-2 border-gray-900 font-bold">
-                                                <td className="border-r border-gray-900 px-2 py-1.5 text-[11px] font-black text-gray-400 align-top uppercase" colSpan={reportType === 'price' ? 4 : (reportType === 'group' ? 3 : 2)}>
+                                                <td className="border-r border-gray-900 px-2 py-1.5 text-[11px] font-black text-gray-400 align-top uppercase" colSpan={(reportType === 'price' || reportType === 'lc_price') ? 4 : (reportType === 'group' ? 3 : 2)}>
                                                     SUB TOTAL
                                                 </td>
                                                 {reportType === 'detailed' ? (
@@ -666,7 +708,9 @@ const StockReport = ({
                                                 )}
                                                 {showQty && (
                                                     <td className={`${reportType === 'short' ? 'border-r border-gray-900' : ''} px-2 py-1.5 text-[13px] text-right font-black text-blue-800 align-top whitespace-nowrap`}>
-                                                        {Math.round(item.inHouseQuantity).toLocaleString('en-US')}
+                                                        {reportType === 'lc_price'
+                                                            ? ((parseFloat(item.inHouseQuantity || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
+                                                            : Math.round(item.inHouseQuantity).toLocaleString('en-US')}
                                                     </td>
                                                 )}
                                                 {reportType === 'short' && (
@@ -718,7 +762,7 @@ const StockReport = ({
                                     );
                                 })
                             ) : (
-                                <tr><td colSpan={reportType === 'detailed' ? ((showBag ? 3 : 0) + (showQty ? 3 : 0) + 3) : (reportType === 'price' ? 7 : (reportType === 'group' ? 6 : 5))} className="px-4 py-8 text-center text-gray-500 italic text-[14px]">No records found for the selected criteria.</td></tr>
+                                <tr><td colSpan={reportType === 'detailed' ? ((showBag ? 3 : 0) + (showQty ? 3 : 0) + 3) : ((reportType === 'price' || reportType === 'lc_price') ? 7 : (reportType === 'group' ? 6 : 5))} className="px-4 py-8 text-center text-gray-500 italic text-[14px]">No records found for the selected criteria.</td></tr>
                             )}
                         </tbody>
                         {records.length > 0 && (
@@ -726,7 +770,7 @@ const StockReport = ({
                                 <tr className="bg-gray-100 border-t-2 border-gray-900">
                                     <td className="border-r border-gray-900 px-2 py-1.5" colSpan={2}></td>
                                     <td className="px-2 py-1.5 text-[14px] font-black text-gray-900 text-center uppercase tracking-wider border-r border-gray-900">Grand Total</td>
-                                    {reportType === 'price' && (
+                                    {(reportType === 'price' || reportType === 'lc_price') && (
                                         <td className="border-r border-gray-900 px-2 py-1.5" colSpan={2}></td>
                                     )}
                                     {reportType === 'group' && (
@@ -777,7 +821,9 @@ const StockReport = ({
                                     )}
                                     {showQty && (
                                         <td className={`${reportType === 'short' ? 'border-r border-gray-900' : ''} px-2 py-1.5 text-[14px] text-right font-black text-gray-900`}>
-                                            {Math.round(totals.totalInHouseQty)}
+                                            {reportType === 'lc_price'
+                                                ? ((parseFloat(totals.totalInHouseQty || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
+                                                : Math.round(totals.totalInHouseQty).toLocaleString('en-US')}
                                         </td>
                                     )}
                                     {reportType === 'short' && (
@@ -857,17 +903,17 @@ const StockReport = ({
                                                     </div>
                                                 )}
                                                 <div className="space-y-2 pt-2">
-                                                    {(reportType === 'price' || reportType === 'group') ? (
+                                                    {(reportType === 'price' || reportType === 'lc_price' || reportType === 'group') ? (
                                                         <>
                                                             <div className="flex items-center justify-between text-xs">
                                                                 <span className="font-bold text-gray-400 uppercase tracking-wider">LC No :</span>
                                                                 <span className="font-black text-gray-900 uppercase">{ent.lcNo || '—'}</span>
                                                             </div>
-                                                            {reportType === 'price' && (
+                                                            {(reportType === 'price' || reportType === 'lc_price') && (
                                                                 <div className="flex items-center justify-between text-xs">
-                                                                    <span className="font-bold text-gray-400 uppercase tracking-wider">Costing :</span>
+                                                                    <span className="font-bold text-gray-400 uppercase tracking-wider">{reportType === 'lc_price' ? 'Lc Rate $ :' : 'Costing :'}</span>
                                                                     <span className="font-black text-emerald-600">
-                                                                        {ent.purchasedPrice ? `৳${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                                        {getCostingDisplay(ent, item.productName)}
                                                                     </span>
                                                                 </div>
                                                             )}
@@ -876,8 +922,13 @@ const StockReport = ({
                                                                 <span className="font-black text-gray-900 text-right">
                                                                     {(() => {
                                                                         const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
-                                                                        return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                    })()} BAG ({Math.round(ent.inHouseQuantity).toLocaleString('en-US')} kg)
+                                                                        const bagStr = `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''} BAG`;
+                                                                        if (reportType === 'lc_price') {
+                                                                            const tonStr = (parseFloat(ent.inHouseQuantity || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+                                                                            return `${bagStr} (${tonStr} Ton)`;
+                                                                        }
+                                                                        return `${bagStr} (${Math.round(ent.inHouseQuantity).toLocaleString('en-US')} kg)`;
+                                                                    })()}
                                                                 </span>
                                                             </div>
                                                         </>
@@ -1016,6 +1067,7 @@ const StockReport = ({
                                 <option value="detailed">Details Report</option>
                                 <option value="group">Group Report</option>
                                 {canShowRate && <option value="price">Price Report</option>}
+                                {canShowLcPrice && <option value="lc_price">LC Price Report</option>}
                             </select>
                             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 sm:px-3 text-gray-400">
                                 <svg className="fill-current h-3.5 w-3.5 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -1464,10 +1516,10 @@ const StockReport = ({
             <ReportFormatModal
                 isOpen={showReportFormatModal}
                 onClose={() => setShowReportFormatModal(false)}
-                title={`Stock Management Report (${reportType === 'detailed' ? 'Details' : (reportType === 'price' ? 'Price' : (reportType === 'group' ? 'Group' : 'Short'))})`}
+                title={`Stock Management Report (${reportType === 'detailed' ? 'Details' : (reportType === 'price' ? 'Price' : (reportType === 'lc_price' ? 'LC Price' : (reportType === 'group' ? 'Group' : 'Short')))})`}
                 subtitle="Select your preferred format to print or export stock records"
                 onExportPdf={async () => {
-                    await generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products, damages, searchQuery, activeBaseline);
+                    await generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products, damages, searchQuery, activeBaseline, lcRecords);
                 }}
                 onExportExcel={() => {
                     generateStockReportExcel(
@@ -1480,7 +1532,8 @@ const StockReport = ({
                         salesRecords,
                         products,
                         damages,
-                        activeBaseline
+                        activeBaseline,
+                        lcRecords
                     );
                 }}
             />

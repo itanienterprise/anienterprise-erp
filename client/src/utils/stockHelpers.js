@@ -356,7 +356,7 @@ export const reconcilePriceReportBrandList = (brandList) => {
 };
 
 export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = [], activeBaseline = null, returnsList = []) => {
-    const isPriceReport = Boolean(stockFilters && (stockFilters.reportType === 'price' || stockFilters.reportType === 'group' || stockFilters.showRate === true));
+    const isPriceReport = Boolean(stockFilters && (stockFilters.reportType === 'price' || stockFilters.reportType === 'lc_price' || stockFilters.reportType === 'group' || stockFilters.showRate === true));
 
     const isWhFilter = stockFilters && stockFilters.warehouse &&
         typeof stockFilters.warehouse === 'string' &&

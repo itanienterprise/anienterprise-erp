@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import { formatDate, computeCustomerBalance, getLocalDateString, getIsoDateString, calculatePurchaseRemainingQty } from './helpers';
 import { calculateStockData } from './stockHelpers';
-import { getLcMilestoneFinances } from './lcValueUtils';
+import { getLcMilestoneFinances, getLcOpenCostMap, getLcOpenCost } from './lcValueUtils';
 
 /**
  * Generates and downloads an Excel spreadsheet (.xlsx) for the Exporter Profile Transaction Report.
@@ -2080,12 +2080,14 @@ export const generateStockReportExcel = (
     salesRecords = [],
     products = [],
     damages = [],
-    activeBaseline = null
+    activeBaseline = null,
+    lcRecords = []
 ) => {
     try {
         const rows = [];
-        const normalizedReportType = ['short', 'detailed', 'price', 'group'].includes(reportType) ? reportType : 'short';
-        const typeLabel = normalizedReportType === 'detailed' ? 'DETAILS REPORT' : (normalizedReportType === 'price' ? 'PRICE REPORT' : (normalizedReportType === 'group' ? 'GROUP REPORT' : 'SHORT REPORT'));
+        const lcCostMap = getLcOpenCostMap(lcRecords);
+        const normalizedReportType = ['short', 'detailed', 'price', 'lc_price', 'group'].includes(reportType) ? reportType : 'short';
+        const typeLabel = normalizedReportType === 'detailed' ? 'DETAILS REPORT' : (normalizedReportType === 'price' ? 'PRICE REPORT' : (normalizedReportType === 'lc_price' ? 'LC PRICE REPORT' : (normalizedReportType === 'group' ? 'GROUP REPORT' : 'SHORT REPORT')));
 
         // 1. Company Header
         rows.push(['M/S ANI ENTERPRISE']);
@@ -2194,7 +2196,7 @@ export const generateStockReportExcel = (
                     if (normalizedReportType === 'short') {
                         return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                     }
-                    if (normalizedReportType === 'price' || normalizedReportType === 'group') {
+                    if (normalizedReportType === 'price' || normalizedReportType === 'lc_price' || normalizedReportType === 'group') {
                         return Math.abs(b.inHouseQuantity || 0) > 0.001;
                     }
                     return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
@@ -2351,6 +2353,25 @@ export const generateStockReportExcel = (
                 { wch: 18 },
                 { wch: 18 }
             ];
+        } else if (normalizedReportType === 'lc_price') {
+            tableHeaders = [
+                'SL',
+                'Product & Quality',
+                'Brand',
+                'LC No',
+                'Lc Rate $',
+                'Closing Bag',
+                'Closing Qty (TON)'
+            ];
+            colWidths = [
+                { wch: 6 },
+                { wch: 28 },
+                { wch: 20 },
+                { wch: 20 },
+                { wch: 22 },
+                { wch: 18 },
+                { wch: 18 }
+            ];
         } else {
             tableHeaders = [
                 'SL',
@@ -2453,10 +2474,18 @@ export const generateStockReportExcel = (
                             ]);
                         }
                     } else {
-                        // Price Report row
+                        // Price Report & LC Price Report row
                         const lcStr = (b.lcNos && b.lcNos.length > 0) ? b.lcNos.join(', ') : (b.lcNo || '—');
-                        const rateVal = b.purchasedPrice || b.rate;
-                        const rateStr = rateVal ? (parseFloat(rateVal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                        const isLcPrice = normalizedReportType === 'lc_price';
+                        const rateVal = isLcPrice
+                            ? getLcOpenCost(b.lcNo, item.productName, lcCostMap)
+                            : (b.purchasedPrice || b.rate);
+                        const rateStr = (rateVal && parseFloat(rateVal) > 0)
+                            ? (isLcPrice ? `$${(parseFloat(rateVal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : (parseFloat(rateVal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                            : '—';
+                        const qtyVal = isLcPrice
+                            ? parseFloat(((parseFloat(b.inHouseQuantity || 0) / 1000).toFixed(3)))
+                            : Math.round(b.inHouseQuantity || 0);
                         rows.push([
                             bIdx === 0 ? index + 1 : '',
                             prodAndQ,
@@ -2464,13 +2493,16 @@ export const generateStockReportExcel = (
                             lcStr,
                             rateStr,
                             formatPktStr(b.inHouseQuantity, b.packetSize || 30),
-                            Math.round(b.inHouseQuantity || 0)
+                            qtyVal
                         ]);
 
                         const isLastOfBrand = (bIdx === brands.length - 1) || ((brands[bIdx + 1]?.brand || '').trim().toUpperCase() !== brandStr.toUpperCase());
                         if (brandCounts[brandStr.toUpperCase()] > 1 && isLastOfBrand) {
                             const matchingBrandRows = brands.filter(x => (x.brand || '').trim().toUpperCase() === brandStr.toUpperCase());
-                            const bTotalQty = matchingBrandRows.reduce((s, x) => s + Math.max(0, parseFloat(x.inHouseQuantity) || 0), 0);
+                            const rawTotal = matchingBrandRows.reduce((s, x) => s + Math.max(0, parseFloat(x.inHouseQuantity) || 0), 0);
+                            const bTotalQty = isLcPrice
+                                ? parseFloat(((rawTotal / 1000).toFixed(3)))
+                                : Math.round(rawTotal);
                             const bTotalBagStr = sumPktRemainder(matchingBrandRows, x => Math.max(0, parseFloat(x.inHouseQuantity) || 0), x => x.packetSize);
                             rows.push([
                                 '',
@@ -2479,7 +2511,7 @@ export const generateStockReportExcel = (
                                 '',
                                 '',
                                 bTotalBagStr,
-                                Math.round(bTotalQty)
+                                bTotalQty
                             ]);
                         }
                     }
@@ -2522,6 +2554,10 @@ export const generateStockReportExcel = (
                         Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0))
                     ]);
                 } else {
+                    const rawSub = brands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0);
+                    const subQty = normalizedReportType === 'lc_price'
+                        ? parseFloat(((rawSub / 1000).toFixed(3)))
+                        : Math.round(rawSub);
                     rows.push([
                         '',
                         `${prodName} TOTAL`,
@@ -2529,7 +2565,7 @@ export const generateStockReportExcel = (
                         '',
                         '',
                         sumPktRemainder(brands, b => Math.max(0, parseFloat(b.inHouseQuantity) || 0), b => b.packetSize),
-                        Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0))
+                        subQty
                     ]);
                 }
             });
@@ -2580,6 +2616,9 @@ export const generateStockReportExcel = (
                         Math.round(whTotalInHouseQty)
                     ]);
                 } else {
+                    const whQty = normalizedReportType === 'lc_price'
+                        ? parseFloat(((whTotalInHouseQty / 1000).toFixed(3)))
+                        : Math.round(whTotalInHouseQty);
                     rows.push([
                         `${whItem.name.toUpperCase()} TOTAL`,
                         '',
@@ -2587,7 +2626,7 @@ export const generateStockReportExcel = (
                         '',
                         '',
                         whInHouseBagStr,
-                        Math.round(whTotalInHouseQty)
+                        whQty
                     ]);
                 }
             }
@@ -2630,6 +2669,9 @@ export const generateStockReportExcel = (
                 Math.round(totalInHouseQty)
             ]);
         } else {
+            const gQty = normalizedReportType === 'lc_price'
+                ? parseFloat(((totalInHouseQty / 1000).toFixed(3)))
+                : Math.round(totalInHouseQty);
             rows.push([
                 'GRAND TOTAL',
                 '',
@@ -2637,7 +2679,7 @@ export const generateStockReportExcel = (
                 '',
                 '',
                 inHouseBagStr,
-                Math.round(totalInHouseQty)
+                gQty
             ]);
         }
 
@@ -2645,7 +2687,8 @@ export const generateStockReportExcel = (
         const ws = XLSX.utils.aoa_to_sheet(rows);
         ws['!cols'] = colWidths;
 
-        const sheetTitle = `Stock ${normalizedReportType.charAt(0).toUpperCase() + normalizedReportType.slice(1)} Report`.slice(0, 31);
+        const repName = normalizedReportType === 'lc_price' ? 'LC_Price' : (normalizedReportType.charAt(0).toUpperCase() + normalizedReportType.slice(1));
+        const sheetTitle = `Stock ${repName.replace('_', ' ')} Report`.slice(0, 31);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, sheetTitle);
 
@@ -2654,7 +2697,7 @@ export const generateStockReportExcel = (
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         });
 
-        const fileName = `Stock_${normalizedReportType.charAt(0).toUpperCase() + normalizedReportType.slice(1)}_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+        const fileName = `Stock_${repName}_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');

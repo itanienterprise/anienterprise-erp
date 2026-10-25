@@ -135,7 +135,8 @@ export const MODULES_LIST = [
         specialLabels: [
             { key: 'special', label: 'Transfer from Stock' },
             { key: 'showRate', label: 'Show Price / Rate' },
-            { key: 'showPrice', label: 'Show Price' }
+            { key: 'showPrice', label: 'Show Price' },
+            { key: 'lcPriceReport', label: 'LC Price Report' }
         ]
     },
     {
@@ -494,6 +495,24 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
         if (defaults[moduleName]) {
             if (defaults[moduleName].showPrice !== undefined) return !!defaults[moduleName].showPrice;
             if (defaults[moduleName].showRate !== undefined) return !!defaults[moduleName].showRate;
+        }
+        return false;
+    }
+
+    // Special check for lcPriceReport
+    if (checkAction === 'lcPriceReport') {
+        if (currentUser.permissions) {
+            const stockPerms = currentUser.permissions[moduleName] || currentUser.permissions.stock;
+            if (stockPerms && stockPerms.lcPriceReport !== undefined) {
+                return !!stockPerms.lcPriceReport;
+            }
+        }
+        const defaults = getDefaultPermissionsForRole(currentUser.role);
+        if (defaults[moduleName] && defaults[moduleName].lcPriceReport !== undefined) {
+            return !!defaults[moduleName].lcPriceReport;
+        }
+        if (defaults.stock && defaults.stock.lcPriceReport !== undefined) {
+            return !!defaults.stock.lcPriceReport;
         }
         return false;
     }

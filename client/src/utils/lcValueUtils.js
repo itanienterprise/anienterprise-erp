@@ -979,3 +979,132 @@ export const calculateLcConclusion = ({
     };
 };
 
+/**
+ * Calculate the LC Dollar Cost per Ton based on:
+ * - LC rate/ton + freight/ton in dollars
+ *
+ * Supports product-specific matching within an LC's productsList.
+ */
+export const calculateLcOpenCost = (lc, productName = '') => {
+    if (!lc) return 0;
+
+    const amendments = lc.amendments || [];
+    const origAmendment = amendments.find(a => a.amendmentNo === 'Original LC' || a.isOriginal) || amendments[0];
+
+    const getRatePerTon = (rVal) => {
+        const r = parseFloat(rVal) || 0;
+        return r > 0 && r < 10 ? r * 1000 : r;
+    };
+    const getFreightPerTon = (fVal) => {
+        const f = parseFloat(fVal) || 0;
+        return f > 0 && f < 0.1 ? f * 1000 : f;
+    };
+
+    const origProducts = (origAmendment?.productsList && origAmendment.productsList.length > 0)
+        ? origAmendment.productsList
+        : (lc.productsList && lc.productsList.length > 0 ? lc.productsList : []);
+
+    if (origProducts.length > 0 && productName) {
+        const matchedProd = origProducts.find(p => isProductMatch(p.productName || p.product, productName));
+        if (matchedProd) {
+            const pRate = getRatePerTon(matchedProd.rate);
+            const pFreight = getFreightPerTon(matchedProd.freight);
+            if (pRate > 0) {
+                return pRate + pFreight;
+            }
+            if (matchedProd.totalDollar && matchedProd.quantity) {
+                const pQty = parseFloat(matchedProd.quantity) || 0;
+                const tDollar = parseFloat(matchedProd.totalDollar) || 0;
+                if (pQty > 0 && tDollar > 0) {
+                    const normalizedDollar = tDollar < (pQty * 10) ? tDollar * 1000 : tDollar;
+                    return normalizedDollar / pQty;
+                }
+            }
+        }
+    }
+
+    const rootRate = getRatePerTon(origAmendment?.rate || lc.rate);
+    const rootFreight = getFreightPerTon(origAmendment?.freight || lc.freight);
+    if (rootRate > 0) {
+        return rootRate + rootFreight;
+    }
+
+    const openTotalDollar = parseFloat(origAmendment?.totalDollar || lc.totalDollar) || 0;
+    const totalQtyTons = parseFloat(origAmendment?.quantity || lc.quantity) || 0;
+    if (openTotalDollar > 0 && totalQtyTons > 0) {
+        return openTotalDollar / totalQtyTons;
+    }
+
+    return 0;
+};
+
+/**
+ * Builds a fast lookup map for LC Open Cost per KG.
+ * Keys:
+ * - `${cleanLc(lcNo)}_${cleanProd(productName)}`
+ * - `${cleanLc(lcNo)}`
+ */
+export const getLcOpenCostMap = (lcRecords = []) => {
+    const map = new Map();
+    if (!Array.isArray(lcRecords)) return map;
+
+    const cleanLc = (v) => String(v || '').replace(/\D/g, '');
+    const cleanProd = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    lcRecords.forEach(lc => {
+        if (!lc) return;
+        const cLc = cleanLc(lc.lcNo);
+        if (!cLc) return;
+
+        // Base/root cost
+        const baseCost = calculateLcOpenCost(lc, '');
+        if (baseCost > 0) {
+            map.set(cLc, baseCost);
+        }
+
+        // Product-wise costs
+        const prods = (lc.productsList && lc.productsList.length > 0) ? lc.productsList : [];
+        prods.forEach(p => {
+            const pName = p.productName || p.product || '';
+            const cP = cleanProd(pName);
+            if (cP) {
+                const pCost = calculateLcOpenCost(lc, pName);
+                if (pCost > 0) {
+                    map.set(`${cLc}_${cP}`, pCost);
+                }
+            }
+        });
+    });
+
+    return map;
+};
+
+/**
+ * Resolves the LC Open Cost for an LC number and product from an LC Cost Map or an array of LC records.
+ */
+export const getLcOpenCost = (lcNo, productName = '', lcRecordsOrMap) => {
+    if (!lcNo) return 0;
+    const cleanLc = (v) => String(v || '').replace(/\D/g, '');
+    const cleanProd = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const cLc = cleanLc(lcNo);
+    if (!cLc || cLc === '0000') return 0;
+
+    const cP = cleanProd(productName);
+
+    if (lcRecordsOrMap instanceof Map) {
+        if (cP && lcRecordsOrMap.has(`${cLc}_${cP}`)) {
+            return lcRecordsOrMap.get(`${cLc}_${cP}`);
+        }
+        if (lcRecordsOrMap.has(cLc)) {
+            return lcRecordsOrMap.get(cLc);
+        }
+    } else if (Array.isArray(lcRecordsOrMap)) {
+        const matched = lcRecordsOrMap.find(l => cleanLc(l.lcNo) === cLc);
+        if (matched) {
+            return calculateLcOpenCost(matched, productName);
+        }
+    }
+    return 0;
+};
+
