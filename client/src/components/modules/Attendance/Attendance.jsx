@@ -654,30 +654,30 @@ const Attendance = ({ currentUser }) => {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
   const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: <IcoHome /> },
-    { id: 'logs',      label: canViewAll ? 'Attendance Logs' : 'My Attendance Logs', icon: <IcoList /> },
-    { id: 'leaves',    label: canViewAll ? 'Leaves' : 'My Leaves', icon: <IcoLeave />, badge: leaves.filter(l => l.status === 'PENDING').length },
+    { id: 'dashboard', label: 'Dashboard', mobileLabel: 'Dashboard', icon: <IcoHome /> },
+    { id: 'logs',      label: canViewAll ? 'Attendance Logs' : 'My Attendance Logs', mobileLabel: 'Logs', icon: <IcoList /> },
+    { id: 'leaves',    label: canViewAll ? 'Leaves' : 'My Leaves', mobileLabel: 'Leaves', icon: <IcoLeave />, badge: leaves.filter(l => l.status === 'PENDING').length },
     ...(canViewAll ? [
-      { id: 'shifts',    label: 'Shifts', icon: <IcoShift /> },
-      { id: 'punches',   label: 'Raw Punches', icon: <IcoClock /> },
+      { id: 'shifts',    label: 'Shifts', mobileLabel: 'Shifts', icon: <IcoShift /> },
+      { id: 'punches',   label: 'Raw Punches', mobileLabel: 'Punches', icon: <IcoClock /> },
     ] : []),
     ...(canAccessDeviceTab ? [
-      { id: 'device',    label: 'Device / Mapping', icon: <IcoDevice />, badge: summary.unmatchedPunches || 0 },
+      { id: 'device',    label: 'Device / Mapping', mobileLabel: 'Device', icon: <IcoDevice />, badge: summary.unmatchedPunches || 0 },
     ] : [])
   ];
 
   return (
     <div className="attendance-module">
       {/* Header */}
-      <div className="att-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <div>
+      <div className="att-header">
+        <div className="att-header-text">
           <h1 className="att-header-title">
             <span style={{ marginRight: 8 }}>👆</span>Attendance Management
           </h1>
           <p className="att-header-sub">ZKTech F8 Biometric Integration · Real-time Tracking</p>
         </div>
         {canAccessDeviceTab && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="att-header-status">
             {deviceLiveStatus?.connected ? (
               <div
                 onClick={() => setActiveTab('device')}
@@ -765,10 +765,15 @@ const Attendance = ({ currentUser }) => {
             key={t.id}
             className={`att-tab ${activeTab === t.id ? 'active' : ''}`}
             onClick={() => setActiveTab(t.id)}
+            title={t.label}
           >
-            {t.icon}
-            {t.label}
-            {t.badge > 0 && <span className="att-tab-badge">{t.badge}</span>}
+            <div className="att-tab-icon-wrap">
+              {t.icon}
+              {t.badge > 0 && <span className="att-tab-badge att-tab-badge-mobile">{t.badge}</span>}
+            </div>
+            <span className="att-tab-label-desktop">{t.label}</span>
+            <span className="att-tab-label-mobile">{t.mobileLabel || t.label}</span>
+            {t.badge > 0 && <span className="att-tab-badge att-tab-badge-desktop">{t.badge}</span>}
           </button>
         ))}
       </div>
@@ -927,6 +932,7 @@ const Attendance = ({ currentUser }) => {
 // Dashboard Tab
 // ═══════════════════════════════════════════════════════════════════════════════
 const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefresh, onProcess, onQuickSync, syncingDevice, processing, canEdit, canViewAll }) => {
+  const [mobileView, setMobileView] = useState('cards'); // 'cards' | 'table'
   const mappingMap = useMemo(() => {
     const map = new Map();
     (mappings || []).forEach(m => map.set(Number(m.enrollId), m));
@@ -1008,7 +1014,7 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
           <div className="att-live-dot" />
           <h2 className="att-panel-title">{canViewAll ? 'Live Punch Feed' : 'My Recent Punches'}</h2>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="att-panel-actions">
           {canEdit && (
             <button
               className="att-btn att-btn-secondary att-btn-sm"
@@ -1045,69 +1051,149 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
             <div className="att-empty-sub">The device will push punches here in real time</div>
           </div>
         ) : (
-          <table className="att-table">
-            <thead>
-              <tr>
-                <th>Time & Date</th>
-                <th>Enroll ID</th>
-                <th>ERP ID</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Verify</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {livePunches.map(p => {
-                const today = isTodayDate(p.punchTime);
-                const mapping = mappingMap.get(Number(p.enrollId));
-                const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
-                const empName = p.employeeName || mapping?.employeeName || '';
-                return (
-                  <tr key={p._id}>
-                    <td style={{ fontFamily: 'monospace' }}>
-                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem' }}>
-                        {fmt12(p.punchTime)}
-                      </div>
-                      <div style={{ fontSize: '0.72rem', marginTop: 2, fontWeight: today ? 600 : 400, color: today ? '#059669' : '#64748b' }}>
-                        {today ? '● Today' : fmtDate(p.punchTime)}
-                      </div>
-                    </td>
-                    <td><span className="att-enroll-badge">{p.enrollId}</span></td>
-                    <td>
-                      {erpId ? (
-                        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', padding: '3px 8px', borderRadius: 6, fontSize: '0.82rem', border: '1px solid #dbeafe' }}>
-                          {erpId}
-                        </span>
-                      ) : (
-                        <span style={{ color: '#94a3b8' }}>—</span>
-                      )}
-                    </td>
-                    <td>
-                      {empName ? (
-                        <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.88rem' }}>
-                          {empName}
+          <>
+            {/* Mobile View Toggle Bar (Only visible on mobile screens) */}
+            <div className="att-mobile-feed-bar">
+              <span className="att-mobile-feed-count">{livePunches.length} punch{livePunches.length !== 1 ? 'es' : ''} today</span>
+              <div className="att-mobile-toggle-group">
+                <button
+                  type="button"
+                  className={`att-toggle-btn ${mobileView === 'cards' ? 'active' : ''}`}
+                  onClick={() => setMobileView('cards')}
+                >
+                  Cards
+                </button>
+                <button
+                  type="button"
+                  className={`att-toggle-btn ${mobileView === 'table' ? 'active' : ''}`}
+                  onClick={() => setMobileView('table')}
+                >
+                  Table
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Cards View (Rendered for mobile, controlled via mobileView and CSS) */}
+            {mobileView === 'cards' && (
+              <div className="att-mobile-cards">
+                {livePunches.map(p => {
+                  const today = isTodayDate(p.punchTime);
+                  const mapping = mappingMap.get(Number(p.enrollId));
+                  const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
+                  const empName = p.employeeName || mapping?.employeeName || '';
+                  return (
+                    <div key={p._id} className={`att-mobile-punch-card ${p.unmatched ? 'unmatched' : 'linked'}`}>
+                      <div className="att-mpc-top">
+                        <div className="att-mpc-time-date">
+                          <span className="att-mpc-time">{fmt12(p.punchTime)}</span>
+                          <span className={`att-mpc-date ${today ? 'today' : ''}`}>
+                            {today ? '● Today' : fmtDate(p.punchTime)}
+                          </span>
                         </div>
-                      ) : p.unmatched ? (
-                        <span style={{ color: '#dc2626', fontSize: '0.78rem', fontStyle: 'italic' }}>
-                          Unmapped Card
-                        </span>
-                      ) : (
-                        <span style={{ color: '#94a3b8' }}>—</span>
-                      )}
-                    </td>
-                    <td><PunchTypeBadge type={p.punchType} /></td>
-                    <td><VerifyModeBadge mode={p.verifyMode} /></td>
-                    <td>
-                      {p.unmatched
-                        ? <span className="att-badge absent">⚠ Unmatched</span>
-                        : <span className="att-badge present">✓ Linked</span>}
-                    </td>
+                        <div className="att-mpc-status">
+                          {p.unmatched ? (
+                            <span className="att-badge absent">⚠ Unmatched</span>
+                          ) : (
+                            <span className="att-badge present">✓ Linked</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="att-mpc-person">
+                        <div className="att-mpc-name">
+                          {empName ? (
+                            empName
+                          ) : p.unmatched ? (
+                            <span className="att-mpc-unmapped">Unmapped Card</span>
+                          ) : (
+                            <span className="att-mpc-empty">—</span>
+                          )}
+                        </div>
+                        <div className="att-mpc-badges">
+                          <span className="att-enroll-badge" title="Enroll ID">ID {p.enrollId}</span>
+                          {erpId ? (
+                            <span className="att-mpc-erpid" title="ERP ID">{erpId}</span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="att-mpc-footer">
+                        <PunchTypeBadge type={p.punchType} />
+                        <VerifyModeBadge mode={p.verifyMode} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Table View (Always displayed on desktop; on mobile displayed when mobileView === 'table') */}
+            <div className={`att-table-container ${mobileView === 'table' ? 'att-show-mobile-table' : ''}`}>
+              <table className="att-table">
+                <thead>
+                  <tr>
+                    <th>Time & Date</th>
+                    <th>Enroll ID</th>
+                    <th>ERP ID</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Verify</th>
+                    <th>Status</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {livePunches.map(p => {
+                    const today = isTodayDate(p.punchTime);
+                    const mapping = mappingMap.get(Number(p.enrollId));
+                    const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
+                    const empName = p.employeeName || mapping?.employeeName || '';
+                    return (
+                      <tr key={p._id}>
+                        <td style={{ fontFamily: 'monospace' }}>
+                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem' }}>
+                            {fmt12(p.punchTime)}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', marginTop: 2, fontWeight: today ? 600 : 400, color: today ? '#059669' : '#64748b' }}>
+                            {today ? '● Today' : fmtDate(p.punchTime)}
+                          </div>
+                        </td>
+                        <td><span className="att-enroll-badge">{p.enrollId}</span></td>
+                        <td>
+                          {erpId ? (
+                            <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', padding: '3px 8px', borderRadius: 6, fontSize: '0.82rem', border: '1px solid #dbeafe' }}>
+                              {erpId}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>—</span>
+                          )}
+                        </td>
+                        <td>
+                          {empName ? (
+                            <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.88rem' }}>
+                              {empName}
+                            </div>
+                          ) : p.unmatched ? (
+                            <span style={{ color: '#dc2626', fontSize: '0.78rem', fontStyle: 'italic' }}>
+                              Unmapped Card
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>—</span>
+                          )}
+                        </td>
+                        <td><PunchTypeBadge type={p.punchType} /></td>
+                        <td><VerifyModeBadge mode={p.verifyMode} /></td>
+                        <td>
+                          {p.unmatched
+                            ? <span className="att-badge absent">⚠ Unmatched</span>
+                            : <span className="att-badge present">✓ Linked</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -1118,23 +1204,38 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
 // ═══════════════════════════════════════════════════════════════════════════════
 // Logs Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const LogsTab = ({ logs, loading, logFromDate, setLogFromDate, logToDate, setLogToDate, logStatus, setLogStatus, logEmpId, setLogEmpId, employees, onRefresh, onProcess, processing, canEdit, canProcess, canViewAll, onEdit }) => (
+const LogsTab = ({ logs, loading, logFromDate, setLogFromDate, logToDate, setLogToDate, logStatus, setLogStatus, logEmpId, setLogEmpId, employees, onRefresh, onProcess, processing, canEdit, canProcess, canViewAll, onEdit }) => {
+  const [mobileView, setMobileView] = useState('cards'); // 'cards' | 'table'
+
+  return (
   <div className="att-panel">
-    <div className="att-panel-header">
+    <div className="att-panel-header att-logs-header">
       <h2 className="att-panel-title">{canViewAll ? 'Attendance Logs' : 'My Attendance Logs'}</h2>
       <div className="att-controls">
-        <button
-          type="button"
-          className={`att-btn ${logFromDate === todayStr() && logToDate === todayStr() ? 'att-btn-primary' : 'att-btn-secondary'}`}
-          style={{ padding: '6px 12px', fontSize: '0.8rem', height: 40, borderRadius: 12 }}
-          onClick={() => {
-            setLogFromDate(todayStr());
-            setLogToDate(todayStr());
-          }}
-        >
-          Today
-        </button>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <div className="att-logs-btn-row">
+          <button
+            type="button"
+            className={`att-btn ${logFromDate === todayStr() && logToDate === todayStr() ? 'att-btn-primary' : 'att-btn-secondary'}`}
+            onClick={() => {
+              setLogFromDate(todayStr());
+              setLogToDate(todayStr());
+            }}
+          >
+            <IcoClock />
+            <span>Today</span>
+          </button>
+          {(canProcess ?? canEdit) && (
+            <button className="att-btn att-btn-primary" onClick={() => onProcess(logToDate || logFromDate || todayStr())} disabled={processing}>
+              <IcoRefresh />
+              <span>{processing ? 'Processing…' : 'Process Date'}</span>
+            </button>
+          )}
+          <button className="att-btn att-btn-secondary" onClick={onRefresh}>
+            <IcoRefresh />
+            <span>Refresh</span>
+          </button>
+        </div>
+        <div className="att-date-group">
           <div className="att-date-wrap" title="From Date">
             <CustomDatePicker
               placeholder="From Date"
@@ -1143,7 +1244,7 @@ const LogsTab = ({ logs, loading, logFromDate, setLogFromDate, logToDate, setLog
               compact={true}
             />
           </div>
-          <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>to</span>
+          <span className="att-date-sep">to</span>
           <div className="att-date-wrap" title="To Date">
             <CustomDatePicker
               placeholder="To Date"
@@ -1155,40 +1256,34 @@ const LogsTab = ({ logs, loading, logFromDate, setLogFromDate, logToDate, setLog
           </div>
         </div>
         {canViewAll && (
+          <div className="att-filter-select-wrap">
+            <ERPSelect
+              value={logEmpId}
+              onChange={e => setLogEmpId(e.target.value)}
+              placeholder="All Employees"
+              style={{ minWidth: 190 }}
+              options={(employees || []).map(emp => ({
+                value: emp._id,
+                label: `${emp.name || emp.firstName || emp.employeeId}${emp.employeeId ? ` (${emp.employeeId})` : ''}`
+              }))}
+            />
+          </div>
+        )}
+        <div className="att-filter-select-wrap">
           <ERPSelect
-            value={logEmpId}
-            onChange={e => setLogEmpId(e.target.value)}
-            placeholder="All Employees"
-            style={{ minWidth: 190 }}
-            options={(employees || []).map(emp => ({
-              value: emp._id,
-              label: `${emp.name || emp.firstName || emp.employeeId}${emp.employeeId ? ` (${emp.employeeId})` : ''}`
+            value={logStatus}
+            onChange={e => setLogStatus(e.target.value)}
+            placeholder="All Status"
+            style={{ minWidth: 140 }}
+            options={['PRESENT','ABSENT','LATE','HALF_DAY','LEAVE','WEEKEND'].map(s => ({
+              value: s,
+              label: s.replace('_', ' ')
             }))}
           />
-        )}
-        <ERPSelect
-          value={logStatus}
-          onChange={e => setLogStatus(e.target.value)}
-          placeholder="All Status"
-          style={{ minWidth: 140 }}
-          options={['PRESENT','ABSENT','LATE','HALF_DAY','LEAVE','WEEKEND'].map(s => ({
-            value: s,
-            label: s.replace('_', ' ')
-          }))}
-        />
-        {(canProcess ?? canEdit) && (
-          <button className="att-btn att-btn-primary" onClick={() => onProcess(logToDate || logFromDate || todayStr())} disabled={processing}>
-            <IcoRefresh />
-            <span>{processing ? 'Processing…' : 'Process Date'}</span>
-          </button>
-        )}
-        <button className="att-btn att-btn-secondary" onClick={onRefresh}>
-          <IcoRefresh />
-          <span>Refresh</span>
-        </button>
+        </div>
       </div>
     </div>
-    <div className="att-table-wrap">
+    <div className="att-panel-body att-table-wrap">
       {loading && logs.length === 0 ? (
         <div style={{ padding: 24 }}>
           {[...Array(6)].map((_, i) => <div key={i} className="att-skeleton" style={{ height: 40, marginBottom: 8 }} />)}
@@ -1206,97 +1301,209 @@ const LogsTab = ({ logs, loading, logFromDate, setLogFromDate, logToDate, setLog
           <div className="att-empty-sub">Click "Process Date" to compute attendance from device punches</div>
         </div>
       ) : (
-        <table className="att-table">
-          <thead>
-            <tr>
-              <th>Employee</th>
-              <th>ERP ID</th>
-              <th>In Time</th>
-              <th>Out Time</th>
-              <th>Hours</th>
-              <th>OT</th>
-              <th>Status</th>
-              <th>Shift</th>
-              {onEdit && <th>Action</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {logs.map(log => {
-              const displayShift = log.shiftName
-                ? (/shift/i.test(log.shiftName) ? log.shiftName : `${log.shiftName} Shift`)
-                : '';
+        <>
+          {/* Mobile View Toggle Bar */}
+          <div className="att-mobile-feed-bar">
+            <span className="att-mobile-feed-count">{logs.length} record{logs.length !== 1 ? 's' : ''}</span>
+            <div className="att-mobile-toggle-group">
+              <button
+                type="button"
+                className={`att-toggle-btn ${mobileView === 'cards' ? 'active' : ''}`}
+                onClick={() => setMobileView('cards')}
+              >
+                Cards
+              </button>
+              <button
+                type="button"
+                className={`att-toggle-btn ${mobileView === 'table' ? 'active' : ''}`}
+                onClick={() => setMobileView('table')}
+              >
+                Table
+              </button>
+            </div>
+          </div>
 
-              return (
-                <tr key={log._id}>
-                  <td>
-                    <div style={{ fontWeight: 600, color: '#0f172a' }}>{log.employeeName || '—'}</div>
-                    {logFromDate !== logToDate && log.date && (
-                      <div style={{ fontSize: '0.72rem', color: '#2563eb', marginTop: 2, fontWeight: 500, fontFamily: 'monospace' }}>
-                        📅 {fmtDate(log.date)}
+          {/* Mobile Cards View */}
+          {mobileView === 'cards' && (
+            <div className="att-mobile-cards">
+              {logs.map(log => {
+                const displayShift = log.shiftName
+                  ? (/shift/i.test(log.shiftName) ? log.shiftName : `${log.shiftName} Shift`)
+                  : '';
+
+                return (
+                  <div key={log._id} className="att-mobile-log-card">
+                    <div className="att-mlc-header">
+                      <div className="att-mlc-top">
+                        <div className="att-mlc-id-group">
+                          {log.employeeEmpId && (
+                            <span className="att-mlc-erpid">{log.employeeEmpId}</span>
+                          )}
+                          {logFromDate !== logToDate && log.date && (
+                            <span className="att-mlc-date">📅 {fmtDate(log.date)}</span>
+                          )}
+                        </div>
+                        <div className="att-mlc-status">
+                          <StatusBadge status={log.status} lateMinutes={log.lateMinutes} />
+                          {log.manualOverride && (
+                            <span title={`Corrected by ${log.overriddenBy}`} className="att-mlc-override">✎</span>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </td>
-                  <td style={{ fontFamily: 'monospace', color: '#64748b' }}>{log.employeeEmpId || '—'}</td>
-                  <td style={{ fontFamily: 'monospace' }}>{fmt12(log.firstPunchIn)}</td>
-                  <td style={{ fontFamily: 'monospace' }}>{fmt12(log.lastPunchOut)}</td>
-                  <td style={{ fontWeight: 600 }}>{log.totalHours ? `${log.totalHours}h` : (log.status === 'PRESENT' || log.status === 'LATE' ? '0h' : '—')}</td>
-                  <td>
-                    {log.overtimeHours > 0 ? (
-                      <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-xs">
-                        +{log.overtimeHours}h
-                      </span>
-                    ) : (log.firstPunchIn || log.status === 'PRESENT' || log.status === 'LATE') ? (
-                      <span className="text-gray-400 font-mono text-xs">0h</span>
-                    ) : (
-                      <span className="text-gray-300">—</span>
-                    )}
-                  </td>
-                  <td>
-                    <StatusBadge status={log.status} lateMinutes={log.lateMinutes} />
-                    {log.manualOverride && <span title={`Corrected by ${log.overriddenBy}`} style={{ marginLeft: 4, fontSize: '0.68rem', color: '#6366f1' }}>✎</span>}
-                  </td>
-                  <td>
-                    {displayShift ? (
-                      <span style={{
-                        display: 'inline-block',
-                        fontSize: '0.75rem',
-                        color: '#047857',
-                        backgroundColor: '#f0fdf4',
-                        padding: '2px 8px',
-                        borderRadius: '6px',
-                        fontWeight: 500,
-                        border: '1px solid #bbf7d0',
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {displayShift}
-                      </span>
-                    ) : (
-                      <span style={{ color: '#94a3b8' }}>—</span>
-                    )}
-                  </td>
-                {onEdit && (
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <div className="flex items-center space-x-1.5">
-                      <button
-                        onClick={() => onEdit(log)}
-                        className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center"
-                        title="Edit Attendance Log"
-                        style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
-                      >
-                        <EditIcon className="w-5 h-5" />
-                      </button>
+                      <div className="att-mlc-name" title={log.employeeName || '—'}>
+                        {log.employeeName || '—'}
+                      </div>
                     </div>
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-          </tbody>
-        </table>
+
+                    <div className="att-mlc-grid">
+                      <div className="att-mlc-stat">
+                        <span className="att-mlc-stat-label">IN TIME</span>
+                        <span className="att-mlc-stat-val mono in">{fmt12(log.firstPunchIn)}</span>
+                      </div>
+                      <div className="att-mlc-stat">
+                        <span className="att-mlc-stat-label">OUT TIME</span>
+                        <span className="att-mlc-stat-val mono out">{fmt12(log.lastPunchOut)}</span>
+                      </div>
+                      <div className="att-mlc-stat">
+                        <span className="att-mlc-stat-label">HOURS</span>
+                        <span className="att-mlc-stat-val bold">
+                          {log.totalHours ? `${log.totalHours}h` : (log.status === 'PRESENT' || log.status === 'LATE' ? '0h' : '—')}
+                        </span>
+                      </div>
+                      <div className="att-mlc-stat">
+                        <span className="att-mlc-stat-label">OVERTIME</span>
+                        <span className="att-mlc-stat-val ot">
+                          {log.overtimeHours > 0 ? (
+                            <span className="att-mlc-ot-badge">+{log.overtimeHours}h</span>
+                          ) : (
+                            '0h'
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="att-mlc-footer">
+                      <div className="att-mlc-shift">
+                        {displayShift ? (
+                          <span className="att-shift-badge">{displayShift}</span>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>—</span>
+                        )}
+                      </div>
+                      {onEdit && (
+                        <button
+                          type="button"
+                          onClick={() => onEdit(log)}
+                          className="att-mlc-edit-btn"
+                          title="Edit Attendance Log"
+                        >
+                          <EditIcon className="w-4 h-4" />
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Table View (Always displayed on desktop; on mobile displayed when mobileView === 'table') */}
+          <div className={`att-table-container ${mobileView === 'table' ? 'att-show-mobile-table' : ''}`}>
+            <table className="att-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>ERP ID</th>
+                  <th>In Time</th>
+                  <th>Out Time</th>
+                  <th>Hours</th>
+                  <th>OT</th>
+                  <th>Status</th>
+                  <th>Shift</th>
+                  {onEdit && <th>Action</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map(log => {
+                  const displayShift = log.shiftName
+                    ? (/shift/i.test(log.shiftName) ? log.shiftName : `${log.shiftName} Shift`)
+                    : '';
+
+                  return (
+                    <tr key={log._id}>
+                      <td>
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{log.employeeName || '—'}</div>
+                        {logFromDate !== logToDate && log.date && (
+                          <div style={{ fontSize: '0.72rem', color: '#2563eb', marginTop: 2, fontWeight: 500, fontFamily: 'monospace' }}>
+                            📅 {fmtDate(log.date)}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ fontFamily: 'monospace', color: '#64748b' }}>{log.employeeEmpId || '—'}</td>
+                      <td style={{ fontFamily: 'monospace' }}>{fmt12(log.firstPunchIn)}</td>
+                      <td style={{ fontFamily: 'monospace' }}>{fmt12(log.lastPunchOut)}</td>
+                      <td style={{ fontWeight: 600 }}>{log.totalHours ? `${log.totalHours}h` : (log.status === 'PRESENT' || log.status === 'LATE' ? '0h' : '—')}</td>
+                      <td>
+                        {log.overtimeHours > 0 ? (
+                          <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-xs">
+                            +{log.overtimeHours}h
+                          </span>
+                        ) : (log.firstPunchIn || log.status === 'PRESENT' || log.status === 'LATE') ? (
+                          <span className="text-gray-400 font-mono text-xs">0h</span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td>
+                        <StatusBadge status={log.status} lateMinutes={log.lateMinutes} />
+                        {log.manualOverride && <span title={`Corrected by ${log.overriddenBy}`} style={{ marginLeft: 4, fontSize: '0.68rem', color: '#6366f1' }}>✎</span>}
+                      </td>
+                      <td>
+                        {displayShift ? (
+                          <span style={{
+                            display: 'inline-block',
+                            fontSize: '0.75rem',
+                            color: '#047857',
+                            backgroundColor: '#f0fdf4',
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            fontWeight: 500,
+                            border: '1px solid #bbf7d0',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {displayShift}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94a3b8' }}>—</span>
+                        )}
+                      </td>
+                      {onEdit && (
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <div className="flex items-center space-x-1.5">
+                            <button
+                              onClick={() => onEdit(log)}
+                              className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center"
+                              title="Edit Attendance Log"
+                              style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                            >
+                              <EditIcon className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   </div>
-);
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Leaves Tab
@@ -1321,6 +1528,8 @@ const LeavesTab = ({
   currentUser,
   myEmployee
 }) => {
+  const [mobileView, setMobileView] = useState('cards'); // 'cards' | 'table'
+
   const isOwnerOf = (l) => {
     const curEmpId = (currentUser?.employeeId || currentUser?.username || '').toLowerCase().trim();
     const curUsername = (currentUser?.username || '').toLowerCase().trim();
@@ -1348,33 +1557,37 @@ const LeavesTab = ({
 
   return (
   <div className="att-panel">
-    <div className="att-panel-header">
+    <div className="att-panel-header att-leaves-header">
       <h2 className="att-panel-title">{canViewAll ? 'Leave Requests' : 'My Leaves'}</h2>
       <div className="att-controls">
-        <ERPSelect
-          value={leaveStatus}
-          onChange={e => setLeaveStatus(e.target.value)}
-          placeholder="All Status"
-          style={{ minWidth: 140 }}
-          options={[
-            { value: 'PENDING', label: 'Pending' },
-            { value: 'APPROVED', label: 'Approved' },
-            { value: 'REJECTED', label: 'Rejected' },
-          ]}
-        />
-        {onAdd && (
-          <button className="att-btn att-btn-primary" onClick={onAdd}>
-            <IcoPlus />
-            <span>New Leave</span>
+        <div className="att-leaves-btn-row">
+          {onAdd && (
+            <button className="att-btn att-btn-primary" onClick={onAdd}>
+              <IcoPlus />
+              <span>New Leave</span>
+            </button>
+          )}
+          <button className="att-btn att-btn-secondary" onClick={onRefresh}>
+            <IcoRefresh />
+            <span>Refresh</span>
           </button>
-        )}
-        <button className="att-btn att-btn-secondary" onClick={onRefresh}>
-          <IcoRefresh />
-          <span>Refresh</span>
-        </button>
+        </div>
+        <div className="att-filter-select-wrap">
+          <ERPSelect
+            value={leaveStatus}
+            onChange={e => setLeaveStatus(e.target.value)}
+            placeholder="All Status"
+            style={{ minWidth: 140 }}
+            options={[
+              { value: 'PENDING', label: 'Pending' },
+              { value: 'APPROVED', label: 'Approved' },
+              { value: 'REJECTED', label: 'Rejected' },
+            ]}
+          />
+        </div>
       </div>
     </div>
-    <div className="att-table-wrap">
+    <div className="att-panel-body att-table-wrap">
       {loading ? (
         <div style={{ padding: 24 }}>
           {[...Array(4)].map((_, i) => <div key={i} className="att-skeleton" style={{ height: 42, marginBottom: 8 }} />)}
@@ -1385,77 +1598,208 @@ const LeavesTab = ({
           <div className="att-empty-title">No leave requests</div>
         </div>
       ) : (
-        <table className="att-table">
-          <thead>
-            <tr>
-              <th>Employee</th>
-              <th>Leave Type</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Days</th>
-              <th>Status</th>
-              {(canApproveLeave || canEditLeave || canDeleteLeave || canDelete || leaves.some(l => canEditItem(l))) && <th style={{ textAlign: 'center' }}>Action</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {leaves.map(l => (
-              <tr key={l._id}>
-                <td style={{ fontWeight: 600 }}>{l.employeeName || l.employeeEmpId || '—'}</td>
-                <td><span className="att-badge leave">{l.leaveType}</span></td>
-                <td>{fmtDate(l.fromDate)}</td>
-                <td>{fmtDate(l.toDate)}</td>
-                <td style={{ fontWeight: 700, textAlign: 'center' }}>{l.totalDays}</td>
-                <td><StatusBadge status={l.status} /></td>
-                {(canApproveLeave || canEditLeave || canDeleteLeave || canDelete || canEditItem(l)) && (
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <div className="flex items-center justify-center space-x-1.5">
-                      {canApproveLeave && l.status === 'PENDING' && (
-                        <>
-                          <button
-                            onClick={() => onAction(l._id, 'APPROVED')}
-                            className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors inline-flex items-center justify-center"
-                            title="Approve Leave"
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
-                          >
-                            <CheckIcon className="w-5 h-5 text-emerald-600" />
-                          </button>
-                          <button
-                            onClick={() => onAction(l._id, 'REJECTED')}
-                            className="p-1 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded transition-colors inline-flex items-center justify-center"
-                            title="Reject Leave"
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
-                          >
-                            <XIcon className="w-5 h-5 text-rose-500" />
-                          </button>
-                        </>
-                      )}
-                      {onEdit && canEditItem(l) && (
-                        <button
-                          onClick={() => onEdit(l)}
-                          className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center"
-                          title="Edit Leave"
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
-                        >
-                          <EditIcon className="w-5 h-5" />
-                        </button>
-                      )}
-                      {onDelete && (
-                        <button
-                          onClick={() => onDelete(l._id)}
-                          className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center"
-                          title="Delete Leave"
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
-                        >
-                          <TrashIcon className="w-5 h-5" />
-                        </button>
-                      )}
+        <>
+          {/* Mobile View Toggle Bar */}
+          <div className="att-mobile-feed-bar">
+            <span className="att-mobile-feed-count">{leaves.length} request{leaves.length !== 1 ? 's' : ''}</span>
+            <div className="att-mobile-toggle-group">
+              <button
+                type="button"
+                className={`att-toggle-btn ${mobileView === 'cards' ? 'active' : ''}`}
+                onClick={() => setMobileView('cards')}
+              >
+                Cards
+              </button>
+              <button
+                type="button"
+                className={`att-toggle-btn ${mobileView === 'table' ? 'active' : ''}`}
+                onClick={() => setMobileView('table')}
+              >
+                Table
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Cards View */}
+          {mobileView === 'cards' && (
+            <div className="att-mobile-cards">
+              {leaves.map(l => (
+                <div key={l._id} className="att-mobile-log-card">
+                  <div className="att-mlc-header">
+                    <div className="att-mlc-top">
+                      <div className="att-mlc-id-group">
+                        {l.employeeEmpId && (
+                          <span className="att-mlc-erpid">{l.employeeEmpId}</span>
+                        )}
+                      </div>
+                      <div className="att-mlc-status">
+                        <StatusBadge status={l.status} />
+                      </div>
                     </div>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    <div className="att-mlc-name" title={l.employeeName || l.employeeEmpId || '—'}>
+                      {l.employeeName || l.employeeEmpId || '—'}
+                    </div>
+                  </div>
+
+                  <div className="att-leave-kv-box">
+                    <div className="att-leave-kv-row">
+                      <span className="att-leave-kv-label">Leave Type:</span>
+                      <span className="att-leave-kv-val">
+                        <span className="att-badge leave" style={{ fontSize: '0.72rem', padding: '1px 8px' }}>
+                          {l.leaveType}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="att-leave-kv-row">
+                      <span className="att-leave-kv-label">From:</span>
+                      <span className="att-leave-kv-val mono">{fmtDate(l.fromDate)}</span>
+                    </div>
+                    <div className="att-leave-kv-row">
+                      <span className="att-leave-kv-label">To:</span>
+                      <span className="att-leave-kv-val mono">{fmtDate(l.toDate)}</span>
+                    </div>
+                    <div className="att-leave-kv-row">
+                      <span className="att-leave-kv-label">Days:</span>
+                      <span className="att-leave-kv-val" style={{ fontWeight: 700, color: '#2563eb' }}>
+                        {l.totalDays} day{l.totalDays !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {l.reason && (
+                      <div className="att-leave-kv-row">
+                        <span className="att-leave-kv-label">Reason:</span>
+                        <span className="att-leave-kv-val" style={{ fontWeight: 500, color: '#475569', fontStyle: 'italic' }}>
+                          {l.reason}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {(canApproveLeave || canEditLeave || canDeleteLeave || canDelete || canEditItem(l)) && (
+                    <div className="att-mlc-footer att-leave-actions-footer">
+                      <div style={{ flex: 1 }} />
+                      <div className="flex items-center space-x-1.5">
+                        {canApproveLeave && l.status === 'PENDING' && (
+                          <>
+                            <button
+                              onClick={() => onAction(l._id, 'APPROVED')}
+                              className="att-leave-action-btn approve"
+                              title="Approve Leave"
+                            >
+                              <CheckIcon className="w-4 h-4" />
+                              <span>Approve</span>
+                            </button>
+                            <button
+                              onClick={() => onAction(l._id, 'REJECTED')}
+                              className="att-leave-action-btn reject"
+                              title="Reject Leave"
+                            >
+                              <XIcon className="w-4 h-4" />
+                              <span>Reject</span>
+                            </button>
+                          </>
+                        )}
+                        {onEdit && canEditItem(l) && (
+                          <button
+                            onClick={() => onEdit(l)}
+                            className="att-leave-action-btn edit"
+                            title="Edit Leave"
+                          >
+                            <EditIcon className="w-4 h-4" />
+                            <span>Edit</span>
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button
+                            onClick={() => onDelete(l._id)}
+                            className="att-leave-action-btn delete"
+                            title="Delete Leave"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Table View (Always displayed on desktop; on mobile displayed when mobileView === 'table') */}
+          <div className={`att-table-container ${mobileView === 'table' ? 'att-show-mobile-table' : ''}`}>
+            <table className="att-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Leave Type</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Days</th>
+                  <th>Status</th>
+                  {(canApproveLeave || canEditLeave || canDeleteLeave || canDelete || leaves.some(l => canEditItem(l))) && <th style={{ textAlign: 'center' }}>Action</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {leaves.map(l => (
+                  <tr key={l._id}>
+                    <td style={{ fontWeight: 600 }}>{l.employeeName || l.employeeEmpId || '—'}</td>
+                    <td><span className="att-badge leave">{l.leaveType}</span></td>
+                    <td>{fmtDate(l.fromDate)}</td>
+                    <td>{fmtDate(l.toDate)}</td>
+                    <td style={{ fontWeight: 700, textAlign: 'center' }}>{l.totalDays}</td>
+                    <td><StatusBadge status={l.status} /></td>
+                    {(canApproveLeave || canEditLeave || canDeleteLeave || canDelete || canEditItem(l)) && (
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div className="flex items-center justify-center space-x-1.5">
+                          {canApproveLeave && l.status === 'PENDING' && (
+                            <>
+                              <button
+                                onClick={() => onAction(l._id, 'APPROVED')}
+                                className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors inline-flex items-center justify-center"
+                                title="Approve Leave"
+                                style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                              >
+                                <CheckIcon className="w-5 h-5 text-emerald-600" />
+                              </button>
+                              <button
+                                onClick={() => onAction(l._id, 'REJECTED')}
+                                className="p-1 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded transition-colors inline-flex items-center justify-center"
+                                title="Reject Leave"
+                                style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                              >
+                                <XIcon className="w-5 h-5 text-rose-500" />
+                              </button>
+                            </>
+                          )}
+                          {onEdit && canEditItem(l) && (
+                            <button
+                              onClick={() => onEdit(l)}
+                              className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center"
+                              title="Edit Leave"
+                              style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                            >
+                              <EditIcon className="w-5 h-5" />
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              onClick={() => onDelete(l._id)}
+                              className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center"
+                              title="Delete Leave"
+                              style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                            >
+                              <TrashIcon className="w-5 h-5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   </div>
@@ -1465,24 +1809,29 @@ const LeavesTab = ({
 // ═══════════════════════════════════════════════════════════════════════════════
 // Shifts Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const ShiftsTab = ({ shifts, loading, onRefresh, onAdd, onEdit, onDelete }) => (
+const ShiftsTab = ({ shifts, loading, onRefresh, onAdd, onEdit, onDelete }) => {
+  const [mobileView, setMobileView] = useState('cards'); // 'cards' | 'table'
+
+  return (
   <div className="att-panel">
-    <div className="att-panel-header">
+    <div className="att-panel-header att-shifts-header">
       <h2 className="att-panel-title">Shift Configuration</h2>
       <div className="att-controls">
-        {onAdd && (
-          <button className="att-btn att-btn-primary" onClick={onAdd}>
-            <IcoPlus />
-            <span>New Shift</span>
+        <div className="att-shifts-btn-row">
+          {onAdd && (
+            <button className="att-btn att-btn-primary" onClick={onAdd}>
+              <IcoPlus />
+              <span>New Shift</span>
+            </button>
+          )}
+          <button className="att-btn att-btn-secondary" onClick={onRefresh}>
+            <IcoRefresh />
+            <span>Refresh</span>
           </button>
-        )}
-        <button className="att-btn att-btn-secondary" onClick={onRefresh}>
-          <IcoRefresh />
-          <span>Refresh</span>
-        </button>
+        </div>
       </div>
     </div>
-    <div className="att-table-wrap">
+    <div className="att-panel-body att-table-wrap">
       {loading ? (
         <div style={{ padding: 24 }}>
           {[...Array(3)].map((_, i) => <div key={i} className="att-skeleton" style={{ height: 48, marginBottom: 8 }} />)}
@@ -1494,73 +1843,178 @@ const ShiftsTab = ({ shifts, loading, onRefresh, onAdd, onEdit, onDelete }) => (
           <div className="att-empty-sub">Add at least one shift (e.g. "General" 9:00–18:00)</div>
         </div>
       ) : (
-        <table className="att-table">
-          <thead>
-            <tr>
-              <th>Shift Name</th>
-              <th>Start</th>
-              <th>End</th>
-              <th>Grace (min)</th>
-              <th>Break (min)</th>
-              <th>Holiday</th>
-              <th>Default</th>
-              {(onEdit || onDelete) && <th>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {shifts.map(s => (
-              <tr key={s._id}>
-                <td style={{ fontWeight: 700 }}>{s.shiftName}</td>
-                <td style={{ fontFamily: 'monospace' }}>{s.startTime}</td>
-                <td style={{ fontFamily: 'monospace' }}>{s.endTime}</td>
-                <td style={{ fontFamily: 'monospace' }}>{s.graceMinutes}</td>
-                <td style={{ fontFamily: 'monospace' }}>{s.breakMinutes}</td>
-                <td>
-                  {Array.isArray(s.holidays) && s.holidays.length > 0 ? (
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {s.holidays.map(d => (
-                        <span key={d} className="att-badge holiday">{d}</span>
-                      ))}
+        <>
+          {/* Mobile View Toggle Bar */}
+          <div className="att-mobile-feed-bar">
+            <span className="att-mobile-feed-count">{shifts.length} shift{shifts.length !== 1 ? 's' : ''}</span>
+            <div className="att-mobile-toggle-group">
+              <button
+                type="button"
+                className={`att-toggle-btn ${mobileView === 'cards' ? 'active' : ''}`}
+                onClick={() => setMobileView('cards')}
+              >
+                Cards
+              </button>
+              <button
+                type="button"
+                className={`att-toggle-btn ${mobileView === 'table' ? 'active' : ''}`}
+                onClick={() => setMobileView('table')}
+              >
+                Table
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Cards View */}
+          {mobileView === 'cards' && (
+            <div className="att-mobile-cards">
+              {shifts.map(s => (
+                <div key={s._id} className="att-mobile-log-card">
+                  <div className="att-mlc-header">
+                    <div className="att-mlc-top">
+                      <div className="att-mlc-id-group">
+                        <span style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>{s.shiftName}</span>
+                      </div>
+                      <div className="att-mlc-status">
+                        {s.isDefault ? (
+                          <span className="att-badge present">✓ Default</span>
+                        ) : null}
+                      </div>
                     </div>
-                  ) : (
-                    <span style={{ color: '#94a3b8' }}>—</span>
-                  )}
-                </td>
-                <td>{s.isDefault ? <span className="att-badge present">✓ Default</span> : '—'}</td>
-                {(onEdit || onDelete) && (
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <div className="flex items-center space-x-1.5">
-                      {onEdit && (
-                        <button
-                          className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center"
-                          onClick={() => onEdit(s)}
-                          title="Edit Shift"
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
-                        >
-                          <EditIcon className="w-5 h-5" />
-                        </button>
-                      )}
-                      {onDelete && (
-                        <button
-                          className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center"
-                          onClick={() => onDelete(s._id)}
-                          title="Delete Shift"
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
-                        >
-                          <TrashIcon className="w-5 h-5" />
-                        </button>
+                  </div>
+
+                  <div className="att-mlc-grid">
+                    <div className="att-mlc-stat">
+                      <span className="att-mlc-stat-label">START</span>
+                      <span className="att-mlc-stat-val mono in">{s.startTime || '—'}</span>
+                    </div>
+                    <div className="att-mlc-stat">
+                      <span className="att-mlc-stat-label">END</span>
+                      <span className="att-mlc-stat-val mono out">{s.endTime || '—'}</span>
+                    </div>
+                    <div className="att-mlc-stat">
+                      <span className="att-mlc-stat-label">GRACE</span>
+                      <span className="att-mlc-stat-val mono">{s.graceMinutes ? `${s.graceMinutes}m` : '0m'}</span>
+                    </div>
+                    <div className="att-mlc-stat">
+                      <span className="att-mlc-stat-label">BREAK</span>
+                      <span className="att-mlc-stat-val mono">{s.breakMinutes ? `${s.breakMinutes}m` : '0m'}</span>
+                    </div>
+                  </div>
+
+                  <div className="att-mlc-footer">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                      {Array.isArray(s.holidays) && s.holidays.length > 0 ? (
+                        s.holidays.map(d => (
+                          <span key={d} className="att-badge holiday" style={{ fontSize: '0.68rem', padding: '1px 5px' }}>{d}</span>
+                        ))
+                      ) : (
+                        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>No weekly holiday</span>
                       )}
                     </div>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    {(onEdit || onDelete) && (
+                      <div className="flex items-center space-x-1.5">
+                        {onEdit && (
+                          <button
+                            type="button"
+                            onClick={() => onEdit(s)}
+                            className="att-leave-action-btn edit"
+                            title="Edit Shift"
+                          >
+                            <EditIcon className="w-4 h-4" />
+                            <span>Edit</span>
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button
+                            type="button"
+                            onClick={() => onDelete(s._id)}
+                            className="att-leave-action-btn delete"
+                            title="Delete Shift"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Table View (Always displayed on desktop; on mobile displayed when mobileView === 'table') */}
+          <div className={`att-table-container ${mobileView === 'table' ? 'att-show-mobile-table' : ''}`}>
+            <table className="att-table">
+              <thead>
+                <tr>
+                  <th>Shift Name</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Grace (min)</th>
+                  <th>Break (min)</th>
+                  <th>Holiday</th>
+                  <th>Default</th>
+                  {(onEdit || onDelete) && <th>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {shifts.map(s => (
+                  <tr key={s._id}>
+                    <td style={{ fontWeight: 700 }}>{s.shiftName}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{s.startTime}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{s.endTime}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{s.graceMinutes}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{s.breakMinutes}</td>
+                    <td>
+                      {Array.isArray(s.holidays) && s.holidays.length > 0 ? (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {s.holidays.map(d => (
+                            <span key={d} className="att-badge holiday">{d}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>—</span>
+                      )}
+                    </td>
+                    <td>{s.isDefault ? <span className="att-badge present">✓ Default</span> : '—'}</td>
+                    {(onEdit || onDelete) && (
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div className="flex items-center space-x-1.5">
+                          {onEdit && (
+                            <button
+                              className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center"
+                              onClick={() => onEdit(s)}
+                              title="Edit Shift"
+                              style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                            >
+                              <EditIcon className="w-5 h-5" />
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center"
+                              onClick={() => onDelete(s._id)}
+                              title="Delete Shift"
+                              style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                            >
+                              <TrashIcon className="w-5 h-5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   </div>
-);
+  );
+};
 
 // Raw Punches Tab
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1575,6 +2029,8 @@ const PunchesTab = ({
   onAddMapping,
   mappings = []
 }) => {
+  const [mobileView, setMobileView] = useState('cards'); // 'cards' | 'table'
+
   const mappingMap = useMemo(() => {
     const map = new Map();
     (mappings || []).forEach(m => {
@@ -1587,48 +2043,55 @@ const PunchesTab = ({
 
   return (
     <div className="att-panel">
-      <div className="att-panel-header">
+      <div className="att-panel-header att-punches-header">
         <h2 className="att-panel-title">Raw Device Punches</h2>
-        <div className="att-controls" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className={`att-btn ${!punchDate ? 'att-btn-primary' : 'att-btn-secondary'}`}
-            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-            onClick={() => setPunchDate('')}
-          >
-            All Dates
-          </button>
-          <button
-            type="button"
-            className={`att-btn ${punchDate === todayStr() ? 'att-btn-primary' : 'att-btn-secondary'}`}
-            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-            onClick={() => setPunchDate(todayStr())}
-          >
-            Today
-          </button>
-          <div className="att-date-wrap">
-            <CustomDatePicker
-              value={punchDate}
-              onChange={e => setPunchDate(e.target.value)}
-              compact={true}
-            />
+        <div className="att-controls">
+          <div className="att-punches-btn-row">
+            <button
+              type="button"
+              className={`att-btn ${!punchDate ? 'att-btn-primary' : 'att-btn-secondary'}`}
+              onClick={() => setPunchDate('')}
+            >
+              <IcoList />
+              <span>All Dates</span>
+            </button>
+            <button
+              type="button"
+              className={`att-btn ${punchDate === todayStr() ? 'att-btn-primary' : 'att-btn-secondary'}`}
+              onClick={() => setPunchDate(todayStr())}
+            >
+              <IcoClock />
+              <span>Today</span>
+            </button>
+            <button
+              type="button"
+              className="att-btn att-btn-secondary"
+              onClick={onRefresh}
+            >
+              <IcoRefresh />
+              <span>Refresh</span>
+            </button>
           </div>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, color: punchUnmatchedOnly ? '#dc2626' : '#64748b' }}>
-            <input
-              type="checkbox"
-              checked={punchUnmatchedOnly}
-              onChange={e => setPunchUnmatchedOnly(e.target.checked)}
-              style={{ width: 15, height: 15, cursor: 'pointer' }}
-            />
-            <span>Unmapped Only</span>
-          </label>
-          <button className="att-btn att-btn-secondary" onClick={onRefresh}>
-            <IcoRefresh />
-            <span>Refresh</span>
-          </button>
+          <div className="att-punches-filter-row">
+            <div className="att-date-wrap att-punches-date-wrap">
+              <CustomDatePicker
+                value={punchDate}
+                onChange={e => setPunchDate(e.target.value)}
+                compact={true}
+              />
+            </div>
+            <label className={`att-unmapped-filter-pill ${punchUnmatchedOnly ? 'active' : ''}`}>
+              <input
+                type="checkbox"
+                checked={punchUnmatchedOnly}
+                onChange={e => setPunchUnmatchedOnly(e.target.checked)}
+              />
+              <span>Unmapped Only</span>
+            </label>
+          </div>
         </div>
       </div>
-      <div className="att-table-wrap">
+      <div className="att-panel-body att-table-wrap">
         {loading ? (
           <div style={{ padding: 24 }}>
             {[...Array(5)].map((_, i) => <div key={i} className="att-skeleton" style={{ height: 36, marginBottom: 8 }} />)}
@@ -1650,75 +2113,181 @@ const PunchesTab = ({
             )}
           </div>
         ) : (
-          <table className="att-table">
-            <thead>
-              <tr>
-                <th>Date & Time</th>
-                <th>Device ID</th>
-                <th>Enroll ID</th>
-                <th>ERP ID</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Verify</th>
-                <th>Linked</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {punches.map(p => {
-                const mapping = mappingMap.get(Number(p.enrollId));
-                const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
-                const empName = p.employeeName || mapping?.employeeName || '';
-                return (
-                  <tr key={p._id}>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                      {new Date(p.punchTime).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka' })} {fmt12(p.punchTime)}
-                    </td>
-                    <td style={{ fontSize: '0.76rem', color: '#64748b' }}>{p.deviceId}</td>
-                    <td><span className="att-enroll-badge">{p.enrollId}</span></td>
-                    <td>
-                      {erpId ? (
-                        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', padding: '3px 8px', borderRadius: 6, fontSize: '0.82rem', border: '1px solid #dbeafe' }}>
-                          {erpId}
-                        </span>
-                      ) : (
-                        <span style={{ color: '#94a3b8' }}>—</span>
-                      )}
-                    </td>
-                    <td>
-                      {empName ? (
-                        <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.88rem' }}>
-                          {empName}
+          <>
+            {/* Mobile View Toggle Bar */}
+            <div className="att-mobile-feed-bar">
+              <span className="att-mobile-feed-count">{punches.length} punch{punches.length !== 1 ? 'es' : ''}</span>
+              <div className="att-mobile-toggle-group">
+                <button
+                  type="button"
+                  className={`att-toggle-btn ${mobileView === 'cards' ? 'active' : ''}`}
+                  onClick={() => setMobileView('cards')}
+                >
+                  Cards
+                </button>
+                <button
+                  type="button"
+                  className={`att-toggle-btn ${mobileView === 'table' ? 'active' : ''}`}
+                  onClick={() => setMobileView('table')}
+                >
+                  Table
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Cards View */}
+            {mobileView === 'cards' && (
+              <div className="att-mobile-cards">
+                {punches.map(p => {
+                  const mapping = mappingMap.get(Number(p.enrollId));
+                  const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
+                  const empName = p.employeeName || mapping?.employeeName || '';
+                  return (
+                    <div key={p._id} className="att-mobile-log-card">
+                      <div className="att-mlc-header">
+                        <div className="att-mlc-top">
+                          <div className="att-mlc-id-group">
+                            {erpId ? (
+                              <span className="att-mlc-id">{erpId}</span>
+                            ) : null}
+                            <span className="att-enroll-badge" title="Enroll ID">ID {p.enrollId}</span>
+                          </div>
+                          <div className="att-mlc-status">
+                            {p.unmatched ? (
+                              <span className="att-badge absent">⚠ Unmapped</span>
+                            ) : (
+                              <span className="att-badge present">✓ Linked</span>
+                            )}
+                          </div>
                         </div>
-                      ) : p.unmatched ? (
-                        <span style={{ color: '#dc2626', fontSize: '0.78rem', fontStyle: 'italic' }}>
-                          Unmapped Card
-                        </span>
-                      ) : (
-                        <span style={{ color: '#94a3b8' }}>—</span>
+                        <div className="att-mlc-name" title={empName || 'Unmapped Card'}>
+                          {empName ? (
+                            empName
+                          ) : (
+                            <span style={{ color: '#dc2626', fontStyle: 'italic', fontWeight: 500 }}>Unmapped Card</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="att-leave-kv-box">
+                        <div className="att-leave-kv-row">
+                          <span className="att-leave-kv-label">DATE & TIME:</span>
+                          <span className="att-leave-kv-val mono" style={{ fontWeight: 700, color: '#0f172a' }}>
+                            {new Date(p.punchTime).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka' })} {fmt12(p.punchTime)}
+                          </span>
+                        </div>
+                        <div className="att-leave-kv-row">
+                          <span className="att-leave-kv-label">DEVICE:</span>
+                          <span className="att-leave-kv-val mono" style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                            {p.deviceId || '—'}
+                          </span>
+                        </div>
+                        <div className="att-leave-kv-row">
+                          <span className="att-leave-kv-label">PUNCH TYPE:</span>
+                          <span className="att-leave-kv-val">
+                            <PunchTypeBadge type={p.punchType} />
+                          </span>
+                        </div>
+                        <div className="att-leave-kv-row">
+                          <span className="att-leave-kv-label">VERIFY:</span>
+                          <span className="att-leave-kv-val">
+                            <VerifyModeBadge mode={p.verifyMode} />
+                          </span>
+                        </div>
+                      </div>
+
+                      {p.unmatched && onAddMapping && (
+                        <div className="att-mlc-footer" style={{ justifyContent: 'flex-end', paddingTop: 8 }}>
+                          <button
+                            type="button"
+                            className="att-btn att-btn-primary"
+                            style={{ borderRadius: 9999, height: 32, fontSize: '0.75rem', padding: '0 12px' }}
+                            onClick={() => onAddMapping(p.enrollId)}
+                          >
+                            <IcoPlus />
+                            <span>Link Enroll ID {p.enrollId}</span>
+                          </button>
+                        </div>
                       )}
-                    </td>
-                    <td><PunchTypeBadge type={p.punchType} /></td>
-                    <td><VerifyModeBadge mode={p.verifyMode} /></td>
-                    <td>{p.unmatched ? <span className="att-badge absent">⚠ Unmapped</span> : <span className="att-badge present">✓ Linked</span>}</td>
-                    <td>
-                      {p.unmatched && onAddMapping ? (
-                        <button
-                          className="att-btn att-btn-primary"
-                          style={{ padding: '3px 8px', fontSize: '0.74rem' }}
-                          onClick={() => onAddMapping(p.enrollId)}
-                        >
-                          + Link ID {p.enrollId}
-                        </button>
-                      ) : (
-                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>—</span>
-                      )}
-                    </td>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Table View (Always displayed on desktop; on mobile displayed when mobileView === 'table') */}
+            <div className={`att-table-container ${mobileView === 'table' ? 'att-show-mobile-table' : ''}`}>
+              <table className="att-table">
+                <thead>
+                  <tr>
+                    <th>Date & Time</th>
+                    <th>Device ID</th>
+                    <th>Enroll ID</th>
+                    <th>ERP ID</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Verify</th>
+                    <th>Linked</th>
+                    <th>Action</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {punches.map(p => {
+                    const mapping = mappingMap.get(Number(p.enrollId));
+                    const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
+                    const empName = p.employeeName || mapping?.employeeName || '';
+                    return (
+                      <tr key={p._id}>
+                        <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                          {new Date(p.punchTime).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka' })} {fmt12(p.punchTime)}
+                        </td>
+                        <td style={{ fontSize: '0.76rem', color: '#64748b' }}>{p.deviceId}</td>
+                        <td><span className="att-enroll-badge">{p.enrollId}</span></td>
+                        <td>
+                          {erpId ? (
+                            <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', padding: '3px 8px', borderRadius: 6, fontSize: '0.82rem', border: '1px solid #dbeafe' }}>
+                              {erpId}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>—</span>
+                          )}
+                        </td>
+                        <td>
+                          {empName ? (
+                            <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.88rem' }}>
+                              {empName}
+                            </div>
+                          ) : p.unmatched ? (
+                            <span style={{ color: '#dc2626', fontSize: '0.78rem', fontStyle: 'italic' }}>
+                              Unmapped Card
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>—</span>
+                          )}
+                        </td>
+                        <td><PunchTypeBadge type={p.punchType} /></td>
+                        <td><VerifyModeBadge mode={p.verifyMode} /></td>
+                        <td>{p.unmatched ? <span className="att-badge absent">⚠ Unmapped</span> : <span className="att-badge present">✓ Linked</span>}</td>
+                        <td>
+                          {p.unmatched && onAddMapping ? (
+                            <button
+                              className="att-btn att-btn-primary"
+                              style={{ padding: '3px 8px', fontSize: '0.74rem' }}
+                              onClick={() => onAddMapping(p.enrollId)}
+                            >
+                              + Link ID {p.enrollId}
+                            </button>
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -1745,6 +2314,7 @@ const DeviceTab = ({
   onDelete
 }) => {
   const [activeMethod, setActiveMethod] = useState('lan'); // 'lan' | 'usb' | 'agent' | 'cloud'
+  const [mappingMobileView, setMappingMobileView] = useState('cards'); // 'cards' | 'table'
   
   // LAN IP Sync state
   const [deviceIp, setDeviceIp] = useState(() => localStorage.getItem('zk_device_ip') || '192.168.0.74');
@@ -1869,83 +2439,66 @@ const DeviceTab = ({
         {/* METHOD 1: Direct LAN IP */}
         {activeMethod === 'lan' && (
           <div className="att-sync-pane">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div>
-                <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>Direct Network Sync (Port 4370)</strong>
-                <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
+            <div className="att-sync-pane-header">
+              <div className="att-sync-pane-title-wrap">
+                <strong className="att-sync-pane-title">Direct Network Sync (Port 4370)</strong>
+                <p className="att-sync-pane-sub">
                   Connect directly to the F8 on your office local network/Wi-Fi to fetch punches.
                 </p>
               </div>
-              <span className="att-badge present">Offline & Local Friendly</span>
+              <span className="att-badge present att-sync-pane-badge">Offline & Local Friendly</span>
             </div>
 
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ flex: '1 1 200px' }}>
-                <label className="att-form-label">Device IP Address</label>
-                <input
-                  type="text"
-                  className="att-input"
-                  value={deviceIp}
-                  onChange={e => setDeviceIp(e.target.value)}
-                  placeholder="e.g. 192.168.1.201"
-                  style={{ width: '100%' }}
-                />
+            <div className="att-lan-form-wrap">
+              <div className="att-lan-inputs-row">
+                <div className="att-lan-ip-wrap">
+                  <label className="att-form-label">Device IP Address</label>
+                  <input
+                    type="text"
+                    className="att-input"
+                    value={deviceIp}
+                    onChange={e => setDeviceIp(e.target.value)}
+                    placeholder="e.g. 192.168.1.201"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div className="att-lan-port-wrap">
+                  <label className="att-form-label">Port</label>
+                  <input
+                    type="number"
+                    className="att-input"
+                    value={devicePort}
+                    onChange={e => setDevicePort(e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
               </div>
-              <div style={{ width: 100 }}>
-                <label className="att-form-label">Port</label>
-                <input
-                  type="number"
-                  className="att-input"
-                  value={devicePort}
-                  onChange={e => setDevicePort(e.target.value)}
-                  style={{ width: '100%' }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>
+              <div className="att-lan-btn-row">
                 <button
                   type="button"
                   className="att-btn att-btn-secondary"
                   onClick={handleTestIp}
                   disabled={testingIp || syncingIp || connectingLive}
                 >
-                  {testingIp ? 'Testing...' : 'Test Connection'}
+                  <IcoCheck />
+                  <span>{testingIp ? 'Testing...' : 'Test IP'}</span>
                 </button>
 
                 {deviceLiveStatus?.connected ? (
                   <button
                     type="button"
-                    className="att-btn"
-                    style={{
-                      background: '#ef4444',
-                      color: '#ffffff',
-                      border: '1px solid #dc2626',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      fontWeight: 600,
-                      boxShadow: '0 1px 3px rgba(239, 68, 68, 0.25)'
-                    }}
+                    className="att-btn att-btn-disconnect"
                     onClick={onDisconnectLive}
                     disabled={connectingLive}
                     title="Disconnect from device"
                   >
-                    <span style={{ fontSize: '0.85rem' }}>⏹</span>
-                    <span>{connectingLive ? 'Disconnecting...' : 'Disconnect'}</span>
+                    <span>⏹</span>
+                    <span>{connectingLive ? 'Stopping...' : 'Disconnect'}</span>
                   </button>
                 ) : (
                   <button
                     type="button"
-                    className="att-btn"
-                    style={{
-                      background: '#10b981',
-                      color: '#ffffff',
-                      border: '1px solid #059669',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      fontWeight: 600,
-                      boxShadow: '0 1px 3px rgba(16, 185, 129, 0.25)'
-                    }}
+                    className="att-btn att-btn-connect"
                     onClick={() => {
                       localStorage.setItem('zk_device_ip', deviceIp);
                       localStorage.setItem('zk_device_port', devicePort);
@@ -1954,8 +2507,8 @@ const DeviceTab = ({
                     disabled={connectingLive || testingIp || syncingIp}
                     title="Connect and stay connected to automatically receive new punches"
                   >
-                    <span style={{ fontSize: '0.85rem' }}>⚡</span>
-                    <span>{connectingLive ? 'Connecting...' : 'Connect (Stay Online)'}</span>
+                    <span>⚡</span>
+                    <span>{connectingLive ? 'Connecting...' : 'Connect Live'}</span>
                   </button>
                 )}
 
@@ -1967,7 +2520,7 @@ const DeviceTab = ({
                   title="Manual on-demand sync of all punches"
                 >
                   <IcoRefresh className={syncingIp ? "animate-spin" : ""} />
-                  <span>{syncingIp ? 'Fetching Punches...' : 'Sync Now'}</span>
+                  <span>{syncingIp ? 'Fetching...' : 'Sync Now'}</span>
                 </button>
               </div>
             </div>
@@ -2226,22 +2779,24 @@ const DeviceTab = ({
 
       {/* Mapping Table */}
       <div className="att-panel">
-        <div className="att-panel-header">
+        <div className="att-panel-header att-mapping-header">
           <h2 className="att-panel-title">Enroll ID → Employee Mapping</h2>
           <div className="att-controls">
-            {onAdd && (
-              <button className="att-btn att-btn-primary" onClick={onAdd}>
-                <IcoPlus />
-                <span>Add Mapping</span>
+            <div className="att-mapping-btn-row">
+              {onAdd && (
+                <button className="att-btn att-btn-primary" onClick={onAdd}>
+                  <IcoPlus />
+                  <span>Add Mapping</span>
+                </button>
+              )}
+              <button className="att-btn att-btn-secondary" onClick={onRefresh}>
+                <IcoRefresh />
+                <span>Refresh</span>
               </button>
-            )}
-            <button className="att-btn att-btn-secondary" onClick={onRefresh}>
-              <IcoRefresh />
-              <span>Refresh</span>
-            </button>
+            </div>
           </div>
         </div>
-        <div className="att-table-wrap">
+        <div className="att-panel-body att-table-wrap">
           {loading ? (
             <div style={{ padding: 24 }}>
               {[...Array(4)].map((_, i) => <div key={i} className="att-skeleton" style={{ height: 44, marginBottom: 8 }} />)}
@@ -2253,69 +2808,174 @@ const DeviceTab = ({
               <div className="att-empty-sub">Click "Add Mapping" to link a ZKTech Enroll ID to an ERP employee</div>
             </div>
           ) : (
-            <table className="att-table">
-              <thead>
-                <tr>
-                  <th>ZK Enroll ID</th>
-                  <th>Employee Name</th>
-                  <th>ERP ID</th>
-                  <th>Shift</th>
-                  <th>Device</th>
-                  <th>Notes</th>
-                  {(onEdit || onDelete) && <th>Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {mappings.map(m => (
-                  <tr key={m._id}>
-                    <td><span className="att-enroll-badge">{m.enrollId}</span></td>
-                    <td style={{ fontWeight: 600 }}>{m.employeeName || '—'}</td>
-                    <td style={{ fontFamily: 'monospace', color: '#3b82f6' }}>
-                      {m.employeeEmpId || (!m.employeeId ? (
-                        <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-sans font-medium">
-                          Card / Custom
-                        </span>
-                      ) : '—')}
-                    </td>
-                    <td>
-                      {m.shiftName ? (
-                        <span className="att-badge present" style={{ fontSize: '0.74rem' }}>{m.shiftName}</span>
-                      ) : (
-                        <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>Default</span>
-                      )}
-                    </td>
-                    <td style={{ fontSize: '0.76rem', color: '#64748b' }}>{m.deviceId}</td>
-                    <td style={{ fontSize: '0.76rem', color: '#94a3b8' }}>{m.notes || '—'}</td>
-                    {(onEdit || onDelete) && (
-                      <td style={{ whiteSpace: 'nowrap' }}>
-                        <div className="flex items-center space-x-1.5">
-                          {onEdit && (
-                            <button
-                              className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center cursor-pointer"
-                              onClick={() => onEdit(m)}
-                              title="Edit Mapping"
-                              style={{ border: 'none', background: 'transparent' }}
-                            >
-                              <EditIcon className="w-4 h-4" />
-                            </button>
-                          )}
-                          {onDelete && (
-                            <button
-                              className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center cursor-pointer"
-                              onClick={() => onDelete(m._id)}
-                              title="Remove Mapping"
-                              style={{ border: 'none', background: 'transparent' }}
-                            >
-                              <TrashIcon className="w-4 h-4" />
-                            </button>
-                          )}
+            <>
+              {/* Mobile View Toggle Bar */}
+              <div className="att-mobile-feed-bar">
+                <span className="att-mobile-feed-count">{mappings.length} mapping{mappings.length !== 1 ? 's' : ''}</span>
+                <div className="att-mobile-toggle-group">
+                  <button
+                    type="button"
+                    className={`att-toggle-btn ${mappingMobileView === 'cards' ? 'active' : ''}`}
+                    onClick={() => setMappingMobileView('cards')}
+                  >
+                    Cards
+                  </button>
+                  <button
+                    type="button"
+                    className={`att-toggle-btn ${mappingMobileView === 'table' ? 'active' : ''}`}
+                    onClick={() => setMappingMobileView('table')}
+                  >
+                    Table
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile Cards View */}
+              {mappingMobileView === 'cards' && (
+                <div className="att-mobile-cards">
+                  {mappings.map(m => (
+                    <div key={m._id} className="att-mobile-log-card">
+                      <div className="att-mlc-header">
+                        <div className="att-mlc-top">
+                          <div className="att-mlc-id-group">
+                            {m.employeeEmpId ? (
+                              <span className="att-mlc-id">{m.employeeEmpId}</span>
+                            ) : !m.employeeId ? (
+                              <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-sans font-medium">
+                                Card / Custom
+                              </span>
+                            ) : null}
+                            <span className="att-enroll-badge" title="Enroll ID">ID #{m.enrollId}</span>
+                          </div>
+                          <div className="att-mlc-status">
+                            {m.shiftName ? (
+                              <span className="att-badge present" style={{ fontSize: '0.74rem' }}>{m.shiftName}</span>
+                            ) : (
+                              <span className="att-badge holiday" style={{ fontSize: '0.74rem' }}>Default Shift</span>
+                            )}
+                          </div>
                         </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <div className="att-mlc-name" title={m.employeeName || '—'}>
+                          {m.employeeName || <span style={{ color: '#94a3b8' }}>—</span>}
+                        </div>
+                      </div>
+
+                      <div className="att-leave-kv-box">
+                        <div className="att-leave-kv-row">
+                          <span className="att-leave-kv-label">DEVICE:</span>
+                          <span className="att-leave-kv-val mono" style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                            {m.deviceId || '—'}
+                          </span>
+                        </div>
+                        {m.notes && (
+                          <div className="att-leave-kv-row">
+                            <span className="att-leave-kv-label">NOTES:</span>
+                            <span className="att-leave-kv-val" style={{ fontSize: '0.78rem', color: '#475569' }}>
+                              {m.notes}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {(onEdit || onDelete) && (
+                        <div className="att-mlc-footer" style={{ justifyContent: 'flex-end', paddingTop: 8 }}>
+                          <div className="flex items-center space-x-1.5">
+                            {onEdit && (
+                              <button
+                                type="button"
+                                onClick={() => onEdit(m)}
+                                className="att-leave-action-btn edit"
+                                title="Edit Mapping"
+                              >
+                                <EditIcon className="w-4 h-4" />
+                                <span>Edit</span>
+                              </button>
+                            )}
+                            {onDelete && (
+                              <button
+                                type="button"
+                                onClick={() => onDelete(m._id)}
+                                className="att-leave-action-btn delete"
+                                title="Delete Mapping"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Table View (Always displayed on desktop; on mobile displayed when mappingMobileView === 'table') */}
+              <div className={`att-table-container ${mappingMobileView === 'table' ? 'att-show-mobile-table' : ''}`}>
+                <table className="att-table">
+                  <thead>
+                    <tr>
+                      <th>ZK Enroll ID</th>
+                      <th>Employee Name</th>
+                      <th>ERP ID</th>
+                      <th>Shift</th>
+                      <th>Device</th>
+                      <th>Notes</th>
+                      {(onEdit || onDelete) && <th>Action</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mappings.map(m => (
+                      <tr key={m._id}>
+                        <td><span className="att-enroll-badge">{m.enrollId}</span></td>
+                        <td style={{ fontWeight: 600 }}>{m.employeeName || '—'}</td>
+                        <td style={{ fontFamily: 'monospace', color: '#3b82f6' }}>
+                          {m.employeeEmpId || (!m.employeeId ? (
+                            <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-sans font-medium">
+                              Card / Custom
+                            </span>
+                          ) : '—')}
+                        </td>
+                        <td>
+                          {m.shiftName ? (
+                            <span className="att-badge present" style={{ fontSize: '0.74rem' }}>{m.shiftName}</span>
+                          ) : (
+                            <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>Default</span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: '0.76rem', color: '#64748b' }}>{m.deviceId}</td>
+                        <td style={{ fontSize: '0.76rem', color: '#94a3b8' }}>{m.notes || '—'}</td>
+                        {(onEdit || onDelete) && (
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <div className="flex items-center space-x-1.5">
+                              {onEdit && (
+                                <button
+                                  className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors inline-flex items-center justify-center cursor-pointer"
+                                  onClick={() => onEdit(m)}
+                                  title="Edit Mapping"
+                                  style={{ border: 'none', background: 'transparent' }}
+                                >
+                                  <EditIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                              {onDelete && (
+                                <button
+                                  className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors inline-flex items-center justify-center cursor-pointer"
+                                  onClick={() => onDelete(m._id)}
+                                  title="Remove Mapping"
+                                  style={{ border: 'none', background: 'transparent' }}
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>

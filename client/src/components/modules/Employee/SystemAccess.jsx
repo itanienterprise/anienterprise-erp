@@ -326,18 +326,16 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
     return (
         <div className="flex-1 space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-                <div>
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent font-sans">
-                        System Access Control
-                    </h1>
-                    <p className="text-sm text-gray-500 mt-1 font-sans">
-                        Configure roles, login permissions, granular module-based rights, and manage credentials for employees.
-                    </p>
-                </div>
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+            <div className="flex flex-col items-center text-center pb-4 border-b border-gray-100">
+                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-2.5 shadow-2xs">
                     <ShieldIcon className="w-6 h-6" />
                 </div>
+                <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent font-sans">
+                    System Access Control
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 font-sans max-w-lg leading-relaxed">
+                    Configure roles, login permissions, granular module-based rights, and manage credentials for employees.
+                </p>
             </div>
 
             {/* Global Success / Error Message banner */}
