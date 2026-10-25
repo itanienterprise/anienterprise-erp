@@ -19,6 +19,9 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
     const [isSaving, setIsSaving] = useState(false);
     const [alertMsg, setAlertMsg] = useState(null); // { type: 'success' | 'error', text: '' }
 
+    const [viewMode, setViewMode] = useState(() => (typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'table' : 'cards'));
+    const [moduleSearch, setModuleSearch] = useState('');
+
     const previewPermissions = useMemo(() => {
         return getDefaultPermissionsForRole('General Staff');
     }, []);
@@ -26,6 +29,12 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
     const sortedModulesList = useMemo(() => {
         return [...MODULES_LIST].sort((a, b) => (a.label || '').localeCompare(b.label || ''));
     }, []);
+
+    const filteredModulesList = useMemo(() => {
+        if (!moduleSearch.trim()) return sortedModulesList;
+        const q = moduleSearch.toLowerCase();
+        return sortedModulesList.filter(m => (m.label || '').toLowerCase().includes(q));
+    }, [sortedModulesList, moduleSearch]);
 
     // Password fields state
     const [customPassword, setCustomPassword] = useState('');
@@ -352,7 +361,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                 {/* Row 1: Select Employee & Employee Name Card (Same line) */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
                     {/* Select Employee Card */}
-                    <div className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-sm space-y-4 flex flex-col justify-between">
+                    <div className="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-sm space-y-4 flex flex-col justify-between">
                         <div>
                             <h2 className="text-base font-semibold text-gray-800 font-sans flex items-center mb-3">
                                 <span className="w-1.5 h-4 bg-blue-500 rounded-full mr-2"></span>
@@ -419,22 +428,22 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
 
                     {/* Employee Profile Summary Card */}
                     {selectedEmployee ? (
-                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex flex-col justify-center animate-in fade-in duration-300 min-h-[140px]">
+                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-5 sm:p-6 text-white shadow-lg relative overflow-hidden flex flex-col justify-center animate-in fade-in duration-300 min-h-[140px]">
                             <div className="absolute -right-10 -bottom-10 opacity-10 pointer-events-none">
                                 <ShieldIcon className="w-40 h-40" />
                             </div>
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-md">
+                                <div className="flex items-center space-x-3 sm:space-x-4">
+                                    <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
                                         <UserIcon className="w-6 h-6 text-blue-400" />
                                     </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold font-sans">{selectedEmployee.name}</h3>
-                                        <p className="text-xs text-slate-300 mt-0.5 font-sans">{selectedEmployee.designation} • {selectedEmployee.department}</p>
+                                    <div className="min-w-0">
+                                        <h3 className="text-base sm:text-lg font-bold font-sans truncate">{selectedEmployee.name}</h3>
+                                        <p className="text-xs text-slate-300 mt-0.5 font-sans truncate">{selectedEmployee.designation} • {selectedEmployee.department}</p>
                                     </div>
                                 </div>
-                                <div className="flex flex-row items-center gap-3">
-                                    <div className="text-right">
+                                <div className="flex flex-row items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t border-white/10 sm:border-0">
+                                    <div className="text-left sm:text-right">
                                         <p className="text-[10px] text-slate-400 uppercase tracking-widest font-sans">Username / ID</p>
                                         <p className="text-sm font-mono font-bold text-blue-400">{selectedEmployee.employeeId}</p>
                                     </div>
@@ -445,7 +454,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                             </div>
                         </div>
                     ) : (
-                        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-6 flex flex-col items-center justify-center text-center shadow-sm min-h-[140px]">
+                        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-5 sm:p-6 flex flex-col items-center justify-center text-center shadow-sm min-h-[140px]">
                             <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center mb-2">
                                 <UserIcon className="w-5 h-5" />
                             </div>
@@ -461,7 +470,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                 {selectedEmployee && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch animate-in fade-in duration-300">
                         {/* Access Configuration Panel */}
-                        <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm space-y-6 flex flex-col justify-between">
+                        <div className="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-6 shadow-sm space-y-6 flex flex-col justify-between">
                             <div>
                                 <h3 className="text-base font-semibold text-gray-800 font-sans flex items-center pb-3 border-b border-gray-100">
                                     <span className="w-1.5 h-4 bg-indigo-500 rounded-full mr-2"></span>
@@ -522,7 +531,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                     type="button"
                                     onClick={handleSaveAccess}
                                     disabled={isSaving}
-                                    className="w-full justify-center px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed flex items-center space-x-2 font-sans"
+                                    className="w-full sm:w-auto justify-center px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed flex items-center space-x-2 font-sans cursor-pointer"
                                 >
                                     {isSaving ? (
                                         <>
@@ -540,7 +549,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                         </div>
 
                         {/* Credentials & Security Panel */}
-                        <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm space-y-6 flex flex-col justify-between">
+                        <div className="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-6 shadow-sm space-y-6 flex flex-col justify-between">
                             <div>
                                 <h3 className="text-base font-semibold text-gray-800 font-sans flex items-center pb-3 border-b border-gray-100">
                                     <span className="w-1.5 h-4 bg-emerald-500 rounded-full mr-2"></span>
@@ -626,157 +635,385 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                     </div>
                 )}
 
-                {/* Row 3: Module-based Permissions in One Line (Full width) */}
+                {/* Row 3: Module-based Permissions Matrix (Responsive Cards + Table View) */}
                 <div className="w-full">
-                    <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm space-y-4 animate-in fade-in duration-300">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
-                            <h3 className="text-base font-semibold text-gray-800 font-sans flex items-center">
-                                <span className="w-1.5 h-4 bg-blue-500 rounded-full mr-2"></span>
-                                Module-based Permissions
-                            </h3>
-                            {!selectedEmployee ? (
-                                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-full">
-                                    <ShieldIcon className="w-3.5 h-3.5 text-amber-600" />
-                                    Preview Mode • Select an employee to edit
-                                </span>
-                            ) : (
-                                <span className="text-xs font-normal text-gray-500 font-sans">
-                                    Configuring for <strong className="text-gray-800">{selectedEmployee.name}</strong>
-                                </span>
+                    <div className="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-6 shadow-sm space-y-4 animate-in fade-in duration-300">
+                        {/* Card Header & Controls */}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-gray-100">
+                            <div>
+                                <h3 className="text-base font-semibold text-gray-800 font-sans flex items-center">
+                                    <span className="w-1.5 h-4 bg-blue-500 rounded-full mr-2 flex-shrink-0"></span>
+                                    <span>Module-based Permissions</span>
+                                </h3>
+                                <p className="text-xs text-gray-400 font-sans mt-0.5 ml-3.5">
+                                    {!selectedEmployee ? (
+                                        <span className="text-amber-600 font-medium flex items-center gap-1">
+                                            <span>Preview Mode</span>
+                                            <span>•</span>
+                                            <span>Select an employee above to edit</span>
+                                        </span>
+                                    ) : (
+                                        <span>Configuring for <strong className="text-gray-700">{selectedEmployee.name}</strong> ({role})</span>
+                                    )}
+                                </p>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 self-start sm:self-auto">
+                                {/* View Toggle */}
+                                <div className="inline-flex bg-gray-100 p-1 rounded-xl border border-gray-200/60">
+                                    <button
+                                        type="button"
+                                        onClick={() => setViewMode('cards')}
+                                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                            viewMode === 'cards'
+                                                ? 'bg-white text-blue-700 shadow-sm border border-gray-200/50'
+                                                : 'text-gray-500 hover:text-gray-800'
+                                        }`}
+                                        title="Card view (optimized for mobile)"
+                                    >
+                                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                                        <span>Cards</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setViewMode('table')}
+                                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                            viewMode === 'table'
+                                                ? 'bg-white text-blue-700 shadow-sm border border-gray-200/50'
+                                                : 'text-gray-500 hover:text-gray-800'
+                                        }`}
+                                        title="Table view (full matrix)"
+                                    >
+                                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                                        <span>Table</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Search Filter Bar */}
+                        <div className="relative">
+                            <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                            <input
+                                type="text"
+                                placeholder="Search modules..."
+                                value={moduleSearch}
+                                onChange={(e) => setModuleSearch(e.target.value)}
+                                className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-sans focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                            />
+                            {moduleSearch && (
+                                <button
+                                    type="button"
+                                    onClick={() => setModuleSearch('')}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 cursor-pointer"
+                                >
+                                    <XIcon className="w-3.5 h-3.5" />
+                                </button>
                             )}
                         </div>
-                        
-                        <div className="overflow-x-auto rounded-xl border border-gray-100">
-                            <table className="w-full text-left text-sm border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs font-semibold uppercase tracking-wider">
-                                        <th className="px-4 py-3 font-sans">Module Name</th>
-                                        <th className="px-3 py-3 text-center font-sans">View</th>
-                                        <th className="px-3 py-3 text-center font-sans">Add</th>
-                                        <th className="px-3 py-3 text-center font-sans">Edit</th>
-                                        <th className="px-3 py-3 text-center font-sans">Delete</th>
-                                        <th className="px-3 py-3 text-center font-sans">Special</th>
-                                        <th className="px-3 py-3 text-center font-sans">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {sortedModulesList.map(mod => {
+
+                        {/* Cards View (default on mobile / selectable on desktop) */}
+                        {viewMode === 'cards' && (
+                            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                                {filteredModulesList.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-400 text-xs font-sans">
+                                        No modules found matching "{moduleSearch}"
+                                    </div>
+                                ) : (
+                                    filteredModulesList.map(mod => {
                                         const activePerms = selectedEmployee ? permissions : previewPermissions;
                                         const mPerms = activePerms[mod.key] || { view: false, add: false, edit: false, delete: false, special: false };
+                                        const anyActive = Object.values(mPerms).some(Boolean);
                                         return (
-                                            <tr key={mod.key} className="hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-4 py-3 font-medium text-gray-800 font-sans">{mod.label}</td>
-                                                
-                                                {/* View checkbox */}
-                                                <td className="px-3 py-3 text-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={!!mPerms.view}
-                                                        disabled={!selectedEmployee}
-                                                        onChange={() => handlePermissionChange(mod.key, 'view')}
-                                                        className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                                    />
-                                                </td>
-                                                
-                                                {/* Add checkbox */}
-                                                <td className="px-3 py-3 text-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={!!mPerms.add}
-                                                        disabled={!selectedEmployee}
-                                                        onChange={() => handlePermissionChange(mod.key, 'add')}
-                                                        className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                                    />
-                                                </td>
-
-                                                {/* Edit checkbox */}
-                                                <td className="px-3 py-3 text-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={!!mPerms.edit}
-                                                        disabled={!selectedEmployee}
-                                                        onChange={() => handlePermissionChange(mod.key, 'edit')}
-                                                        className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                                    />
-                                                </td>
-
-                                                {/* Delete checkbox */}
-                                                <td className="px-3 py-3 text-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={!!mPerms.delete}
-                                                        disabled={!selectedEmployee}
-                                                        onChange={() => handlePermissionChange(mod.key, 'delete')}
-                                                        className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                                    />
-                                                </td>
-
-                                                {/* Special checkbox */}
-                                                <td className="px-3 py-3 text-center">
-                                                    {mod.specialLabels && Array.isArray(mod.specialLabels) ? (
-                                                        <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-xl mx-auto py-1">
-                                                            {mod.specialLabels.map(sItem => (
-                                                                <div key={sItem.key} className="flex flex-col items-center gap-0.5">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={!!mPerms[sItem.key]}
-                                                                        disabled={!selectedEmployee}
-                                                                        onChange={() => handlePermissionChange(mod.key, sItem.key)}
-                                                                        className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                                                    />
-                                                                    <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap">
-                                                                        {sItem.label}
-                                                                    </span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : mod.specialLabel ? (
-                                                        <div className="flex flex-col items-center gap-1">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={!!mPerms.special}
-                                                                disabled={!selectedEmployee}
-                                                                onChange={() => handlePermissionChange(mod.key, 'special')}
-                                                                className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                                            />
-                                                            <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap">
-                                                                {mod.specialLabel}
-                                                            </span>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-gray-300 font-sans font-medium select-none">-</span>
-                                                    )}
-                                                </td>
-
-                                                {/* Actions: Toggle All */}
-                                                <td className="px-3 py-3 text-center">
+                                            <div 
+                                                key={mod.key} 
+                                                className="bg-white rounded-xl border border-gray-200/90 p-3.5 shadow-xs space-y-3 hover:border-blue-200 transition-all"
+                                            >
+                                                {/* Card Header: Module Name & Toggle All */}
+                                                <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${anyActive ? 'bg-blue-600' : 'bg-gray-300'}`}></span>
+                                                        <span className="font-semibold text-gray-800 text-sm font-sans truncate">{mod.label}</span>
+                                                    </div>
                                                     <button
                                                         type="button"
                                                         disabled={!selectedEmployee}
                                                         onClick={() => handleToggleAllModulePermissions(mod.key)}
-                                                        className={`text-xs font-sans ${!selectedEmployee ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 hover:underline cursor-pointer'}`}
+                                                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors flex-shrink-0 font-sans ${
+                                                            !selectedEmployee
+                                                                ? 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
+                                                                : 'text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border-blue-200 cursor-pointer'
+                                                        }`}
                                                     >
                                                         Toggle All
                                                     </button>
+                                                </div>
+
+                                                {/* Standard 4 CRUD Permissions */}
+                                                <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                                                    {[
+                                                        { key: 'view', label: 'View' },
+                                                        { key: 'add', label: 'Add' },
+                                                        { key: 'edit', label: 'Edit' },
+                                                        { key: 'delete', label: 'Delete' }
+                                                    ].map(act => {
+                                                        const isChecked = !!mPerms[act.key];
+                                                        return (
+                                                            <label
+                                                                key={act.key}
+                                                                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all select-none ${
+                                                                    !selectedEmployee 
+                                                                        ? 'cursor-not-allowed opacity-60 bg-gray-50 border-gray-200 text-gray-400' 
+                                                                        : isChecked
+                                                                            ? 'cursor-pointer bg-blue-50 border-blue-300 text-blue-700 shadow-xs'
+                                                                            : 'cursor-pointer bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+                                                                }`}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isChecked}
+                                                                    disabled={!selectedEmployee}
+                                                                    onChange={() => handlePermissionChange(mod.key, act.key)}
+                                                                    className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                />
+                                                                <span className="text-[11px] font-semibold mt-1 font-sans">
+                                                                    {act.label}
+                                                                </span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                {/* Special Permissions (if any) */}
+                                                {((mod.specialLabels && mod.specialLabels.length > 0) || mod.specialLabel) && (
+                                                    <div className="pt-2 border-t border-gray-100 space-y-2">
+                                                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider font-sans">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                                                            <span>Special Permissions</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                                            {mod.specialLabels ? (
+                                                                mod.specialLabels.map(sItem => {
+                                                                    const isChecked = !!mPerms[sItem.key];
+                                                                    return (
+                                                                        <label
+                                                                            key={sItem.key}
+                                                                            className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-all select-none ${
+                                                                                !selectedEmployee
+                                                                                    ? 'cursor-not-allowed opacity-60 bg-gray-50 border-gray-200 text-gray-400'
+                                                                                    : isChecked
+                                                                                        ? 'cursor-pointer bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold shadow-xs'
+                                                                                        : 'cursor-pointer bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                                                            }`}
+                                                                        >
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={isChecked}
+                                                                                disabled={!selectedEmployee}
+                                                                                onChange={() => handlePermissionChange(mod.key, sItem.key)}
+                                                                                className={`w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300 flex-shrink-0 ${!selectedEmployee ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                            />
+                                                                            <span className="text-[11px] leading-tight font-sans">
+                                                                                {sItem.label}
+                                                                            </span>
+                                                                        </label>
+                                                                    );
+                                                                })
+                                                            ) : mod.specialLabel ? (
+                                                                <label
+                                                                    className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-all select-none ${
+                                                                        !selectedEmployee
+                                                                            ? 'cursor-not-allowed opacity-60 bg-gray-50 border-gray-200 text-gray-400'
+                                                                            : !!mPerms.special
+                                                                                ? 'cursor-pointer bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold shadow-xs'
+                                                                                : 'cursor-pointer bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                                                    }`}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!mPerms.special}
+                                                                        disabled={!selectedEmployee}
+                                                                        onChange={() => handlePermissionChange(mod.key, 'special')}
+                                                                        className={`w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300 flex-shrink-0 ${!selectedEmployee ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                    />
+                                                                    <span className="text-[11px] leading-tight font-sans">
+                                                                        {mod.specialLabel}
+                                                                    </span>
+                                                                </label>
+                                                            ) : null}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        )}
+
+                        {/* Table View (Responsive Table with Sticky Module Column & align-top) */}
+                        {viewMode === 'table' && (
+                            <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-xs max-h-[600px] overflow-y-auto">
+                                <table className="min-w-[800px] w-full text-left text-sm border-collapse">
+                                    <thead className="sticky top-0 z-20">
+                                        <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs font-semibold uppercase tracking-wider">
+                                            <th className="px-4 py-3 font-sans sticky left-0 bg-gray-50 z-30 shadow-[2px_0_4px_rgba(0,0,0,0.05)] w-44">Module Name</th>
+                                            <th className="px-3 py-3 text-center font-sans w-16">View</th>
+                                            <th className="px-3 py-3 text-center font-sans w-16">Add</th>
+                                            <th className="px-3 py-3 text-center font-sans w-16">Edit</th>
+                                            <th className="px-3 py-3 text-center font-sans w-16">Delete</th>
+                                            <th className="px-4 py-3 text-center font-sans min-w-[280px]">Special</th>
+                                            <th className="px-3 py-3 text-center font-sans w-24">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 bg-white">
+                                        {filteredModulesList.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="7" className="text-center py-8 text-gray-400 text-xs font-sans">
+                                                    No modules found matching "{moduleSearch}"
                                                 </td>
                                             </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                                        ) : (
+                                            filteredModulesList.map(mod => {
+                                                const activePerms = selectedEmployee ? permissions : previewPermissions;
+                                                const mPerms = activePerms[mod.key] || { view: false, add: false, edit: false, delete: false, special: false };
+                                                return (
+                                                    <tr key={mod.key} className="hover:bg-slate-50/60 transition-colors align-top">
+                                                        {/* Module Name (Sticky) */}
+                                                        <td className="px-4 py-3.5 font-medium text-gray-800 font-sans align-top whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_4px_rgba(0,0,0,0.03)]">
+                                                            {mod.label}
+                                                        </td>
+                                                        
+                                                        {/* View checkbox */}
+                                                        <td className="px-3 py-3.5 text-center align-top">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!mPerms.view}
+                                                                disabled={!selectedEmployee}
+                                                                onChange={() => handlePermissionChange(mod.key, 'view')}
+                                                                className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                                            />
+                                                        </td>
+                                                        
+                                                        {/* Add checkbox */}
+                                                        <td className="px-3 py-3.5 text-center align-top">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!mPerms.add}
+                                                                disabled={!selectedEmployee}
+                                                                onChange={() => handlePermissionChange(mod.key, 'add')}
+                                                                className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                                            />
+                                                        </td>
 
+                                                        {/* Edit checkbox */}
+                                                        <td className="px-3 py-3.5 text-center align-top">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!mPerms.edit}
+                                                                disabled={!selectedEmployee}
+                                                                onChange={() => handlePermissionChange(mod.key, 'edit')}
+                                                                className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                                            />
+                                                        </td>
+
+                                                        {/* Delete checkbox */}
+                                                        <td className="px-3 py-3.5 text-center align-top">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!mPerms.delete}
+                                                                disabled={!selectedEmployee}
+                                                                onChange={() => handlePermissionChange(mod.key, 'delete')}
+                                                                className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                                            />
+                                                        </td>
+
+                                                        {/* Special checkbox */}
+                                                        <td className="px-3 py-3.5 text-center align-top">
+                                                            {mod.specialLabels && Array.isArray(mod.specialLabels) ? (
+                                                                <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-lg mx-auto">
+                                                                    {mod.specialLabels.map(sItem => (
+                                                                        <label 
+                                                                            key={sItem.key} 
+                                                                            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-medium transition-colors select-none ${
+                                                                                !selectedEmployee
+                                                                                    ? 'cursor-not-allowed opacity-50 bg-gray-50 border-gray-200 text-gray-400'
+                                                                                    : mPerms[sItem.key]
+                                                                                        ? 'cursor-pointer bg-emerald-50 border-emerald-200 text-emerald-800'
+                                                                                        : 'cursor-pointer bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                                                            }`}
+                                                                        >
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={!!mPerms[sItem.key]}
+                                                                                disabled={!selectedEmployee}
+                                                                                onChange={() => handlePermissionChange(mod.key, sItem.key)}
+                                                                                className={`w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                            />
+                                                                            <span className="whitespace-nowrap font-sans">{sItem.label}</span>
+                                                                        </label>
+                                                                    ))}
+                                                                </div>
+                                                            ) : mod.specialLabel ? (
+                                                                <label 
+                                                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-medium transition-colors select-none ${
+                                                                        !selectedEmployee
+                                                                            ? 'cursor-not-allowed opacity-50 bg-gray-50 border-gray-200 text-gray-400'
+                                                                            : mPerms.special
+                                                                                ? 'cursor-pointer bg-emerald-50 border-emerald-200 text-emerald-800'
+                                                                                : 'cursor-pointer bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                                                    }`}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!mPerms.special}
+                                                                        disabled={!selectedEmployee}
+                                                                        onChange={() => handlePermissionChange(mod.key, 'special')}
+                                                                        className={`w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                    />
+                                                                    <span className="whitespace-nowrap font-sans">{mod.specialLabel}</span>
+                                                                </label>
+                                                            ) : (
+                                                                <span className="text-gray-300 font-sans font-medium select-none">-</span>
+                                                            )}
+                                                        </td>
+
+                                                        {/* Actions: Toggle All */}
+                                                        <td className="px-3 py-3.5 text-center align-top">
+                                                            <button
+                                                                type="button"
+                                                                disabled={!selectedEmployee}
+                                                                onClick={() => handleToggleAllModulePermissions(mod.key)}
+                                                                className={`text-xs font-sans whitespace-nowrap ${
+                                                                    !selectedEmployee 
+                                                                        ? 'text-gray-400 cursor-not-allowed' 
+                                                                        : 'text-blue-600 hover:text-blue-800 hover:underline cursor-pointer'
+                                                                }`}
+                                                            >
+                                                                Toggle All
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* Bottom Save Bar */}
                         <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
                             {!selectedEmployee ? (
                                 <>
-                                    <p className="text-xs text-gray-500 font-sans flex items-center gap-1.5">
-                                        <span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
-                                        Select an employee from the left panel to modify and save their permissions.
+                                    <p className="text-xs text-gray-500 font-sans flex items-center gap-1.5 text-center sm:text-left">
+                                        <span className="w-2 h-2 rounded-full bg-amber-400 inline-block flex-shrink-0"></span>
+                                        Select an employee from the panel above to modify and save their permissions.
                                     </p>
                                     <button
                                         type="button"
                                         disabled
-                                        className="px-6 py-2.5 bg-gray-100 text-gray-400 border border-gray-200 rounded-xl font-medium text-sm cursor-not-allowed flex items-center space-x-2 font-sans"
+                                        className="w-full sm:w-auto px-6 py-2.5 bg-gray-100 text-gray-400 border border-gray-200 rounded-xl font-medium text-sm cursor-not-allowed flex items-center justify-center space-x-2 font-sans"
                                     >
                                         <CheckIcon className="w-4 h-4" />
                                         <span>Save Access & Permissions</span>
@@ -784,14 +1021,14 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                 </>
                             ) : (
                                 <>
-                                    <p className="text-xs text-gray-400 font-sans">
-                                        Click save to apply changes for {selectedEmployee.name}.
+                                    <p className="text-xs text-gray-400 font-sans text-center sm:text-left">
+                                        Click save to apply changes for <strong className="text-gray-700">{selectedEmployee.name}</strong>.
                                     </p>
                                     <button
                                         type="button"
                                         onClick={handleSaveAccess}
                                         disabled={isSaving}
-                                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed flex items-center space-x-2 font-sans"
+                                        className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center space-x-2 font-sans cursor-pointer"
                                     >
                                         {isSaving ? (
                                             <>
