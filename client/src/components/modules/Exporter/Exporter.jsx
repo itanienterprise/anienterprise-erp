@@ -1011,7 +1011,6 @@ const Exporter = ({
                                                     )}
                                                     <div className="min-w-0">
                                                         <p className="font-bold text-gray-900 text-sm truncate uppercase tracking-tight">{exporter.name}</p>
-                                                        <p className="text-[10px] font-semibold text-blue-600 mt-0.5">BIN: {exporter.bin} | TIN: {exporter.tin} | IRC: {exporter.irc}</p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-3">
@@ -1028,14 +1027,36 @@ const Exporter = ({
                                             {isExpanded && (
                                                 <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
                                                     <div className="space-y-2.5 pt-3 border-t border-gray-50">
-                                                        <div className="flex justify-between items-center text-xs">
-                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Contact Person</span>
-                                                            <span className="text-gray-900 font-black">{exporter.contactPerson}</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center text-xs">
-                                                            <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Phone Number</span>
-                                                            <span className="text-gray-900 font-black font-mono">{exporter.phone}</span>
-                                                        </div>
+                                                        {exporter.bin && (
+                                                            <div className="flex justify-between items-center text-xs">
+                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">BIN</span>
+                                                                <span className="text-gray-900 font-black font-mono">{exporter.bin}</span>
+                                                            </div>
+                                                        )}
+                                                        {exporter.tin && (
+                                                            <div className="flex justify-between items-center text-xs">
+                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">TIN</span>
+                                                                <span className="text-gray-900 font-black font-mono">{exporter.tin}</span>
+                                                            </div>
+                                                        )}
+                                                        {exporter.irc && (
+                                                            <div className="flex justify-between items-center text-xs">
+                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">IRC</span>
+                                                                <span className="text-gray-900 font-black font-mono">{exporter.irc}</span>
+                                                            </div>
+                                                        )}
+                                                        {exporter.contactPerson && (
+                                                            <div className="flex justify-between items-center text-xs">
+                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Contact Person</span>
+                                                                <span className="text-gray-900 font-black">{exporter.contactPerson}</span>
+                                                            </div>
+                                                        )}
+                                                        {exporter.phone && (
+                                                            <div className="flex justify-between items-center text-xs">
+                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Phone Number</span>
+                                                                <span className="text-gray-900 font-black font-mono">{exporter.phone}</span>
+                                                            </div>
+                                                        )}
                                                         {exporter.address && (
                                                             <div className="flex justify-between items-start text-xs pt-1">
                                                                 <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px] shrink-0">Office Address</span>

@@ -682,7 +682,6 @@ const Importer = ({
                                                 )}
                                                 <div className="min-w-0">
                                                     <p className="font-bold text-gray-900 text-sm truncate">{importer.name}</p>
-                                                    <p className="text-[10px] font-semibold text-blue-600 mt-0.5">BIN: {importer.bin} | TIN: {importer.tin} | IRC: {importer.irc}</p>
                                                 </div>
                                             </div>
                                             <span className={`importer-status-badge ${importer.status === 'Active' ? 'active' : 'inactive'} shrink-0`}>
@@ -692,14 +691,36 @@ const Importer = ({
 
                                         {/* Card Body */}
                                         <div className="space-y-1.5 mt-3">
-                                            <div className="flex justify-between items-center text-sm">
-                                                <span className="text-gray-500">Contact</span>
-                                                <span className="text-gray-700 font-medium text-right max-w-[60%]">{importer.contactPerson}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-sm">
-                                                <span className="text-gray-500">Phone</span>
-                                                <span className="text-gray-700 font-medium font-mono">{importer.phone}</span>
-                                            </div>
+                                            {importer.bin && (
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-gray-500">BIN</span>
+                                                    <span className="text-gray-700 font-medium font-mono">{importer.bin}</span>
+                                                </div>
+                                            )}
+                                            {importer.tin && (
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-gray-500">TIN</span>
+                                                    <span className="text-gray-700 font-medium font-mono">{importer.tin}</span>
+                                                </div>
+                                            )}
+                                            {importer.irc && (
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-gray-500">IRC</span>
+                                                    <span className="text-gray-700 font-medium font-mono">{importer.irc}</span>
+                                                </div>
+                                            )}
+                                            {importer.contactPerson && (
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-gray-500">Contact</span>
+                                                    <span className="text-gray-700 font-medium text-right max-w-[60%]">{importer.contactPerson}</span>
+                                                </div>
+                                            )}
+                                            {importer.phone && (
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-gray-500">Phone</span>
+                                                    <span className="text-gray-700 font-medium font-mono">{importer.phone}</span>
+                                                </div>
+                                            )}
                                             {importer.address && (
                                                 <div className="flex justify-between items-start text-sm">
                                                     <span className="text-gray-500 shrink-0">Address</span>
@@ -758,14 +779,9 @@ const Importer = ({
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200 z-10">
                         {/* Modal Header */}
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
-                            <div className="flex-1 text-left">
-                                <h3 className="text-lg md:text-xl font-bold text-gray-900">Import History - {viewData.name}</h3>
-                                <div className="text-xs text-gray-500 mt-1 space-y-0.5">
-                                    <p>BIN: {viewData.bin} | TIN: {viewData.tin} | IRC: {viewData.irc}</p>
-                                    {viewData.address && (
-                                        <p className="text-gray-400 font-medium">{viewData.address}</p>
-                                    )}
-                                </div>
+                            <div className="flex-1 text-left min-w-0 pr-8 md:pr-0">
+                                <h3 className="text-base sm:text-xl font-bold text-gray-900 leading-tight">Import History</h3>
+                                <p className="text-xs sm:text-sm font-semibold text-gray-600 truncate mt-0.5">{viewData.name}</p>
                             </div>
 
                             {/* Search bar */}
