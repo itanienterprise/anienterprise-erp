@@ -2259,6 +2259,9 @@ function App() {
 
       try {
         if (['stock', 'stock-baseline', 'warehouses', 'warehouse', 'transfer', 'transfers', 'purchase-receives', 'purchase-receive', 'purchasereceive', 'purchasereceives', 'returns', 'return', 'return-product', 'returnproduct'].includes(module) || module === 'all') {
+          queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
+          queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+          queryClient.invalidateQueries({ queryKey: ['stock'] });
           if (typeof fetchStockRecords === 'function') fetchStockRecords();
           if (typeof fetchWarehouses === 'function') fetchWarehouses();
         }

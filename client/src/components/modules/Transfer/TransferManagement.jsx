@@ -13,10 +13,22 @@ import { formatFirstName } from '../IPManagement/IPManagement';
 import { getSocket } from '../../../utils/socket';
 
 const TransferManagement = ({ currentUser, addNotification, highlightId, isRequestedNotif, refreshPendingIndicators }) => {
-    const canDelete = hasPermission(currentUser, 'warehouse', 'delete') || hasPermission(currentUser, 'transfer', 'delete');
-    const canTransfer = hasPermission(currentUser, 'stock', 'special') || hasPermission(currentUser, 'transfer', 'add') || hasPermission(currentUser, 'warehouse', 'edit');
-    const canApprove = hasPermission(currentUser, 'transfer', 'approve') || hasPermission(currentUser, 'warehouse', 'approve') || currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
-    const canShowEntryBy = hasPermission(currentUser, 'transfer', 'showEntryBy');
+    const roleLower = (currentUser?.role || '').toLowerCase();
+    const isAdmin = currentUser?.username === 'admin' || roleLower === 'admin' || roleLower === 'administrator';
+    const isIncharge = roleLower === 'incharge';
+
+    const canDelete = isAdmin || isIncharge || hasPermission(currentUser, 'warehouse', 'delete') || hasPermission(currentUser, 'transfer', 'delete');
+    const canTransfer = isAdmin || isIncharge || hasPermission(currentUser, 'stock', 'special') || hasPermission(currentUser, 'transfer', 'add') || hasPermission(currentUser, 'transfer', 'edit') || hasPermission(currentUser, 'warehouse', 'edit') || hasPermission(currentUser, 'warehouse', 'add');
+    const canApprove = isAdmin || isIncharge ||
+        hasPermission(currentUser, 'transfer', 'approve') ||
+        hasPermission(currentUser, 'transfer', 'special') ||
+        hasPermission(currentUser, 'warehouse', 'approve') ||
+        hasPermission(currentUser, 'warehouse', 'special') ||
+        !!currentUser?.permissions?.transfer?.approve ||
+        !!currentUser?.permissions?.transfer?.special ||
+        !!currentUser?.permissions?.warehouse?.approve ||
+        !!currentUser?.permissions?.warehouse?.special;
+    const canShowEntryBy = hasPermission(currentUser, 'transfer', 'showEntryBy') || hasPermission(currentUser, 'warehouse', 'showEntryBy');
 
     // States
     const recentStatusUpdatesRef = useRef(new Map());
@@ -29,7 +41,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     const [products, setProducts] = useState([]);
     const [transferLogs, setTransferLogs] = useState(() => {
         try {
-            const cachedWh = queryClient.getQueryData(['warehouses']);
+            const cachedWh = queryClient.getQueryData(['rawWarehouses']) || queryClient.getQueryData(['warehouses']);
             if (Array.isArray(cachedWh) && cachedWh.length > 0) {
                 const logs = [];
                 cachedWh.forEach(item => {
@@ -60,7 +72,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     });
     const [activeBaseline, setActiveBaseline] = useState(null);
     const [isLoading, setIsLoading] = useState(() => {
-        const cachedWh = queryClient.getQueryData(['warehouses']);
+        const cachedWh = queryClient.getQueryData(['rawWarehouses']) || queryClient.getQueryData(['warehouses']);
         return !(Array.isArray(cachedWh) && cachedWh.length > 0);
     });
 
@@ -72,9 +84,11 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     const [viewingTransfer, setViewingTransfer] = useState(null);
 
     const rowRefs = useRef({});
+    const handledHighlightRef = useRef(null);
 
     useEffect(() => {
         if (!highlightId) return;
+        if (handledHighlightRef.current === String(highlightId)) return;
 
         const cleanH = String(highlightId).toLowerCase().trim();
         const targetItem = (transferLogs || []).find(t => 
@@ -87,10 +101,13 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         if (targetItem) {
             const isReq = (targetItem.status || '').toLowerCase() === 'requested';
             setIsRequestedOnly(isReq);
+            handledHighlightRef.current = String(highlightId);
         } else if (isRequestedNotif) {
             setIsRequestedOnly(true);
+            handledHighlightRef.current = String(highlightId);
         } else {
             setIsRequestedOnly(false);
+            handledHighlightRef.current = String(highlightId);
         }
 
         const scrollToRow = () => {
@@ -115,7 +132,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             }
         }, 250);
         return () => clearTimeout(t1);
-    }, [highlightId, transferLogs]);
+    }, [highlightId, transferLogs, isRequestedNotif]);
 
     const requestedCount = useMemo(() => (transferLogs || []).filter(t => t.status === 'Requested').length, [transferLogs]);
 
@@ -161,7 +178,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
 
     // Fetch and Decrypt Data
     const fetchData = async (silent = false) => {
-        const cachedWh = queryClient.getQueryData(['warehouses']);
+        const cachedWh = queryClient.getQueryData(['rawWarehouses']) || queryClient.getQueryData(['warehouses']);
         if (!cachedWh && !silent) {
             setIsLoading(true);
         }
@@ -169,12 +186,14 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             const cacheBuster = `_t=${Date.now()}`;
             const [whRes, stockRes, prodRes, salesRes, damagesRes, baselineRes] = await Promise.all([
                 queryClient.fetchQuery({
-                    queryKey: ['warehouses'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryKey: ['rawWarehouses'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : []),
+                    staleTime: 0
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['stock'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : []),
+                    staleTime: 0
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['products'],
@@ -193,6 +212,10 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                     queryFn: () => axios.get(`${API_BASE_URL}/api/stock-baseline/active`).then(r => r.data || null).catch(() => null)
                 })
             ]);
+
+            if (Array.isArray(whRes)) {
+                queryClient.setQueryData(['rawWarehouses'], whRes);
+            }
 
             setActiveBaseline(baselineRes || null);
 
@@ -278,8 +301,8 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                 return new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date);
             });
             const reconciledLogs = logs.map(l => {
-                const recent = recentStatusUpdatesRef.current?.get(l._id);
-                if (recent && (Date.now() - recent.timestamp < 15000)) {
+                const recent = recentStatusUpdatesRef.current?.get(String(l._id));
+                if (recent && (Date.now() - recent.timestamp < 30000)) {
                     return { ...l, status: recent.status };
                 }
                 return l;
@@ -504,23 +527,38 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         const handleRealtimeUpdate = (data) => {
             const mod = (data?.module || '').toLowerCase().trim();
             if (!mod || ['warehouses', 'warehouse', 'stock', 'transfer', 'transfers', 'products', 'sales', 'damages', 'all'].includes(mod)) {
+                queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
+                queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+                queryClient.invalidateQueries({ queryKey: ['stock'] });
                 fetchData(true);
             }
         };
 
+        const handleConnect = () => {
+            queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            fetchData(true);
+        };
+
         if (socket) {
             socket.on('data_updated', handleRealtimeUpdate);
+            socket.on('connect', handleConnect);
+            if (socket.connected) {
+                fetchData(true);
+            }
         }
         const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
         window.addEventListener('erp_data_updated', onCustomEvent);
 
         const pollTimer = setInterval(() => {
             fetchData(true);
-        }, 30000);
+        }, 15000);
 
         return () => {
             if (socket) {
                 socket.off('data_updated', handleRealtimeUpdate);
+                socket.off('connect', handleConnect);
             }
             window.removeEventListener('erp_data_updated', onCustomEvent);
             clearInterval(pollTimer);
@@ -727,109 +765,10 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         setSubmitStatus(null);
     };
 
-    // Helper to revert stock back to source warehouse when a transfer is deleted or updated
+    // Helper to revert stock back to source warehouse when a transfer is deleted or updated.
+    // Dynamic stock ledger in stockHelpers automatically manages source/destination stock upon transfer log changes.
     const revertTransferStock = async (logItem) => {
-        if (!logItem) return;
-        const oldQty = parseFloat(logItem.transferQty ?? logItem.whQty ?? logItem.inHouseQuantity ?? 0);
-        const oldPkt = parseFloat(logItem.transferPkt ?? logItem.whPkt ?? logItem.inHousePacket ?? 0);
-        if (oldQty <= 0 && oldPkt <= 0) return;
-
-        const fromWh = (logItem.fromWh || '').trim().toLowerCase();
-        const toWh = (logItem.toWh || logItem.whName || logItem.warehouse || '').trim().toLowerCase();
-        const prod = (logItem.productName || logItem.product || '').trim().toLowerCase();
-        const brand = (logItem.brand || '').trim().toLowerCase();
-        const lc = (logItem.lcNo || '').trim().toLowerCase();
-
-        // 1. Restore stock to Source warehouse (fromWh)
-        const allSources = [
-            ...(warehouseData || []).map(r => ({ ...r, _sourceType: 'warehouse' })),
-            ...(stockRecords || []).map(r => ({ ...r, _sourceType: 'stock' }))
-        ];
-
-        const sourceMatch = allSources.find(item => {
-            const itemWh = (item.name || item.whName || item.warehouse || '').trim().toLowerCase();
-            const itemProd = (item.productName || item.product || '').trim().toLowerCase();
-            const itemBrand = (item.brand || '').trim().toLowerCase();
-            const itemLc = (item.lcNo || '').trim().toLowerCase();
-
-            return itemWh === fromWh && itemProd === prod && (!brand || itemBrand === brand || itemBrand.includes(brand)) && (!lc || isLcMatch(itemLc, lc));
-        });
-
-        if (sourceMatch) {
-            const curQty = parseFloat(sourceMatch.whQty ?? sourceMatch.inHouseQuantity ?? sourceMatch.quantity ?? 0);
-            const curPkt = parseFloat(sourceMatch.whPkt ?? sourceMatch.inHousePacket ?? sourceMatch.packet ?? 0);
-            const updatedQty = curQty + oldQty;
-            const updatedPkt = curPkt + oldPkt;
-
-            const updatedRecord = {
-                ...sourceMatch,
-                whQty: updatedQty,
-                whPkt: updatedPkt,
-                inHouseQuantity: updatedQty,
-                inHousePacket: updatedPkt,
-                totalInHouseQuantity: updatedQty,
-                totalInHousePacket: updatedPkt,
-                lastUpdated: new Date().toISOString()
-            };
-            delete updatedRecord._sourceType;
-
-            if (sourceMatch._sourceType === 'stock') {
-                await axios.put(`${API_BASE_URL}/api/stock/${sourceMatch._id}`, updatedRecord);
-            } else {
-                await axios.put(`${API_BASE_URL}/api/warehouses/${sourceMatch._id}`, updatedRecord);
-            }
-        } else if (logItem.fromWh) {
-            // Create source warehouse record if none exists
-            const restoredRecord = {
-                whName: logItem.fromWh,
-                warehouse: logItem.fromWh,
-                productName: logItem.productName || logItem.product,
-                product: logItem.productName || logItem.product,
-                brand: logItem.brand,
-                lcNo: logItem.lcNo,
-                packetSize: logItem.packetSize || 30,
-                whPkt: oldPkt,
-                whQty: oldQty,
-                inHousePacket: oldPkt,
-                inHouseQuantity: oldQty,
-                quantity: oldQty,
-                packet: oldPkt,
-                recordType: 'warehouse',
-                createdAt: new Date().toISOString()
-            };
-            await axios.post(`${API_BASE_URL}/api/warehouses`, restoredRecord);
-        }
-
-        // 2. Deduct stock from Destination warehouse (toWh)
-        const destMatch = (warehouseData || []).find(item => {
-            if (item.isTransferLog || item._id === logItem._id) return false;
-            const itemWh = (item.name || item.whName || item.warehouse || '').trim().toLowerCase();
-            const itemProd = (item.productName || item.product || '').trim().toLowerCase();
-            const itemBrand = (item.brand || '').trim().toLowerCase();
-            const itemLc = (item.lcNo || '').trim().toLowerCase();
-
-            return itemWh === toWh && itemProd === prod && (!brand || itemBrand === brand || itemBrand.includes(brand)) && (!lc || isLcMatch(itemLc, lc));
-        });
-
-        if (destMatch) {
-            const curQty = parseFloat(destMatch.whQty ?? destMatch.inHouseQuantity ?? destMatch.quantity ?? 0);
-            const curPkt = parseFloat(destMatch.whPkt ?? destMatch.inHousePacket ?? destMatch.packet ?? 0);
-            const updatedQty = Math.max(0, curQty - oldQty);
-            const updatedPkt = Math.max(0, curPkt - oldPkt);
-
-            const updatedRecord = {
-                ...destMatch,
-                whQty: updatedQty,
-                whPkt: updatedPkt,
-                inHouseQuantity: updatedQty,
-                inHousePacket: updatedPkt,
-                totalInHouseQuantity: updatedQty,
-                totalInHousePacket: updatedPkt,
-                lastUpdated: new Date().toISOString()
-            };
-
-            await axios.put(`${API_BASE_URL}/api/warehouses/${destMatch._id}`, updatedRecord);
-        }
+        return;
     };
 
     // Edit Transfer Record
@@ -927,14 +866,15 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             }
 
             setSubmitStatus('success');
-            window.dispatchEvent(new CustomEvent('erp_data_updated', {
-                detail: { module: 'transfer', type: editingTransferId ? 'edit' : 'create' }
-            }));
+            queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             queryClient.invalidateQueries({ queryKey: ['stock'] });
+            window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                detail: { module: 'transfer', action: editingTransferId ? 'update' : 'create' }
+            }));
             setShowForm(false);
             resetForm();
-            fetchData(true);
+            await fetchData(true);
 
         } catch (error) {
             console.error('Error submitting stock transfer:', error);
@@ -947,96 +887,27 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
 
     // Approve Transfer Request
     const handleApprove = async (item) => {
-        const canApproveUser = hasPermission(currentUser, 'transfer', 'approve') || hasPermission(currentUser, 'warehouse', 'approve') || currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
-        if (!canApproveUser) {
+        if (!canApprove) {
             alert('Forbidden: You do not have permission to approve transfer requests');
             return;
         }
 
-        recentStatusUpdatesRef.current?.set(item._id, { status: 'Approved', timestamp: Date.now() });
+        const itemId = String(item._id);
+        recentStatusUpdatesRef.current?.set(itemId, { status: 'Approved', timestamp: Date.now() });
 
         // Instant optimistic update
-        setTransferLogs(prev => (prev || []).map(l => l._id === item._id ? { ...l, status: 'Approved', approvedAt: new Date().toISOString(), approvedBy: currentUser?.username || 'admin' } : l));
+        setTransferLogs(prev => (prev || []).map(l => String(l._id) === itemId ? { ...l, status: 'Approved', approvedAt: new Date().toISOString(), approvedBy: currentUser?.username || 'admin' } : l));
         if (typeof refreshPendingIndicators === 'function') {
             refreshPendingIndicators();
         }
         window.dispatchEvent(new CustomEvent('erp_data_updated', {
-            detail: { module: 'transfer', type: 'approve', id: item._id }
+            detail: { module: 'transfer', action: 'approve', id: itemId }
         }));
 
         try {
-            let transferQty = parseFloat(item.transferQty ?? item.whQty ?? item.inHouseQuantity ?? 0);
-            let transferPkt = parseFloat(item.transferPkt ?? item.whPkt ?? item.inHousePacket ?? 0);
-
-            const targetWh = (item.fromWh || '').trim().toLowerCase();
-            const targetProd = (item.productName || item.product || '').trim().toLowerCase();
-            const targetBrand = (item.brand || '').trim().toLowerCase();
-            const targetLc = (item.lcNo || '').trim().toLowerCase();
-
-            // Find matching source records to deduct from
-            const allSources = [
-                ...(warehouseData || []).map(r => ({ ...r, _sourceType: 'warehouse' })),
-                ...(stockRecords || []).map(r => ({ ...r, _sourceType: 'stock' }))
-            ];
-
-            const sourceRecords = allSources.filter(s => {
-                const itemWh = (s.name || s.whName || s.warehouse || '').trim().toLowerCase();
-                const itemProd = (s.productName || s.product || '').trim().toLowerCase();
-                const itemBrand = (s.brand || '').trim().toLowerCase();
-                const itemLc = (s.lcNo || '').trim().toLowerCase();
-
-                const whMatch = !targetWh || itemWh === targetWh || itemWh.includes(targetWh);
-                const prodMatch = itemProd === targetProd;
-                const brandMatch = !targetBrand || itemBrand === targetBrand || itemBrand.includes(targetBrand);
-                const lcMatch = !targetLc || isLcMatch(itemLc, targetLc);
-                const availQty = parseFloat(s.whQty ?? s.inHouseQuantity ?? s.quantity ?? 0);
-                const availPkt = parseFloat(s.whPkt ?? s.inHousePacket ?? s.packet ?? 0);
-
-                return whMatch && prodMatch && brandMatch && lcMatch && (availQty > 0 || availPkt > 0);
-            });
-
-            // Deduct from Source
-            for (const sourceRecord of sourceRecords) {
-                if (transferQty <= 0 && transferPkt <= 0) break;
-
-                const availQty = parseFloat(sourceRecord.whQty ?? sourceRecord.inHouseQuantity ?? sourceRecord.quantity ?? 0);
-                const availPkt = parseFloat(sourceRecord.whPkt ?? sourceRecord.inHousePacket ?? sourceRecord.packet ?? 0);
-
-                const deductQty = Math.min(transferQty, availQty);
-                const deductPkt = Math.min(transferPkt, availPkt);
-
-                const newWhQty = Math.max(0, availQty - deductQty);
-                const newWhPkt = Math.max(0, availPkt - deductPkt);
-
-                const updatedRecord = {
-                    ...sourceRecord,
-                    whQty: newWhQty,
-                    whPkt: newWhPkt,
-                    inHouseQuantity: newWhQty,
-                    inHousePacket: newWhPkt,
-                    totalInHouseQuantity: newWhQty,
-                    totalInHousePacket: newWhPkt,
-                    lastUpdated: new Date().toISOString()
-                };
-                delete updatedRecord._sourceType;
-
-                // Protect pre-baseline historical records from mutation
-                const isPreBaseline = activeBaseline && activeBaseline.status === 'active' &&
-                    (sourceRecord.date || sourceRecord.createdAt || '') < activeBaseline.baselineDate;
-
-                if (!isPreBaseline) {
-                    if (sourceRecord._sourceType === 'stock') {
-                        await axios.put(`${API_BASE_URL}/api/stock/${sourceRecord._id}`, updatedRecord);
-                    } else {
-                        await axios.put(`${API_BASE_URL}/api/warehouses/${sourceRecord._id}`, updatedRecord);
-                    }
-                }
-
-                transferQty -= deductQty;
-                transferPkt -= deductPkt;
-            }
-
-            // Update transfer status to Approved
+            // Update transfer status to Approved in MongoDB.
+            // Centralized stock calculation (stockHelpers) dynamically reflects the transfer:
+            // adding stock to destination warehouse and deducting from source warehouse via the transfer log.
             const updatedLog = {
                 ...item,
                 status: 'Approved',
@@ -1044,36 +915,39 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                 approvedBy: currentUser?.username || 'admin'
             };
 
-            await axios.put(`${API_BASE_URL}/api/warehouses/${item._id}`, updatedLog);
+            await axios.put(`${API_BASE_URL}/api/warehouses/${itemId}`, updatedLog);
 
+            queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
             queryClient.invalidateQueries({ queryKey: ['warehouses'] });
             queryClient.invalidateQueries({ queryKey: ['stock'] });
             if (addNotification) addNotification('success', `Stock transfer for ${item.productName || item.product} approved successfully`);
-            fetchData(true);
+            await fetchData(true);
         } catch (error) {
             console.error('Error approving transfer request:', error);
+            recentStatusUpdatesRef.current?.delete(itemId);
+            setTransferLogs(prev => (prev || []).map(l => String(l._id) === itemId ? { ...l, status: 'Requested' } : l));
             if (addNotification) addNotification('error', 'Failed to approve transfer request');
         }
     };
 
     // Reject Transfer Request
     const handleReject = async (item) => {
-        const canApproveUser = hasPermission(currentUser, 'transfer', 'approve') || hasPermission(currentUser, 'warehouse', 'approve') || currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
-        if (!canApproveUser) {
+        if (!canApprove) {
             alert('Forbidden: You do not have permission to reject transfer requests');
             return;
         }
 
         if (window.confirm('Are you sure you want to reject this transfer request?')) {
-            recentStatusUpdatesRef.current?.set(item._id, { status: 'Rejected', timestamp: Date.now() });
+            const itemId = String(item._id);
+            recentStatusUpdatesRef.current?.set(itemId, { status: 'Rejected', timestamp: Date.now() });
 
             // Instant optimistic update
-            setTransferLogs(prev => (prev || []).map(l => l._id === item._id ? { ...l, status: 'Rejected', rejectedAt: new Date().toISOString(), rejectedBy: currentUser?.username || 'admin' } : l));
+            setTransferLogs(prev => (prev || []).map(l => String(l._id) === itemId ? { ...l, status: 'Rejected', rejectedAt: new Date().toISOString(), rejectedBy: currentUser?.username || 'admin' } : l));
             if (typeof refreshPendingIndicators === 'function') {
                 refreshPendingIndicators();
             }
             window.dispatchEvent(new CustomEvent('erp_data_updated', {
-                detail: { module: 'transfer', type: 'reject', id: item._id }
+                detail: { module: 'transfer', action: 'reject', id: itemId }
             }));
 
             try {
@@ -1084,14 +958,17 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                     rejectedBy: currentUser?.username || 'admin'
                 };
 
-                await axios.put(`${API_BASE_URL}/api/warehouses/${item._id}`, updatedLog);
+                await axios.put(`${API_BASE_URL}/api/warehouses/${itemId}`, updatedLog);
 
+                queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
                 queryClient.invalidateQueries({ queryKey: ['warehouses'] });
                 queryClient.invalidateQueries({ queryKey: ['stock'] });
                 if (addNotification) addNotification('info', `Stock transfer request for ${item.productName || item.product} rejected`);
-                fetchData(true);
+                await fetchData(true);
             } catch (error) {
                 console.error('Error rejecting transfer request:', error);
+                recentStatusUpdatesRef.current?.delete(itemId);
+                setTransferLogs(prev => (prev || []).map(l => String(l._id) === itemId ? { ...l, status: 'Requested' } : l));
                 if (addNotification) addNotification('error', 'Failed to reject transfer request');
             }
         }
@@ -1118,10 +995,14 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                     await revertTransferStock(logItem);
                 }
                 await axios.delete(`${API_BASE_URL}/api/warehouses/${recordId}`);
+                queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
                 queryClient.invalidateQueries({ queryKey: ['warehouses'] });
                 queryClient.invalidateQueries({ queryKey: ['stock'] });
+                window.dispatchEvent(new CustomEvent('erp_data_updated', {
+                    detail: { module: 'transfer', action: 'delete', id: recordId }
+                }));
                 if (addNotification) addNotification('success', 'Transfer record deleted and stock restored to source warehouse');
-                fetchData(true);
+                await fetchData(true);
             } catch (error) {
                 console.error('Error deleting transfer record:', error);
                 if (addNotification) addNotification('error', 'Failed to delete transfer record');
@@ -1772,6 +1653,32 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                             )}
 
                             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                                {canApprove && viewingTransfer.status === 'Requested' && (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                const item = viewingTransfer;
+                                                setViewingTransfer(null);
+                                                handleReject(item);
+                                            }}
+                                            className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
+                                        >
+                                            <XIcon className="w-4 h-4" />
+                                            <span>Reject Request</span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const item = viewingTransfer;
+                                                setViewingTransfer(null);
+                                                handleApprove(item);
+                                            }}
+                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
+                                        >
+                                            <CheckIcon className="w-4 h-4" />
+                                            <span>Accept / Approve</span>
+                                        </button>
+                                    </>
+                                )}
                                 <button
                                     onClick={() => window.print()}
                                     className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl flex items-center gap-1.5"

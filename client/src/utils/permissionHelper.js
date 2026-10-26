@@ -450,7 +450,7 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
     const roleLower = (currentUser.role || '').toLowerCase();
 
     // 1. Admin bypass
-    if (username === 'admin' || roleLower === 'admin') {
+    if (username === 'admin' || roleLower === 'admin' || roleLower === 'administrator') {
         return true;
     }
 
@@ -576,6 +576,28 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
             return hasPermission(currentUser, 'bank', 'view');
         }
         return hasPermission(currentUser, 'bank', action);
+    }
+
+    // Special fallback for transfer approve / special
+    if (moduleName === 'transfer') {
+        if (checkAction === 'approve' || checkAction === 'special') {
+            if (currentUser.permissions) {
+                const tPerms = currentUser.permissions.transfer;
+                if (tPerms) {
+                    if (tPerms.approve !== undefined && tPerms.approve) return true;
+                    if (tPerms.special !== undefined && tPerms.special) return true;
+                }
+                const wPerms = currentUser.permissions.warehouse;
+                if (wPerms) {
+                    if (wPerms.approve !== undefined && wPerms.approve) return true;
+                    if (wPerms.special !== undefined && wPerms.special) return true;
+                }
+            }
+            if (roleLower === 'incharge') return true;
+            const defaults = getDefaultPermissionsForRole(currentUser.role);
+            if (defaults.transfer && (defaults.transfer.approve || defaults.transfer.special)) return true;
+            if (defaults.warehouse && (defaults.warehouse.approve || defaults.warehouse.special)) return true;
+        }
     }
 
     // 2. Custom permission check

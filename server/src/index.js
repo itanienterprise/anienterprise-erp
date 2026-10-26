@@ -3474,6 +3474,9 @@ apiRouter.post('/api/warehouses', async (req, res) => {
     const savedWarehouse = await newWarehouse.save();
     const result = { ...req.body, _id: savedWarehouse._id, createdAt: savedWarehouse.createdAt };
     broadcastUpdate('warehouses', 'create', { id: savedWarehouse._id, warehouse: result });
+    if (req.body?.isTransferLog || parseFloat(req.body?.transferQty) > 0 || parseFloat(req.body?.transferPkt) > 0) {
+      broadcastUpdate('transfer', 'create', { id: savedWarehouse._id, warehouse: result });
+    }
     req._broadcastDone = true;
     res.status(201).json(result);
   } catch (err) {
@@ -3486,6 +3489,7 @@ apiRouter.delete('/api/warehouses/:id', async (req, res) => {
     const deletedWarehouse = await Warehouse.findByIdAndDelete(req.params.id);
     if (!deletedWarehouse) return res.status(404).json({ message: 'Warehouse not found' });
     broadcastUpdate('warehouses', 'delete', { id: req.params.id });
+    broadcastUpdate('transfer', 'delete', { id: req.params.id });
     req._broadcastDone = true;
     res.json({ message: 'Warehouse deleted' });
   } catch (err) {
@@ -3500,6 +3504,9 @@ apiRouter.put('/api/warehouses/:id', async (req, res) => {
     if (!updatedWarehouse) return res.status(404).json({ message: 'Warehouse not found' });
     const result = { ...req.body, _id: updatedWarehouse._id, createdAt: updatedWarehouse.createdAt };
     broadcastUpdate('warehouses', 'update', { id: req.params.id, warehouse: result });
+    if (req.body?.isTransferLog || parseFloat(req.body?.transferQty) > 0 || parseFloat(req.body?.transferPkt) > 0) {
+      broadcastUpdate('transfer', 'update', { id: req.params.id, warehouse: result });
+    }
     req._broadcastDone = true;
     res.json(result);
   } catch (err) {
