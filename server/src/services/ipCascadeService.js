@@ -327,8 +327,7 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
     const targetIpName = (newIpName || newName).trim();
     const oldNameCandidates = new Set([
         oldIpName,
-        oldName,
-        newProduct.name
+        oldName
     ].filter(Boolean).map(normalize));
 
     // Support root terms (e.g., BRAN <-> WHEAT BRAN)
@@ -381,8 +380,6 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
                     await saveEncrypted(doc, ip);
                     counts.ips++;
                     if (ip.ipNumber) affectedIpNumbers.add(normalize(ip.ipNumber));
-                } else if (normIpProd === normalize(targetIpName) && ip.ipNumber) {
-                    affectedIpNumbers.add(normalize(ip.ipNumber));
                 }
             }
         } catch (err) {
@@ -407,7 +404,7 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             const normPiProd = normalize(pi.productName);
             const matchesPiName = oldNameCandidates.has(normPiProd);
 
-            if (targetIpName && (matchesPiName || isLinkedToAffectedIp) && normPiProd !== normalize(targetIpName)) {
+            if (targetIpName && (matchesPiName || (isLinkedToAffectedIp && oldNameCandidates.has(normPiProd))) && normPiProd !== normalize(targetIpName)) {
                 pi.productName = targetIpName;
                 piModified = true;
             }
@@ -420,7 +417,7 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
                     const itemMatchesName = oldNameCandidates.has(normItemProd);
                     const itemMatchesHs = (newHsCode && item.hsCode === newHsCode) || (oldHsCode && item.hsCode === oldHsCode);
 
-                    if (targetIpName && (itemLinked || itemMatchesName || (itemMatchesHs && (normItemProd.includes(normalize(oldName)) || normItemProd.includes('bran'))))) {
+                    if (targetIpName && (itemMatchesName || (itemLinked && oldNameCandidates.has(normItemProd)) || (itemMatchesHs && (normItemProd.includes(normalize(oldName)) || normItemProd.includes('bran'))))) {
                         if (normItemProd !== normalize(targetIpName)) {
                             item.productName = targetIpName;
                             piModified = true;
@@ -440,7 +437,7 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             if (Array.isArray(pi.revisions)) {
                 pi.revisions.forEach(rev => {
                     const normRevProd = normalize(rev.productName);
-                    if (targetIpName && (oldNameCandidates.has(normRevProd) || isLinkedToAffectedIp) && normRevProd !== normalize(targetIpName)) {
+                    if (targetIpName && oldNameCandidates.has(normRevProd) && normRevProd !== normalize(targetIpName)) {
                         rev.productName = targetIpName;
                         piModified = true;
                     }
@@ -452,7 +449,7 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
                             const itemMatchesName = oldNameCandidates.has(normItemProd);
                             const itemMatchesHs = (newHsCode && item.hsCode === newHsCode) || (oldHsCode && item.hsCode === oldHsCode);
 
-                            if (targetIpName && (itemLinked || itemMatchesName || (itemMatchesHs && (normItemProd.includes(normalize(oldName)) || normItemProd.includes('bran'))))) {
+                            if (targetIpName && (itemMatchesName || (itemLinked && oldNameCandidates.has(normItemProd)) || (itemMatchesHs && (normItemProd.includes(normalize(oldName)) || normItemProd.includes('bran'))))) {
                                 if (normItemProd !== normalize(targetIpName)) {
                                     item.productName = targetIpName;
                                     piModified = true;
@@ -474,9 +471,9 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             if (piModified) {
                 await saveEncrypted(doc, pi);
                 counts.pis++;
-            }
-            if (pi.piNumber) {
-                affectedPiNumbers.add(cleanLc(pi.piNumber));
+                if (pi.piNumber) {
+                    affectedPiNumbers.add(cleanLc(pi.piNumber));
+                }
             }
         }
     } catch (err) {
@@ -504,7 +501,7 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             const normLcProd = normalize(lc.productName || lc.product);
             const matchesLcName = oldNameCandidates.has(normLcProd);
 
-            if (targetIpName && (matchesLcName || isLinkedViaIp || isLinkedViaPi)) {
+            if (targetIpName && (matchesLcName || (isLinkedViaPi && oldNameCandidates.has(normLcProd)))) {
                 if (lc.productName && normalize(lc.productName) !== normalize(targetIpName)) {
                     lc.productName = targetIpName;
                     lcModified = true;
@@ -521,7 +518,7 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
                     const itemMatchesName = oldNameCandidates.has(normItemProd);
                     const itemMatchesHs = (newHsCode && item.hsCode === newHsCode) || (oldHsCode && item.hsCode === oldHsCode);
 
-                    if (targetIpName && (isLinkedViaIp || isLinkedViaPi || itemMatchesName || (itemMatchesHs && (normItemProd.includes(normalize(oldName)) || normItemProd.includes('bran'))))) {
+                    if (targetIpName && (itemMatchesName || (isLinkedViaPi && oldNameCandidates.has(normItemProd)) || (itemMatchesHs && (normItemProd.includes(normalize(oldName)) || normItemProd.includes('bran'))))) {
                         if (normItemProd !== normalize(targetIpName)) {
                             item.productName = targetIpName;
                             lcModified = true;
@@ -537,14 +534,14 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             if (Array.isArray(lc.amendments)) {
                 lc.amendments.forEach(amd => {
                     const normAmdProd = normalize(amd.productName);
-                    if (targetIpName && (oldNameCandidates.has(normAmdProd) || isLinkedViaIp || isLinkedViaPi) && normAmdProd !== normalize(targetIpName)) {
+                    if (targetIpName && oldNameCandidates.has(normAmdProd) && normAmdProd !== normalize(targetIpName)) {
                         amd.productName = targetIpName;
                         lcModified = true;
                     }
                     if (Array.isArray(amd.productsList)) {
                         amd.productsList.forEach(item => {
                             const normItemProd = normalize(item.productName);
-                            if (targetIpName && (oldNameCandidates.has(normItemProd) || isLinkedViaIp || isLinkedViaPi) && normItemProd !== normalize(targetIpName)) {
+                            if (targetIpName && oldNameCandidates.has(normItemProd) && normItemProd !== normalize(targetIpName)) {
                                 item.productName = targetIpName;
                                 lcModified = true;
                             }
@@ -556,9 +553,9 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             if (lcModified) {
                 await saveEncrypted(doc, lc);
                 counts.lcs++;
-            }
-            if (lc.lcNo) {
-                affectedLcNumbers.add(cleanLc(lc.lcNo));
+                if (lc.lcNo) {
+                    affectedLcNumbers.add(cleanLc(lc.lcNo));
+                }
             }
         }
     } catch (err) {
@@ -573,19 +570,8 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             if (!pl) continue;
 
             let plModified = false;
-            const plLcClean = cleanLc(pl.lcNumber || pl.lcNo);
-            const plPiClean = cleanLc(pl.piNumber || pl.piNo);
-            const plIps = [
-                pl.ipNo,
-                ...(Array.isArray(pl.ipNumbers) ? pl.ipNumbers : [])
-            ].filter(Boolean).map(normalize);
-
-            const isLinked = plIps.some(ip => affectedIpNumbers.has(ip)) ||
-                (plLcClean && affectedLcNumbers.has(plLcClean)) ||
-                (plPiClean && affectedPiNumbers.has(plPiClean));
-
             const normPlProd = normalize(pl.productName);
-            if (targetIpName && (isLinked || oldNameCandidates.has(normPlProd)) && normPlProd !== normalize(targetIpName)) {
+            if (targetIpName && oldNameCandidates.has(normPlProd) && normPlProd !== normalize(targetIpName)) {
                 pl.productName = targetIpName;
                 plModified = true;
             }
@@ -593,11 +579,11 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             if (Array.isArray(pl.productsList)) {
                 pl.productsList.forEach(item => {
                     const normItemProd = normalize(item.productName);
-                    if (targetIpName && (isLinked || oldNameCandidates.has(normItemProd)) && normItemProd !== normalize(targetIpName)) {
+                    if (targetIpName && oldNameCandidates.has(normItemProd) && normItemProd !== normalize(targetIpName)) {
                         item.productName = targetIpName;
                         plModified = true;
                     }
-                    if (newHsCode && (isLinked || oldNameCandidates.has(normItemProd)) && item.hsCode !== newHsCode) {
+                    if (newHsCode && oldNameCandidates.has(normItemProd) && item.hsCode !== newHsCode) {
                         item.hsCode = newHsCode;
                         plModified = true;
                     }
@@ -621,13 +607,10 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             if (!stock) continue;
 
             let stockModified = false;
-            const stockLcClean = cleanLc(stock.lcNo);
-            const isLinkedToLc = stockLcClean && affectedLcNumbers.has(stockLcClean);
-
             const normStockProd = normalize(stock.productName || stock.product);
             const matchesStockName = oldNameCandidates.has(normStockProd);
 
-            if (targetIpName && (isLinkedToLc || matchesStockName)) {
+            if (targetIpName && matchesStockName) {
                 if (stock.productName && normalize(stock.productName) !== normalize(targetIpName)) {
                     stock.productName = targetIpName;
                     stockModified = true;
@@ -636,6 +619,16 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
                     stock.product = targetIpName;
                     stockModified = true;
                 }
+            }
+
+            if (Array.isArray(stock.entries)) {
+                stock.entries.forEach(entry => {
+                    const normEntryProd = normalize(entry.productName);
+                    if (targetIpName && oldNameCandidates.has(normEntryProd) && normEntryProd !== normalize(targetIpName)) {
+                        entry.productName = targetIpName;
+                        stockModified = true;
+                    }
+                });
             }
 
             if (stockModified) {
