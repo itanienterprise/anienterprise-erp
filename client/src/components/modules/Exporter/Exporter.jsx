@@ -1013,10 +1013,7 @@ const Exporter = ({
                                                         <p className="font-bold text-gray-900 text-sm truncate uppercase tracking-tight">{exporter.name}</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className={`exporter-status-badge ${exporter.status === 'Active' ? 'active' : 'inactive'} shrink-0 text-[10px] py-0.5 px-2`}>
-                                                        {exporter.status}
-                                                    </span>
+                                                <div className="flex items-center gap-1">
                                                     <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}>
                                                         {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
                                                     </div>
@@ -1026,41 +1023,41 @@ const Exporter = ({
                                             {/* Expandable Body */}
                                             {isExpanded && (
                                                 <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
-                                                    <div className="space-y-2.5 pt-3 border-t border-gray-50">
+                                                    <div className="space-y-2 pt-3 border-t border-gray-100">
                                                         {exporter.bin && (
-                                                            <div className="flex justify-between items-center text-xs">
-                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">BIN</span>
-                                                                <span className="text-gray-900 font-black font-mono">{exporter.bin}</span>
+                                                            <div className="flex justify-between items-center text-xs sm:text-sm">
+                                                                <span className="text-gray-500 font-semibold text-xs">BIN</span>
+                                                                <span className="text-gray-900 font-bold font-mono text-xs sm:text-sm">{exporter.bin}</span>
                                                             </div>
                                                         )}
                                                         {exporter.tin && (
-                                                            <div className="flex justify-between items-center text-xs">
-                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">TIN</span>
-                                                                <span className="text-gray-900 font-black font-mono">{exporter.tin}</span>
+                                                            <div className="flex justify-between items-center text-xs sm:text-sm">
+                                                                <span className="text-gray-500 font-semibold text-xs">TIN</span>
+                                                                <span className="text-gray-900 font-bold font-mono text-xs sm:text-sm">{exporter.tin}</span>
                                                             </div>
                                                         )}
                                                         {exporter.irc && (
-                                                            <div className="flex justify-between items-center text-xs">
-                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">IRC</span>
-                                                                <span className="text-gray-900 font-black font-mono">{exporter.irc}</span>
+                                                            <div className="flex justify-between items-center text-xs sm:text-sm">
+                                                                <span className="text-gray-500 font-semibold text-xs">IRC</span>
+                                                                <span className="text-gray-900 font-bold font-mono text-xs sm:text-sm">{exporter.irc}</span>
                                                             </div>
                                                         )}
                                                         {exporter.contactPerson && (
-                                                            <div className="flex justify-between items-center text-xs">
-                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Contact Person</span>
-                                                                <span className="text-gray-900 font-black">{exporter.contactPerson}</span>
+                                                            <div className="flex justify-between items-center text-xs sm:text-sm">
+                                                                <span className="text-gray-500 font-semibold text-xs">Contact Person</span>
+                                                                <span className="text-gray-900 font-bold text-xs sm:text-sm text-right max-w-[65%] truncate">{exporter.contactPerson}</span>
                                                             </div>
                                                         )}
                                                         {exporter.phone && (
-                                                            <div className="flex justify-between items-center text-xs">
-                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Phone Number</span>
-                                                                <span className="text-gray-900 font-black font-mono">{exporter.phone}</span>
+                                                            <div className="flex justify-between items-center text-xs sm:text-sm">
+                                                                <span className="text-gray-500 font-semibold text-xs">Phone Number</span>
+                                                                <span className="text-gray-900 font-bold font-mono text-xs sm:text-sm">{exporter.phone}</span>
                                                             </div>
                                                         )}
                                                         {exporter.address && (
-                                                            <div className="flex justify-between items-start text-xs pt-1">
-                                                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px] shrink-0">Office Address</span>
-                                                                <span className="text-gray-900 font-black text-right max-w-[65%] line-clamp-2">{exporter.address}</span>
+                                                            <div className="flex justify-between items-start text-xs sm:text-sm pt-0.5">
+                                                                <span className="text-gray-500 font-semibold text-xs shrink-0">Office Address</span>
+                                                                <span className="text-gray-900 font-bold text-xs sm:text-sm text-right max-w-[65%] leading-snug break-words">{exporter.address}</span>
                                                             </div>
                                                         )}
                                                     </div>
@@ -1352,27 +1349,6 @@ const Exporter = ({
 
                         {/* Modal Body */}
                         <div className="flex-1 overflow-auto p-4 md:p-6 min-h-0 space-y-4 text-left">
-                            {/* Exporter Info Card */}
-                            {(viewData.bin || viewData.tin || viewData.irc || viewData.address) && (
-                                <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-2xl border border-gray-100 p-4 shadow-sm">
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                        {(viewData.bin || viewData.tin || viewData.irc) && (
-                                            <div>
-                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Registration Info</span>
-                                                <p className="text-xs font-semibold text-gray-800 mt-0.5">
-                                                    BIN: {viewData.bin || '-'} | TIN: {viewData.tin || '-'} | IRC: {viewData.irc || '-'}
-                                                </p>
-                                            </div>
-                                        )}
-                                        {viewData.address && (
-                                            <div className="md:col-span-3">
-                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Address</span>
-                                                <p className="text-xs font-semibold text-gray-800 mt-0.5">{viewData.address}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
                             {historyLoading ? (
                                 <div className="flex items-center justify-center py-16">
                                     <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>

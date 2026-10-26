@@ -470,7 +470,7 @@ const EmployeeManagement = ({
         <div className="employee-container space-y-6 text-left">
             {!showForm && (
                 <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-                    <div className="w-full md:w-1/4 text-left">
+                    <div className="w-full md:w-1/4 text-center md:text-left">
                         <h2 className="text-xl md:text-2xl font-bold text-gray-800">Employee Management</h2>
                     </div>
 
@@ -483,7 +483,7 @@ const EmployeeManagement = ({
                             placeholder="Search by ID, Name, Designation..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="h-10 block w-full pl-10 pr-4 bg-white/50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                            className="h-10 block w-full pl-10 pr-10 bg-white/50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none text-center md:text-left placeholder:text-center md:placeholder:text-left"
                         />
                     </div>
 
@@ -493,18 +493,18 @@ const EmployeeManagement = ({
                                 <button
                                     ref={filterButtonRef}
                                     onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                    className="w-full md:w-auto flex items-center justify-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold hover:bg-blue-100 transition-all shadow-sm whitespace-nowrap"
+                                    className="w-full md:w-auto h-10 flex items-center justify-center gap-2 px-3.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all shadow-sm whitespace-nowrap"
                                 >
                                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
                                     {filters.status}
-                                    <ChevronDownIcon className={`w-3 h-3 ml-1 transition-transform duration-300 ${showFilterPanel ? 'rotate-180' : ''}`} />
+                                    <ChevronDownIcon className={`w-3.5 h-3.5 ml-1 transition-transform duration-300 ${showFilterPanel ? 'rotate-180' : ''}`} />
                                 </button>
                             )}
 
                             {showFilterPanel && (
                                 <div
                                     ref={filterPanelRef}
-                                    className="absolute right-0 top-full mt-3 w-72 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-50 p-5 animate-in fade-in zoom-in duration-200"
+                                    className="absolute left-0 md:left-auto md:right-0 top-full mt-2 w-64 bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-50 p-4 animate-in fade-in zoom-in duration-200"
                                 >
                                     <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
                                         <h4 className="font-bold text-gray-900">Filters</h4>
@@ -880,7 +880,28 @@ const EmployeeManagement = ({
                                             >
                                                 {isSelectionMode && <td className="px-6 py-4"><input type="checkbox" checked={selectedItems.has(e._id)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /></td>}
                                                 <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.employeeId}</td>
-                                                <td className="px-6 py-4 text-sm font-bold text-gray-900 font-sans">{e.name}</td>
+                                                <td className="px-6 py-4 text-sm font-bold text-gray-900 font-sans">
+                                                    <div className="flex items-center gap-3">
+                                                        {(e.avatarPhoto || e.profilePhoto) ? (
+                                                            <img
+                                                                src={e.avatarPhoto || e.profilePhoto}
+                                                                alt={e.name}
+                                                                className="w-8 h-8 rounded-full object-cover object-top ring-1 ring-gray-200 shrink-0"
+                                                            />
+                                                        ) : (
+                                                            <div
+                                                                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-xs"
+                                                                style={{
+                                                                    background: 'radial-gradient(circle at 50% 30%, #334155 0%, #1e293b 55%, #0f172a 100%)',
+                                                                    border: '1px solid rgba(255, 255, 255, 0.15)'
+                                                                }}
+                                                            >
+                                                                {e.name?.charAt(0)?.toUpperCase() || 'E'}
+                                                            </div>
+                                                        )}
+                                                        <span>{e.name}</span>
+                                                    </div>
+                                                </td>
                                                 <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.department}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-600 font-sans">{e.designation}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-600 font-sans">
@@ -908,63 +929,128 @@ const EmployeeManagement = ({
                             </div>
                             <TableScrollNav className="hidden md:flex" count={getFilteredAndSortedData().length} />
 
-                            {/* Mobile Grid Layout */}
-                            <div className="md:hidden space-y-4">
-                                {getFilteredAndSortedData().map(e => (
-                                    <div
-                                        key={e._id}
-                                        onMouseDown={() => startLongPress(e._id)}
-                                        onMouseUp={endLongPress}
-                                        onClick={() => isSelectionMode ? toggleSelection(e._id) : toggleCardExpansion(e._id)}
-                                        className={`p-5 bg-white rounded-2xl border border-gray-100 shadow-sm transition-all relative overflow-hidden cursor-pointer ${selectedItems.has(e._id) ? 'ring-2 ring-blue-500 border-transparent bg-blue-50/30' : ''}`}
-                                    >
-                                        <div className="flex justify-between items-start mb-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-blue-200">
-                                                    {e.name?.charAt(0)}
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-bold text-gray-900 text-sm">{e.name}</h4>
-                                                    <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{e.employeeId}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <button onClick={(event) => { event.stopPropagation(); setViewData(e); }} className="p-2 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded-xl transition-colors"><EyeIcon className="w-4 h-4" /></button>
-                                                {!cannotManage && (
-                                                    <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-colors"><EditIcon className="w-4 h-4" /></button>
-                                                )}
-                                                {!cannotDelete && (
-                                                    <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-xl transition-colors"><TrashIcon className="w-4 h-4" /></button>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div className={`grid grid-cols-2 gap-y-3 gap-x-4 overflow-hidden transition-all duration-300 ${expandedCards.has(e._id) ? 'max-h-[500px] opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
-                                            <div>
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Role</p>
-                                                <p className="text-xs text-gray-700 font-medium">{e.role}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Dept</p>
-                                                <p className="text-xs text-gray-700 font-medium">{e.department}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Designation</p>
-                                                <p className="text-xs text-gray-700 font-medium">{e.designation}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Phone</p>
-                                                <p className="text-xs text-gray-700 font-medium">{e.phone}</p>
-                                            </div>
-                                            <div className="col-span-2 flex items-center gap-2 pt-1 border-t border-gray-50 mt-1">
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Status:</p>
-                                                <div className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-tight ${e.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-700'}`}>
-                                                    {e.status}
-                                                </div>
-                                            </div>
-                                        </div>
+                            {/* Mobile 2x2 Grid Layout with Full-Card Photo */}
+                            <div className="md:hidden grid grid-cols-2 gap-2.5 sm:gap-3">
+                                {getFilteredAndSortedData().length === 0 ? (
+                                    <div className="col-span-2 text-center py-12 text-gray-400 text-xs font-sans bg-white rounded-2xl border border-gray-100 p-6">
+                                        No employees found matching your search
                                     </div>
-                                ))}
+                                ) : (
+                                    getFilteredAndSortedData().map(e => (
+                                        <div
+                                            key={e._id}
+                                            onMouseDown={() => startLongPress(e._id)}
+                                            onMouseUp={endLongPress}
+                                            onTouchStart={() => startLongPress(e._id)}
+                                            onTouchEnd={endLongPress}
+                                            onClick={() => isSelectionMode ? toggleSelection(e._id) : setViewData(e)}
+                                            className={`relative aspect-[3/4] min-h-[220px] rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between p-2.5 select-none cursor-pointer group active:scale-[0.98] ${selectedItems.has(e._id) ? 'ring-3 ring-blue-500 shadow-blue-200' : 'border border-gray-200/60'
+                                                }`}
+                                        >
+                                            {/* Full-Card Background Photo or Details Card Fallback */}
+                                            {e.profilePhoto ? (
+                                                <img
+                                                    src={e.profilePhoto}
+                                                    alt={e.name}
+                                                    className="absolute inset-0 w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                                                />
+                                            ) : (
+                                                <div
+                                                    className="absolute inset-0 w-full h-full flex flex-col items-center justify-center pb-8"
+                                                    style={{ background: 'radial-gradient(circle at 50% 30%, #334155 0%, #1e293b 55%, #0f172a 100%)' }}
+                                                >
+                                                    <div
+                                                        className="w-16 h-16 sm:w-18 sm:h-18 rounded-full flex items-center justify-center text-white font-extrabold text-2xl shadow-lg"
+                                                        style={{
+                                                            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%)',
+                                                            backdropFilter: 'blur(10px)',
+                                                            WebkitBackdropFilter: 'blur(10px)',
+                                                            border: '2px solid rgba(255, 255, 255, 0.2)',
+                                                            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)'
+                                                        }}
+                                                    >
+                                                        {e.name?.charAt(0)?.toUpperCase() || 'E'}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Bottom Vignette Overlay — smoothly covers bottom so multi-line text stays bright & readable */}
+                                            <div
+                                                className="absolute inset-x-0 bottom-0 h-[58%] pointer-events-none"
+                                                style={{
+                                                    background: 'linear-gradient(to top, rgba(15, 23, 42, 0.98) 0%, rgba(15, 23, 42, 0.7) 45%, rgba(15, 23, 42, 0.25) 75%, transparent 100%)'
+                                                }}
+                                            />
+
+                                            {/* Top Header: ID Badge (Left Aligned) */}
+                                            <div className="relative z-10 flex items-center justify-start gap-2 w-full">
+                                                {/* Multi-select Checkbox */}
+                                                {isSelectionMode && (
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedItems.has(e._id)}
+                                                        onChange={(ev) => { ev.stopPropagation(); toggleSelection(e._id); }}
+                                                        className="w-4 h-4 accent-blue-600 rounded cursor-pointer"
+                                                        onClick={(ev) => ev.stopPropagation()}
+                                                    />
+                                                )}
+
+                                                <span className="text-[10px] font-mono font-bold text-white/95 bg-black/40 backdrop-blur-md border border-white/20 px-2.5 py-0.5 rounded-full truncate max-w-[90px] shadow-xs">
+                                                    {e.employeeId}
+                                                </span>
+                                            </div>
+
+                                            {/* Bottom Info (Center Aligned) & Action Buttons */}
+                                            <div className="relative z-10 flex flex-col w-full text-center items-center">
+                                                <h4 className="font-bold text-white text-xs sm:text-sm leading-snug font-sans tracking-tight drop-shadow-md w-full px-1 break-words" title={e.name}>
+                                                    {e.name}
+                                                </h4>
+
+                                                <p className="text-[10px] sm:text-[11px] text-white/90 font-medium leading-snug font-sans mt-0.5 drop-shadow-xs w-full px-1 break-words" title={e.designation || e.role}>
+                                                    {e.designation || e.role || '-'}
+                                                </p>
+
+                                                {e.department && e.department !== '-' && (
+                                                    <p className="text-[9px] sm:text-[10px] text-white/70 font-medium leading-snug font-sans mt-0.5 w-full px-1 break-words">
+                                                        {e.department}
+                                                    </p>
+                                                )}
+
+                                                {/* Action Buttons Bar */}
+                                                <div className="flex items-center justify-between gap-1.5 pt-2 mt-1.5 border-t border-white/15 w-full">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(event) => { event.stopPropagation(); setViewData(e); }}
+                                                        className="flex-1 py-1.5 flex items-center justify-center text-white/85 hover:text-white bg-white/15 hover:bg-white/25 active:scale-95 backdrop-blur-md rounded-lg transition-all cursor-pointer"
+                                                        title="View Profile"
+                                                    >
+                                                        <EyeIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    {!cannotManage && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(event) => { event.stopPropagation(); handleEdit(e); }}
+                                                            className="flex-1 py-1.5 flex items-center justify-center text-white/85 hover:text-white bg-white/15 hover:bg-blue-600/80 active:scale-95 backdrop-blur-md rounded-lg transition-all cursor-pointer"
+                                                            title="Edit Employee"
+                                                        >
+                                                            <EditIcon className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                    {!cannotDelete && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }}
+                                                            className="flex-1 py-1.5 flex items-center justify-center text-white/85 hover:text-white bg-white/15 hover:bg-rose-600/80 active:scale-95 backdrop-blur-md rounded-lg transition-all cursor-pointer"
+                                                            title="Delete Employee"
+                                                        >
+                                                            <TrashIcon className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </>
                     )}

@@ -1636,60 +1636,73 @@ const Bank = ({ onDeleteConfirm }) => {
                                     <div
                                         key={group.bankName}
                                         onClick={() => toggleRowExpansion(group.bankName)}
-                                        className={`bg-white rounded-2xl border ${isExpanded ? 'border-blue-100 ring-4 ring-blue-500/5 shadow-lg' : 'border-gray-100 shadow-sm'} p-5 transition-all duration-500 cursor-pointer overflow-hidden relative group`}
+                                        className={`bg-white rounded-2xl border ${isExpanded ? 'border-blue-100 ring-4 ring-blue-500/5 shadow-lg' : 'border-gray-100 shadow-sm'} p-4 sm:p-5 transition-all duration-300 cursor-pointer overflow-hidden relative group`}
                                     >
                                         <BankWatermark bankName={group.bankName} className="w-48 h-48 sm:w-56 sm:h-56" opacity={0.08} />
-                                        <div className="flex justify-between items-center relative z-10">
-                                            <div className="flex items-center gap-3.5">
-                                                <BankLogo bankName={group.bankName} className="w-16 h-16 rounded-2xl shadow-xs" imgClassName="w-full h-full object-contain p-1" />
-                                                <div className="space-y-1">
-                                                    <h3 className={`text-base md:text-lg font-black transition-colors duration-300 ${isExpanded ? 'text-blue-600' : 'text-gray-800'}`}>
+                                        <div className="flex justify-between items-center relative z-10 gap-2">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <BankLogo 
+                                                    bankName={group.bankName} 
+                                                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl shadow-xs shrink-0 bg-white" 
+                                                    imgClassName="w-full h-full object-contain p-1" 
+                                                />
+                                                <div className="min-w-0 flex-1 space-y-0.5">
+                                                    <h3 
+                                                        title={group.bankName}
+                                                        className={`text-sm sm:text-base font-black truncate whitespace-nowrap transition-colors duration-300 ${isExpanded ? 'text-blue-600' : 'text-gray-900'}`}
+                                                    >
                                                         {group.bankName}
                                                     </h3>
                                                     {group.items[0]?.binNo && (
-                                                        <p className="text-xs font-semibold text-blue-600">BIN: {group.items[0].binNo}</p>
+                                                        <p className="text-[11px] font-semibold text-blue-600 truncate whitespace-nowrap">BIN: {group.items[0].binNo}</p>
                                                     )}
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
-                                                        <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isExpanded ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'}`}></span>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center whitespace-nowrap">
+                                                        <span className={`w-1.5 h-1.5 rounded-full mr-1.5 shrink-0 ${isExpanded ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'}`}></span>
                                                         {group.items.length} {group.items.length > 1 ? 'Accounts' : 'Account'}
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex items-center bg-gray-50/80 p-0.5 rounded-lg border border-gray-100 divide-x divide-gray-100">
+                                            <div className="flex items-center shrink-0 ml-1">
+                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isExpanded ? 'bg-blue-50 text-blue-600 rotate-180' : 'bg-gray-50 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-600'}`}>
+                                                    <ChevronDownIcon className="w-4 h-4 transition-transform duration-300" />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {isExpanded && (
+                                            <div className="mt-4 pt-4 border-t border-gray-100 space-y-4 animate-in slide-in-from-top-3 duration-300">
+                                                {/* Bank Action Buttons Revealed After Click */}
+                                                <div className="flex items-center gap-2">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); openLcBillHistory(group.bankName); }}
-                                                        className="p-2 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-all"
+                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold hover:bg-emerald-100 active:scale-95 transition-all border border-emerald-200/60 shadow-2xs"
                                                         title="LC Bill History"
                                                     >
-                                                        <EyeIcon className="w-5 h-5" />
+                                                        <EyeIcon className="w-4 h-4" />
+                                                        <span>LC Bills</span>
                                                     </button>
                                                     {!isBorderManager && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleEdit(group.items[0]); }}
                                                             data-action={`Edit Bank (${group.bankName || ''})`}
-                                                            className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-all"
+                                                            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-blue-50 text-blue-700 rounded-xl text-xs font-bold hover:bg-blue-100 active:scale-95 transition-all border border-blue-200/60 shadow-2xs"
                                                             title="Edit Bank"
                                                         >
-                                                            <EditIcon className="w-5 h-5" />
+                                                            <EditIcon className="w-4 h-4" />
+                                                            <span>Edit Bank</span>
                                                         </button>
                                                     )}
                                                     {!isBorderManager && !cannotDelete && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(group.items[0]._id); }}
                                                             data-action={`Delete Bank (${group.bankName || ''})`}
-                                                            className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all"
+                                                            className="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 active:scale-95 transition-all border border-rose-200/60 shadow-2xs"
                                                             title="Delete Bank"
                                                         >
-                                                            <TrashIcon className="w-5 h-5" />
+                                                            <TrashIcon className="w-4 h-4" />
                                                         </button>
                                                     )}
                                                 </div>
-                                            </div>
-                                        </div>
-
-                                        {isExpanded && (
-                                            <div className="mt-6 space-y-4 animate-in slide-in-from-top-4 duration-500">
                                                 {group.items.map((item, idx) => {
                                                      const hasNewLcCharges = !!(
                                                          item.lcCommission ||
@@ -1708,8 +1721,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                                      );
                                                      return (
                                                          <div key={item.uniqueRowKey} className="relative bg-gray-50/50 rounded-2xl p-4 border border-gray-100 shadow-sm text-left">
-                                                             <div className="flex items-center gap-4">
-                                                                 <div className="flex-1 space-y-2.5">
+                                                             <div className="space-y-2.5">
                                                                      <div className="flex items-center text-[13px]">
                                                                          <span className="w-32 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Branch -</span>
                                                                          <span className="font-black text-gray-900 uppercase truncate">{item.branch}</span>
@@ -1799,18 +1811,29 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                              </div>
                                                                          </>
                                                                      )}
-                                                                 </div>
-                                                                 {canManageOpeningBalance && (
+                                                             </div>
+                                                             {canManageOpeningBalance && (
+                                                                 <div className="mt-3 pt-3 border-t border-gray-200/60">
                                                                      <button
                                                                          type="button"
                                                                          onClick={(e) => { e.stopPropagation(); handleOpenOpeningBalanceModal(item); }}
-                                                                         className={`p-2 rounded-xl transition-all shrink-0 self-start ${item.isOpeningBalanceActive ? "bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-xs" : "bg-white text-gray-400 hover:text-amber-600 hover:bg-amber-50 border border-gray-200"}`}
-                                                                         title="Manage Opening Balance"
+                                                                         data-action={`Manage Opening Balance (${item.accountNo || ""})`}
+                                                                         className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-2xs border ${
+                                                                             item.isOpeningBalanceActive
+                                                                                 ? "bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100"
+                                                                                 : "bg-amber-50 text-amber-700 border-amber-200/80 hover:bg-amber-100"
+                                                                         }`}
+                                                                         title={
+                                                                             item.isOpeningBalanceActive
+                                                                                 ? `Opening Balance Active: ৳${(Number(item.openingBalance) || 0).toLocaleString()} (Click to manage)`
+                                                                                 : "Set / Activate Opening Balance"
+                                                                         }
                                                                      >
-                                                                         <BanknotesIcon className="w-4 h-4" />
+                                                                         <BanknotesIcon className={`w-4 h-4 ${item.isOpeningBalanceActive ? "text-emerald-600" : "text-amber-600"}`} />
+                                                                         <span>{item.isOpeningBalanceActive ? "Manage Opening Balance" : "Set Opening Balance"}</span>
                                                                      </button>
-                                                                 )}
-                                                             </div>
+                                                                 </div>
+                                                             )}
                                                          </div>
                                                      );
                                                  })}

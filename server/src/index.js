@@ -5529,12 +5529,17 @@ apiRouter.get('/api/employees', async (req, res) => {
   try {
     const records = await Employee.find().sort({ createdAt: -1 });
 
-    // Fetch user profile photos to attach
-    const usersWithPhotos = await User.find({ profilePhoto: { $exists: true, $ne: null } }, 'username profilePhoto');
+    // Fetch user profile photos and avatar photos to attach
+    const usersWithPhotos = await User.find(
+      { $or: [{ profilePhoto: { $exists: true, $ne: null } }, { avatarPhoto: { $exists: true, $ne: null } }] },
+      'username profilePhoto avatarPhoto'
+    );
     const userPhotoMap = {};
+    const userAvatarMap = {};
     usersWithPhotos.forEach(u => {
-      if (u.username && u.profilePhoto) {
-        userPhotoMap[u.username] = u.profilePhoto;
+      if (u.username) {
+        if (u.profilePhoto) userPhotoMap[u.username] = u.profilePhoto;
+        if (u.avatarPhoto) userAvatarMap[u.username] = u.avatarPhoto;
       }
     });
 
@@ -5548,6 +5553,7 @@ apiRouter.get('/api/employees', async (req, res) => {
         d.role = await resolveRoleToDisplay(d.role);
       }
       const profilePhoto = (d && d.employeeId && userPhotoMap[d.employeeId]) || d?.profilePhoto || null;
+      const avatarPhoto = (d && d.employeeId && userAvatarMap[d.employeeId]) || d?.avatarPhoto || null;
 
       if (!hasFullEmployeePerm) {
         return {
@@ -5561,11 +5567,12 @@ apiRouter.get('/api/employees', async (req, res) => {
           role: d?.role || '',
           designation: d?.designation || '',
           department: d?.department || '',
-          profilePhoto
+          profilePhoto,
+          avatarPhoto
         };
       }
 
-      return { ...d, _id: r._id, createdAt: r.createdAt, profilePhoto };
+      return { ...d, _id: r._id, createdAt: r.createdAt, profilePhoto, avatarPhoto };
     }));
     res.json(decrypted);
   } catch (err) {

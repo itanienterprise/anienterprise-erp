@@ -684,9 +684,6 @@ const Importer = ({
                                                     <p className="font-bold text-gray-900 text-sm truncate">{importer.name}</p>
                                                 </div>
                                             </div>
-                                            <span className={`importer-status-badge ${importer.status === 'Active' ? 'active' : 'inactive'} shrink-0`}>
-                                                {importer.status}
-                                            </span>
                                         </div>
 
                                         {/* Card Body */}
