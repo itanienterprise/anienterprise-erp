@@ -765,10 +765,63 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         setSubmitStatus(null);
     };
 
-    // Helper to revert stock back to source warehouse when a transfer is deleted or updated.
-    // Dynamic stock ledger in stockHelpers automatically manages source/destination stock upon transfer log changes.
+    // Helper to revert stock back to source warehouse when a transfer is deleted or updated
     const revertTransferStock = async (logItem) => {
-        return;
+        if (!logItem) return;
+        const oldQty = parseFloat(logItem.transferQty ?? logItem.whQty ?? logItem.inHouseQuantity ?? 0);
+        const oldPkt = parseFloat(logItem.transferPkt ?? logItem.whPkt ?? logItem.inHousePacket ?? 0);
+        if (oldQty <= 0 && oldPkt <= 0) return;
+
+        const fromWh = (logItem.fromWh || '').trim().toLowerCase();
+        const prod = (logItem.productName || logItem.product || '').trim().toLowerCase();
+        const brand = (logItem.brand || '').trim().toLowerCase();
+        const lc = (logItem.lcNo || '').trim().toLowerCase();
+
+        // Find matching source records in stock or warehouse that were mutated/deducted
+        const allSources = [
+            ...(warehouseData || []).map(r => ({ ...r, _sourceType: 'warehouse' })),
+            ...(stockRecords || []).map(r => ({ ...r, _sourceType: 'stock' }))
+        ];
+
+        const sourceMatch = allSources.find(item => {
+            const itemWh = (item.name || item.whName || item.warehouse || '').trim().toLowerCase();
+            const itemProd = (item.productName || item.product || '').trim().toLowerCase();
+            const itemBrand = (item.brand || '').trim().toLowerCase();
+            const itemLc = (item.lcNo || '').trim().toLowerCase();
+
+            return itemWh === fromWh && itemProd === prod && (!brand || itemBrand === brand || itemBrand.includes(brand)) && (!lc || isLcMatch(itemLc, lc));
+        });
+
+        if (sourceMatch && (sourceMatch.lastUpdated || (parseFloat(sourceMatch.inHouseQuantity ?? sourceMatch.whQty ?? 0) < parseFloat(sourceMatch.quantity || 0)))) {
+            const curQty = parseFloat(sourceMatch.whQty ?? sourceMatch.inHouseQuantity ?? sourceMatch.quantity ?? 0);
+            const curPkt = parseFloat(sourceMatch.whPkt ?? sourceMatch.inHousePacket ?? sourceMatch.packet ?? 0);
+            const origQty = parseFloat(sourceMatch.quantity || 0);
+            const origPkt = parseFloat(sourceMatch.packet || 0);
+
+            const updatedQty = origQty > 0 ? Math.min(origQty, curQty + oldQty) : (curQty + oldQty);
+            const updatedPkt = origPkt > 0 ? Math.min(origPkt, curPkt + oldPkt) : (curPkt + oldPkt);
+
+            const updatedRecord = {
+                ...sourceMatch,
+                whQty: updatedQty,
+                whPkt: updatedPkt,
+                inHouseQuantity: updatedQty,
+                inHousePacket: updatedPkt,
+                totalInHouseQuantity: updatedQty,
+                totalInHousePacket: updatedPkt
+            };
+            delete updatedRecord._sourceType;
+
+            try {
+                if (sourceMatch._sourceType === 'stock') {
+                    await axios.put(`${API_BASE_URL}/api/stock/${sourceMatch._id}`, updatedRecord);
+                } else {
+                    await axios.put(`${API_BASE_URL}/api/warehouses/${sourceMatch._id}`, updatedRecord);
+                }
+            } catch (err) {
+                console.warn('Could not restore source record in database:', err);
+            }
+        }
     };
 
     // Edit Transfer Record
