@@ -245,23 +245,40 @@ export const PIDetailsModal = ({
     };
 
     const handlePrintPDF = () => {
-        if (!resolvedPi) return;
+        const origRev = timeline.find(t => t.isOriginal || t.reviseNo === 'Original PI') || timeline[0] || resolvedPi;
+        const prevRev = activeHistoryIndex > 0 ? timeline[activeHistoryIndex - 1] : origRev;
+
         const enriched = {
             ...resolvedPi,
             ...activeRevision,
             piNumber: activeRevision.isTenPercent
                 ? (activeRevision.piNumber || resolvedPi.piNumber)
                 : `${resolvedPi.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
-            isTenPercent: !!activeRevision.isTenPercent
+            originalPiNumber: resolvedPi.piNumber,
+            originalGrandTotal: activeRevision.originalGrandTotal || origRev?.grandTotal || resolvedPi.grandTotal,
+            originalGrandTotalQuantity: activeRevision.originalGrandTotalQuantity || origRev?.grandTotalQuantity || resolvedPi.grandTotalQuantity,
+            previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || resolvedPi.grandTotal,
+            previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || resolvedPi.grandTotalQuantity,
+            linkedLc: linkedLcRecord,
+            lcNo: linkedLcRecord?.lcNo || resolvedPi.lcNo || resolvedPi.lcNumber || activeRevision.lcNo || '',
+            lcDate: linkedLcRecord?.openingDate || linkedLcRecord?.lcDate || resolvedPi.lcDate || activeRevision.lcDate || '',
+            originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (resolvedPi.productsList || [])),
+            originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (resolvedPi.ipNumbers || [])),
+            amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
+            extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
+            extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
+            isTenPercent: !!activeRevision.isTenPercent,
+            ipRecords: ipRecords || []
         };
 
-        if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+        if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature || !enriched.exporterSeal) {
             const exp = exporters?.find(e => e.name === enriched.exporterName);
             if (exp) {
                 enriched.exporterAddress = enriched.exporterAddress || exp.address;
                 enriched.exporterContact = enriched.exporterContact || exp.phone;
                 enriched.exporterEmail = enriched.exporterEmail || exp.email;
                 enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                enriched.exporterSeal = enriched.exporterSeal || exp.seal;
             }
         }
 
@@ -284,10 +301,27 @@ export const PIDetailsModal = ({
 
     const handlePrintBankApplication = () => {
         if (!resolvedPi) return;
+        const origRev = timeline.find(t => t.isOriginal || t.reviseNo === 'Original PI') || timeline[0] || resolvedPi;
+        const prevRev = activeHistoryIndex > 0 ? timeline[activeHistoryIndex - 1] : origRev;
+
         const enriched = {
             ...resolvedPi,
             ...activeRevision,
-            piNumber: `${resolvedPi.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
+            piNumber: `${resolvedPi.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
+            originalPiNumber: resolvedPi.piNumber,
+            originalGrandTotal: activeRevision.originalGrandTotal || origRev?.grandTotal || resolvedPi.grandTotal,
+            originalGrandTotalQuantity: activeRevision.originalGrandTotalQuantity || origRev?.grandTotalQuantity || resolvedPi.grandTotalQuantity,
+            previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || resolvedPi.grandTotal,
+            previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || resolvedPi.grandTotalQuantity,
+            linkedLc: linkedLcRecord,
+            lcNo: linkedLcRecord?.lcNo || resolvedPi.lcNo || resolvedPi.lcNumber || activeRevision.lcNo || '',
+            lcDate: linkedLcRecord?.openingDate || linkedLcRecord?.lcDate || resolvedPi.lcDate || activeRevision.lcDate || '',
+            originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (resolvedPi.productsList || [])),
+            originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (resolvedPi.ipNumbers || [])),
+            amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
+            extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
+            extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
+            ipRecords: ipRecords || []
         };
 
         if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {

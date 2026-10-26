@@ -217,7 +217,10 @@ function PI({
         grandTotal: '',
         grandTotalQuantity: '',
         remarks: '',
-        ipNumbers: []
+        ipNumbers: [],
+        amendmentType: '',
+        extendedShipmentDate: '',
+        extendedExpiryDate: ''
     });
     const [viewHistoryRecord, setViewHistoryRecord] = useState(null);
     const [activeHistoryIndex, setActiveHistoryIndex] = useState(0);
@@ -2677,7 +2680,10 @@ function PI({
             grandTotal: '',
             grandTotalQuantity: '',
             remarks: '',
-            ipNumbers: []
+            ipNumbers: [],
+            amendmentType: '',
+            extendedShipmentDate: '',
+            extendedExpiryDate: ''
         });
     };
 
@@ -3317,7 +3323,10 @@ function PI({
             grandTotal,
             grandTotalQuantity,
             remarks: '',
-            ipNumbers
+            ipNumbers,
+            amendmentType: '',
+            extendedShipmentDate: '',
+            extendedExpiryDate: ''
         });
         setReviseSearchQuery(pi.piNumber || '');
         setReviseIpSearch('');
@@ -3429,6 +3438,147 @@ function PI({
             const { list: updatedList, grandTotal, grandTotalQuantity } = recalcReviseProducts(list);
             return { ...prev, productsList: updatedList, grandTotal, grandTotalQuantity };
         });
+    };
+
+    const handlePrintReviseBankApplication = () => {
+        if (!selectedPiForRevise) {
+            showToast('Please select a PI Number first.', 'error');
+            return;
+        }
+
+        const cleanPiNum = String(selectedPiForRevise.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+        const linkedLc = (lcRecords || []).find(lc => {
+            const lcPi = String(lc.piNo || lc.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+            return lcPi === cleanPiNum;
+        });
+
+        const enriched = {
+            ...selectedPiForRevise,
+            ...reviseFormData,
+            piNumber: `${selectedPiForRevise.piNumber} (REVISED)`,
+            originalPiNumber: selectedPiForRevise.piNumber,
+            originalGrandTotal: selectedPiForRevise.grandTotal,
+            originalGrandTotalQuantity: selectedPiForRevise.grandTotalQuantity,
+            originalProductsList: selectedPiForRevise.productsList || (selectedPiForRevise.productName ? [{ productName: selectedPiForRevise.productName, quantity: selectedPiForRevise.grandTotalQuantity }] : []),
+            originalIpNumbers: selectedPiForRevise.ipNumbers || (selectedPiForRevise.ipNumber ? String(selectedPiForRevise.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : []),
+            previousGrandTotal: selectedPiForRevise.grandTotal,
+            previousGrandTotalQuantity: selectedPiForRevise.grandTotalQuantity,
+            linkedLc,
+            lcNo: linkedLc?.lcNo || selectedPiForRevise.lcNo || selectedPiForRevise.lcNumber || '',
+            lcDate: linkedLc?.openingDate || linkedLc?.lcDate || selectedPiForRevise.lcDate || '',
+            amendmentType: reviseFormData.amendmentType || 'Increase of L/C Value and Quantity',
+            extendedShipmentDate: reviseFormData.extendedShipmentDate || '',
+            extendedExpiryDate: reviseFormData.extendedExpiryDate || '',
+            ipRecords: ipRecords || []
+        };
+
+        if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+            const exp = exporters?.find(e => e.name === enriched.exporterName);
+            if (exp) {
+                enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                enriched.exporterContact = enriched.exporterContact || exp.phone;
+                enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                enriched.exporterSeal = enriched.exporterSeal || exp.seal;
+            }
+        }
+        if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+            const imp = importers?.find(i => i.name === enriched.partyName);
+            if (imp) {
+                enriched.partyAddress = enriched.partyAddress || imp.address;
+                enriched.partyContact = enriched.partyContact || imp.phone;
+                enriched.partyEmail = enriched.partyEmail || imp.email;
+                enriched.partySignature = enriched.partySignature || imp.signature;
+            }
+        }
+
+        generateBankApplicationPDF(enriched);
+    };
+
+    const getEnrichedPiForPdf = (record) => {
+        if (!record) return null;
+
+        const revisions = record.revisions || [];
+        const actualRevs = revisions.filter(r => !r.isOriginal && r.reviseNo !== 'Original PI' && !r.isTenPercent);
+        const isRevised = actualRevs.length > 0;
+
+        const cleanPiNum = String(record.piNumber || '').replace(/\s*\(revised\)/gi, '').trim();
+        const cleanPiNumLower = cleanPiNum.toLowerCase();
+
+        const linkedLc = (lcRecords || []).find(lc => {
+            const lcPi = String(lc.piNo || lc.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+            return lcPi === cleanPiNumLower;
+        });
+
+        let enriched;
+
+        if (isRevised) {
+            const latestRev = actualRevs[actualRevs.length - 1];
+            const origRev = revisions.find(r => r.isOriginal || r.reviseNo === 'Original PI') || revisions[0] || record;
+            const prevRev = actualRevs.length > 1 ? actualRevs[actualRevs.length - 2] : origRev;
+
+            enriched = {
+                ...record,
+                ...latestRev,
+                piNumber: `${cleanPiNum} (REVISED)`,
+                originalPiNumber: record.originalPiNumber || cleanPiNum,
+                date: latestRev.reviseDate || record.date,
+                reviseDate: latestRev.reviseDate || record.date,
+                originalGrandTotal: latestRev.originalGrandTotal || origRev?.grandTotal || record.originalGrandTotal || record.grandTotal,
+                originalGrandTotalQuantity: latestRev.originalGrandTotalQuantity || origRev?.grandTotalQuantity || record.originalGrandTotalQuantity || record.grandTotalQuantity,
+                originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (record.productsList || [])),
+                originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || [])),
+                previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || record.grandTotal,
+                previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || record.grandTotalQuantity,
+                linkedLc,
+                lcNo: latestRev.lcNo || linkedLc?.lcNo || record.lcNo || record.lcNumber || '',
+                lcDate: latestRev.lcDate || linkedLc?.openingDate || linkedLc?.lcDate || record.lcDate || '',
+                amendmentType: latestRev.amendmentType || record.amendmentType || 'Increase of L/C Value and Quantity',
+                extendedShipmentDate: latestRev.extendedShipmentDate || record.extendedShipmentDate || '',
+                extendedExpiryDate: latestRev.extendedExpiryDate || record.extendedExpiryDate || '',
+                productsList: latestRev.productsList && latestRev.productsList.length > 0 ? latestRev.productsList : (record.productsList || []),
+                ipNumbers: latestRev.ipNumbers || record.ipNumbers || [],
+                grandTotal: latestRev.grandTotal !== undefined && latestRev.grandTotal !== '' ? latestRev.grandTotal : record.grandTotal,
+                grandTotalQuantity: latestRev.grandTotalQuantity !== undefined && latestRev.grandTotalQuantity !== '' ? latestRev.grandTotalQuantity : record.grandTotalQuantity,
+                ipRecords: ipRecords || record.ipRecords || []
+            };
+        } else {
+            enriched = {
+                ...record,
+                piNumber: record.piNumber,
+                originalPiNumber: record.piNumber,
+                linkedLc,
+                lcNo: linkedLc?.lcNo || record.lcNo || record.lcNumber || '',
+                lcDate: linkedLc?.openingDate || linkedLc?.lcDate || record.lcDate || '',
+                ipRecords: ipRecords || record.ipRecords || []
+            };
+        }
+
+        if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature || !enriched.exporterSeal) {
+            const exp = exporters?.find(e => e.name === enriched.exporterName);
+            if (exp) {
+                enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                enriched.exporterContact = enriched.exporterContact || exp.phone;
+                enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                enriched.exporterSeal = enriched.exporterSeal || exp.seal;
+            }
+        }
+        if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+            const imp = importers?.find(i => i.name === enriched.partyName);
+            if (imp) {
+                enriched.partyAddress = enriched.partyAddress || imp.address;
+                enriched.partyContact = enriched.partyContact || imp.phone;
+                enriched.partyEmail = enriched.partyEmail || imp.email;
+                enriched.partySignature = enriched.partySignature || imp.signature;
+            }
+        }
+        if (!enriched.bankBranch && banks?.length > 0) {
+            const b = banks.find(bk => bk.name === enriched.bankName);
+            if (b) enriched.bankBranch = b.branch;
+        }
+
+        return enriched;
     };
 
     const handleReviseSubmit = async (e) => {
@@ -3566,6 +3716,12 @@ function PI({
                 }
             }
 
+            const cleanPiNum = String(pi.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+            const matchedLc = (lcRecords || []).find(lc => {
+                const lcPi = String(lc.piNo || lc.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+                return lcPi === cleanPiNum;
+            });
+
             const newRevision = {
                 reviseNo: reviseFormData.reviseNo,
                 reviseDate: reviseFormData.reviseDate,
@@ -3580,6 +3736,13 @@ function PI({
                 grandTotalQuantity: reviseFormData.grandTotalQuantity,
                 remarks: reviseFormData.remarks,
                 ipNumbers: updatedIpNumbers,
+                amendmentType: reviseFormData.amendmentType || 'Increase of L/C Value and Quantity',
+                extendedShipmentDate: reviseFormData.extendedShipmentDate || '',
+                extendedExpiryDate: reviseFormData.extendedExpiryDate || '',
+                originalGrandTotal: pi.grandTotal || '',
+                originalGrandTotalQuantity: pi.grandTotalQuantity || '',
+                lcNo: matchedLc?.lcNo || pi.lcNo || pi.lcNumber || '',
+                lcDate: matchedLc?.openingDate || matchedLc?.lcDate || pi.lcDate || '',
                 revisedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
                 revisedByName: currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '',
                 createdAt: (targetRevIndex !== -1 && currentRevisions[targetRevIndex]?.createdAt) ? currentRevisions[targetRevIndex].createdAt : new Date().toISOString(),
@@ -3631,6 +3794,13 @@ function PI({
                     grandTotal: reviseFormData.grandTotal,
                     grandTotalQuantity: reviseFormData.grandTotalQuantity,
                     remarks: reviseFormData.remarks,
+                    amendmentType: reviseFormData.amendmentType || 'Increase of L/C Value and Quantity',
+                    extendedShipmentDate: reviseFormData.extendedShipmentDate || '',
+                    extendedExpiryDate: reviseFormData.extendedExpiryDate || '',
+                    originalGrandTotal: pi.grandTotal || '',
+                    originalGrandTotalQuantity: pi.grandTotalQuantity || '',
+                    lcNo: matchedLc?.lcNo || pi.lcNo || pi.lcNumber || '',
+                    lcDate: matchedLc?.openingDate || matchedLc?.lcDate || pi.lcDate || '',
                     piRevision: `${newRevision.reviseNo} DATE: ${formatDate(newRevision.reviseDate)}`,
                     revisedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
                     revisedByName: currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '',
@@ -5999,7 +6169,114 @@ function PI({
                                 </div>
 
                                 <div className="lg:col-span-2 space-y-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                                    <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Revise Details</h4>
+                                    <div className="relative flex items-center justify-center min-h-[36px] mb-4">
+                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest absolute left-0 top-1/2 -translate-y-1/2">Revise Details</h4>
+                                        <div className="relative dropdown-container">
+                                            {(() => {
+                                                const amendmentOptionsList = [
+                                                    'Increase of L/C Value and Quantity',
+                                                    'Amendment of Commodity Description and Value',
+                                                    'Extension of Shipment and Expiry Dates'
+                                                ];
+                                                const selectedAmendments = (reviseFormData.amendmentType || '')
+                                                    .split(',')
+                                                    .map(s => s.trim())
+                                                    .filter(Boolean);
+
+                                                const isOptionSelected = (opt) => selectedAmendments.some(s => s.toLowerCase() === opt.toLowerCase());
+
+                                                const handleToggleAmendment = (option) => {
+                                                    let updated;
+                                                    if (isOptionSelected(option)) {
+                                                        updated = selectedAmendments.filter(s => s.toLowerCase() !== option.toLowerCase());
+                                                    } else {
+                                                        const set = new Set([...selectedAmendments, option]);
+                                                        updated = amendmentOptionsList.filter(o => {
+                                                            return Array.from(set).some(s => s.toLowerCase() === o.toLowerCase());
+                                                        });
+                                                    }
+                                                    setReviseFormData(prev => ({
+                                                        ...prev,
+                                                        amendmentType: updated.join(', ')
+                                                    }));
+                                                };
+
+                                                const displayText = selectedAmendments.length === 0
+                                                    ? ''
+                                                    : selectedAmendments.length === 1
+                                                        ? selectedAmendments[0]
+                                                        : `${selectedAmendments.length} Options Selected`;
+
+                                                return (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setActiveDropdown(activeDropdown === 'reviseAmendment' ? null : 'reviseAmendment')}
+                                                            className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-xl border transition-all shadow-sm ${
+                                                                selectedAmendments.length > 0
+                                                                    ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                                                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                                                            }`}
+                                                        >
+                                                            <span>Amendment</span>
+                                                            {displayText && (
+                                                                <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-md whitespace-nowrap" title={selectedAmendments.join(', ')}>
+                                                                    : {displayText}
+                                                                </span>
+                                                            )}
+                                                            <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${activeDropdown === 'reviseAmendment' ? 'rotate-180 text-blue-600' : ''}`} />
+                                                        </button>
+
+                                                        {activeDropdown === 'reviseAmendment' && (
+                                                            <div className="absolute left-1/2 -translate-x-1/2 mt-1.5 w-auto min-w-[390px] sm:min-w-[420px] max-w-[calc(100vw-3rem)] bg-white border border-gray-100 rounded-xl shadow-xl z-[70] py-1.5 overflow-hidden animate-in fade-in duration-150">
+                                                                <div className="px-3.5 py-2 text-[10px] font-black text-gray-400 uppercase tracking-wider border-b border-gray-50 flex items-center justify-between">
+                                                                    <span>Amendment Options</span>
+                                                                    {selectedAmendments.length > 0 && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setReviseFormData(prev => ({ ...prev, amendmentType: '' }));
+                                                                            }}
+                                                                            className="text-[10px] font-semibold text-rose-500 hover:text-rose-700 hover:underline"
+                                                                        >
+                                                                            Reset
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                {amendmentOptionsList.map((option, idx) => {
+                                                                    const selected = isOptionSelected(option);
+                                                                    return (
+                                                                        <button
+                                                                            key={idx}
+                                                                            type="button"
+                                                                            onClick={() => handleToggleAmendment(option)}
+                                                                            className={`w-full px-3.5 py-2.5 text-left text-xs font-semibold transition-colors flex items-center justify-between ${
+                                                                                selected
+                                                                                    ? 'bg-blue-50 text-blue-700 font-bold'
+                                                                                    : 'text-gray-700 hover:bg-blue-50/60 hover:text-blue-600'
+                                                                            }`}
+                                                                        >
+                                                                            <div className="flex items-center gap-2 min-w-0 pr-3">
+                                                                                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-colors ${
+                                                                                    selected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+                                                                                }`}>
+                                                                                    {idx + 1}
+                                                                                </span>
+                                                                                <span className="whitespace-nowrap">{option}</span>
+                                                                            </div>
+                                                                            {selected && (
+                                                                                <CheckIcon className="w-4 h-4 text-blue-600 shrink-0 ml-2" />
+                                                                            )}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         <div className="space-y-1.5">
@@ -6031,6 +6308,31 @@ function PI({
                                             />
                                         </div>
                                     </div>
+
+                                    {(reviseFormData.amendmentType === 'Extension of Shipment and Expiry Dates' || (reviseFormData.amendmentType || '').toLowerCase().includes('extension')) && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4 bg-blue-50/60 border border-blue-200/80 rounded-2xl animate-in fade-in duration-200">
+                                            <div className="space-y-1.5">
+                                                <CustomDatePicker
+                                                    label="New Latest Shipment Date *"
+                                                    value={reviseFormData.extendedShipmentDate}
+                                                    onChange={(e) => setReviseFormData(prev => ({ ...prev, extendedShipmentDate: e.target.value }))}
+                                                    compact={true}
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <CustomDatePicker
+                                                    label="New Expiry Date *"
+                                                    value={reviseFormData.extendedExpiryDate}
+                                                    onChange={(e) => setReviseFormData(prev => ({
+                                                        ...prev,
+                                                        extendedExpiryDate: e.target.value,
+                                                        validityDate: prev.validityDate || e.target.value
+                                                    }))}
+                                                    compact={true}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* First Line: Place of Receipt, Port of Loading, Port of Discharge */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -6462,6 +6764,17 @@ function PI({
                                         >
                                             Cancel
                                         </button>
+                                        {reviseFormData.amendmentType && (
+                                            <button
+                                                type="button"
+                                                onClick={handlePrintReviseBankApplication}
+                                                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+                                                title="Preview / Print Amendment Bank Application"
+                                            >
+                                                <FileTextIcon className="w-4 h-4 text-white shrink-0" />
+                                                <span>Bank Application</span>
+                                            </button>
+                                        )}
                                         <button
                                             type="submit"
                                             disabled={isReviseSaving}
@@ -7207,29 +7520,8 @@ function PI({
                                                             </button>
                                                             <button
                                                                 onClick={() => {
-                                                                    const enriched = {
-                                                                        ...record,
-                                                                        piNumber: record.revisions && record.revisions.length > 0 ? `${record.piNumber} (REVISED)` : record.piNumber,
-                                                                        date: record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date
-                                                                    };
-                                                                    if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
-                                                                        const exp = exporters?.find(e => e.name === enriched.exporterName);
-                                                                        if (exp) {
-                                                                            enriched.exporterAddress = enriched.exporterAddress || exp.address;
-                                                                            enriched.exporterContact = enriched.exporterContact || exp.phone;
-                                                                            enriched.exporterEmail = enriched.exporterEmail || exp.email;
-                                                                            enriched.exporterSignature = enriched.exporterSignature || exp.signature;
-                                                                        }
-                                                                    }
-                                                                    if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
-                                                                        const imp = importers?.find(i => i.name === enriched.partyName);
-                                                                        if (imp) {
-                                                                            enriched.partyAddress = enriched.partyAddress || imp.address;
-                                                                            enriched.partyContact = enriched.partyContact || imp.phone;
-                                                                            enriched.partyEmail = enriched.partyEmail || imp.email;
-                                                                            enriched.partySignature = enriched.partySignature || imp.signature;
-                                                                        }
-                                                                    }
+                                                                    const enriched = getEnrichedPiForPdf(record);
+                                                                    if (!enriched) return;
                                                                     if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
                                                                         generatePI2PDF(enriched);
                                                                     } else {
@@ -7509,25 +7801,8 @@ function PI({
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            const enriched = {
-                                                                ...record,
-                                                                piNumber: record.revisions && record.revisions.length > 0 ? `${record.piNumber} (REVISED)` : record.piNumber,
-                                                                date: record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date
-                                                            };
-                                                            const exp = exporters?.find(e => e.name === enriched.exporterName);
-                                                            if (exp) {
-                                                                enriched.exporterAddress = enriched.exporterAddress || exp.address;
-                                                                enriched.exporterContact = enriched.exporterContact || exp.phone;
-                                                                enriched.exporterEmail = enriched.exporterEmail || exp.email;
-                                                                enriched.exporterSignature = enriched.exporterSignature || exp.signature;
-                                                            }
-                                                            const imp = importers?.find(i => i.name === enriched.partyName);
-                                                            if (imp) {
-                                                                enriched.partyAddress = enriched.partyAddress || imp.address;
-                                                                enriched.partyContact = enriched.partyContact || imp.phone;
-                                                                enriched.partyEmail = enriched.partyEmail || imp.email;
-                                                                enriched.partySignature = enriched.partySignature || imp.signature;
-                                                            }
+                                                            const enriched = getEnrichedPiForPdf(record);
+                                                            if (!enriched) return;
                                                             if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
                                                                 generatePI2PDF(enriched);
                                                             } else {
@@ -7877,17 +8152,34 @@ function PI({
                                                         <button
                                                             type="button"
                                                             onClick={() => {
+                                                                const origRev = timeline.find(t => t.isOriginal || t.reviseNo === 'Original PI') || timeline[0] || viewHistoryRecord;
+                                                                const prevRev = activeHistoryIndex > 0 ? timeline[activeHistoryIndex - 1] : origRev;
+
                                                                 const enriched = {
                                                                     ...viewHistoryRecord,
                                                                     ...activeRevision,
                                                                     piNumber: activeRevision.isTenPercent
                                                                         ? (activeRevision.piNumber || viewHistoryRecord.piNumber)
                                                                         : `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
-                                                                    isTenPercent: !!activeRevision.isTenPercent
+                                                                    originalPiNumber: viewHistoryRecord.piNumber,
+                                                                    originalGrandTotal: activeRevision.originalGrandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
+                                                                    originalGrandTotalQuantity: activeRevision.originalGrandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
+                                                                    previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
+                                                                    previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
+                                                                    linkedLc,
+                                                                    lcNo: linkedLc?.lcNo || viewHistoryRecord.lcNo || viewHistoryRecord.lcNumber || activeRevision.lcNo || '',
+                                                                    lcDate: linkedLc?.openingDate || linkedLc?.lcDate || viewHistoryRecord.lcDate || activeRevision.lcDate || '',
+                                                                    originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (viewHistoryRecord.productsList || [])),
+                                                                    originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (viewHistoryRecord.ipNumbers || [])),
+                                                                    amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
+                                                                    extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
+                                                                    extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
+                                                                    isTenPercent: !!activeRevision.isTenPercent,
+                                                                    ipRecords: ipRecords || []
                                                                 };
 
                                                                 // Enrich exporter details if missing
-                                                                if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature || !enriched.exporterSeal) {
                                                                     const exp = exporters?.find(e => e.name === enriched.exporterName);
                                                                     if (exp) {
                                                                         enriched.exporterAddress = enriched.exporterAddress || exp.address;
@@ -7924,12 +8216,29 @@ function PI({
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
+                                                                    const origRev = timeline.find(t => t.isOriginal || t.reviseNo === 'Original PI') || timeline[0] || viewHistoryRecord;
+                                                                    const prevRev = activeHistoryIndex > 0 ? timeline[activeHistoryIndex - 1] : origRev;
+
                                                                     const enriched = {
                                                                         ...viewHistoryRecord,
                                                                         ...activeRevision,
-                                                                        piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
+                                                                        piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
+                                                                        originalPiNumber: viewHistoryRecord.piNumber,
+                                                                        originalGrandTotal: activeRevision.originalGrandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
+                                                                        originalGrandTotalQuantity: activeRevision.originalGrandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
+                                                                        previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
+                                                                        previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
+                                                                        linkedLc,
+                                                                        lcNo: linkedLc?.lcNo || viewHistoryRecord.lcNo || viewHistoryRecord.lcNumber || activeRevision.lcNo || '',
+                                                                        lcDate: linkedLc?.openingDate || linkedLc?.lcDate || viewHistoryRecord.lcDate || activeRevision.lcDate || '',
+                                                                        originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (viewHistoryRecord.productsList || [])),
+                                                                        originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (viewHistoryRecord.ipNumbers || [])),
+                                                                        amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
+                                                                        extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
+                                                                        extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
+                                                                        ipRecords: ipRecords || []
                                                                     };
-                                                                    if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                    if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature || !enriched.exporterSeal) {
                                                                         const exp = exporters?.find(e => e.name === enriched.exporterName);
                                                                         if (exp) {
                                                                             enriched.exporterAddress = enriched.exporterAddress || exp.address;
@@ -8023,7 +8332,10 @@ function PI({
                                                                                 grandTotal: grandTotal || (activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0),
                                                                                 grandTotalQuantity: grandTotalQuantity || (activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0),
                                                                                 remarks: activeRevision.remarks && activeRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? activeRevision.remarks : '',
-                                                                                ipNumbers: activeRevision.ipNumbers || []
+                                                                                ipNumbers: activeRevision.ipNumbers || [],
+                                                                                amendmentType: activeRevision.amendmentType || '',
+                                                                                extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
+                                                                                extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || ''
                                                                             });
                                                                             setShowReviseForm(true);
                                                                         }
