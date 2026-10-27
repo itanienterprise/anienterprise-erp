@@ -2415,19 +2415,25 @@ const Bank = ({ onDeleteConfirm }) => {
                                         {filteredLcBillHistoryRows.map((row, idx) => {
                                             const isExpanded = expandedHistoryRowIdx === idx;
                                             return (
-                                                <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200">
+                                                <div key={idx} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200">
                                                     <div 
                                                         onClick={() => setExpandedHistoryRowIdx(isExpanded ? null : idx)}
-                                                        className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                                        className="flex justify-between items-center p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50 transition-colors gap-3"
                                                     >
-                                                        <div className="flex-1 min-w-0 pr-4">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
-                                                                <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
-                                                                <p className="text-xs font-black text-blue-600 truncate">{row.lcNo && row.lcNo.length > 4 ? `...${row.lcNo.slice(-4)}` : row.lcNo}</p>
+                                                        <div className="flex-1 min-w-0 text-left space-y-1">
+                                                            <div className="text-[11px] font-semibold text-gray-400">
+                                                                {formatDate(row.date)}
                                                             </div>
+                                                            <div className="font-bold text-blue-600 text-sm font-mono leading-tight break-all" title={row.lcNo}>
+                                                                {row.lcNo || '—'}
+                                                            </div>
+                                                            {row.importer && (
+                                                                <div className="text-[11px] text-gray-500 font-medium truncate" title={row.importer}>
+                                                                    {row.importer}
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <div className="flex items-center gap-3 shrink-0">
+                                                        <div className="flex items-center gap-2 shrink-0">
                                                             <div className="text-right">
                                                                 {row.marginPaid > 0 && (
                                                                     <p className="text-sm font-black text-emerald-600 font-mono">
@@ -2448,7 +2454,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                     <p className="text-sm font-medium text-gray-400">-</p>
                                                                 )}
                                                             </div>
-                                                            <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-gray-50 text-gray-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                            <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'}`}>
                                                                 {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
                                                             </div>
                                                         </div>
