@@ -184,6 +184,7 @@ const Supplier = ({
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [historySortConfig, setHistorySortConfig] = useState({ key: 'date', direction: 'desc' });
     const [expandedHistoryIdx, setExpandedHistoryIdx] = useState(null);
+    const [expandedSupplierId, setExpandedSupplierId] = useState(null);
     const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
     const [historyFilters, setHistoryFilters] = useState({
         quickRange: 'all',
@@ -712,13 +713,16 @@ const Supplier = ({
                         type="text"
                         placeholder="Search suppliers..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setExpandedSupplierId(null);
+                        }}
                         className="h-10 block w-full pl-10 pr-4 bg-white/50 border border-gray-200 rounded-xl text-sm text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
                     />
                 </div>
 
                 {canAdd && (
-                    <div className="w-full md:w-1/4 flex justify-end z-10">
+                    <div className="w-full md:w-1/4 flex justify-center md:justify-end z-10 px-2 md:px-0">
                         <button onClick={() => setShowForm(!showForm)} data-action="Create New Supplier" className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm whitespace-nowrap">
                             <span className="mr-2 text-xl font-bold">+</span> Add New
                         </button>
@@ -1050,21 +1054,26 @@ const Supplier = ({
                             <TableScrollNav className="hidden md:flex" count={sortedSuppliers.length} />
 
                             {/* Mobile View */}
-                            <div className="block md:hidden space-y-4 px-2">
+                            <div className="block md:hidden space-y-3 px-2">
                                 {sortedSuppliers.map((supplier) => {
                                     const isSelected = selectedItems.has(supplier._id);
+                                    const isExpanded = expandedSupplierId === supplier._id;
                                     const expList = Array.isArray(supplier.exporters) && supplier.exporters.length > 0
                                         ? supplier.exporters
                                         : (supplier.exporter ? supplier.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
                                     return (
                                         <div 
                                             key={supplier._id}
-                                            className={`supplier-mobile-card ${isSelected ? 'selected' : ''}`}
+                                            className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isSelected ? 'border-blue-300 bg-blue-50/30' : 'border-gray-100 shadow-sm'} ${isExpanded ? 'ring-1 ring-blue-50 shadow-md border-blue-200' : 'hover:border-gray-200 shadow-sm'} cursor-pointer`}
                                             onClick={() => {
+                                                if (isLongPressTriggered?.current) {
+                                                    isLongPressTriggered.current = false;
+                                                    return;
+                                                }
                                                 if (isSelectionMode) {
                                                     toggleSelection(supplier._id);
                                                 } else {
-                                                    setViewData(supplier);
+                                                    setExpandedSupplierId(isExpanded ? null : supplier._id);
                                                 }
                                             }}
                                             onTouchStart={(e) => startLongPress(() => {
@@ -1074,52 +1083,105 @@ const Supplier = ({
                                             onTouchEnd={endLongPress}
                                             onTouchMove={endLongPress}
                                         >
-                                            <div className="flex justify-between items-start gap-4">
-                                                <div className="min-w-0 flex-1">
-                                                    <h4 className="font-bold text-gray-900 truncate text-left">{supplier.name}</h4>
-                                                    <p className="text-xs text-gray-500 mt-1 text-left">Contact: {supplier.contactPerson}</p>
-                                                    <p className="text-xs text-gray-500 mt-0.5 text-left">Phone: {supplier.phone}</p>
-                                                    <div className="text-xs text-gray-500 mt-1 text-left flex items-start gap-1 flex-wrap">
-                                                        <span className="font-semibold">Exporter:</span>
-                                                        {expList.length === 0 ? '—' : (
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {expList.map((expName, idx) => (
-                                                                    <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
-                                                                        {expName}
-                                                                    </span>
-                                                                ))}
+                                            {/* Card Header - Always Visible */}
+                                            <div className="flex justify-between items-center p-4">
+                                                <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
+                                                    {isSelectionMode && (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={(e) => { e.stopPropagation(); toggleSelection(supplier._id); }}
+                                                            className="w-4 h-4 accent-blue-600 shrink-0"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <h4 className={`font-bold text-base sm:text-lg truncate tracking-tight transition-colors duration-200 ${isExpanded ? 'text-blue-600' : 'text-gray-900'}`}>{supplier.name}</h4>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}>
+                                                        {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Expandable Body */}
+                                            {isExpanded && (
+                                                <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
+                                                    <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                                                        <div className="flex items-center text-sm">
+                                                            <span className="w-20 text-gray-500 font-semibold text-xs sm:text-sm shrink-0">Contact</span>
+                                                            <span className="text-gray-400 font-bold mr-2 text-sm shrink-0">:</span>
+                                                            <span className="text-gray-900 font-semibold text-sm truncate">{supplier.contactPerson || '-'}</span>
+                                                        </div>
+
+                                                        <div className="flex items-center text-sm">
+                                                            <span className="w-20 text-gray-500 font-semibold text-xs sm:text-sm shrink-0">Phone</span>
+                                                            <span className="text-gray-400 font-bold mr-2 text-sm shrink-0">:</span>
+                                                            <span className="text-gray-900 font-semibold font-mono text-sm">{supplier.phone || '-'}</span>
+                                                        </div>
+
+                                                        {supplier.address && (
+                                                            <div className="flex items-start text-sm pt-0.5">
+                                                                <span className="w-20 text-gray-500 font-semibold text-xs sm:text-sm shrink-0">Address</span>
+                                                                <span className="text-gray-400 font-bold mr-2 text-sm shrink-0">:</span>
+                                                                <span className="text-gray-900 font-semibold text-sm leading-snug break-words">{supplier.address}</span>
                                                             </div>
+                                                        )}
+
+                                                        <div className="flex items-start text-sm pt-0.5">
+                                                            <span className="w-20 text-gray-500 font-semibold text-xs sm:text-sm shrink-0">Exporter</span>
+                                                            <span className="text-gray-400 font-bold mr-2 text-sm shrink-0">:</span>
+                                                            <div className="flex-1 min-w-0">
+                                                                {expList.length === 0 ? (
+                                                                    <span className="text-gray-400 font-semibold text-sm">—</span>
+                                                                ) : (
+                                                                    <div className="flex flex-col gap-1.5 w-full">
+                                                                        {expList.map((expName, idx) => (
+                                                                            <span 
+                                                                                key={idx} 
+                                                                                className="inline-flex items-center px-2.5 py-1 rounded-md text-xs sm:text-sm font-semibold bg-blue-50 text-blue-700 border border-blue-100/80 w-fit max-w-full leading-snug break-words"
+                                                                            >
+                                                                                {expName}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Card Actions at bottom */}
+                                                    <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setViewData(supplier); }}
+                                                            data-action={`View Supplier (${supplier.name || ''})`}
+                                                            className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-gray-50 text-gray-700 rounded-xl text-xs sm:text-sm font-bold flex-1 hover:bg-gray-100 transition-colors"
+                                                        >
+                                                            <EyeIcon className="w-4 h-4" /> View
+                                                        </button>
+                                                        {canManage && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleEdit(supplier); }}
+                                                                data-action={`Edit Supplier (${supplier.name || ''})`}
+                                                                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-blue-50 text-blue-600 rounded-xl text-xs sm:text-sm font-bold flex-1 hover:bg-blue-100 transition-colors"
+                                                            >
+                                                                <EditIcon className="w-4 h-4" /> Edit
+                                                            </button>
+                                                        )}
+                                                        {canDelete && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDelete(supplier._id); }}
+                                                                data-action={`Delete Supplier (${supplier.name || ''})`}
+                                                                className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="flex flex-col items-end gap-2.5 shrink-0">
-                                                    <span className={`supplier-status-badge ${supplier.status === 'Active' ? 'active' : 'inactive'}`}>
-                                                        {supplier.status}
-                                                    </span>
-                                                    {!isSelectionMode && (
-                                                        <div className="flex items-center gap-2">
-                                                            {canManage && (
-                                                                <button 
-                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(supplier); }} 
-                                                                    data-action={`Edit Supplier (${supplier.name || ''})`}
-                                                                    className="p-1.5 bg-gray-100 rounded-lg text-gray-600 active:bg-gray-200"
-                                                                >
-                                                                    <EditIcon className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            )}
-                                                            {canDelete && (
-                                                                <button 
-                                                                    onClick={(e) => { e.stopPropagation(); handleDelete(supplier._id); }} 
-                                                                    data-action={`Delete Supplier (${supplier.name || ''})`}
-                                                                    className="p-1.5 bg-red-50 rounded-lg text-red-600 active:bg-red-100"
-                                                                >
-                                                                    <TrashIcon className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
+                                            )}
                                         </div>
                                     );
                                 })}

@@ -553,11 +553,12 @@
     .supplier-mobile-card {
         background: white;
         border-radius: 1rem;
-        padding: 1rem 1.15rem;
+        padding: 0;
         border: 1px solid #f3f4f6;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         cursor: pointer;
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
     }
 
     .supplier-mobile-card:active {

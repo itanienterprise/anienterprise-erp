@@ -21,6 +21,7 @@
 .importer-add-btn {
     display: flex;
     align-items: center;
+    justify-content: center;
     padding: 0.5rem 1rem;
     background: linear-gradient(to right, #2563eb, #4f46e5);
     color: white;

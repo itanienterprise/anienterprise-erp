@@ -1671,38 +1671,6 @@ const Bank = ({ onDeleteConfirm }) => {
 
                                         {isExpanded && (
                                             <div className="mt-4 pt-4 border-t border-gray-100 space-y-4 animate-in slide-in-from-top-3 duration-300">
-                                                {/* Bank Action Buttons Revealed After Click */}
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); openLcBillHistory(group.bankName); }}
-                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold hover:bg-emerald-100 active:scale-95 transition-all border border-emerald-200/60 shadow-2xs"
-                                                        title="LC Bill History"
-                                                    >
-                                                        <EyeIcon className="w-4 h-4" />
-                                                        <span>LC Bills</span>
-                                                    </button>
-                                                    {!isBorderManager && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleEdit(group.items[0]); }}
-                                                            data-action={`Edit Bank (${group.bankName || ''})`}
-                                                            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-blue-50 text-blue-700 rounded-xl text-xs font-bold hover:bg-blue-100 active:scale-95 transition-all border border-blue-200/60 shadow-2xs"
-                                                            title="Edit Bank"
-                                                        >
-                                                            <EditIcon className="w-4 h-4" />
-                                                            <span>Edit Bank</span>
-                                                        </button>
-                                                    )}
-                                                    {!isBorderManager && !cannotDelete && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleDelete(group.items[0]._id); }}
-                                                            data-action={`Delete Bank (${group.bankName || ''})`}
-                                                            className="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 active:scale-95 transition-all border border-rose-200/60 shadow-2xs"
-                                                            title="Delete Bank"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                </div>
                                                 {group.items.map((item, idx) => {
                                                      const hasNewLcCharges = !!(
                                                          item.lcCommission ||
@@ -1722,13 +1690,13 @@ const Bank = ({ onDeleteConfirm }) => {
                                                      return (
                                                          <div key={item.uniqueRowKey} className="relative bg-gray-50/50 rounded-2xl p-4 border border-gray-100 shadow-sm text-left">
                                                              <div className="space-y-2.5">
-                                                                     <div className="flex items-center text-[13px]">
+                                                                     <div className="flex items-start text-[13px]">
                                                                          <span className="w-32 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Branch -</span>
-                                                                         <span className="font-black text-gray-900 uppercase truncate">{item.branch}</span>
+                                                                         <span className="font-black text-gray-900 uppercase leading-tight break-words flex-1">{item.branch}</span>
                                                                      </div>
                                                                      <div className="flex items-start text-[13px]">
                                                                          <span className="w-32 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Account Name -</span>
-                                                                         <span className="font-bold text-gray-800 uppercase leading-tight">{item.accountName}</span>
+                                                                         <span className="font-bold text-gray-800 uppercase leading-tight break-words flex-1">{item.accountName}</span>
                                                                      </div>
                                                                      <div className="flex items-center text-[13px]">
                                                                          <span className="w-32 text-[11px] font-bold text-blue-400 uppercase tracking-wider shrink-0">Account No -</span>
@@ -1812,13 +1780,15 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                          </>
                                                                      )}
                                                              </div>
-                                                             {canManageOpeningBalance && (
-                                                                 <div className="mt-3 pt-3 border-t border-gray-200/60">
+
+                                                             {/* Account Actions (Account-Wise) */}
+                                                             <div className="mt-3 pt-3 border-t border-gray-200/60 space-y-2">
+                                                                 {canManageOpeningBalance && (
                                                                      <button
                                                                          type="button"
                                                                          onClick={(e) => { e.stopPropagation(); handleOpenOpeningBalanceModal(item); }}
                                                                          data-action={`Manage Opening Balance (${item.accountNo || ""})`}
-                                                                         className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-2xs border ${
+                                                                         className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 shadow-2xs border ${
                                                                              item.isOpeningBalanceActive
                                                                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100"
                                                                                  : "bg-amber-50 text-amber-700 border-amber-200/80 hover:bg-amber-100"
@@ -1832,8 +1802,43 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                          <BanknotesIcon className={`w-4 h-4 ${item.isOpeningBalanceActive ? "text-emerald-600" : "text-amber-600"}`} />
                                                                          <span>{item.isOpeningBalanceActive ? "Manage Opening Balance" : "Set Opening Balance"}</span>
                                                                      </button>
+                                                                 )}
+
+                                                                 <div className="flex items-center gap-2">
+                                                                     <button
+                                                                         type="button"
+                                                                         onClick={(e) => { e.stopPropagation(); openLcBillHistory(group.bankName); }}
+                                                                         className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs sm:text-sm font-bold hover:bg-emerald-100 active:scale-95 transition-all border border-emerald-200/60 shadow-2xs"
+                                                                         title="LC Bill History"
+                                                                     >
+                                                                         <EyeIcon className="w-4 h-4" />
+                                                                         <span>LC Bills</span>
+                                                                     </button>
+                                                                     {!isBorderManager && (
+                                                                         <button
+                                                                             type="button"
+                                                                             onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
+                                                                             data-action={`Edit Bank Account (${item.accountNo || ''})`}
+                                                                             className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-50 text-blue-700 rounded-xl text-xs sm:text-sm font-bold hover:bg-blue-100 active:scale-95 transition-all border border-blue-200/60 shadow-2xs"
+                                                                             title="Edit Account"
+                                                                         >
+                                                                             <EditIcon className="w-4 h-4" />
+                                                                             <span>Edit</span>
+                                                                         </button>
+                                                                     )}
+                                                                     {!isBorderManager && !cannotDelete && (
+                                                                         <button
+                                                                             type="button"
+                                                                             onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
+                                                                             data-action={`Delete Bank Account (${item.accountNo || ''})`}
+                                                                             className="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 active:scale-95 transition-all border border-rose-200/60 shadow-2xs"
+                                                                             title="Delete Account"
+                                                                         >
+                                                                             <TrashIcon className="w-4 h-4" />
+                                                                         </button>
+                                                                     )}
                                                                  </div>
-                                                             )}
+                                                             </div>
                                                          </div>
                                                      );
                                                  })}

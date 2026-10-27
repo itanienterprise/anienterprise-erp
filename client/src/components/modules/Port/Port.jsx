@@ -398,28 +398,16 @@ const Port = ({
                                     <div 
                                         key={port._id} 
                                         onClick={() => setExpandedRowId(isExpanded ? null : port._id)}
-                                        className={`bg-white rounded-2xl border ${isExpanded ? 'border-blue-100 ring-4 ring-blue-500/5 shadow-lg' : 'border-gray-100 shadow-sm'} p-5 transition-all duration-500 cursor-pointer overflow-hidden`}
+                                        className={`bg-white rounded-2xl border ${isExpanded ? 'border-blue-100 ring-4 ring-blue-500/5 shadow-lg' : 'border-gray-100 shadow-sm'} p-5 transition-all duration-300 cursor-pointer overflow-hidden`}
                                     >
-                                        <div className="flex justify-between items-center group">
-                                            <div className="space-y-1">
-                                                <h3 className={`text-base font-black transition-colors duration-300 ${isExpanded ? 'text-blue-600' : 'text-gray-800'}`}>{port.name}</h3>
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
-                                                    <span className={`w-1.5 h-1.5 rounded-full mr-2 ${port.status === 'Active' ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                                                    {port.status}
-                                                </p>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex items-center bg-gray-50/80 p-0.5 rounded-lg border border-gray-100 divide-x divide-gray-100">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(port); }} data-action={`Edit Port (${port.name || ''})`} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-all"><EditIcon className="w-5 h-5" /></button>
-                                                     {!cannotDelete && (
-                                                         <button onClick={(e) => { e.stopPropagation(); handleDelete(port._id); }} data-action={`Delete Port (${port.name || ''})`} className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all"><TrashIcon className="w-5 h-5" /></button>
-                                                     )}
-                                                </div>
-                                            </div>
+                                        <div className="flex items-center justify-between group">
+                                            <h3 className={`text-base font-black transition-colors duration-300 truncate ${isExpanded ? 'text-blue-600' : 'text-gray-800'}`}>
+                                                {port.name}
+                                            </h3>
                                         </div>
 
                                         {isExpanded && (
-                                            <div className="mt-6 space-y-4 animate-in slide-in-from-top-4 duration-500">
+                                            <div className="mt-4 space-y-3 animate-in slide-in-from-top-3 duration-300">
                                                 <div className="bg-gray-50/50 rounded-2xl p-4 border border-gray-100/50 space-y-2.5">
                                                     <div className="flex items-center text-[13px]">
                                                         <span className="w-36 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Code</span>
@@ -447,6 +435,32 @@ const Port = ({
                                                         <span className="font-black text-blue-600 tracking-tight">{port.type}</span>
                                                     </div>
                                                 </div>
+
+                                                {/* Card Actions at bottom */}
+                                                {(canEdit || !cannotDelete) && (
+                                                    <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                                                        {canEdit && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleEdit(port); }}
+                                                                data-action={`Edit Port (${port.name || ''})`}
+                                                                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all active:scale-95 border border-blue-200/60 shadow-2xs"
+                                                            >
+                                                                <EditIcon className="w-4 h-4" />
+                                                                <span>Edit Port</span>
+                                                            </button>
+                                                        )}
+                                                        {!cannotDelete && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDelete(port._id); }}
+                                                                data-action={`Delete Port (${port.name || ''})`}
+                                                                className="p-2.5 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-all active:scale-95 border border-rose-200/60 shadow-2xs"
+                                                                title="Delete Port"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
@@ -46,6 +46,7 @@ const Importer = ({
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [lcRecords, setLcRecords] = useState([]);
     const [expandedHistoryRowKey, setExpandedHistoryRowKey] = useState(null);
+    const [expandedImporterId, setExpandedImporterId] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
         address: '',
@@ -356,14 +357,17 @@ const Importer = ({
                         type="text"
                         placeholder="Search importers..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setExpandedImporterId(null);
+                        }}
                         className="block w-full pl-12 md:pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] md:text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
                     />
                 </div>
 
                 {canAdd && (
-                    <div className="w-full md:w-1/4 flex justify-end z-10">
-                        <button onClick={() => setShowForm(!showForm)} data-action="Create New Importer" className="w-full md:w-auto importer-add-btn whitespace-nowrap">
+                    <div className="w-full md:w-1/4 flex justify-center md:justify-end z-10 px-2 md:px-0">
+                        <button onClick={() => setShowForm(!showForm)} data-action="Create New Importer" className="w-full md:w-auto importer-add-btn whitespace-nowrap justify-center flex items-center">
                             <span className="importer-add-icon">+</span> Add New
                         </button>
                     </div>
@@ -654,108 +658,124 @@ const Importer = ({
 
                             {/* Mobile Card List - hidden on desktop */}
                             <div className="block md:hidden px-2 py-3 space-y-3">
-                                {sortData(filteredImporters).map((importer) => (
-                                    <div
-                                        key={importer._id}
-                                        className={`bg-white rounded-xl border px-4 py-3 shadow-sm cursor-pointer transition-all duration-200 ${selectedItems.has(importer._id) ? 'border-blue-300 bg-blue-50/30 shadow-blue-100' : 'border-gray-100 hover:shadow-md'}`}
-                                        onTouchStart={() => startLongPress(importer._id)}
-                                        onTouchEnd={endLongPress}
-                                        onClick={() => {
-                                            if (isLongPressTriggered.current) {
-                                                isLongPressTriggered.current = false;
-                                                return;
-                                            }
-                                            if (isSelectionMode) toggleSelection(importer._id);
-                                        }}
-                                    >
-                                        {/* Card Header */}
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
-                                                {isSelectionMode && (
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedItems.has(importer._id)}
-                                                        onChange={(e) => { e.stopPropagation(); toggleSelection(importer._id); }}
-                                                        className="w-4 h-4 accent-blue-600 shrink-0"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                    />
-                                                )}
-                                                <div className="min-w-0">
-                                                    <p className="font-bold text-gray-900 text-sm truncate">{importer.name}</p>
+                                {sortData(filteredImporters).map((importer) => {
+                                    const isExpanded = expandedImporterId === importer._id;
+                                    return (
+                                        <div
+                                            key={importer._id}
+                                            className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${selectedItems.has(importer._id) ? 'border-blue-300 bg-blue-50/30' : 'border-gray-100 shadow-sm'} ${isExpanded ? 'ring-1 ring-blue-50 shadow-md border-blue-200' : 'hover:border-gray-200 shadow-sm'} cursor-pointer`}
+                                            onTouchStart={() => startLongPress(importer._id)}
+                                            onTouchEnd={endLongPress}
+                                            onClick={() => {
+                                                if (isLongPressTriggered.current) {
+                                                    isLongPressTriggered.current = false;
+                                                    return;
+                                                }
+                                                if (isSelectionMode) {
+                                                    toggleSelection(importer._id);
+                                                } else {
+                                                    setExpandedImporterId(isExpanded ? null : importer._id);
+                                                }
+                                            }}
+                                        >
+                                            {/* Card Header - Always Visible */}
+                                            <div className="flex justify-between items-center p-4">
+                                                <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
+                                                    {isSelectionMode && (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(importer._id)}
+                                                            onChange={(e) => { e.stopPropagation(); toggleSelection(importer._id); }}
+                                                            className="w-4 h-4 accent-blue-600 shrink-0"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <p className={`font-bold text-base sm:text-lg truncate tracking-tight transition-colors duration-200 ${isExpanded ? 'text-blue-600' : 'text-gray-900'}`}>{importer.name}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}>
+                                                        {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        {/* Card Body */}
-                                        <div className="space-y-1.5 mt-3">
-                                            {importer.bin && (
-                                                <div className="flex justify-between items-center text-sm">
-                                                    <span className="text-gray-500">BIN</span>
-                                                    <span className="text-gray-700 font-medium font-mono">{importer.bin}</span>
-                                                </div>
-                                            )}
-                                            {importer.tin && (
-                                                <div className="flex justify-between items-center text-sm">
-                                                    <span className="text-gray-500">TIN</span>
-                                                    <span className="text-gray-700 font-medium font-mono">{importer.tin}</span>
-                                                </div>
-                                            )}
-                                            {importer.irc && (
-                                                <div className="flex justify-between items-center text-sm">
-                                                    <span className="text-gray-500">IRC</span>
-                                                    <span className="text-gray-700 font-medium font-mono">{importer.irc}</span>
-                                                </div>
-                                            )}
-                                            {importer.contactPerson && (
-                                                <div className="flex justify-between items-center text-sm">
-                                                    <span className="text-gray-500">Contact</span>
-                                                    <span className="text-gray-700 font-medium text-right max-w-[60%]">{importer.contactPerson}</span>
-                                                </div>
-                                            )}
-                                            {importer.phone && (
-                                                <div className="flex justify-between items-center text-sm">
-                                                    <span className="text-gray-500">Phone</span>
-                                                    <span className="text-gray-700 font-medium font-mono">{importer.phone}</span>
-                                                </div>
-                                            )}
-                                            {importer.address && (
-                                                <div className="flex justify-between items-start text-sm">
-                                                    <span className="text-gray-500 shrink-0">Address</span>
-                                                    <span className="text-gray-700 font-medium text-right max-w-[60%]">{importer.address}</span>
-                                                </div>
-                                            )}
-                                        </div>
+                                            {/* Card Body & Actions - Collapsible */}
+                                            {isExpanded && (
+                                                <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
+                                                    <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                                                        {importer.bin && (
+                                                            <div className="flex justify-between items-center text-sm">
+                                                                <span className="text-gray-500 font-semibold text-xs sm:text-sm">BIN</span>
+                                                                <span className="text-gray-900 font-semibold font-mono text-sm">{importer.bin}</span>
+                                                            </div>
+                                                        )}
+                                                        {importer.tin && (
+                                                            <div className="flex justify-between items-center text-sm">
+                                                                <span className="text-gray-500 font-semibold text-xs sm:text-sm">TIN</span>
+                                                                <span className="text-gray-900 font-semibold font-mono text-sm">{importer.tin}</span>
+                                                            </div>
+                                                        )}
+                                                        {importer.irc && (
+                                                            <div className="flex justify-between items-center text-sm">
+                                                                <span className="text-gray-500 font-semibold text-xs sm:text-sm">IRC</span>
+                                                                <span className="text-gray-900 font-semibold font-mono text-sm">{importer.irc}</span>
+                                                            </div>
+                                                        )}
+                                                        {importer.contactPerson && (
+                                                            <div className="flex justify-between items-center text-sm">
+                                                                <span className="text-gray-500 font-semibold text-xs sm:text-sm">Contact</span>
+                                                                <span className="text-gray-900 font-semibold text-right max-w-[60%] truncate text-sm">{importer.contactPerson}</span>
+                                                            </div>
+                                                        )}
+                                                        {importer.phone && (
+                                                            <div className="flex justify-between items-center text-sm">
+                                                                <span className="text-gray-500 font-semibold text-xs sm:text-sm">Phone</span>
+                                                                <span className="text-gray-900 font-semibold font-mono text-sm">{importer.phone}</span>
+                                                            </div>
+                                                        )}
+                                                        {importer.address && (
+                                                            <div className="flex justify-between items-start text-sm pt-0.5">
+                                                                <span className="text-gray-500 font-semibold text-xs sm:text-sm shrink-0">Address</span>
+                                                                <span className="text-gray-900 font-semibold text-right max-w-[60%] text-sm leading-snug break-words">{importer.address}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
 
-                                        {/* Card Actions */}
-                                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); setViewData(importer); }}
-                                                data-action={`View Importer (${importer.name || ''})`}
-                                                className="flex items-center justify-center gap-1.5 py-2 px-3 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold flex-1 hover:bg-gray-100 transition-colors"
-                                            >
-                                                <EyeIcon className="w-4 h-4" /> View
-                                            </button>
-                                            {canEdit && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleEdit(importer); }}
-                                                    data-action={`Edit Importer (${importer.name || ''})`}
-                                                    className="flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
-                                                >
-                                                    <EditIcon className="w-4 h-4" /> Edit
-                                                </button>
-                                            )}
-                                            {canDelete && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }}
-                                                    data-action={`Delete Importer (${importer.name || ''})`}
-                                                    className="flex items-center justify-center gap-1.5 py-2 px-3 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors"
-                                                >
-                                                    <TrashIcon className="w-4 h-4" />
-                                                </button>
+                                                    {/* Card Actions */}
+                                                    <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setViewData(importer); }}
+                                                            data-action={`View Importer (${importer.name || ''})`}
+                                                            className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-gray-50 text-gray-700 rounded-xl text-xs sm:text-sm font-bold flex-1 hover:bg-gray-100 transition-colors"
+                                                        >
+                                                            <EyeIcon className="w-4 h-4" /> View
+                                                        </button>
+                                                        {canEdit && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleEdit(importer); }}
+                                                                data-action={`Edit Importer (${importer.name || ''})`}
+                                                                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-blue-50 text-blue-600 rounded-xl text-xs sm:text-sm font-bold flex-1 hover:bg-blue-100 transition-colors"
+                                                            >
+                                                                <EditIcon className="w-4 h-4" /> Edit
+                                                            </button>
+                                                        )}
+                                                        {canDelete && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }}
+                                                                data-action={`Delete Importer (${importer.name || ''})`}
+                                                                className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </>
                     ) : (
