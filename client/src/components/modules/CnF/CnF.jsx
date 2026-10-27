@@ -1647,21 +1647,44 @@ const CnF = ({
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); }}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[96vw] xl:max-w-[1750px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200 z-10">
-                        <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
-                            <div className="flex-1 text-left w-full flex items-center justify-between md:block pr-12 md:pr-0">
-                                <div>
-                                    <h2 className="text-xl font-bold text-gray-900">{viewData.name}</h2>
-                                    <p className="text-xs text-gray-500 mt-1">ID: {viewData.cnfId}</p>
+                        <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
+                            <div className="flex-1 text-left w-full flex items-center justify-between md:block">
+                                <div className="min-w-0 pr-2">
+                                    <h2 className="text-xl font-bold text-gray-900 truncate">{viewData.name}</h2>
+                                    {viewData.cnfId && <p className="text-xs text-gray-500 mt-0.5">ID: {viewData.cnfId}</p>}
                                 </div>
-                                {/* Mobile Close Button */}
-                                <button onClick={() => setViewData(null)} className="md:hidden p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
-                                    <XIcon className="w-5 h-5" />
-                                </button>
+                                {/* Mobile Action Buttons: Filter, Print, Close */}
+                                <div className="md:hidden flex items-center gap-2 shrink-0">
+                                    <button
+                                        ref={historyFilterButtonMobileRef}
+                                        onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
+                                        className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all border ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                            : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
+                                            }`}
+                                        title="Filter History"
+                                    >
+                                        <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                    </button>
+                                    <button
+                                        onClick={handlePrintHistory}
+                                        className="w-9 h-9 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30"
+                                        title="Print Report"
+                                    >
+                                        <PrinterIcon className="w-4 h-4 text-gray-400" />
+                                    </button>
+                                    <button
+                                        onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); }}
+                                        className="w-9 h-9 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                                        title="Close"
+                                    >
+                                        <XIcon className="w-4 h-4 text-gray-400" />
+                                    </button>
+                                </div>
                             </div>
-                            {/* Search bar - centered */}
+                            {/* Search bar */}
                             <div className="flex-1 flex flex-col items-center gap-3 w-full">
-                                {/* Desktop Search Input */}
-                                <div className="hidden md:block w-full max-w-sm relative">
+                                <div className="w-full md:max-w-sm relative">
                                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                     <input
                                         type="text"
@@ -1672,40 +1695,11 @@ const CnF = ({
                                     />
                                 </div>
 
-                                {/* Mobile Search & Action Bar */}
-                                <div className="md:hidden w-full flex items-center gap-2 px-1">
-                                    <div className="relative flex-1">
-                                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                                        <input
-                                            type="text"
-                                            placeholder={historyViewMode === 'earnings' ? "Search history..." : "Search payments..."}
-                                            value={historySearchQuery}
-                                            onChange={(e) => setHistorySearchQuery(e.target.value)}
-                                            className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
-                                        />
-                                    </div>
-                                    <button
-                                        ref={historyFilterButtonMobileRef}
-                                        onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
-                                        className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all border ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
-                                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                                            : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
-                                            }`}
-                                    >
-                                        <FunnelIcon className="w-4 h-4 text-gray-400" />
-                                    </button>
-                                    <button
-                                        onClick={handlePrintHistory}
-                                        className="w-9 h-9 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30"
-                                    >
-                                        <PrinterIcon className="w-4 h-4 text-gray-400" />
-                                    </button>
-                                </div>
-
-                                <div className="flex items-center gap-2 max-w-full overflow-x-auto hide-scrollbar shrink-0 px-1 py-0.5">
+                                {/* Desktop View Tabs */}
+                                <div className="hidden md:flex items-center gap-2 max-w-full overflow-x-auto hide-scrollbar shrink-0 px-1 py-0.5">
                                     <button
                                         onClick={() => { setHistoryViewMode('earnings'); setExpandedHistoryIdx(null); }}
-                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'earnings'
+                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border cursor-pointer ${historyViewMode === 'earnings'
                                             ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                                             : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                                             }`}
@@ -1714,7 +1708,7 @@ const CnF = ({
                                     </button>
                                     <button
                                         onClick={() => { setHistoryViewMode('expense'); setExpandedHistoryIdx(null); }}
-                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'expense'
+                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border cursor-pointer ${historyViewMode === 'expense'
                                             ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                                             : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                                             }`}
@@ -1723,7 +1717,7 @@ const CnF = ({
                                     </button>
                                     <button
                                         onClick={() => { setHistoryViewMode('payments'); setExpandedHistoryIdx(null); }}
-                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'payments'
+                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border cursor-pointer ${historyViewMode === 'payments'
                                             ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                                             : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                                             }`}
@@ -1732,13 +1726,110 @@ const CnF = ({
                                     </button>
                                     <button
                                         onClick={() => { setHistoryViewMode('all'); setExpandedHistoryIdx(null); }}
-                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'all'
+                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border cursor-pointer ${historyViewMode === 'all'
                                             ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                                             : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                                             }`}
                                     >
                                         All
                                     </button>
+                                </div>
+
+                                {/* Mobile View Tabs: Circular Icons with Labels Below */}
+                                <div className="md:hidden w-full pt-1">
+                                    <div className="bg-white/95 backdrop-blur-md rounded-2xl p-2 sm:p-2.5 border border-gray-100 shadow-sm grid grid-cols-4 gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setHistoryViewMode('earnings'); setExpandedHistoryIdx(null); }}
+                                            className="flex flex-col items-center justify-center gap-1.5 py-1 px-0.5 rounded-xl transition-all cursor-pointer select-none active:scale-95"
+                                        >
+                                            <div
+                                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                                                    historyViewMode === 'earnings'
+                                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/35 ring-4 ring-blue-50'
+                                                        : 'bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100'
+                                                }`}
+                                            >
+                                                <TrendingUpIcon className="w-5 h-5" />
+                                            </div>
+                                            <span
+                                                className={`text-[10px] sm:text-[11px] font-bold tracking-tight text-center transition-colors truncate max-w-full ${
+                                                    historyViewMode === 'earnings' ? 'text-blue-600 font-extrabold' : 'text-slate-600'
+                                                }`}
+                                            >
+                                                Earnings
+                                            </span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => { setHistoryViewMode('expense'); setExpandedHistoryIdx(null); }}
+                                            className="flex flex-col items-center justify-center gap-1.5 py-1 px-0.5 rounded-xl transition-all cursor-pointer select-none active:scale-95"
+                                        >
+                                            <div
+                                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                                                    historyViewMode === 'expense'
+                                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/35 ring-4 ring-blue-50'
+                                                        : 'bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100'
+                                                }`}
+                                            >
+                                                <ReceiptIcon className="w-5 h-5" />
+                                            </div>
+                                            <span
+                                                className={`text-[10px] sm:text-[11px] font-bold tracking-tight text-center transition-colors truncate max-w-full ${
+                                                    historyViewMode === 'expense' ? 'text-blue-600 font-extrabold' : 'text-slate-600'
+                                                }`}
+                                            >
+                                                LC Expense
+                                            </span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => { setHistoryViewMode('payments'); setExpandedHistoryIdx(null); }}
+                                            className="flex flex-col items-center justify-center gap-1.5 py-1 px-0.5 rounded-xl transition-all cursor-pointer select-none active:scale-95"
+                                        >
+                                            <div
+                                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                                                    historyViewMode === 'payments'
+                                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/35 ring-4 ring-blue-50'
+                                                        : 'bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100'
+                                                }`}
+                                            >
+                                                <DollarSignIcon className="w-5 h-5" />
+                                            </div>
+                                            <span
+                                                className={`text-[10px] sm:text-[11px] font-bold tracking-tight text-center transition-colors truncate max-w-full ${
+                                                    historyViewMode === 'payments' ? 'text-blue-600 font-extrabold' : 'text-slate-600'
+                                                }`}
+                                            >
+                                                Payments
+                                            </span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => { setHistoryViewMode('all'); setExpandedHistoryIdx(null); }}
+                                            className="flex flex-col items-center justify-center gap-1.5 py-1 px-0.5 rounded-xl transition-all cursor-pointer select-none active:scale-95"
+                                        >
+                                            <div
+                                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                                                    historyViewMode === 'all'
+                                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/35 ring-4 ring-blue-50'
+                                                        : 'bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100'
+                                                }`}
+                                            >
+                                                <BarChartIcon className="w-5 h-5" />
+                                            </div>
+                                            <span
+                                                className={`text-[10px] sm:text-[11px] font-bold tracking-tight text-center transition-colors truncate max-w-full ${
+                                                    historyViewMode === 'all' ? 'text-blue-600 font-extrabold' : 'text-slate-600'
+                                                }`}
+                                            >
+                                                All
+                                            </span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             {/* Desktop Actions Column */}
@@ -1769,8 +1860,12 @@ const CnF = ({
                                         Bulk Edit ({selectedHistoryIds.size})
                                     </button>
                                 )}
-                                <button onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); }} className="p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
-                                    <XIcon className="w-5 h-5" />
+                                <button
+                                    onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); }}
+                                    className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                                    title="Close"
+                                >
+                                    <XIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                                 </button>
                             </div>
 
@@ -2022,119 +2117,86 @@ const CnF = ({
                                         const currentBalance = totalBill - (totalPaid + totalDiscount);
 
                                         return (
-                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4">
                                                 {/* Total Truck Card */}
-                                                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                                                        <div className="space-y-1 min-w-0 flex-1 w-full">
-                                                            <div className="flex items-center justify-between sm:block">
-                                                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70 truncate">Total Truck</p>
-                                                                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 sm:hidden shrink-0">
-                                                                    <TruckIcon className="w-4 h-4" />
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                                <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
-                                                                    {totalTrucks.toLocaleString('en-IN')}
-                                                                </h3>
-                                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">Units</span>
-                                                            </div>
+                                                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-100/50 p-3 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                                                    <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                                                        <p className="text-[10px] sm:text-xs font-bold text-blue-600 uppercase tracking-wider leading-tight">Total Truck</p>
+                                                        <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-blue-100 text-blue-600 shrink-0">
+                                                            <TruckIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                                                         </div>
-                                                        <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
-                                                            <TruckIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <h3 className="text-[13px] sm:text-base lg:text-xl font-black text-gray-900 tracking-tight leading-snug break-words">
+                                                            {totalTrucks.toLocaleString('en-IN')}
+                                                        </h3>
+                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">Units</span>
                                                     </div>
                                                 </div>
 
                                                 {/* Total Bill Card */}
-                                                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                                                        <div className="space-y-1 min-w-0 flex-1 w-full">
-                                                            <div className="flex items-center justify-between sm:block">
-                                                                <p className="text-[10px] font-bold text-purple-600 uppercase tracking-widest opacity-70 truncate">Total Bill</p>
-                                                                <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 sm:hidden shrink-0">
-                                                                    <BarChartIcon className="w-4 h-4" />
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                                <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
-                                                                    {totalBill.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                </h3>
-                                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
-                                                            </div>
+                                                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100/50 p-3 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                                                    <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                                                        <p className="text-[10px] sm:text-xs font-bold text-purple-600 uppercase tracking-wider leading-tight">Total Bill</p>
+                                                        <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-purple-100 text-purple-600 shrink-0">
+                                                            <BarChartIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                                                         </div>
-                                                        <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-100 items-center justify-center text-purple-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
-                                                            <BarChartIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <h3 className="text-[13px] sm:text-base lg:text-xl font-black text-gray-900 tracking-tight leading-snug break-words">
+                                                            {totalBill.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </h3>
+                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
 
                                                 {/* Total Paid Card */}
-                                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                                                        <div className="space-y-1 min-w-0 flex-1 w-full">
-                                                            <div className="flex items-center justify-between sm:block">
-                                                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70 truncate">Total Paid</p>
-                                                                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 sm:hidden shrink-0">
-                                                                    <DollarSignIcon className="w-4 h-4" />
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                                <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
-                                                                    {totalPaid.toLocaleString('en-IN')}
-                                                                </h3>
-                                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
-                                                            </div>
+                                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-3 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                                                    <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                                                        <p className="text-[10px] sm:text-xs font-bold text-blue-600 uppercase tracking-wider leading-tight">Total Paid</p>
+                                                        <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-blue-100 text-blue-600 shrink-0">
+                                                            <DollarSignIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                                                         </div>
-                                                        <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
-                                                            <DollarSignIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <h3 className="text-[13px] sm:text-base lg:text-xl font-black text-gray-900 tracking-tight leading-snug break-words">
+                                                            {totalPaid.toLocaleString('en-IN')}
+                                                        </h3>
+                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
 
                                                 {/* Total Discount Card */}
-                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                                                        <div className="space-y-1 min-w-0 flex-1 w-full">
-                                                            <div className="flex items-center justify-between sm:block">
-                                                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70 truncate">Total Discount</p>
-                                                                <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 sm:hidden shrink-0">
-                                                                    <ReceiptIcon className="w-4 h-4" />
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                                <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
-                                                                    {totalDiscount.toLocaleString('en-IN')}
-                                                                </h3>
-                                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
-                                                            </div>
+                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-3 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                                                    <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                                                        <p className="text-[10px] sm:text-xs font-bold text-emerald-600 uppercase tracking-wider leading-tight">Total Discount</p>
+                                                        <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-emerald-100 text-emerald-600 shrink-0">
+                                                            <ReceiptIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                                                         </div>
-                                                        <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-100 items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
-                                                            <ReceiptIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <h3 className="text-[13px] sm:text-base lg:text-xl font-black text-gray-900 tracking-tight leading-snug break-words">
+                                                            {totalDiscount.toLocaleString('en-IN')}
+                                                        </h3>
+                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
 
-                                                {/* Balance Card */}
-                                                <div className="bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                                                        <div className="space-y-1 min-w-0 flex-1 w-full">
-                                                            <div className="flex items-center justify-between sm:block">
-                                                                <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70 truncate">Current Balance</p>
-                                                                <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600 sm:hidden shrink-0">
-                                                                    <TrendingUpIcon className="w-4 h-4" />
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                                <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
-                                                                    {currentBalance.toLocaleString('en-IN')}
-                                                                </h3>
-                                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
-                                                            </div>
+                                                {/* Balance Card - spans 2 cols on mobile */}
+                                                <div className="col-span-2 md:col-span-1 lg:col-span-1 bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100/50 p-3 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                                                    <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                                                        <p className="text-[10px] sm:text-xs font-bold text-rose-600 uppercase tracking-wider leading-tight">Current Balance</p>
+                                                        <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-rose-100 text-rose-600 shrink-0">
+                                                            <TrendingUpIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                                                         </div>
-                                                        <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-rose-100 items-center justify-center text-rose-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
-                                                            <TrendingUpIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <h3 className="text-[13px] sm:text-base lg:text-xl font-black text-rose-600 tracking-tight leading-snug break-words">
+                                                            {currentBalance < 0
+                                                                ? `-${Math.abs(currentBalance).toLocaleString('en-IN')}`
+                                                                : currentBalance.toLocaleString('en-IN')}
+                                                        </h3>
+                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2260,91 +2322,125 @@ const CnF = ({
                                                                     }
                                                                 }}
                                                             >
-                                                                <div className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors">
-                                                                    <div className="flex-1 min-w-0 pr-4 flex items-center gap-3">
+                                                                <div
+                                                                    className="flex justify-between items-start p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50/50 transition-colors gap-3"
+                                                                >
+                                                                    {/* Left Side: Checkbox (if selection mode), Date, Importer, Full LC No, Product */}
+                                                                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
                                                                         {isHistorySelectionMode && canUserEditRecord(row) && (
-                                                                                <input type="checkbox" checked={isSelected} readOnly className="w-5 h-5 accent-gray-900 shrink-0" onClick={(e) => e.stopPropagation()} />
-                                                                            )}
-                                                                        <div className="min-w-0">
-                                                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5 min-w-0">
-                                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
-                                                                                <span className="h-1 w-1 bg-gray-300 rounded-full sm:block hidden"></span>
-                                                                                <p className="text-xs font-bold text-gray-800 truncate max-w-[120px] xs:max-w-[180px] sm:max-w-none">{row.product || '-'}</p>
-                                                                                <span className="h-1 w-1 bg-gray-300 rounded-full sm:block hidden"></span>
-                                                                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
-                                                                                    {row.source || 'LC'}
-                                                                                </span>
-                                                                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${row.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-rose-100 text-rose-700 border-rose-200'} border`}>
-                                                                                    {row.paymentStatus}
-                                                                                </span>
-                                                                                {row.source === 'Sale' ? (
-                                                                                    (row.cnfType === 'Indian' ? row.indCommissionEdited : row.bdCommissionEdited) && (
-                                                                                        <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0 sm:inline-block hidden">Sale Edited</span>
-                                                                                    )
-                                                                                ) : (
-                                                                                    (row.indCnFEdited || row.bdCnFEdited || row.indCnFBulkEdited || row.bdCnFBulkEdited) && (
-                                                                                        <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0 sm:inline-block hidden">Edited</span>
-                                                                                    )
-                                                                                )}
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={isSelected}
+                                                                                readOnly
+                                                                                className="w-5 h-5 accent-gray-900 shrink-0 mt-0.5 cursor-pointer"
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            />
+                                                                        )}
+                                                                        <div className="space-y-0.5 min-w-0 flex-1 text-left">
+                                                                            {/* Line 1: Date */}
+                                                                            <div className="text-[11px] font-semibold text-gray-400">
+                                                                                {formatDate(row.date)}
                                                                             </div>
-                                                                            <p className="text-sm font-black text-gray-900 truncate">{row.lcNo || '-'}</p>
+                                                                            {/* Line 2: Importer */}
+                                                                            {row.importer && (
+                                                                                <div className="text-xs font-bold text-gray-800 truncate" title={row.importer}>
+                                                                                    {row.importer}
+                                                                                </div>
+                                                                            )}
+                                                                            {/* Line 3: Full LC No */}
+                                                                            <div className="text-sm font-black text-gray-900 font-mono tracking-tight truncate leading-tight" title={row.lcNo || '—'}>
+                                                                                {row.lcNo || '—'}
+                                                                            </div>
+                                                                            {/* Line 4: Product */}
+                                                                            <div className="text-xs font-semibold text-gray-600 truncate leading-tight" title={row.product || '—'}>
+                                                                                {row.product || '—'}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                    <div className={`p-2 rounded-lg transition-colors ${isExpanded ? 'bg-gray-50 text-gray-600' : 'bg-gray-50 text-gray-400'}`}>{isExpanded ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}</div>
+
+                                                                    {/* Right Side: Badges, Total Commission Amount, Truck Count */}
+                                                                    <div className="text-right flex flex-col items-end shrink-0 space-y-1">
+                                                                        <div className="flex items-center gap-1.5 justify-end flex-wrap">
+                                                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                                                row.source === 'Sale'
+                                                                                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                                                                    : 'bg-blue-100 text-blue-700 border border-blue-200'
+                                                                            }`}>
+                                                                                {row.source || 'LC'}
+                                                                            </span>
+                                                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                                                row.paymentStatus === 'Paid'
+                                                                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                                                                    : 'bg-rose-100 text-rose-700 border border-rose-200'
+                                                                            }`}>
+                                                                                {row.paymentStatus}
+                                                                            </span>
+                                                                            {row.source === 'Sale' ? (
+                                                                                (row.cnfType === 'Indian' ? row.indCommissionEdited : row.bdCommissionEdited) && (
+                                                                                    <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0">Sale Edited</span>
+                                                                                )
+                                                                            ) : (
+                                                                                (row.indCnFEdited || row.bdCnFEdited || row.indCnFBulkEdited || row.bdCnFBulkEdited) && (
+                                                                                    <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0">Edited</span>
+                                                                                )
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="text-sm sm:text-base font-black text-gray-900 font-mono leading-tight">
+                                                                            {(row.totalCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                        </div>
+                                                                        {row.truck && (
+                                                                            <div className="text-[11px] text-gray-400 font-medium leading-tight">
+                                                                                {row.truck} {row.truck === '1' || row.truck === 1 ? 'Truck' : 'Trucks'}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                                 {isExpanded && (
-                                                                    <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-4 duration-300">
-                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-gray-50">
-                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
-                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Port<span className="md:hidden"> :</span></span>
-                                                                                <span className="font-semibold text-gray-700 md:text-xs md:font-medium">{row.port || '-'}</span>
+                                                                    <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
+                                                                        <div className="space-y-2.5 pt-3 border-t border-gray-100 text-xs sm:text-sm">
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Port</span>
+                                                                                <span className="font-semibold text-gray-800">{row.port || '—'}</span>
                                                                             </div>
-                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1 md:text-right">
-                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Status<span className="md:hidden"> :</span></span>
-                                                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${row.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-rose-100 text-rose-700 border-rose-200'} border inline-block`}>
-                                                                                    {row.paymentStatus}
+                                                                            <div className="flex items-start justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Importer</span>
+                                                                                <span className="font-semibold text-gray-800 text-right truncate max-w-[200px]" title={row.importer || '—'}>{row.importer || '—'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-start justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Exporter</span>
+                                                                                <span className="font-semibold text-gray-800 text-right truncate max-w-[200px]" title={row.exporter || '—'}>{row.exporter || '—'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Truck No</span>
+                                                                                <span className="font-semibold text-gray-800">{row.truck || '—'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">BOE No</span>
+                                                                                <span className="font-semibold text-gray-800">{row.billOfEntry || '—'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Bag / Qty</span>
+                                                                                <span className="font-bold text-gray-900">
+                                                                                    {row.bag && !isNaN(parseFloat(row.bag)) ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '0'} / {row.qty && !isNaN(parseFloat(row.qty)) ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '0'}
                                                                                 </span>
                                                                             </div>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">
-                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
-                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Importer<span className="md:hidden"> :</span></span>
-                                                                                <span className="font-semibold text-gray-700 truncate max-w-[200px] md:max-w-none md:text-xs md:font-medium" title={row.importer || '-'}>{row.importer || '-'}</span>
+                                                                            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Commission ({row.uom || viewData?.uom || 'QTY'})</span>
+                                                                                <span className="font-semibold text-gray-900 font-mono">{row.uom === 'BOE' ? '—' : `${(row.commission || 0).toLocaleString('en-IN')} Tk`}</span>
                                                                             </div>
-                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1 md:text-right">
-                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Exporter<span className="md:hidden"> :</span></span>
-                                                                                <span className="font-semibold text-gray-700 truncate max-w-[200px] md:max-w-none md:text-xs md:font-medium" title={row.exporter || '-'}>{row.exporter || '-'}</span>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Total Commission</span>
+                                                                                <span className="font-black text-blue-600 font-mono text-sm">{(row.totalCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk</span>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4">
-                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
-                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Truck No<span className="md:hidden"> :</span></span>
-                                                                                <span className="font-semibold text-gray-700 md:text-xs">{row.truck || '-'}</span>
-                                                                            </div>
-                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1 md:text-right">
-                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">BOE No<span className="md:hidden"> :</span></span>
-                                                                                <span className="font-semibold text-gray-700 md:text-xs">{row.billOfEntry || '-'}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">
-                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
-                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Bag / Qty<span className="md:hidden"> :</span></span>
-                                                                                <span className="font-bold text-gray-900 md:text-xs">{row.bag && !isNaN(parseFloat(row.bag)) ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '0'} / {row.qty && !isNaN(parseFloat(row.qty)) ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '0'}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-50">
-                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
-                                                                                <span className="text-gray-500 font-medium md:text-[9px] md:font-bold md:text-gray-400 md:uppercase md:tracking-widest">Commission ({row.uom || viewData?.uom || 'QTY'})<span className="md:hidden"> :</span></span>
-                                                                                <span className="font-semibold text-gray-900 font-mono md:text-xs md:font-black">{row.uom === 'BOE' ? '-' : `${(row.commission || 0).toLocaleString('en-IN')} Tk`}</span>
-                                                                            </div>
-                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1 md:text-right">
-                                                                                <span className="text-gray-500 font-medium md:text-[9px] md:font-bold md:text-gray-400 md:uppercase md:tracking-widest">Total Commission<span className="md:hidden"> :</span></span>
-                                                                                <span className="font-semibold text-gray-900 font-mono md:text-xs md:font-black">{(row.totalCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk</span>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
+                                                                        <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
                                                                             {canUserEditRecord(row) ? (
-                                                                                <button onClick={() => handleEditHistory(row)} className="flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-black flex-1 active:scale-95 shadow-lg shadow-gray-900/20"><EditIcon className="w-4 h-4" /> Edit Record</button>
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); handleEditHistory(row); }}
+                                                                                    className="flex items-center justify-center gap-2 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-black flex-1 active:scale-95 shadow-md transition-all cursor-pointer"
+                                                                                >
+                                                                                    <EditIcon className="w-4 h-4" /> Edit Record
+                                                                                </button>
                                                                             ) : (
                                                                                 <div className="flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-500 rounded-xl text-[10px] font-black flex-1 uppercase tracking-widest">
                                                                                     <LockIcon className="w-4 h-4" /> {row.source === 'Sale' ? 'Sale Edited & Locked' : 'Edited & Locked'}
@@ -2408,44 +2504,59 @@ const CnF = ({
                                                         return (
                                                             <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm transition-all overflow-hidden">
                                                                 <div
-                                                                    className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                                                    className="flex justify-between items-start p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50/50 transition-colors gap-3"
                                                                     onClick={() => setExpandedExpenseIdx(isExpanded ? null : idx)}
                                                                 >
-                                                                    <div className="flex-1 min-w-0 pr-4 flex items-center gap-2">
-                                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
-                                                                        <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
-                                                                        <span className="text-xs font-bold text-blue-600 truncate">{row.lcNo}</span>
+                                                                    <div className="space-y-0.5 min-w-0 flex-1 text-left">
+                                                                        {/* Line 1: Date */}
+                                                                        <div className="text-[11px] font-semibold text-gray-400">
+                                                                            {formatDate(row.date)}
+                                                                        </div>
+                                                                        {/* Line 2: Importer */}
+                                                                        {row.importer && (
+                                                                            <div className="text-xs font-bold text-gray-800 truncate" title={row.importer}>
+                                                                                {row.importer}
+                                                                            </div>
+                                                                        )}
+                                                                        {/* Line 3: Full LC No */}
+                                                                        <div className="text-sm font-black text-gray-900 font-mono tracking-tight truncate leading-tight" title={row.lcNo || '—'}>
+                                                                            {row.lcNo || '—'}
+                                                                        </div>
+                                                                        {/* Line 4: Product */}
+                                                                        <div className="text-xs font-semibold text-gray-600 truncate leading-tight" title={row.product || 'Expense'}>
+                                                                            {row.product || 'Expense'}
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="flex items-center gap-3 shrink-0">
-                                                                        <span className="text-xs font-black text-rose-600 font-mono">
-                                                                            {parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                    <div className="text-right flex flex-col items-end shrink-0 space-y-1">
+                                                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200">
+                                                                            Expense
                                                                         </span>
-                                                                        <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-gray-50 text-gray-600' : 'bg-gray-50 text-gray-400'}`}>
-                                                                            {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                        <div className="text-sm sm:text-base font-black text-rose-600 font-mono leading-tight">
+                                                                            {parseFloat(row.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
                                                                         </div>
                                                                     </div>
                                                                 </div>
                                                                 {isExpanded && (
-                                                                    <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-4 duration-300">
-                                                                        <div className="grid grid-cols-2 gap-3 bg-gray-50/50 rounded-lg p-2.5 text-xs">
-                                                                            <div>
-                                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Product</p>
-                                                                                <p className="font-semibold text-gray-700">{row.product || '-'}</p>
+                                                                    <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
+                                                                        <div className="space-y-2.5 pt-3 border-t border-gray-100 text-xs sm:text-sm">
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Product</span>
+                                                                                <span className="font-semibold text-gray-800">{row.product || '—'}</span>
                                                                             </div>
-                                                                            <div className="text-right">
-                                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</p>
-                                                                                <p className="font-semibold text-gray-700">{row.port || '-'}</p>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Port</span>
+                                                                                <span className="font-semibold text-gray-800">{row.port || '—'}</span>
                                                                             </div>
-                                                                        </div>
-                                                                        <div className="flex justify-between items-center text-xs">
-                                                                            <span className="text-gray-500 font-medium">Importer :</span>
-                                                                            <span className="font-semibold text-gray-700 truncate max-w-[200px]">{row.importer || '-'}</span>
-                                                                        </div>
-                                                                        <div className="flex justify-between items-center pt-2 border-t border-gray-50">
-                                                                            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Amount :</span>
-                                                                            <span className="text-sm font-black text-rose-600 font-mono">
-                                                                                {parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
-                                                                            </span>
+                                                                            <div className="flex items-start justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Importer</span>
+                                                                                <span className="font-semibold text-gray-800 text-right truncate max-w-[200px]" title={row.importer || '—'}>{row.importer || '—'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Amount</span>
+                                                                                <span className="font-black text-rose-600 font-mono text-sm">
+                                                                                    {parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                                </span>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 )}
@@ -2480,9 +2591,9 @@ const CnF = ({
                                                                     <td className="cnf-table-cell">{formatDate(p.date)}</td>
                                                                     <td className="cnf-table-cell font-bold">{p.method}</td>
                                                                     <td className="cnf-table-cell truncate max-w-[400px]" title={p.bankName || p.reference || '-'}>{p.bankName || p.reference || '-'}</td>
-                                                                    <td className="cnf-table-cell text-right font-black">{(p.amount || 0).toLocaleString('en-IN')} Tk</td>
+                                                                    <td className="cnf-table-cell text-right font-black">{(p.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk</td>
                                                                     <td className="cnf-table-cell text-right font-bold text-emerald-600">
-                                                                        {p.discount > 0 ? `${(p.discount || 0).toLocaleString('en-IN')} Tk` : '-'}
+                                                                        {p.discount > 0 ? `${(p.discount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk` : '-'}
                                                                     </td>
                                                                 </tr>
                                                             ))
@@ -2494,30 +2605,47 @@ const CnF = ({
                                             </div>
                                             <div className="block md:hidden space-y-3">
                                                 {filteredPayments.length > 0 ? (
-                                                    filteredPayments.map((p, idx) => (
-                                                        <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
-                                                            <div className="flex justify-between items-center">
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(p.date)}</p>
-                                                                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black uppercase tracking-widest">{p.method}</span>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Reference / Bank</p>
-                                                                <p className="text-xs font-medium text-gray-700 truncate">{p.bankName || p.reference || '-'}</p>
-                                                            </div>
-                                                            <div className="flex justify-between items-center pt-2 border-t border-gray-50">
-                                                                <div>
-                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amount</p>
-                                                                    <p className="text-sm font-black text-gray-900">{(p.amount || 0).toLocaleString('en-IN')} Tk</p>
-                                                                </div>
-                                                                {p.discount > 0 && (
-                                                                    <div className="text-right">
-                                                                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Discount</p>
-                                                                        <p className="text-sm font-black text-emerald-600">{(p.discount || 0).toLocaleString('en-IN')} Tk</p>
+                                                    filteredPayments.map((p, idx) => {
+                                                        const hasBank = p.bankName && p.bankName !== '-';
+                                                        const hasRef = p.reference && p.reference !== '-';
+                                                        const title = hasBank ? p.bankName : (hasRef ? p.reference : `${p.method || 'Cash'} Payment`);
+                                                        const subtitle = hasBank && hasRef ? `Ref: ${p.reference}` : null;
+                                                        return (
+                                                            <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm transition-all overflow-hidden p-3.5 sm:p-4">
+                                                                <div className="flex justify-between items-start gap-3">
+                                                                    {/* Left Side: Date, Bank / Reference */}
+                                                                    <div className="space-y-0.5 min-w-0 flex-1 text-left">
+                                                                        <div className="text-[11px] font-semibold text-gray-400">
+                                                                            {formatDate(p.date)}
+                                                                        </div>
+                                                                        <div className="text-sm font-black text-gray-900 tracking-tight truncate leading-tight" title={title}>
+                                                                            {title}
+                                                                        </div>
+                                                                        {subtitle && (
+                                                                            <div className="text-xs font-semibold text-gray-500 truncate leading-tight" title={subtitle}>
+                                                                                {subtitle}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
-                                                                )}
+
+                                                                    {/* Right Side: Method Badge, Paid Amount, Discount */}
+                                                                    <div className="text-right flex flex-col items-end shrink-0 space-y-1">
+                                                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 border border-blue-200">
+                                                                            {p.method || 'Payment'}
+                                                                        </span>
+                                                                        <div className="text-sm sm:text-base font-black text-gray-900 font-mono leading-tight">
+                                                                            {(p.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                        </div>
+                                                                        {p.discount > 0 && (
+                                                                            <div className="text-[11px] font-bold text-emerald-600 leading-tight">
+                                                                                Discount: {(p.discount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    ))
+                                                        );
+                                                    })
                                                 ) : (
                                                     <div className="text-center py-12 text-gray-400"><DollarSignIcon className="w-8 h-8 mb-2 mx-auto opacity-20" /><p className="text-sm">No payment history found</p></div>
                                                 )}
@@ -2590,10 +2718,10 @@ const CnF = ({
                                             <div className="block md:hidden space-y-3">
                                                 {filteredAll.length > 0 ? (
                                                     filteredAll.map((row, idx) => (
-                                                        <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
-                                                            <div className="flex justify-between items-center">
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
-                                                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
+                                                        <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-2.5">
+                                                            <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+                                                                <span className="text-[11px] font-semibold text-gray-400">{formatDate(row.date)}</span>
+                                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
                                                                     row.type === 'earning'
                                                                         ? 'bg-purple-100 text-purple-700 border border-purple-200'
                                                                         : row.type === 'expense'
@@ -2603,62 +2731,80 @@ const CnF = ({
                                                                     {row.type === 'earning' ? 'Earning' : row.type === 'expense' ? 'Expense' : 'Payment'}
                                                                 </span>
                                                             </div>
-                                                            {row.type !== 'payment' ? (
-                                                                <>
-                                                                    <div className="flex justify-between items-baseline">
-                                                                        <span className="text-xs font-bold text-blue-600">{row.lcNo}</span>
-                                                                        <span className="text-xs font-semibold text-gray-700">{row.product || '-'}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-center text-xs">
-                                                                        <span className="text-gray-500 font-medium">Importer:</span>
-                                                                        <span className="font-semibold text-gray-700 truncate max-w-[180px]">{row.importer || '-'}</span>
-                                                                    </div>
-                                                                    <div className="grid grid-cols-3 gap-2 text-[11px] pt-1">
-                                                                        <div>
-                                                                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Port</span>
-                                                                            <span className="font-medium text-gray-700 truncate block">{row.port || '-'}</span>
+                                                            <div className="space-y-2 text-xs sm:text-sm">
+                                                                {row.type !== 'payment' ? (
+                                                                    <>
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">LC No:</span>
+                                                                            <span className="font-bold text-gray-900 font-mono text-xs">{row.lcNo || '—'}</span>
                                                                         </div>
-                                                                        <div>
-                                                                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Qty</span>
-                                                                            <span className="font-medium text-gray-700">{parseFloat(row.qty) > 0 ? `${parseFloat(row.qty).toLocaleString('en-US')} kg` : '-'}</span>
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Product:</span>
+                                                                            <span className="font-semibold text-gray-800 text-right truncate max-w-[200px]" title={row.product || '—'}>{row.product || '—'}</span>
                                                                         </div>
-                                                                        <div>
-                                                                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Truck</span>
-                                                                            <span className="font-medium text-gray-700">{row.truck && row.truck !== '-' ? row.truck : '-'}</span>
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Importer:</span>
+                                                                            <span className="font-semibold text-gray-800 text-right truncate max-w-[200px]" title={row.importer || '—'}>{row.importer || '—'}</span>
                                                                         </div>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-50">
-                                                                        <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Billing Amount</span>
-                                                                        <span className="text-sm font-black text-gray-900">+{row.billingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} Tk</span>
-                                                                    </div>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <div className="flex justify-between items-center text-xs">
-                                                                        <span className="text-gray-500 font-medium">Method:</span>
-                                                                        <span className="font-bold text-gray-700">{row.method || '-'}</span>
-                                                                    </div>
-                                                                    {(row.bankName || row.reference) && (
-                                                                        <div className="flex justify-between items-center text-xs">
-                                                                            <span className="text-gray-500 font-medium">Ref / Bank:</span>
-                                                                            <span className="font-medium text-gray-600 truncate max-w-[180px]">{row.bankName || row.reference}</span>
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Port:</span>
+                                                                            <span className="font-semibold text-gray-800">{row.port || '—'}</span>
                                                                         </div>
-                                                                    )}
-                                                                    {row.discount > 0 && (
-                                                                        <div className="flex justify-between items-center text-xs text-emerald-600">
-                                                                            <span>Discount:</span>
-                                                                            <span className="font-semibold">{(row.discount).toLocaleString('en-IN', { minimumFractionDigits: 2 })} Tk</span>
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Quantity:</span>
+                                                                            <span className="font-semibold text-gray-800">
+                                                                                {parseFloat(row.qty) > 0 ? `${parseFloat(row.qty).toLocaleString('en-US')} kg` : '—'}
+                                                                            </span>
                                                                         </div>
-                                                                    )}
-                                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-50">
-                                                                        <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Payment Amount</span>
-                                                                        <span className="text-sm font-black text-rose-600">-{row.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} Tk</span>
-                                                                    </div>
-                                                                </>
-                                                            )}
-                                                            <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100/50 mt-1">
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Running Balance</span>
-                                                                <span className="text-xs font-black text-gray-900">{row.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} Tk</span>
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Truck:</span>
+                                                                            <span className="font-semibold text-gray-800">
+                                                                                {row.truck && row.truck !== '-' ? row.truck : (row.truckCount && row.truckCount !== '-' ? row.truckCount : '—')}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="flex items-center justify-between pt-1.5 border-t border-gray-100">
+                                                                            <span className="text-gray-500 font-bold uppercase tracking-wider text-[11px] shrink-0">Billing Amount:</span>
+                                                                            <span className="text-sm font-black text-gray-900 font-mono">
+                                                                                +{row.billingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                            </span>
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Method:</span>
+                                                                            <span className="font-bold text-gray-800">{row.method || '—'}</span>
+                                                                        </div>
+                                                                        {(row.bankName || row.reference) && (
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Ref / Bank:</span>
+                                                                                <span className="font-semibold text-gray-800 text-right truncate max-w-[200px]" title={row.bankName || row.reference}>
+                                                                                    {row.bankName || row.reference}
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                        {row.discount > 0 && (
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-emerald-600 font-bold uppercase tracking-wider text-[11px] shrink-0">Discount:</span>
+                                                                                <span className="font-black text-emerald-600 font-mono">
+                                                                                    {(row.discount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="flex items-center justify-between pt-1.5 border-t border-gray-100">
+                                                                            <span className="text-rose-600 font-bold uppercase tracking-wider text-[11px] shrink-0">Payment Amount:</span>
+                                                                            <span className="text-sm font-black text-rose-600 font-mono">
+                                                                                -{row.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                            </span>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                                <div className="flex items-center justify-between bg-gray-50 p-2.5 rounded-lg border border-gray-100 mt-2">
+                                                                    <span className="text-gray-500 font-bold uppercase tracking-wider text-[11px] shrink-0">Running Balance:</span>
+                                                                    <span className="text-xs sm:text-sm font-black text-gray-900 font-mono">
+                                                                        {row.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     ))

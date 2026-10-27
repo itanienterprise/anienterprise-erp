@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { queryClient } from '../../../utils/queryClient';
@@ -318,6 +319,14 @@ const PattyCash = ({ currentUser = {}, onDeleteConfirm }) => {
     const [editingRecord, setEditingRecord] = useState(null);
     const [selectedVoucher, setSelectedVoucher] = useState(null); // Printable Voucher Slip
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
+    const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+    const [expandedRecordId, setExpandedRecordId] = useState(null);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -960,46 +969,61 @@ const PattyCash = ({ currentUser = {}, onDeleteConfirm }) => {
                             />
                         </div>
 
-                        {/* Action Controls: Filter Button + Add Buttons (Same as Deposit.jsx) */}
-                        <div className="flex items-center justify-center md:justify-end gap-2.5 w-full md:w-auto shrink-0">
+                        {/* Action Controls: Filter Button + Add Buttons */}
+                        <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-end gap-2 w-full md:w-auto shrink-0">
                             {/* Filter Dropdown */}
-                            <div className="relative">
+                            <div className="relative w-full sm:w-auto">
                                 <button
                                     ref={filterButtonRef}
                                     onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                    className={`h-10 flex items-center justify-center gap-2 px-4 rounded-xl border transition-all active:scale-95 text-sm font-medium shadow-sm cursor-pointer ${
+                                    className={`h-10 w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 sm:px-4 rounded-xl border transition-all active:scale-95 text-xs sm:text-sm font-semibold shadow-sm cursor-pointer ${
                                         showFilterPanel || isFilterActive
                                             ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
                                             : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                                     }`}
                                 >
                                     <FunnelIcon className={`w-4 h-4 ${showFilterPanel || isFilterActive ? 'text-white' : 'text-gray-400'}`} />
-                                    <span className="text-sm font-medium">Filter</span>
+                                    <span>Filter</span>
                                     {isFilterActive && (
-                                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse ml-0.5" />
                                     )}
                                 </button>
 
-                                {showFilterPanel && (
-                                    <>
-                                        {/* Mobile backdrop */}
+                                {/* Mobile Filter Modal Portaled to Body */}
+                                {showFilterPanel && isMobile && typeof document !== 'undefined' && document.body && createPortal(
+                                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
                                         <div
-                                            className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[2005] md:hidden"
+                                            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
                                             onClick={() => setShowFilterPanel(false)}
                                         />
                                         <div
                                             ref={filterPanelRef}
-                                            className="fixed inset-x-4 top-24 md:absolute md:top-full md:left-auto md:right-0 md:mt-2 w-auto md:w-88 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-visible text-left"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-100 z-10 p-5 flex flex-col max-h-[85vh] overflow-y-auto text-left animate-in fade-in zoom-in-95 duration-150"
                                         >
-                                            <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
-                                                <h4 className="font-bold text-gray-900 text-sm">Filter Transactions</h4>
-                                                <button
-                                                    type="button"
-                                                    onClick={resetFilters}
-                                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider cursor-pointer"
-                                                >
-                                                    Reset
-                                                </button>
+                                            <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-gray-100 shrink-0">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+                                                        <FunnelIcon className="w-4 h-4" />
+                                                    </div>
+                                                    <h4 className="font-bold text-gray-900 text-sm">Filter Transactions</h4>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={resetFilters}
+                                                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider px-2 py-1 bg-blue-50 rounded-lg hover:bg-blue-100 transition cursor-pointer"
+                                                    >
+                                                        Reset
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowFilterPanel(false)}
+                                                        className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                                                    >
+                                                        <XIcon className="w-5 h-5" />
+                                                    </button>
+                                                </div>
                                             </div>
 
                                             <div className="space-y-3">
@@ -1045,13 +1069,82 @@ const PattyCash = ({ currentUser = {}, onDeleteConfirm }) => {
                                                 <button
                                                     type="button"
                                                     onClick={() => setShowFilterPanel(false)}
-                                                    className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-2 active:scale-[0.98] cursor-pointer"
+                                                    className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all mt-2 active:scale-[0.98] cursor-pointer shadow-md shadow-blue-500/20"
                                                 >
                                                     APPLY FILTERS
                                                 </button>
                                             </div>
                                         </div>
-                                    </>
+                                    </div>,
+                                    document.body
+                                )}
+
+                                {/* Desktop Filter Dropdown Panel */}
+                                {showFilterPanel && !isMobile && (
+                                    <div
+                                        ref={filterPanelRef}
+                                        className="absolute top-full right-0 mt-2 w-88 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-visible text-left"
+                                    >
+                                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                                            <h4 className="font-bold text-gray-900 text-sm">Filter Transactions</h4>
+                                            <button
+                                                type="button"
+                                                onClick={resetFilters}
+                                                className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider cursor-pointer"
+                                            >
+                                                Reset
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <CustomDatePicker
+                                                label="Start Date"
+                                                value={filters.startDate}
+                                                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e?.target?.value || e }))}
+                                                compact={true}
+                                            />
+                                            <CustomDatePicker
+                                                label="End Date"
+                                                value={filters.endDate}
+                                                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e?.target?.value || e }))}
+                                                compact={true}
+                                            />
+
+                                            {/* Transaction Type Filter */}
+                                            <SearchableFilterSelect
+                                                label="Transaction Type"
+                                                value={filters.type}
+                                                onChange={(val) => setFilters(prev => ({ ...prev, type: val }))}
+                                                options={[
+                                                    { value: '', label: 'All Types' },
+                                                    { value: 'expense', label: 'Expense (Cash Out)' },
+                                                    { value: 'inflow', label: 'Cash In (Replenish)' }
+                                                ]}
+                                                placeholder="All Types"
+                                            />
+
+                                            {/* Category Head Filter */}
+                                            <SearchableFilterSelect
+                                                label="Category Head"
+                                                value={filters.category}
+                                                onChange={(val) => setFilters(prev => ({ ...prev, category: val }))}
+                                                options={[
+                                                    { value: '', label: 'All Categories' },
+                                                    ...EXPENSE_CATEGORIES.map(c => ({ value: c, label: c, sublabel: 'Expense Head' })),
+                                                    ...INFLOW_CATEGORIES.map(c => ({ value: c, label: c, sublabel: 'Inflow Head' }))
+                                                ]}
+                                                placeholder="All Categories"
+                                            />
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowFilterPanel(false)}
+                                                className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-2 active:scale-[0.98] cursor-pointer"
+                                            >
+                                                APPLY FILTERS
+                                            </button>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
 
@@ -1059,20 +1152,20 @@ const PattyCash = ({ currentUser = {}, onDeleteConfirm }) => {
                             <button
                                 type="button"
                                 onClick={() => setShowReportFormatModal(true)}
-                                className="h-10 flex items-center justify-center gap-2 px-4 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95 text-sm font-medium shadow-sm cursor-pointer"
+                                className="h-10 w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 sm:px-4 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95 text-xs sm:text-sm font-semibold shadow-sm cursor-pointer"
                                 title="Export Report (PDF / Excel)"
                             >
                                 <BarChartIcon className="w-4 h-4 text-gray-500" />
-                                <span className="text-sm font-medium">Report</span>
+                                <span>Report</span>
                             </button>
 
-                            {/* Add Deposit / Record Expense Buttons (Same Style as Deposit.jsx) */}
+                            {/* Add Deposit / Record Expense Buttons */}
                             {canAdd && (
-                                <div className="flex items-center gap-2">
+                                <>
                                     <button
                                         onClick={() => handleOpenCreateModal('inflow')}
                                         data-action="Create New Cash In"
-                                        className="h-10 border border-transparent px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center text-sm gap-1.5 whitespace-nowrap cursor-pointer"
+                                        className="h-10 w-full sm:w-auto border border-transparent px-3 sm:px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl shadow-md shadow-emerald-500/20 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center text-xs sm:text-sm gap-1.5 whitespace-nowrap cursor-pointer"
                                     >
                                         <ArrowDownLeftIcon className="w-4 h-4" />
                                         <span>Cash In</span>
@@ -1081,18 +1174,18 @@ const PattyCash = ({ currentUser = {}, onDeleteConfirm }) => {
                                     <button
                                         onClick={() => handleOpenCreateModal('expense')}
                                         data-action="Create New Expense"
-                                        className="h-10 border border-transparent px-4.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center text-sm gap-2 whitespace-nowrap cursor-pointer"
+                                        className="h-10 w-full sm:w-auto border border-transparent px-3 sm:px-4.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center text-xs sm:text-sm gap-1.5 whitespace-nowrap cursor-pointer"
                                     >
                                         <PlusIcon className="w-4 h-4" />
                                         <span>Record Expense</span>
                                     </button>
-                                </div>
+                                </>
                             )}
                         </div>
                     </div>
 
-                    {/* View Tabs - CENTER ALIGNED UNDER SEARCH BAR */}
-                    <div className="flex justify-center items-center w-full pt-1">
+                    {/* Desktop View Tabs: Pill Bar (hidden on mobile) */}
+                    <div className="hidden md:flex justify-center items-center w-full pt-1">
                         <div className="inline-flex p-1 bg-gray-100/90 rounded-xl max-w-full overflow-x-auto shadow-xs">
                             <button
                                 className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
@@ -1125,6 +1218,103 @@ const PattyCash = ({ currentUser = {}, onDeleteConfirm }) => {
                                 onClick={() => setActiveTab('summary')}
                             >
                                 Category Breakdown
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Mobile View Tabs: Circular Icons with Labels Below (matching Attendance style) */}
+                    <div className="md:hidden w-full pt-1">
+                        <div className="bg-white/95 backdrop-blur-md rounded-2xl p-2.5 sm:p-3 border border-gray-100 shadow-sm grid grid-cols-4 gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('all')}
+                                className="flex flex-col items-center justify-center gap-1.5 py-1 px-1 rounded-xl transition-all cursor-pointer select-none active:scale-95"
+                            >
+                                <div
+                                    className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                                        activeTab === 'all'
+                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/35 ring-4 ring-blue-50'
+                                            : 'bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <FileTextIcon className="w-5 h-5" />
+                                </div>
+                                <span
+                                    className={`text-[11px] font-bold tracking-tight text-center transition-colors truncate max-w-full ${
+                                        activeTab === 'all' ? 'text-blue-600 font-extrabold' : 'text-slate-600'
+                                    }`}
+                                >
+                                    All ({records.length})
+                                </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('expense')}
+                                className="flex flex-col items-center justify-center gap-1.5 py-1 px-1 rounded-xl transition-all cursor-pointer select-none active:scale-95"
+                            >
+                                <div
+                                    className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                                        activeTab === 'expense'
+                                            ? 'bg-rose-600 text-white shadow-md shadow-rose-500/35 ring-4 ring-rose-50'
+                                            : 'bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <ArrowUpRightIcon className="w-5 h-5" />
+                                </div>
+                                <span
+                                    className={`text-[11px] font-bold tracking-tight text-center transition-colors truncate max-w-full ${
+                                        activeTab === 'expense' ? 'text-rose-600 font-extrabold' : 'text-slate-600'
+                                    }`}
+                                >
+                                    Expenses ({records.filter(r => r.type === 'expense').length})
+                                </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('inflow')}
+                                className="flex flex-col items-center justify-center gap-1.5 py-1 px-1 rounded-xl transition-all cursor-pointer select-none active:scale-95"
+                            >
+                                <div
+                                    className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                                        activeTab === 'inflow'
+                                            ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/35 ring-4 ring-emerald-50'
+                                            : 'bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <ArrowDownLeftIcon className="w-5 h-5" />
+                                </div>
+                                <span
+                                    className={`text-[11px] font-bold tracking-tight text-center transition-colors truncate max-w-full ${
+                                        activeTab === 'inflow' ? 'text-emerald-600 font-extrabold' : 'text-slate-600'
+                                    }`}
+                                >
+                                    Cash In ({records.filter(r => r.type === 'inflow').length})
+                                </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('summary')}
+                                className="flex flex-col items-center justify-center gap-1.5 py-1 px-1 rounded-xl transition-all cursor-pointer select-none active:scale-95"
+                            >
+                                <div
+                                    className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                                        activeTab === 'summary'
+                                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/35 ring-4 ring-indigo-50'
+                                            : 'bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <BarChartIcon className="w-5 h-5" />
+                                </div>
+                                <span
+                                    className={`text-[11px] font-bold tracking-tight text-center transition-colors truncate max-w-full ${
+                                        activeTab === 'summary' ? 'text-indigo-600 font-extrabold' : 'text-slate-600'
+                                    }`}
+                                >
+                                    Breakdown
+                                </span>
                             </button>
                         </div>
                     </div>
@@ -1457,69 +1647,83 @@ const PattyCash = ({ currentUser = {}, onDeleteConfirm }) => {
             {/* KPI OVERVIEW CARDS (EXACT STYLE MATCHING DEPOSIT.JSX) */}
             {!showModal && (
                 <div className="space-y-4 md:space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
                         {/* Cash in Hand Card */}
-                        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Cash In Hand</p>
-                                    <h3 className={`text-xl font-bold mt-1 ${summary.currentBalance < 0 ? 'text-rose-600' : 'text-blue-600'}`}>
-                                        ৳{summary.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </h3>
+                        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                            <div>
+                                <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                                    <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Cash In Hand</p>
+                                    <div className="p-1.5 sm:p-2 bg-blue-50 text-blue-600 rounded-lg sm:rounded-xl border border-blue-100 shadow-sm shrink-0">
+                                        <WalletIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                                    </div>
                                 </div>
-                                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 shadow-sm">
-                                    <WalletIcon className="w-5 h-5" />
-                                </div>
+                                <h3
+                                    className={`text-[13px] sm:text-base lg:text-xl font-black tracking-tight leading-snug break-words ${summary.currentBalance < 0 ? 'text-rose-600' : 'text-blue-600'}`}
+                                    title={`৳${summary.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                >
+                                    {summary.currentBalance < 0
+                                        ? `-৳${Math.abs(summary.currentBalance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                        : `৳${summary.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                </h3>
                             </div>
-                            <p className="text-[11px] text-gray-400 mt-2 font-medium">Net available petty cash</p>
+                            <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">Net available petty cash</p>
                         </div>
 
                         {/* Total Cash In Card */}
-                        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Cash In</p>
-                                    <h3 className="text-xl font-bold text-emerald-600 mt-1">
-                                        ৳{summary.totalIn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </h3>
+                        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                            <div>
+                                <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                                    <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Total Cash In</p>
+                                    <div className="p-1.5 sm:p-2 bg-emerald-50 text-emerald-600 rounded-lg sm:rounded-xl border border-emerald-100 shadow-sm shrink-0">
+                                        <ArrowDownLeftIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                                    </div>
                                 </div>
-                                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 shadow-sm">
-                                    <ArrowDownLeftIcon className="w-5 h-5" />
-                                </div>
+                                <h3
+                                    className="text-[13px] sm:text-base lg:text-xl font-black text-emerald-600 tracking-tight leading-snug break-words"
+                                    title={`৳${summary.totalIn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                >
+                                    ৳{summary.totalIn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </h3>
                             </div>
-                            <p className="text-[11px] text-gray-400 mt-2 font-medium">Fund replenished / added</p>
+                            <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">Fund replenished / added</p>
                         </div>
 
                         {/* Total Expense Card */}
-                        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Expenses</p>
-                                    <h3 className="text-xl font-bold text-rose-600 mt-1">
-                                        ৳{summary.totalOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </h3>
+                        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                            <div>
+                                <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                                    <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Total Expenses</p>
+                                    <div className="p-1.5 sm:p-2 bg-rose-50 text-rose-600 rounded-lg sm:rounded-xl border border-rose-100 shadow-sm shrink-0">
+                                        <ArrowUpRightIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                                    </div>
                                 </div>
-                                <div className="p-3 bg-rose-50 text-rose-600 rounded-xl border border-rose-100 shadow-sm">
-                                    <ArrowUpRightIcon className="w-5 h-5" />
-                                </div>
+                                <h3
+                                    className="text-[13px] sm:text-base lg:text-xl font-black text-rose-600 tracking-tight leading-snug break-words"
+                                    title={`৳${summary.totalOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                >
+                                    ৳{summary.totalOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </h3>
                             </div>
-                            <p className="text-[11px] text-gray-400 mt-2 font-medium">Disbursed petty expenses</p>
+                            <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">Disbursed petty expenses</p>
                         </div>
 
                         {/* Today's Expense Card */}
-                        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Today's Expense</p>
-                                    <h3 className="text-xl font-bold text-amber-600 mt-1">
-                                        ৳{summary.todayExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </h3>
+                        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                            <div>
+                                <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                                    <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Today's Expense</p>
+                                    <div className="p-1.5 sm:p-2 bg-amber-50 text-amber-600 rounded-lg sm:rounded-xl border border-amber-100 shadow-sm shrink-0">
+                                        <ClockIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                                    </div>
                                 </div>
-                                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl border border-amber-100 shadow-sm">
-                                    <ClockIcon className="w-5 h-5" />
-                                </div>
+                                <h3
+                                    className="text-[13px] sm:text-base lg:text-xl font-black text-amber-600 tracking-tight leading-snug break-words"
+                                    title={`৳${summary.todayExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                >
+                                    ৳{summary.todayExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </h3>
                             </div>
-                            <p className="text-[11px] text-gray-400 mt-2 font-medium">Disbursed today</p>
+                            <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">Disbursed today</p>
                         </div>
                     </div>
 
@@ -1573,136 +1777,354 @@ const PattyCash = ({ currentUser = {}, onDeleteConfirm }) => {
                             )}
                         </div>
                     ) : (
-                        /* TAB CONTENT: Table */
-                        <div className="patty-cash-table-card">
-                            <div className="patty-cash-table-wrapper">
-                                <table className="patty-cash-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Date</th>
-                                            <th>Voucher No</th>
-                                            <th>Type</th>
-                                            <th>Category</th>
-                                            <th>Paid To / Source</th>
-                                            <th>Particulars</th>
-                                            <th className="text-right">Cash In (Tk)</th>
-                                            <th className="text-right">Cash Out (Tk)</th>
-                                            <th className="text-right">Balance (Tk)</th>
-                                            <th>Entry By</th>
-                                            <th className="text-center w-28">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {isLoading ? (
+                        <>
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block patty-cash-table-card">
+                                <div className="patty-cash-table-wrapper">
+                                    <table className="patty-cash-table">
+                                        <thead>
                                             <tr>
-                                                <td colSpan="11" className="py-12 text-center text-gray-500">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                                                        <span>Loading patty cash records...</span>
-                                                    </div>
-                                                </td>
+                                                <th>Date</th>
+                                                <th>Voucher No</th>
+                                                <th>Type</th>
+                                                <th>Category</th>
+                                                <th>Paid To / Source</th>
+                                                <th>Particulars</th>
+                                                <th className="text-right">Cash In (Tk)</th>
+                                                <th className="text-right">Cash Out (Tk)</th>
+                                                <th className="text-right">Balance (Tk)</th>
+                                                <th>Entry By</th>
+                                                <th className="text-center w-28">Actions</th>
                                             </tr>
-                                        ) : recordsWithBalance.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="11" className="py-12 text-center text-gray-400">
-                                                    No patty cash transactions found matching your criteria.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            recordsWithBalance.map((item) => (
-                                                <tr key={item._id}>
-                                                    <td className="whitespace-nowrap font-medium text-gray-900">
-                                                        {formatDate(item.date) || item.date}
-                                                    </td>
-                                                    <td className="whitespace-nowrap">
-                                                        <button
-                                                            onClick={() => setSelectedVoucher(item)}
-                                                            className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded transition cursor-pointer"
-                                                            title="Click to view printable voucher slip"
-                                                        >
-                                                            {item.voucherNo || 'N/A'}
-                                                        </button>
-                                                    </td>
-                                                    <td className="whitespace-nowrap">
-                                                        {item.type === 'inflow' ? (
-                                                            <span className="badge-inflow">
-                                                                <ArrowDownLeftIcon className="w-3 h-3" />
-                                                                <span>Cash In</span>
-                                                            </span>
-                                                        ) : (
-                                                            <span className="badge-expense">
-                                                                <ArrowUpRightIcon className="w-3 h-3" />
-                                                                <span>Expense</span>
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="whitespace-nowrap text-[13px] font-medium text-gray-700">
-                                                        {item.category || 'General'}
-                                                    </td>
-                                                    <td className="max-w-[150px] truncate" title={item.partyName}>
-                                                        <span className="font-medium text-gray-800">{item.partyName || '—'}</span>
-                                                        {item.paymentMode && (
-                                                            <span className="text-[10px] text-gray-400 block font-normal">
-                                                                {item.paymentMode}{item.bankName ? ` • ${item.bankName}` : ''}
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="max-w-[200px] truncate" title={item.particulars}>
-                                                        <span className="text-gray-600 text-xs">{item.particulars || '—'}</span>
-                                                    </td>
-                                                    <td className="text-right whitespace-nowrap font-semibold text-emerald-600">
-                                                        {item.type === 'inflow'
-                                                            ? `৳ ${Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                                                            : '—'}
-                                                    </td>
-                                                    <td className="text-right whitespace-nowrap font-semibold text-rose-600">
-                                                        {item.type === 'expense'
-                                                            ? `৳ ${Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                                                            : '—'}
-                                                    </td>
-                                                    <td className={`text-right whitespace-nowrap font-bold ${item.runningBalance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                                                        ৳ {item.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                    </td>
-                                                    <td className="whitespace-nowrap text-[13px] font-medium text-gray-600">
-                                                        {item.entryBy || 'Admin'}
-                                                    </td>
-                                                    <td className="text-center whitespace-nowrap">
-                                                        <div className="inline-flex items-center gap-1">
-                                                            <button
-                                                                onClick={() => setSelectedVoucher(item)}
-                                                                className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition cursor-pointer"
-                                                                title="Print / View Voucher"
-                                                            >
-                                                                <PrinterIcon className="w-4 h-4" />
-                                                            </button>
-                                                            {canEdit && (
-                                                                <button
-                                                                    onClick={() => handleOpenEditModal(item)}
-                                                                    className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition cursor-pointer"
-                                                                    title="Edit Transaction"
-                                                                >
-                                                                    <EditIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                            {canDelete && (
-                                                                <button
-                                                                    onClick={() => handleDeleteClick(item)}
-                                                                    className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition cursor-pointer"
-                                                                    title="Delete Transaction"
-                                                                >
-                                                                    <TrashIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
+                                        </thead>
+                                        <tbody>
+                                            {isLoading ? (
+                                                <tr>
+                                                    <td colSpan="11" className="py-12 text-center text-gray-500">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                                            <span>Loading patty cash records...</span>
                                                         </div>
                                                     </td>
                                                 </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
+                                            ) : recordsWithBalance.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="11" className="py-12 text-center text-gray-400">
+                                                        No patty cash transactions found matching your criteria.
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                recordsWithBalance.map((item) => (
+                                                    <tr key={item._id}>
+                                                        <td className="whitespace-nowrap font-medium text-gray-900">
+                                                            {formatDate(item.date) || item.date}
+                                                        </td>
+                                                        <td className="whitespace-nowrap">
+                                                            <button
+                                                                onClick={() => setSelectedVoucher(item)}
+                                                                className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded transition cursor-pointer"
+                                                                title="Click to view printable voucher slip"
+                                                            >
+                                                                {item.voucherNo || 'N/A'}
+                                                            </button>
+                                                        </td>
+                                                        <td className="whitespace-nowrap">
+                                                            {item.type === 'inflow' ? (
+                                                                <span className="badge-inflow">
+                                                                    <ArrowDownLeftIcon className="w-3 h-3" />
+                                                                    <span>Cash In</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="badge-expense">
+                                                                    <ArrowUpRightIcon className="w-3 h-3" />
+                                                                    <span>Expense</span>
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="whitespace-nowrap text-[13px] font-medium text-gray-700">
+                                                            {item.category || 'General'}
+                                                        </td>
+                                                        <td className="max-w-[150px] truncate" title={item.partyName}>
+                                                            <span className="font-medium text-gray-800">{item.partyName || '—'}</span>
+                                                            {item.paymentMode && (
+                                                                <span className="text-[10px] text-gray-400 block font-normal">
+                                                                    {item.paymentMode}{item.bankName ? ` • ${item.bankName}` : ''}
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="max-w-[200px] truncate" title={item.particulars}>
+                                                            <span className="text-gray-600 text-xs">{item.particulars || '—'}</span>
+                                                        </td>
+                                                        <td className="text-right whitespace-nowrap font-semibold text-emerald-600">
+                                                            {item.type === 'inflow'
+                                                                ? `৳ ${Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                : '—'}
+                                                        </td>
+                                                        <td className="text-right whitespace-nowrap font-semibold text-rose-600">
+                                                            {item.type === 'expense'
+                                                                ? `৳ ${Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                : '—'}
+                                                        </td>
+                                                        <td className={`text-right whitespace-nowrap font-bold ${item.runningBalance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                                            ৳ {item.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="whitespace-nowrap text-[13px] font-medium text-gray-600">
+                                                            {item.entryBy || 'Admin'}
+                                                        </td>
+                                                        <td className="text-center whitespace-nowrap">
+                                                            <div className="inline-flex items-center gap-1">
+                                                                <button
+                                                                    onClick={() => setSelectedVoucher(item)}
+                                                                    className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition cursor-pointer"
+                                                                    title="Print / View Voucher"
+                                                                >
+                                                                    <PrinterIcon className="w-4 h-4" />
+                                                                </button>
+                                                                {canEdit && (
+                                                                    <button
+                                                                        onClick={() => handleOpenEditModal(item)}
+                                                                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition cursor-pointer"
+                                                                        title="Edit Transaction"
+                                                                    >
+                                                                        <EditIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                                {canDelete && (
+                                                                    <button
+                                                                        onClick={() => handleDeleteClick(item)}
+                                                                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition cursor-pointer"
+                                                                        title="Delete Transaction"
+                                                                    >
+                                                                        <TrashIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <TableScrollNav count={recordsWithBalance.length} />
                             </div>
-                            <TableScrollNav count={recordsWithBalance.length} />
-                        </div>
+
+                            {/* Mobile Transaction Cards View */}
+                            <div className="md:hidden space-y-3 pb-36">
+                                {isLoading ? (
+                                    <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
+                                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                                        <p className="text-xs text-gray-400 font-medium">Loading transactions...</p>
+                                    </div>
+                                ) : recordsWithBalance.length === 0 ? (
+                                    <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
+                                        <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl mx-auto flex items-center justify-center mb-3">
+                                            <WalletIcon className="w-6 h-6" />
+                                        </div>
+                                        <p className="text-sm font-bold text-gray-700">No transactions found</p>
+                                        <p className="text-xs text-gray-400 mt-1">
+                                            {searchQuery || isFilterActive
+                                                ? "Try adjusting your search or filter criteria."
+                                                : "No petty cash records recorded yet."}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    recordsWithBalance.map((item, idx) => {
+                                        const isExpanded = expandedRecordId === (item._id || idx);
+                                        const isCashIn = item.type === 'inflow';
+                                        return (
+                                            <div
+                                                key={item._id || idx}
+                                                className={`patty-cash-mobile-card bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${
+                                                    isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-100 shadow-sm hover:border-gray-200'
+                                                }`}
+                                            >
+                                                {/* Mobile Card Header - Clickable for Collapse / Expand */}
+                                                <div
+                                                    onClick={(e) => {
+                                                        const willExpand = !isExpanded;
+                                                        setExpandedRecordId(willExpand ? (item._id || idx) : null);
+                                                        if (willExpand) {
+                                                            const cardEl = e.currentTarget.closest('.patty-cash-mobile-card') || e.currentTarget;
+                                                            setTimeout(() => {
+                                                                cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                                            }, 120);
+                                                        }
+                                                    }}
+                                                    className="p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50/50 transition-colors flex items-center justify-between gap-3"
+                                                >
+                                                    {/* Left Side: Date, Voucher No Tag, Category & Party */}
+                                                    <div className="space-y-1 text-left min-w-0 flex-1">
+                                                        <div className="text-[11px] sm:text-xs font-semibold text-gray-400">
+                                                            {formatDate(item.date) || item.date}
+                                                        </div>
+                                                        <div>
+                                                            <span className="inline-block font-mono font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded text-[11px]">
+                                                                {item.voucherNo || 'N/A'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="font-bold text-gray-900 text-sm leading-tight truncate">
+                                                            {item.category || 'General'}
+                                                        </div>
+                                                        {item.partyName && (
+                                                            <div className="text-xs text-gray-500 font-medium truncate">
+                                                                {item.partyName}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Right Side: Type Badge (Expense / Cash In), Amount & Running Balance */}
+                                                    <div className="text-right shrink-0 flex flex-col items-end">
+                                                        <span
+                                                            className={`inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                                                                isCashIn
+                                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                                            }`}
+                                                        >
+                                                            {isCashIn ? <ArrowDownLeftIcon className="w-3 h-3" /> : <ArrowUpRightIcon className="w-3 h-3" />}
+                                                            {isCashIn ? 'Cash In' : 'Expense'}
+                                                        </span>
+                                                        <div className={`font-black text-base sm:text-lg mt-1 ${isCashIn ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {isCashIn ? '+' : '-'}৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </div>
+                                                        <div className="text-[11px] text-gray-400 font-medium mt-0.5">
+                                                            Bal: <span className={`font-bold ${item.runningBalance < 0 ? 'text-rose-600' : 'text-gray-700'}`}>
+                                                                {Number(item.runningBalance || 0) < 0
+                                                                    ? `-৳${Math.abs(Number(item.runningBalance || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                                                                    : `৳${Number(item.runningBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Expandable Details Body */}
+                                                {isExpanded && (
+                                                    <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
+                                                        <div className="space-y-2 pt-3 border-t border-gray-100 text-xs sm:text-sm">
+                                                            <div className="flex items-start">
+                                                                <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Voucher No -</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedVoucher(item);
+                                                                    }}
+                                                                    className="font-mono font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded transition cursor-pointer text-xs"
+                                                                >
+                                                                    {item.voucherNo || 'N/A'} (View Slip)
+                                                                </button>
+                                                            </div>
+
+                                                            <div className="flex items-start">
+                                                                <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Date -</span>
+                                                                <span className="font-semibold text-gray-800 flex-1">{formatDate(item.date) || item.date}</span>
+                                                            </div>
+
+                                                            <div className="flex items-start">
+                                                                <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Type -</span>
+                                                                <span className={`font-bold ${isCashIn ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                    {isCashIn ? 'Cash In (Replenishment)' : 'Expense (Cash Out)'}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="flex items-start">
+                                                                <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Category -</span>
+                                                                <span className="font-semibold text-gray-800 flex-1">{item.category || 'General'}</span>
+                                                            </div>
+
+                                                            <div className="flex items-start">
+                                                                <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">
+                                                                    {isCashIn ? 'Received From -' : 'Paid To -'}
+                                                                </span>
+                                                                <span className="font-semibold text-gray-800 flex-1">{item.partyName || '—'}</span>
+                                                            </div>
+
+                                                            {item.particulars && (
+                                                                <div className="flex items-start">
+                                                                    <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Particulars -</span>
+                                                                    <span className="text-gray-700 flex-1">{item.particulars}</span>
+                                                                </div>
+                                                            )}
+
+                                                            <div className="flex items-start">
+                                                                <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Payment Mode -</span>
+                                                                <span className="font-semibold text-gray-800 flex-1">
+                                                                    {item.paymentMode || 'Cash'}
+                                                                    {item.bankName ? ` • ${item.bankName}` : ''}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="flex items-start">
+                                                                <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Amount -</span>
+                                                                <span className={`font-black text-sm ${isCashIn ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                    ৳{Number(item.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="flex items-start">
+                                                                <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Running Bal -</span>
+                                                                <span className={`font-bold ${item.runningBalance < 0 ? 'text-rose-600' : 'text-gray-900'}`}>
+                                                                    ৳{Number(item.runningBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="flex items-start">
+                                                                <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Entry By -</span>
+                                                                <span className="text-gray-600 flex-1">{item.entryBy || 'Admin'}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Action Buttons Row */}
+                                                        <div className="flex items-center gap-2 pt-3 mt-3 border-t border-gray-100">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedVoucher(item);
+                                                                }}
+                                                                className="flex-1 py-2 px-3 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                                                            >
+                                                                <PrinterIcon className="w-3.5 h-3.5" />
+                                                                <span>Voucher Slip</span>
+                                                            </button>
+
+                                                            {canEdit && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleOpenEditModal(item);
+                                                                    }}
+                                                                    className="flex-1 py-2 px-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                                                                >
+                                                                    <EditIcon className="w-3.5 h-3.5" />
+                                                                    <span>Edit</span>
+                                                                </button>
+                                                            )}
+
+                                                            {canDelete && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDeleteClick(item);
+                                                                    }}
+                                                                    className="flex-1 py-2 px-3 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                                                                >
+                                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                                    <span>Delete</span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </>
                     )}
                 </div>
             )}

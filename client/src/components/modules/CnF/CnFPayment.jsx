@@ -165,12 +165,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                 </span>
             );
         }
-        return (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <CheckIcon className="w-3 h-3 text-emerald-600" />
-                Completed
-            </span>
-        );
+        return null;
     };
 
     // Requested Filter State
@@ -2223,7 +2218,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                                                         {p.discount > 0 ? `৳${(parseFloat(p.discount) || 0).toLocaleString('en-IN')}` : '-'}
                                                     </td>
                                                     <td className="px-4 py-3 whitespace-nowrap text-center">
-                                                        {getStatusBadge(p)}
+                                                        {getStatusBadge(p) || <span className="text-gray-400 text-xs font-normal">—</span>}
                                                     </td>
                                                     {canShowEntryBy && (
                                                         <td className="px-4 py-3 whitespace-nowrap text-center">
@@ -2346,33 +2341,41 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                                                 style={isHighlighted ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                                 onClick={() => toggleCard(p._id)}
                                             >
-                                            <div className="flex flex-col gap-2">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2 overflow-hidden mr-2">
-                                                        <div className="text-base md:text-lg font-black text-gray-900 truncate tracking-tight">{p.cnfName}</div>
-                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">{p.cnfType}</span>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <div className="text-base md:text-lg font-black text-gray-900">৳{(parseFloat(p.amount) || 0).toLocaleString('en-IN')}</div>
-                                                        {p.discount > 0 && <div className="text-[10px] font-bold text-emerald-600 leading-none">(-৳{(parseFloat(p.discount) || 0).toLocaleString('en-IN')})</div>}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-4">
+                                                <div className="flex justify-between items-start gap-3">
+                                                    {/* Left Side: C&F Name & Type, Date */}
+                                                    <div className="space-y-1.5 min-w-0 flex-1 text-left">
+                                                        <div className="flex items-center gap-2 overflow-hidden">
+                                                            <div className="text-base md:text-lg font-black text-gray-900 truncate tracking-tight">{p.cnfName}</div>
+                                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">{p.cnfType}</span>
+                                                        </div>
                                                         <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
                                                             <CalendarIcon className="w-3.5 h-3.5" />
                                                             {formatDate(p.date)}
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
-                                                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                                            {p.method}
-                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        {getStatusBadge(p)}
+
+                                                    {/* Right Side: Method Tag, Amount, Discount, Status Badge */}
+                                                    <div className="text-right flex flex-col items-end shrink-0 space-y-1">
+                                                        {p.method && (
+                                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 border border-blue-200">
+                                                                {p.method}
+                                                            </span>
+                                                        )}
+                                                        <div className="text-base md:text-lg font-black text-gray-900 leading-tight">
+                                                            ৳{(parseFloat(p.amount) || 0).toLocaleString('en-IN')}
+                                                        </div>
+                                                        {p.discount > 0 && (
+                                                            <div className="text-[10px] font-bold text-emerald-600 leading-none">
+                                                                (-৳{(parseFloat(p.discount) || 0).toLocaleString('en-IN')})
+                                                            </div>
+                                                        )}
+                                                        {getStatusBadge(p) && (
+                                                            <div className="pt-0.5">
+                                                                {getStatusBadge(p)}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
-                                            </div>
 
                                             {isExpanded && (
                                                 <div className="mt-5 pt-5 border-t border-gray-100 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
