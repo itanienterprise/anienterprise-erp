@@ -8,6 +8,7 @@ const Stock = require('../models/Stock');
 const Sale = require('../models/Sale');
 const Purchase = require('../models/Purchase');
 const PurchaseReceive = require('../models/PurchaseReceive');
+const Product = require('../models/Product');
 
 const normalize = (str) => (str || '').toString().trim().toLowerCase();
 const cleanLc = (str) => (str || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
@@ -599,8 +600,9 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
         console.error('Error cascading product update to PackingList:', err);
     }
 
-    // 5. UPDATE STOCK RECORDS
+    // 5. UPDATE STOCK RECORDS (use internal ERP catalog product name to match Sales)
     try {
+        const targetStockName = (newName || targetIpName).trim();
         const stockDocs = await Stock.find({});
         for (const doc of stockDocs) {
             const stock = getDecrypted(doc);
@@ -610,13 +612,13 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             const normStockProd = normalize(stock.productName || stock.product);
             const matchesStockName = oldNameCandidates.has(normStockProd);
 
-            if (targetIpName && matchesStockName) {
-                if (stock.productName && normalize(stock.productName) !== normalize(targetIpName)) {
-                    stock.productName = targetIpName;
+            if (targetStockName && matchesStockName) {
+                if (stock.productName && normalize(stock.productName) !== normalize(targetStockName)) {
+                    stock.productName = targetStockName;
                     stockModified = true;
                 }
-                if (stock.product && normalize(stock.product) !== normalize(targetIpName)) {
-                    stock.product = targetIpName;
+                if (stock.product && normalize(stock.product) !== normalize(targetStockName)) {
+                    stock.product = targetStockName;
                     stockModified = true;
                 }
             }
@@ -624,8 +626,8 @@ async function cascadeProductUpdate({ productId, oldProduct = {}, newProduct = {
             if (Array.isArray(stock.entries)) {
                 stock.entries.forEach(entry => {
                     const normEntryProd = normalize(entry.productName);
-                    if (targetIpName && oldNameCandidates.has(normEntryProd) && normEntryProd !== normalize(targetIpName)) {
-                        entry.productName = targetIpName;
+                    if (targetStockName && oldNameCandidates.has(normEntryProd) && normEntryProd !== normalize(targetStockName)) {
+                        entry.productName = targetStockName;
                         stockModified = true;
                     }
                 });
@@ -855,7 +857,36 @@ async function syncAllIpProductNames() {
             }
         }
 
-        // Sync Stocks
+        // Sync Stocks (normalize IP trade names to internal catalog product names)
+        const productDocs = await Product.find({}).lean();
+        const catalogMap = new Map();
+        for (const p of productDocs) {
+            const dec = getDecrypted(p);
+            if (dec && dec.name) {
+                catalogMap.set(normalize(dec.name), dec.name);
+                if (dec.ipName) {
+                    catalogMap.set(normalize(dec.ipName), dec.name);
+                    const stripped = normalize(dec.ipName.replace(/\(.*?\)/g, ''));
+                    if (stripped) catalogMap.set(stripped, dec.name);
+                }
+            }
+        }
+        catalogMap.set('wheat bran', 'BRAN');
+        catalogMap.set('wheat bran (feed grade)', 'BRAN');
+        catalogMap.set('red whole lentils', 'MOSUR DAL');
+        catalogMap.set('red whole lentils (masur)', 'MOSUR DAL');
+        catalogMap.set('grass pea', 'KHESHARI DAL');
+        catalogMap.set('grass pea (khesari dal)', 'KHESHARI DAL');
+        catalogMap.set('groundnut (in shell)', 'GROUND NUT');
+        catalogMap.set('non basmati boiled rice', 'RICE');
+        catalogMap.set('fresh tomato', 'TOMATO');
+        catalogMap.set('fresh valencia oranges (malta)', 'MALTA');
+        catalogMap.set('fresh orange', 'ORANGE');
+        catalogMap.set('fresh anar (pomegranate)', 'ANAR (POMEGRANATE)');
+        catalogMap.set('anar', 'ANAR (POMEGRANATE)');
+        catalogMap.set('drum stick (sozna data)', 'DRUM STICK');
+        catalogMap.set('fresh ginger (non-seed)', 'GINGER');
+
         const stockDocs = await Stock.find({});
         for (const doc of stockDocs) {
             const stock = getDecrypted(doc);
@@ -865,12 +896,14 @@ async function syncAllIpProductNames() {
             const ipNo = normalize(stock.ipNo || stock.ipNumber);
             const currentIpProd = ipMap[ipNo];
             if (ipNo && currentIpProd) {
-                if (stock.productName && normalize(stock.productName) !== normalize(currentIpProd)) {
-                    stock.productName = currentIpProd;
+                const normIpProd = normalize(currentIpProd);
+                const catalogProd = catalogMap.get(normIpProd) || currentIpProd;
+                if (stock.productName && normalize(stock.productName) !== normalize(catalogProd)) {
+                    stock.productName = catalogProd;
                     modified = true;
                 }
-                if (stock.product && normalize(stock.product) !== normalize(currentIpProd)) {
-                    stock.product = currentIpProd;
+                if (stock.product && normalize(stock.product) !== normalize(catalogProd)) {
+                    stock.product = catalogProd;
                     modified = true;
                 }
             }

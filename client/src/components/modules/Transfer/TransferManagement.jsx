@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { createPortal } from 'react-dom';
-import { SearchIcon, XIcon, ChevronDownIcon, TrashIcon, EyeIcon, RotateCcwIcon, PrinterIcon, PlusIcon, FileTextIcon, HomeIcon, BoxIcon, EditIcon, CheckIcon } from '../../Icons';
+import { SearchIcon, XIcon, ChevronDownIcon, TrashIcon, EyeIcon, RotateCcwIcon, PrinterIcon, PlusIcon, FileTextIcon, HomeIcon, BoxIcon, EditIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
@@ -80,28 +80,37 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const deferredSearch = useDeferredValue(searchQuery);
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [viewingTransfer, setViewingTransfer] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 50;
 
     const rowRefs = useRef({});
     const handledHighlightRef = useRef(null);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [deferredSearch, isRequestedOnly]);
 
     useEffect(() => {
         if (!highlightId) return;
         if (handledHighlightRef.current === String(highlightId)) return;
 
         const cleanH = String(highlightId).toLowerCase().trim();
-        const targetItem = (transferLogs || []).find(t => 
+        const targetIndex = (transferLogs || []).findIndex(t => 
             String(t._id) === cleanH ||
             (t.truckNo && String(t.truckNo).toLowerCase().trim() === cleanH) ||
             (t.gatePassNo && String(t.gatePassNo).toLowerCase().trim() === cleanH) ||
             (t.lcNo && String(t.lcNo).toLowerCase().trim() === cleanH)
         );
 
-        if (targetItem) {
+        if (targetIndex !== -1) {
+            const targetItem = transferLogs[targetIndex];
             const isReq = (targetItem.status || '').toLowerCase() === 'requested';
             setIsRequestedOnly(isReq);
             handledHighlightRef.current = String(highlightId);
+            setCurrentPage(Math.floor(targetIndex / itemsPerPage) + 1);
         } else if (isRequestedNotif) {
             setIsRequestedOnly(true);
             handledHighlightRef.current = String(highlightId);
@@ -183,33 +192,44 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             setIsLoading(true);
         }
         try {
-            const cacheBuster = `_t=${Date.now()}`;
+            // Leverage cached sales & damages unless form is active or data not loaded yet
+            const salesCached = queryClient.getQueryData(['sales']);
+            const damagesCached = queryClient.getQueryData(['damages']);
+
             const [whRes, stockRes, prodRes, salesRes, damagesRes, baselineRes] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['rawWarehouses'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : []),
-                    staleTime: 0
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : []),
+                    staleTime: 30000
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['stock'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : []),
-                    staleTime: 0
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : []),
+                    staleTime: 30000
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['products'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : []),
+                    staleTime: 60000
                 }),
-                queryClient.fetchQuery({
-                    queryKey: ['sales'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['damages'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/damages`).then(r => Array.isArray(r.data) ? r.data : [])
-                }),
+                salesCached && Array.isArray(salesCached) && salesCached.length > 0
+                    ? Promise.resolve(salesCached)
+                    : queryClient.fetchQuery({
+                        queryKey: ['sales'],
+                        queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : []),
+                        staleTime: 60000
+                    }),
+                damagesCached && Array.isArray(damagesCached) && damagesCached.length > 0
+                    ? Promise.resolve(damagesCached)
+                    : queryClient.fetchQuery({
+                        queryKey: ['damages'],
+                        queryFn: () => axios.get(`${API_BASE_URL}/api/damages`).then(r => Array.isArray(r.data) ? r.data : []),
+                        staleTime: 60000
+                    }),
                 queryClient.fetchQuery({
                     queryKey: ['stock-baseline-active'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock-baseline/active`).then(r => r.data || null).catch(() => null)
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock-baseline/active`).then(r => r.data || null).catch(() => null),
+                    staleTime: 60000
                 })
             ]);
 
@@ -524,13 +544,18 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         fetchEmployees();
 
         const socket = getSocket();
+        let updateTimer = null;
+
         const handleRealtimeUpdate = (data) => {
             const mod = (data?.module || '').toLowerCase().trim();
             if (!mod || ['warehouses', 'warehouse', 'stock', 'transfer', 'transfers', 'products', 'sales', 'damages', 'all'].includes(mod)) {
-                queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
-                queryClient.invalidateQueries({ queryKey: ['warehouses'] });
-                queryClient.invalidateQueries({ queryKey: ['stock'] });
-                fetchData(true);
+                if (updateTimer) clearTimeout(updateTimer);
+                updateTimer = setTimeout(() => {
+                    queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
+                    queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+                    queryClient.invalidateQueries({ queryKey: ['stock'] });
+                    fetchData(true);
+                }, 400);
             }
         };
 
@@ -553,9 +578,10 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
 
         const pollTimer = setInterval(() => {
             fetchData(true);
-        }, 15000);
+        }, 60000);
 
         return () => {
+            if (updateTimer) clearTimeout(updateTimer);
             if (socket) {
                 socket.off('data_updated', handleRealtimeUpdate);
                 socket.off('connect', handleConnect);
@@ -1065,12 +1091,14 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
 
     // Filtered Transfer Logs
     const displayLogs = useMemo(() => {
+        const q = (deferredSearch || '').toLowerCase().trim();
         return (transferLogs || []).filter(t => {
             if (isRequestedOnly) {
                 if (t.status !== 'Requested') return false;
             } else {
                 if (t.status === 'Requested') return false;
             }
+            if (!q) return true;
             const fromWh = (t.fromWh || '').toLowerCase();
             const toWh = (t.toWh || t.whName || t.warehouse || '').toLowerCase();
             const prod = (t.productName || t.product || '').toLowerCase();
@@ -1079,11 +1107,16 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             const truck = (t.truckNo || '').toLowerCase();
             const entryBy = (t.entryByName || t.entryBy || '').toLowerCase();
             const entryByFn = getEntryByFirstName(t).toLowerCase();
-            const q = searchQuery.toLowerCase().trim();
 
-            return !q || fromWh.includes(q) || toWh.includes(q) || prod.includes(q) || brand.includes(q) || lc.includes(q) || truck.includes(q) || entryBy.includes(q) || entryByFn.includes(q);
+            return fromWh.includes(q) || toWh.includes(q) || prod.includes(q) || brand.includes(q) || lc.includes(q) || truck.includes(q) || entryBy.includes(q) || entryByFn.includes(q);
         });
-    }, [transferLogs, searchQuery, isRequestedOnly, employeesMap]);
+    }, [transferLogs, deferredSearch, isRequestedOnly, employeesMap]);
+
+    const totalPages = Math.max(1, Math.ceil(displayLogs.length / itemsPerPage));
+    const paginatedLogs = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return displayLogs.slice(start, start + itemsPerPage);
+    }, [displayLogs, currentPage, itemsPerPage]);
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -1490,7 +1523,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                                         </td>
                                     </tr>
                                 ) : (
-                                    displayLogs.map((item, idx) => {
+                                    paginatedLogs.map((item, idx) => {
                                         const bagVal = parseFloat(item.transferPkt ?? item.whPkt ?? item.inHousePacket ?? 0);
                                         const qtyVal = parseFloat(item.transferQty ?? item.whQty ?? item.inHouseQuantity ?? 0);
 
@@ -1618,6 +1651,32 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                             </tbody>
                         </table>
                     </div>
+                    {totalPages > 1 && (
+                        <div className="px-4 py-3 bg-white border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                            <div>
+                                Showing <span className="font-bold text-gray-700">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-bold text-gray-700">{Math.min(currentPage * itemsPerPage, displayLogs.length)}</span> of <span className="font-bold text-gray-700">{displayLogs.length}</span> transfers
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className="p-1.5 px-3 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed font-medium transition-colors"
+                                >
+                                    Previous
+                                </button>
+                                <span className="px-2 font-bold text-gray-700">
+                                    Page {currentPage} of {totalPages}
+                                </span>
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage >= totalPages}
+                                    className="p-1.5 px-3 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed font-medium transition-colors"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <TableScrollNav count={displayLogs.length} />
                 </div>
             )}

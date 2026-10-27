@@ -1,0 +1,2233 @@
+{
+  "6a6099a0fe45c0fe1bcaa557": {
+    "productsList": [
+      {
+        "productName": "FRESH DATES",
+        "hsCode": "0804.10.19",
+        "quantity": "100000",
+        "bagCount": "",
+        "packingType": "CARATES",
+        "netWeight": "100000",
+        "grossWeight": "107400",
+        "rate": ".398",
+        "amount": "39800.00",
+        "freight": ".002",
+        "totalFreight": "200.00"
+      }
+    ],
+    "lcNumber": "073926010115"
+  },
+  "6a60b596fe45c0fe1bcaa569": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "246000",
+        "bagCount": "",
+        "packingType": "CARATES",
+        "netWeight": "246000",
+        "grossWeight": "264300",
+        "rate": ".395",
+        "amount": "97170.00",
+        "freight": ".005",
+        "totalFreight": "1230.00"
+      }
+    ],
+    "lcNumber": "087326010624"
+  },
+  "6a66eea3dbac24c13fcb8514": {
+    "productsList": [
+      {
+        "productName": "FRESH DATES",
+        "hsCode": "0804.10.19",
+        "quantity": "100000",
+        "bagCount": "",
+        "packingType": "CARATES",
+        "netWeight": "100000",
+        "grossWeight": "107500",
+        "rate": ".398",
+        "amount": "39800.00",
+        "freight": ".002",
+        "totalFreight": "200.00"
+      }
+    ],
+    "lcNumber": "073926010115"
+  },
+  "6a69dd46ececa32e6f4b64e4": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "110000",
+        "bagCount": "",
+        "packingType": "CARATES",
+        "netWeight": "110000",
+        "grossWeight": "118200",
+        "rate": ".348",
+        "amount": "38280.00",
+        "freight": ".002",
+        "totalFreight": "220.00"
+      }
+    ],
+    "lcNumber": "073926010110"
+  },
+  "6a7070083c34bf5759797c5c": {
+    "productsList": [
+      {
+        "productName": "GREEN CHILI",
+        "hsCode": "0709.60.19",
+        "quantity": "300000",
+        "bagCount": "",
+        "packingType": "MESH BSG",
+        "netWeight": "300000",
+        "grossWeight": "322200",
+        "rate": "0.295",
+        "amount": "88500.00",
+        "freight": "0.005",
+        "totalFreight": "1500.00"
+      }
+    ],
+    "lcNumber": "087326010652"
+  },
+  "6a7079c63c34bf5759797c69": {
+    "productsList": [
+      {
+        "productName": "GREEN CHILI",
+        "hsCode": "0709.60.19",
+        "quantity": "300000",
+        "bagCount": "",
+        "packingType": "Mesh Bag",
+        "netWeight": "300000",
+        "grossWeight": "322200",
+        "rate": ".298",
+        "amount": "89400.00",
+        "freight": ".002",
+        "totalFreight": "600.00"
+      }
+    ],
+    "lcNumber": "073926010119"
+  },
+  "6a708b3e3c34bf5759797c84": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "280000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "280000",
+        "grossWeight": "300800",
+        "rate": ".345",
+        "amount": "96600.00",
+        "freight": ".005",
+        "totalFreight": "1400.00"
+      }
+    ],
+    "lcNumber": "087326010658"
+  },
+  "6a708ed13c34bf5759797c92": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "285000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "285000",
+        "grossWeight": "306100",
+        "rate": "0.348",
+        "amount": "99180.00",
+        "freight": "0.002",
+        "totalFreight": "570.00"
+      }
+    ],
+    "lcNumber": "087326010660"
+  },
+  "6a744b8b279a7fdf78fc1de8": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "244000",
+        "bagCount": "",
+        "packingType": "CARATES",
+        "netWeight": "244000",
+        "grossWeight": "262100",
+        "rate": ".395",
+        "amount": "96380.00",
+        "freight": "0.005",
+        "totalFreight": "1220.00"
+      }
+    ],
+    "lcNumber": "087326010668"
+  },
+  "6a7450f0279a7fdf78fc1ded": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "275000",
+        "bagCount": "",
+        "packingType": "CARATES",
+        "netWeight": "275000",
+        "grossWeight": "295400",
+        "rate": ".348",
+        "amount": "95700.00",
+        "freight": ".002",
+        "totalFreight": "550.00"
+      }
+    ],
+    "lcNumber": "087326010666"
+  },
+  "6a785dd8de2ea4e166258b52": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "274000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "274000",
+        "grossWeight": "294300",
+        "rate": ".345",
+        "amount": "94530.00",
+        "freight": ".005",
+        "totalFreight": "1370.00"
+      }
+    ],
+    "lcNumber": "087326010675"
+  },
+  "6a79acd38571d51e0b3c4e05": {
+    "productsList": [
+      {
+        "productName": "WHEAT",
+        "hsCode": "1001.19.90",
+        "quantity": "250000",
+        "bagCount": "",
+        "packingType": "P.P BAGS",
+        "netWeight": "250000",
+        "grossWeight": "251700",
+        "rate": ".308",
+        "amount": "77000.00",
+        "freight": ".002",
+        "totalFreight": "500.00"
+      }
+    ],
+    "lcNumber": "087326010674"
+  },
+  "6a7afa7911f41d5bc20805c0": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "273000",
+        "bagCount": "",
+        "packingType": "BOX/CARATE",
+        "netWeight": "273000",
+        "grossWeight": "293300",
+        "rate": "0.345",
+        "amount": "94185.00",
+        "freight": ".005",
+        "totalFreight": "1365.00"
+      }
+    ],
+    "lcNumber": "087326010684"
+  },
+  "6a7afca811f41d5bc20805c8": {
+    "productsList": [
+      {
+        "productName": "GREEN CHILI",
+        "hsCode": "0709.60.19",
+        "quantity": "330000",
+        "bagCount": "",
+        "packingType": "MESH BAGS",
+        "netWeight": "330000",
+        "grossWeight": "337900",
+        "rate": ".295",
+        "amount": "97350.00",
+        "freight": "0.005",
+        "totalFreight": "1650.00"
+      }
+    ],
+    "lcNumber": "087326010685"
+  },
+  "6a7b012b11f41d5bc20805d1": {
+    "productsList": [
+      {
+        "productName": "RED WHOLE LENTILS",
+        "hsCode": "0713.40.90",
+        "quantity": "128000",
+        "bagCount": "",
+        "packingType": "P.P BAGS",
+        "netWeight": "128000",
+        "grossWeight": "128853.20",
+        "rate": "1.178",
+        "amount": "150784.00",
+        "freight": ".002",
+        "totalFreight": "256.00"
+      }
+    ],
+    "lcNumber": "087326010686"
+  },
+  "6a7c3f2001aa41188a4f9b36": {
+    "productsList": [
+      {
+        "productName": "CHICK PEAS",
+        "hsCode": "0713.20.90",
+        "quantity": "80000",
+        "bagCount": "",
+        "packingType": "P.P BAGS",
+        "netWeight": "80000",
+        "grossWeight": "80799.8",
+        "rate": ".753",
+        "amount": "60240.00",
+        "freight": "0.002",
+        "totalFreight": "160.00"
+      },
+      {
+        "productName": "YELLOW PEA BRAN",
+        "hsCode": "2302.50.00",
+        "quantity": "32000",
+        "bagCount": "",
+        "packingType": "P.P BAGS",
+        "netWeight": "32000",
+        "grossWeight": "32480",
+        "rate": ".353",
+        "amount": "11296.00",
+        "freight": "0.002",
+        "totalFreight": "64.00"
+      }
+    ],
+    "lcNumber": "087326010687"
+  },
+  "6a7d8c133ed22a9a9ec987a9": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "284000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "284000",
+        "grossWeight": "305100",
+        "rate": ".345",
+        "amount": "97980.00",
+        "freight": ".005",
+        "totalFreight": "1420.00"
+      }
+    ],
+    "lcNumber": "087326010691"
+  },
+  "6a81825aa418726920f00098": {
+    "productsList": [
+      {
+        "productName": "RED WHOLE LENTILS",
+        "hsCode": "0713.40.90",
+        "quantity": "128000",
+        "bagCount": "",
+        "packingType": "P.P BAGS",
+        "netWeight": "128000",
+        "grossWeight": "129279.80",
+        "rate": "1.180",
+        "amount": "151040.00",
+        "freight": ".002",
+        "totalFreight": "256.00"
+      }
+    ],
+    "lcNumber": "087326010693"
+  },
+  "6a818778a418726920f000aa": {
+    "productsList": [
+      {
+        "productName": "MUNG DAL",
+        "hsCode": "0713.31.90",
+        "quantity": "127000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "127000",
+        "grossWeight": "128269.90",
+        "rate": ".883",
+        "amount": "112141.00",
+        "freight": ".002",
+        "totalFreight": "254.00"
+      }
+    ],
+    "lcNumber": "073926010121"
+  },
+  "6a81a6d6c5d951355122552b": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "272000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "272000",
+        "grossWeight": "292300",
+        "rate": ".345",
+        "amount": "93840.00",
+        "freight": "0.005",
+        "totalFreight": "1360.00"
+      }
+    ],
+    "lcNumber": "087326010695"
+  },
+  "6a82e008d95bca4ba8dca6ea": {
+    "productsList": [
+      {
+        "productName": "GROUNDNUT (IN SHELL)",
+        "hsCode": "1202.41.90",
+        "quantity": "72000",
+        "bagCount": "",
+        "packingType": "PP BAGS",
+        "netWeight": "72000",
+        "grossWeight": "72411.40",
+        "rate": ".783",
+        "amount": "56376.00",
+        "freight": ".002",
+        "totalFreight": "144.00"
+      }
+    ],
+    "lcNumber": "073926010122"
+  },
+  "6a82eb0ed95bca4ba8dca6f4": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "299000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "299000",
+        "grossWeight": "321200",
+        "rate": ".345",
+        "amount": "103155.00",
+        "freight": ".005",
+        "totalFreight": "1495.00"
+      }
+    ],
+    "lcNumber": "087326010699"
+  },
+  "6a853f09af67b8be9305f3c8": {
+    "productsList": [
+      {
+        "productName": "FRESH DATES",
+        "hsCode": "0804.10.19",
+        "quantity": "150000",
+        "bagCount": "",
+        "packingType": "CRATES",
+        "netWeight": "50000",
+        "grossWeight": "53800",
+        "rate": ".395",
+        "amount": "59250.00",
+        "freight": ".005",
+        "totalFreight": "750.00"
+      }
+    ],
+    "lcNumber": "073926010112"
+  },
+  "6a85496faf67b8be9305f3d2": {
+    "productsList": [
+      {
+        "productName": "RED WHOLE LENTILS",
+        "hsCode": "0713.40.90",
+        "quantity": "42000",
+        "bagCount": "",
+        "packingType": "P.P BAGS  ",
+        "netWeight": "42000",
+        "grossWeight": "42420.00",
+        "rate": "1.180",
+        "amount": "49560.00",
+        "freight": ".002",
+        "totalFreight": "84.00"
+      }
+    ],
+    "lcNumber": "087326010693"
+  },
+  "6a855ca9af67b8be9305f3e0": {
+    "productsList": [
+      {
+        "productName": "WHEAT",
+        "hsCode": "1001.19.90",
+        "quantity": "165000",
+        "bagCount": "3300",
+        "packingType": "BAGS",
+        "netWeight": "165000",
+        "grossWeight": "168300",
+        "rate": ".304",
+        "amount": "50160.00",
+        "freight": ".002",
+        "totalFreight": "330.00"
+      }
+    ],
+    "lcNumber": "087326010698"
+  },
+  "6a86b14c664e757e9edfbc28": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "279000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "279000",
+        "grossWeight": "299700",
+        "rate": ".348",
+        "amount": "97092.00",
+        "freight": ".002",
+        "totalFreight": "558.00"
+      }
+    ],
+    "lcNumber": "073926010130"
+  },
+  "6a86d7aa664e757e9edfbc2e": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "295000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "295000",
+        "grossWeight": "316900",
+        "rate": "0.345",
+        "amount": "101775.00",
+        "freight": "0.005",
+        "totalFreight": "1475.00"
+      }
+    ],
+    "lcNumber": "087326010707"
+  },
+  "6a8ac3c3fa96aa3e05ab7fe8": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "283000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "283000",
+        "grossWeight": "304000",
+        "rate": ".348",
+        "amount": "98484.00",
+        "freight": ".002",
+        "totalFreight": "566.00"
+      }
+    ],
+    "lcNumber": "073926010131"
+  },
+  "6a8ac5d3fa96aa3e05ab7fed": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "246000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "246000",
+        "grossWeight": "264300",
+        "rate": ".395",
+        "amount": "97170.00",
+        "freight": ".005",
+        "totalFreight": "1230.00"
+      }
+    ],
+    "lcNumber": "073926010132"
+  },
+  "6a8ae558fa96aa3e05ab800f": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "245000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "245000",
+        "grossWeight": "263200",
+        "rate": ".398",
+        "amount": "97510.00",
+        "freight": ".002",
+        "totalFreight": "490.00"
+      }
+    ],
+    "lcNumber": "087326010710"
+  },
+  "6a8bfd4fafe11d89f2391c50": {
+    "productsList": [
+      {
+        "productName": "DRUM STICK (SOZNA DATA)",
+        "hsCode": "0709.99.90",
+        "quantity": "100000",
+        "bagCount": "",
+        "packingType": "JUTE BAGS",
+        "netWeight": "100000",
+        "grossWeight": "102500",
+        "rate": ".298",
+        "amount": "29800.00",
+        "freight": ".002",
+        "totalFreight": "200.00"
+      }
+    ],
+    "lcNumber": "087326010714"
+  },
+  "6a8c1762afe11d89f2391c5d": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "295000",
+        "bagCount": "",
+        "packingType": "CARATE",
+        "netWeight": "295000",
+        "grossWeight": "316900",
+        "rate": ".345",
+        "amount": "101775.00",
+        "freight": ".005",
+        "totalFreight": "1475.00"
+      }
+    ],
+    "lcNumber": "087326010716"
+  },
+  "6a8c228aafe11d89f2391c6c": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "165000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "165000",
+        "grossWeight": "177300",
+        "rate": ".345",
+        "amount": "56925.00",
+        "freight": ".005",
+        "totalFreight": "825.00"
+      }
+    ],
+    "lcNumber": "073926010135"
+  },
+  "6a8d6b14b960ae1aea3222f4": {
+    "productsList": [
+      {
+        "productName": "MUNG DAL",
+        "hsCode": "0713.31.90",
+        "quantity": "85000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "85000",
+        "grossWeight": "85849.9",
+        "rate": ".983",
+        "amount": "83555.00",
+        "freight": ".002",
+        "totalFreight": "170.00"
+      },
+      {
+        "productName": "RED WHOLE LENTILS",
+        "hsCode": "0713.40.90",
+        "quantity": "86000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "86000",
+        "grossWeight": "86859.8",
+        "rate": "1.153",
+        "amount": "99158.00",
+        "freight": ".002",
+        "totalFreight": "172.00"
+      }
+    ],
+    "lcNumber": "073926010137"
+  },
+  "6a8d6ffbb960ae1aea3222ff": {
+    "productsList": [
+      {
+        "productName": "CHICK PEAS",
+        "hsCode": "0713.20.90",
+        "quantity": "84000",
+        "bagCount": "",
+        "packingType": "P.P BAG",
+        "netWeight": "84000",
+        "grossWeight": "84000",
+        "rate": ".753",
+        "amount": "63252.00",
+        "freight": "0.002",
+        "totalFreight": "168.00"
+      },
+      {
+        "productName": "YELLOW PEA BRAN",
+        "hsCode": "2302.50.00",
+        "quantity": "16000",
+        "bagCount": "",
+        "packingType": "P.P BAG",
+        "netWeight": "16000",
+        "grossWeight": "16000",
+        "rate": ".353",
+        "amount": "5648.00",
+        "freight": "0.002",
+        "totalFreight": "32.00"
+      }
+    ],
+    "lcNumber": "087326010687"
+  },
+  "6a900a83e5696371b845ccac": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "290000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "290000",
+        "grossWeight": "311500",
+        "rate": ".345",
+        "amount": "100050.00",
+        "freight": ".005",
+        "totalFreight": "1450.00"
+      }
+    ],
+    "lcNumber": "087326010722"
+  },
+  "6a902468e5696371b845cce8": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "289000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "289000",
+        "grossWeight": "310400",
+        "rate": ".340",
+        "amount": "98260.00",
+        "freight": ".005",
+        "totalFreight": "1445.00"
+      }
+    ],
+    "lcNumber": "087326010724"
+  },
+  "6a940307445d8499a7f5fac5": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "247000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "247000",
+        "grossWeight": "265300",
+        "rate": ".395",
+        "amount": "97565.00",
+        "freight": ".005",
+        "totalFreight": "1235.00"
+      }
+    ],
+    "lcNumber": "087326010732"
+  },
+  "6a96918049e2209fba061bf8": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "282000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "282000",
+        "grossWeight": "302900",
+        "rate": ".345",
+        "amount": "97290.00",
+        "freight": ".005",
+        "totalFreight": "1410.00"
+      }
+    ],
+    "lcNumber": "087326010739"
+  },
+  "6a97fc3cf51fb40af4668482": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "280000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "280000",
+        "grossWeight": "300800",
+        "rate": ".348",
+        "amount": "97440.00",
+        "freight": ".002",
+        "totalFreight": "560.00"
+      }
+    ],
+    "lcNumber": "087326010743"
+  },
+  "6a99400a2b91a52d1a7fd366": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "292000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "292000",
+        "grossWeight": "313700",
+        "rate": ".338",
+        "amount": "98696.00",
+        "freight": ".002",
+        "totalFreight": "584.00"
+      }
+    ],
+    "lcNumber": "073926010142"
+  },
+  "6a994aff2b91a52d1a7fd377": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "118000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "118000",
+        "grossWeight": "126800",
+        "rate": ".395",
+        "amount": "46610.00",
+        "freight": ".005",
+        "totalFreight": "590.00"
+      }
+    ],
+    "lcNumber": "087326010747"
+  },
+  "6a9962492b91a52d1a7fd381": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "305000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "305000",
+        "grossWeight": "327600",
+        "rate": ".335",
+        "amount": "102175.00",
+        "freight": ".005",
+        "totalFreight": "1525.00"
+      }
+    ],
+    "lcNumber": "087326010750"
+  },
+  "6a9d32141a65f38839b8a33b": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "61000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "61000",
+        "grossWeight": "65600",
+        "rate": ".348",
+        "amount": "21228.00",
+        "freight": ".002",
+        "totalFreight": "122.00"
+      },
+      {
+        "productName": "FRESH GRAPES",
+        "hsCode": "0806.10.90",
+        "quantity": "20000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "20000",
+        "grossWeight": "21500",
+        "rate": ".498",
+        "amount": "9960.00",
+        "freight": ".002",
+        "totalFreight": "40.00"
+      }
+    ],
+    "lcNumber": "073926010131"
+  },
+  "6a9d54ea1a65f38839b8a350": {
+    "productsList": [
+      {
+        "productName": "CHICK PEAS",
+        "hsCode": "0713.20.90",
+        "quantity": "171000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "171000",
+        "grossWeight": "172710",
+        "rate": ".743",
+        "amount": "127053.00",
+        "freight": ".002",
+        "totalFreight": "342.00"
+      }
+    ],
+    "lcNumber": "087326010751"
+  },
+  "6a9d577d1a65f38839b8a357": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "302000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "302000",
+        "grossWeight": "324400",
+        "rate": ".345",
+        "amount": "104190.00",
+        "freight": ".005",
+        "totalFreight": "1510.00"
+      }
+    ],
+    "lcNumber": "087326010752"
+  },
+  "6a9e85f83b4f540d88caa521": {
+    "productsList": [
+      {
+        "productName": "RED WHOLE LENTILS",
+        "hsCode": "0713.40.90",
+        "quantity": "86000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "86000",
+        "grossWeight": "86859.80",
+        "rate": "1.160",
+        "amount": "99760.00",
+        "freight": ".002",
+        "totalFreight": "172.00"
+      },
+      {
+        "productName": "MUNG DAL",
+        "hsCode": "0713.31.90",
+        "quantity": "43000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "43000",
+        "grossWeight": "43429.90",
+        "rate": ".810",
+        "amount": "34830.00",
+        "freight": ".002",
+        "totalFreight": "86.00"
+      }
+    ],
+    "lcNumber": "087326010754"
+  },
+  "6a9e90a83b4f540d88caa52b": {
+    "productsList": [
+      {
+        "productName": "YELLOW PEA BRAN",
+        "hsCode": "2302.50.00",
+        "quantity": "62000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "62000",
+        "grossWeight": "62930",
+        "rate": ".323",
+        "amount": "20026.00",
+        "freight": ".002",
+        "totalFreight": "124.00"
+      }
+    ],
+    "lcNumber": "087326010756"
+  },
+  "6a9fda0b72ef9dcf71abe63b": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "275000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "275000",
+        "grossWeight": "295400",
+        "rate": ".345",
+        "amount": "94875.00",
+        "freight": ".005",
+        "totalFreight": "1375.00"
+      }
+    ],
+    "lcNumber": "073926010146"
+  },
+  "6aa11c32d171c8edd0811b3b": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "302000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "302000",
+        "grossWeight": "324500",
+        "rate": ".335",
+        "amount": "101170.00",
+        "freight": ".005",
+        "totalFreight": "1510.00"
+      }
+    ],
+    "lcNumber": "073926010147"
+  },
+  "6aa14e1bd171c8edd0811b78": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "243000",
+        "bagCount": "",
+        "packingType": "CRATE/BOX",
+        "netWeight": "243000",
+        "grossWeight": "261000",
+        "rate": ".395",
+        "amount": "95985.00",
+        "freight": ".005",
+        "totalFreight": "1215.00"
+      }
+    ],
+    "lcNumber": "087326010761"
+  },
+  "6aa25b127a49bde55d430b16": {
+    "productsList": [
+      {
+        "productName": "GREEN CHILI",
+        "hsCode": "0709.60.19",
+        "quantity": "50000",
+        "bagCount": "",
+        "packingType": "Mesh Bag",
+        "netWeight": "50000",
+        "grossWeight": "53800",
+        "rate": ".298",
+        "amount": "14900.00",
+        "freight": ".002",
+        "totalFreight": "100.00"
+      }
+    ],
+    "lcNumber": "073926010119"
+  },
+  "6aa289e97a49bde55d430b4c": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "292000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "292000",
+        "grossWeight": "313700",
+        "rate": ".335",
+        "amount": "97820.00",
+        "freight": ".005",
+        "totalFreight": "1460.00"
+      }
+    ],
+    "lcNumber": "073926010148"
+  },
+  "6aa28d707a49bde55d430b5f": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "288000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "288000",
+        "grossWeight": "309400",
+        "rate": ".338",
+        "amount": "97344.00",
+        "freight": ".002",
+        "totalFreight": "576.00"
+      }
+    ],
+    "lcNumber": "073926010149"
+  },
+  "6aa297167a49bde55d430b64": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "244000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "244000",
+        "grossWeight": "262100",
+        "rate": ".395",
+        "amount": "96380.00",
+        "freight": ".005",
+        "totalFreight": "1220.00"
+      }
+    ],
+    "lcNumber": "073926010150"
+  },
+  "6aa7c70a26ca252b19d3d163": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "272000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "275000",
+        "grossWeight": "292200",
+        "rate": ".345",
+        "amount": "93840.00",
+        "freight": ".005",
+        "totalFreight": "1360.00"
+      }
+    ],
+    "lcNumber": "087326010765"
+  },
+  "6aa9024d51000780c99e5155": {
+    "productsList": [
+      {
+        "productName": "DRUM STICK (SOZNA DATA)",
+        "hsCode": "0709.99.90",
+        "quantity": "28000",
+        "bagCount": "",
+        "packingType": "MESH BAGS",
+        "netWeight": "28000",
+        "grossWeight": "28700",
+        "rate": ".298",
+        "amount": "8344.00",
+        "freight": ".002",
+        "totalFreight": "56.00"
+      },
+      {
+        "productName": "GREEN CHILI",
+        "hsCode": "0709.60.19",
+        "quantity": "172000",
+        "bagCount": "",
+        "packingType": "MESH BAGS",
+        "netWeight": "172000",
+        "grossWeight": "176100",
+        "rate": ".298",
+        "amount": "51256.00",
+        "freight": ".002",
+        "totalFreight": "344.00"
+      }
+    ],
+    "lcNumber": "087326010714"
+  },
+  "6aa90d7d51000780c99e516a": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "303000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "303000",
+        "grossWeight": "325500",
+        "rate": ".340",
+        "amount": "103020.00",
+        "freight": ".005",
+        "totalFreight": "1515.00"
+      }
+    ],
+    "lcNumber": "087326010770"
+  },
+  "6aa92a93c25453c5b4a16f42": {
+    "productsList": [
+      {
+        "productName": "WHEAT",
+        "hsCode": "1001.19.90",
+        "quantity": "330000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "330000",
+        "grossWeight": "336600",
+        "rate": ".318",
+        "amount": "104940.00",
+        "freight": ".002",
+        "totalFreight": "660.00"
+      }
+    ],
+    "lcNumber": "087326010773"
+  },
+  "6aaa7b26a0f7d3f55dec5afa": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "276000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "276000",
+        "grossWeight": "296500",
+        "rate": ".345",
+        "amount": "95220.00",
+        "freight": ".005",
+        "totalFreight": "1380.00"
+      }
+    ],
+    "lcNumber": "087326010782"
+  },
+  "6aabb9ee670cc51e277a5a93": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "297000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "297000",
+        "grossWeight": "320000",
+        "rate": ".345",
+        "amount": "102465.00",
+        "freight": ".005",
+        "totalFreight": "1485.00"
+      }
+    ],
+    "lcNumber": "087326010785"
+  },
+  "6aabbb84670cc51e277a5aa8": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "152000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX, Mesh Bag",
+        "netWeight": "152000",
+        "grossWeight": "163300",
+        "rate": ".345",
+        "amount": "52440.00",
+        "freight": ".005",
+        "totalFreight": "760.00"
+      },
+      {
+        "productName": "GREEN CHILI",
+        "hsCode": "0709.60.19",
+        "quantity": "150000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX, Mesh Bag",
+        "netWeight": "150000",
+        "grossWeight": "153500",
+        "rate": ".300",
+        "amount": "45000.00",
+        "freight": ".005",
+        "totalFreight": "750.00"
+      }
+    ],
+    "lcNumber": "087326010786"
+  },
+  "6aaf7efd98adb054c0fd9a63": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "297000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "297000",
+        "grossWeight": "320000",
+        "rate": ".335",
+        "amount": "99495.00",
+        "freight": ".005",
+        "totalFreight": "1485.00"
+      }
+    ],
+    "lcNumber": "073926010147"
+  },
+  "6aafb44098adb054c0fd9ba2": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "298000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "298000",
+        "grossWeight": "320100",
+        "rate": ".345",
+        "amount": "102810.00",
+        "freight": ".005",
+        "totalFreight": "1490.00"
+      }
+    ],
+    "lcNumber": "087326010788"
+  },
+  "6aafc05098adb054c0fd9bb2": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "247000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "247000",
+        "grossWeight": "265300",
+        "rate": ".395",
+        "amount": "97565.00",
+        "freight": ".005",
+        "totalFreight": "1235.00"
+      }
+    ],
+    "lcNumber": "087326010790"
+  },
+  "6ab0f2eff8380ba05633736d": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "565000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "565000",
+        "grossWeight": "606900",
+        "rate": ".345",
+        "amount": "194925.00",
+        "freight": ".005",
+        "totalFreight": "2825.00"
+      }
+    ],
+    "lcNumber": "087326010791"
+  },
+  "6ab0f9a2f8380ba0563373dd": {
+    "productsList": [
+      {
+        "productName": "MUNG DAL",
+        "hsCode": "0713.31.90",
+        "quantity": "84000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "84000",
+        "grossWeight": "84840",
+        "rate": ".883",
+        "amount": "74172.00",
+        "freight": ".002",
+        "totalFreight": "168.00"
+      }
+    ],
+    "lcNumber": "087326010792"
+  },
+  "6ab0fa23f8380ba0563373f3": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "282000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "282000",
+        "grossWeight": "302900",
+        "rate": ".348",
+        "amount": "98136.00",
+        "freight": ".002",
+        "totalFreight": "564.00"
+      }
+    ],
+    "lcNumber": "087326010793"
+  },
+  "6ab21a7bfe9c72d98b926e0e": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "130000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "130000",
+        "grossWeight": "139700",
+        "rate": ".395",
+        "amount": "51350.00",
+        "freight": ".005",
+        "totalFreight": "650.00"
+      }
+    ],
+    "lcNumber": "087326010747"
+  },
+  "6ab23f52fe9c72d98b926eb6": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "303000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "303000",
+        "grossWeight": "325500",
+        "rate": ".340",
+        "amount": "103020.00",
+        "freight": ".005",
+        "totalFreight": "1515.00"
+      }
+    ],
+    "lcNumber": "087326010795"
+  },
+  "6ab3a2cac141242046da4e49": {
+    "productsList": [
+      {
+        "productName": "GREEN CHILI",
+        "hsCode": "0709.60.19",
+        "quantity": "200000",
+        "bagCount": "",
+        "packingType": "Mesh Bag",
+        "netWeight": "200000",
+        "grossWeight": "204800",
+        "rate": ".298",
+        "amount": "59600.00",
+        "freight": ".002",
+        "totalFreight": "400.00"
+      }
+    ],
+    "lcNumber": "073926010157"
+  },
+  "6ab4c193d65c2cb2af6c31db": {
+    "productsList": [
+      {
+        "productName": "GREEN CHILI",
+        "hsCode": "0709.60.19",
+        "quantity": "200000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX, Mesh Bag",
+        "netWeight": "200000",
+        "grossWeight": "204800",
+        "rate": ".300",
+        "amount": "60000.00",
+        "freight": ".005",
+        "totalFreight": "1000.00"
+      }
+    ],
+    "lcNumber": "087326010786"
+  },
+  "6ab4f6bad65c2cb2af6c3250": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "285000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "285000",
+        "grossWeight": "306100",
+        "rate": "0.345",
+        "amount": "98325.00",
+        "freight": ".005",
+        "totalFreight": "1425.00"
+      }
+    ],
+    "lcNumber": "073926010159"
+  },
+  "6ab8c80c531423bd7b1bcc24": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "273000",
+        "bagCount": "",
+        "packingType": "CRATE/BOX",
+        "netWeight": "273000",
+        "grossWeight": "293300",
+        "rate": ".345",
+        "amount": "94185.00",
+        "freight": ".005",
+        "totalFreight": "1365.00"
+      }
+    ],
+    "lcNumber": "087326010785"
+  },
+  "6ab8d82d531423bd7b1bcc6d": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "245000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "245000",
+        "grossWeight": "263200",
+        "rate": ".395",
+        "amount": "96775.00",
+        "freight": ".005",
+        "totalFreight": "1225.00"
+      }
+    ],
+    "lcNumber": "073926010160"
+  },
+  "6ab8e35321c83c74aa0c7633": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "318000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "318000",
+        "grossWeight": "341600",
+        "rate": ".340",
+        "amount": "108120.00",
+        "freight": ".005",
+        "totalFreight": "1590.00"
+      }
+    ],
+    "lcNumber": "073926010161"
+  },
+  "6ab8e4bc21c83c74aa0c7644": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "290000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "290000",
+        "grossWeight": "311500",
+        "rate": ".345",
+        "amount": "100050.00",
+        "freight": ".005",
+        "totalFreight": "1450.00"
+      }
+    ],
+    "lcNumber": "087326010805"
+  },
+  "6ab8e7f021c83c74aa0c7656": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "155000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "155000",
+        "grossWeight": "166500",
+        "rate": ".395",
+        "amount": "61225.00",
+        "freight": ".005",
+        "totalFreight": "775.00"
+      }
+    ],
+    "lcNumber": "087326010806"
+  },
+  "6aba217272f6f923e42a5c3a": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "246000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "246000",
+        "grossWeight": "264300",
+        "rate": ".398",
+        "amount": "97908.00",
+        "freight": ".002",
+        "totalFreight": "492.00"
+      }
+    ],
+    "lcNumber": "073926010164"
+  },
+  "6aba233d72f6f923e42a5c4a": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "240000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "240000",
+        "grossWeight": "257800",
+        "rate": ".348",
+        "amount": "83520.00",
+        "freight": ".002",
+        "totalFreight": "480.00"
+      }
+    ],
+    "lcNumber": "073926010163"
+  },
+  "6aba34d072f6f923e42a5cec": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "292000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "292000",
+        "grossWeight": "313700",
+        "rate": ".345",
+        "amount": "100740.00",
+        "freight": ".005",
+        "totalFreight": "1460.00"
+      }
+    ],
+    "lcNumber": "087326010810"
+  },
+  "6abb814f07336256406f3f4e": {
+    "productsList": [
+      {
+        "productName": "WHEAT",
+        "hsCode": "1001.19.90",
+        "quantity": "100000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "100000",
+        "grossWeight": "102000",
+        "rate": ".308",
+        "amount": "30800.00",
+        "freight": ".002",
+        "totalFreight": "200.00"
+      }
+    ],
+    "lcNumber": "087326010812"
+  },
+  "6abb890a07336256406f3f65": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "318000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "318000",
+        "grossWeight": "341600",
+        "rate": ".345",
+        "amount": "109710.00",
+        "freight": ".005",
+        "totalFreight": "1590.00"
+      }
+    ],
+    "lcNumber": "087326010813"
+  },
+  "6abcc741f4fa74b70153ace5": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "110000",
+        "bagCount": "",
+        "packingType": "Export Standard",
+        "netWeight": "110000",
+        "grossWeight": "118140",
+        "rate": ".395",
+        "amount": "43450.00",
+        "freight": ".005",
+        "totalFreight": "550.00"
+      }
+    ],
+    "lcNumber": "087326010806"
+  },
+  "6abe28f52d0615ef8ffae448": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "243000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "243000",
+        "grossWeight": "257800",
+        "rate": "0.395",
+        "amount": "95985.00",
+        "freight": ".005",
+        "totalFreight": "1215.00"
+      }
+    ],
+    "lcNumber": "073926010169"
+  },
+  "6abe42482d0615ef8ffae495": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "258000",
+        "bagCount": "",
+        "packingType": "CARATE",
+        "netWeight": "258000",
+        "grossWeight": "277100",
+        "rate": ".395",
+        "amount": "101910.00",
+        "freight": ".005",
+        "totalFreight": "1290.00"
+      }
+    ],
+    "lcNumber": "087326010820"
+  },
+  "6ac1f9dfa4452d3bcfaf5cbe": {
+    "productsList": [
+      {
+        "productName": "FRESH ORANGE",
+        "hsCode": "0805.10.90",
+        "quantity": "260000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "260000",
+        "grossWeight": "279300",
+        "rate": ".345",
+        "amount": "89700.00",
+        "freight": ".005",
+        "totalFreight": "1300.00"
+      }
+    ],
+    "lcNumber": "087326010825"
+  },
+  "6ac1ffbda4452d3bcfaf6410": {
+    "productsList": [
+      {
+        "productName": "FRESH VALENCIA ORANGES (MALTA)",
+        "hsCode": "0805.10.90",
+        "quantity": "34000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "34000",
+        "grossWeight": "36600",
+        "rate": ".398",
+        "amount": "13532.00",
+        "freight": ".002",
+        "totalFreight": "68.00"
+      }
+    ],
+    "lcNumber": "073926010162"
+  },
+  "6ac20747a4452d3bcfaf6a6d": {
+    "productsList": [
+      {
+        "productName": "WHEAT",
+        "hsCode": "1001.19.90",
+        "quantity": "120000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "120000",
+        "grossWeight": "122400",
+        "rate": ".308",
+        "amount": "36960.00",
+        "freight": ".002",
+        "totalFreight": "240.00"
+      }
+    ],
+    "lcNumber": "087326010812"
+  },
+  "6ac4f702e37c56e181276074": {
+    "productsList": [
+      {
+        "productName": "MUNG DAL",
+        "hsCode": "0713.31.90",
+        "quantity": "42510",
+        "bagCount": "1417",
+        "packingType": "Export Standard",
+        "netWeight": "42510",
+        "grossWeight": "42793.40",
+        "rate": "1.095",
+        "amount": "46548.45",
+        "freight": ".005",
+        "totalFreight": "212.55"
+      }
+    ],
+    "lcNumber": "073926010170"
+  },
+  "6ac78d71c81c382faae7ecc2": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "98000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "98000",
+        "grossWeight": "105300",
+        "rate": ".395",
+        "amount": "38710.00",
+        "freight": ".005",
+        "totalFreight": "490.00"
+      },
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "140000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "140000",
+        "grossWeight": "150400",
+        "rate": ".395",
+        "amount": "55300.00",
+        "freight": ".005",
+        "totalFreight": "700.00"
+      },
+      {
+        "productName": "FRESH ORANGE",
+        "hsCode": "0805.10.90",
+        "quantity": "78000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "78000",
+        "grossWeight": "83800",
+        "rate": ".345",
+        "amount": "26910.00",
+        "freight": ".005",
+        "totalFreight": "390.00"
+      }
+    ],
+    "lcNumber": "087326010842"
+  },
+  "6acb30380a8c9aa733c2d74f": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "210000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "210000",
+        "grossWeight": "225600",
+        "rate": ".395",
+        "amount": "82950.00",
+        "freight": ".005",
+        "totalFreight": "1050.00"
+      }
+    ],
+    "lcNumber": "087326010820"
+  },
+  "6acb36150a8c9aa733c2d78a": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "208000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "208000",
+        "grossWeight": "223400",
+        "rate": "0.395",
+        "amount": "82160.00",
+        "freight": ".005",
+        "totalFreight": "1040.00"
+      }
+    ],
+    "lcNumber": "073926010169"
+  },
+  "6acb8e197661077aa4918117": {
+    "productsList": [
+      {
+        "productName": "RED WHOLE LENTILS",
+        "hsCode": "0713.40.90",
+        "quantity": "127500",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "127500",
+        "grossWeight": "128775",
+        "rate": "1.118",
+        "amount": "142545.00",
+        "freight": ".002",
+        "totalFreight": "255.00"
+      },
+      {
+        "productName": "MUNG DAL",
+        "hsCode": "0713.31.90",
+        "quantity": "85500",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "85500",
+        "grossWeight": "86355",
+        "rate": ".918",
+        "amount": "78489.00",
+        "freight": ".002",
+        "totalFreight": "171.00"
+      }
+    ],
+    "lcNumber": "087326010847"
+  },
+  "6acc9e80b5465e75b414a933": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "138000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "138000",
+        "grossWeight": "148300",
+        "rate": ".395",
+        "amount": "54510.00",
+        "freight": ".005",
+        "totalFreight": "690.00"
+      }
+    ],
+    "lcNumber": "087326010849"
+  },
+  "6accae6db5465e75b414a977": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "250000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "250000",
+        "grossWeight": "268500",
+        "rate": ".395",
+        "amount": "98750.00",
+        "freight": ".005",
+        "totalFreight": "1250.00"
+      }
+    ],
+    "lcNumber": "073926010175"
+  },
+  "6accc20eb5465e75b414a994": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "252000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "252000",
+        "grossWeight": "270700",
+        "rate": ".398",
+        "amount": "100296.00",
+        "freight": ".002",
+        "totalFreight": "504.00"
+      }
+    ],
+    "lcNumber": "087326010852"
+  },
+  "6accc314b5465e75b414a9a5": {
+    "productsList": [
+      {
+        "productName": "FRESH ANAR (POMEGRANATE)",
+        "hsCode": "0810.90.90",
+        "quantity": "242000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "242000",
+        "grossWeight": "260000",
+        "rate": ".395",
+        "amount": "95590.00",
+        "freight": ".005",
+        "totalFreight": "1210.00"
+      }
+    ],
+    "lcNumber": "087326010853"
+  },
+  "6acdc24859185a5c7649da9c": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "386000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "386000",
+        "grossWeight": "414600",
+        "rate": ".345",
+        "amount": "133170.00",
+        "freight": ".005",
+        "totalFreight": "1930.00"
+      }
+    ],
+    "lcNumber": "087326010813"
+  },
+  "6acde9bb59185a5c7649dc40": {
+    "productsList": [
+      {
+        "productName": "BLACK MATPE",
+        "hsCode": "0713.31.90",
+        "quantity": "70000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "70000",
+        "grossWeight": "70700",
+        "rate": ".988",
+        "amount": "69160.00",
+        "freight": ".002",
+        "totalFreight": "140.00"
+      }
+    ],
+    "lcNumber": "094026010188"
+  },
+  "6acf13e531525247382c5975": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "250000",
+        "bagCount": "",
+        "packingType": "Carats ",
+        "netWeight": "250000",
+        "grossWeight": "268500",
+        "rate": "0.395",
+        "amount": "98750.00",
+        "freight": ".005",
+        "totalFreight": "1250.00"
+      }
+    ],
+    "lcNumber": "073926010175"
+  },
+  "6acf3f4b31525247382c5aca": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "250000",
+        "bagCount": "",
+        "packingType": "CARATS",
+        "netWeight": "250000",
+        "grossWeight": "268500",
+        "rate": ".395",
+        "amount": "98750.00",
+        "freight": ".005",
+        "totalFreight": "1250.00"
+      }
+    ],
+    "lcNumber": "073926010172"
+  },
+  "6acf6eb231525247382c5b55": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "284000",
+        "bagCount": "",
+        "packingType": "CARATS",
+        "netWeight": "284000",
+        "grossWeight": "305100",
+        "rate": "0.345",
+        "amount": "97980.00",
+        "freight": ".005",
+        "totalFreight": "1420.00"
+      }
+    ],
+    "lcNumber": "073926010181"
+  },
+  "6ad0693014f70f02c99ca3a8": {
+    "productsList": [
+      {
+        "productName": "WHEAT BRAN (FEED GRADE)",
+        "hsCode": "2302.30.00",
+        "quantity": "225000",
+        "bagCount": "",
+        "packingType": "Jute Bags, P.P Bags",
+        "netWeight": "225000",
+        "grossWeight": "226688",
+        "rate": ".323",
+        "amount": "72675.00",
+        "freight": ".002",
+        "totalFreight": "450.00"
+      }
+    ],
+    "lcNumber": "087326010860"
+  },
+  "6ad069bf14f70f02c99ca3b0": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "285000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "285000",
+        "grossWeight": "306100",
+        "rate": "0.345",
+        "amount": "98325.00",
+        "freight": ".005",
+        "totalFreight": "1425.00"
+      }
+    ],
+    "lcNumber": "087326010859"
+  },
+  "6ad48cda93c768d1030b96ef": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "303000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "303000",
+        "grossWeight": "325500",
+        "rate": ".345",
+        "amount": "104535.00",
+        "freight": ".005",
+        "totalFreight": "1515.00"
+      }
+    ],
+    "lcNumber": "073926010185"
+  },
+  "6ad4995293c768d1030b96ff": {
+    "productsList": [
+      {
+        "productName": "FRESH ORANGE",
+        "hsCode": "0805.10.90",
+        "quantity": "277000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "277000",
+        "grossWeight": "297500",
+        "rate": ".345",
+        "amount": "95565.00",
+        "freight": ".005",
+        "totalFreight": "1385.00"
+      }
+    ],
+    "lcNumber": "087326010863"
+  },
+  "6ad49f2f93c768d1030b973a": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "250000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "250000",
+        "grossWeight": "268500",
+        "rate": ".395",
+        "amount": "98750.00",
+        "freight": ".005",
+        "totalFreight": "1250.00"
+      }
+    ],
+    "lcNumber": "087326010864"
+  },
+  "6ad5e933aae37c8ee467deb0": {
+    "productsList": [
+      {
+        "productName": "CHICK PEAS",
+        "hsCode": "0713.20.90",
+        "quantity": "105000",
+        "bagCount": "",
+        "packingType": "P.P BAGS",
+        "netWeight": "105000",
+        "grossWeight": "106400",
+        "rate": ".853",
+        "amount": "89565.00",
+        "freight": ".002",
+        "totalFreight": "210.00"
+      }
+    ],
+    "lcNumber": "087326010867"
+  },
+  "6ad5ed78aae37c8ee467defa": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "160000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "160000",
+        "grossWeight": "171900",
+        "rate": ".348",
+        "amount": "55680.00",
+        "freight": ".002",
+        "totalFreight": "320.00"
+      }
+    ],
+    "lcNumber": "087326010868"
+  },
+  "6add9ee3fa1e5e59cc707a6b": {
+    "productsList": [
+      {
+        "productName": "RED WHOLE LENTILS",
+        "hsCode": "0713.40.90",
+        "quantity": "127500",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "127500",
+        "grossWeight": "128775",
+        "rate": "1.118",
+        "amount": "142545.00",
+        "freight": ".002",
+        "totalFreight": "255.00"
+      },
+      {
+        "productName": "MUNG DAL",
+        "hsCode": "0713.31.90",
+        "quantity": "85000",
+        "bagCount": "",
+        "packingType": "P.P Bags",
+        "netWeight": "85000",
+        "grossWeight": "85849.9",
+        "rate": ".768",
+        "amount": "65280.00",
+        "freight": ".002",
+        "totalFreight": "170.00"
+      }
+    ],
+    "lcNumber": "087326010870"
+  },
+  "6adda4b2fa1e5e59cc707aae": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "300000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "300000",
+        "grossWeight": "322200",
+        "rate": ".345",
+        "amount": "103500.00",
+        "freight": ".005",
+        "totalFreight": "1500.00"
+      }
+    ],
+    "lcNumber": "073926010185"
+  },
+  "6addbbe2fa1e5e59cc707b66": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "300000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "300000",
+        "grossWeight": "322200",
+        "rate": ".345",
+        "amount": "103500.00",
+        "freight": ".005",
+        "totalFreight": "1500.00"
+      }
+    ],
+    "lcNumber": "073926010187"
+  },
+  "6adddda3e7d7b2ddba455819": {
+    "productsList": [
+      {
+        "productName": "FRESH APPLE",
+        "hsCode": "0808.10.90",
+        "quantity": "250000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "250000",
+        "grossWeight": "268500",
+        "rate": ".395",
+        "amount": "98750.00",
+        "freight": ".005",
+        "totalFreight": "1250.00"
+      }
+    ],
+    "lcNumber": "094026010199"
+  },
+  "6adde1d3e7d7b2ddba455834": {
+    "productsList": [
+      {
+        "productName": "FRESH TOMATO",
+        "hsCode": "0702.00.19",
+        "quantity": "470000",
+        "bagCount": "",
+        "packingType": "CARATE/BOX",
+        "netWeight": "470000",
+        "grossWeight": "504800",
+        "rate": ".345",
+        "amount": "162150.00",
+        "freight": ".005",
+        "totalFreight": "2350.00"
+      }
+    ],
+    "lcNumber": "002926010049"
+  },
+  "6adef18bd2d9bdf8b46ef606": {
+    "productsList": [
+      {
+        "productName": "WHEAT BRAN (FEED GRADE)",
+        "hsCode": "2302.30.00",
+        "quantity": "200000",
+        "bagCount": "",
+        "packingType": "Jute Bags, P.P Bags",
+        "netWeight": "200000",
+        "grossWeight": "201890",
+        "rate": ".323",
+        "amount": "64600.00",
+        "freight": ".002",
+        "totalFreight": "400.00"
+      }
+    ],
+    "lcNumber": "087326010860"
+  }
+}

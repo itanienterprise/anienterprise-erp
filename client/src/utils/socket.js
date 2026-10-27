@@ -56,14 +56,15 @@ export const getSocket = () => {
 
     // Auto-sync when window receives focus or tab becomes visible again
     if (typeof window !== 'undefined') {
-      let lastFocusSync = 0;
+      // Auto-reconnect when window receives focus or tab becomes visible again
+      let lastFocusSync = Date.now();
       const handleWindowActive = (reason) => {
         const now = Date.now();
-        if (now - lastFocusSync > 2500) {
+        if (socket && !socket.connected) {
+          socket.connect();
+        } else if (now - lastFocusSync > 10 * 60 * 1000) {
+          // Only if away for > 10 minutes and socket was idle, perform a background refresh
           lastFocusSync = now;
-          if (socket && !socket.connected) {
-            socket.connect();
-          }
           window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'all', action: reason } }));
         }
       };

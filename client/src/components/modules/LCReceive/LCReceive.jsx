@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
@@ -579,41 +579,77 @@ function LCReceive({
         });
     }, [localStockRecords, stockRecords]);
 
+    const deferredLcSearch = useDeferredValue(lcSearchQuery);
+
+    const productNameMap = useMemo(() => {
+        const map = new Map();
+        const knownAliases = {
+            'wheat bran': 'BRAN',
+            'wheat bran (feed grade)': 'BRAN',
+            'bran': 'BRAN',
+            'red whole lentils': 'MOSUR DAL',
+            'red whole lentils (masur)': 'MOSUR DAL',
+            'mosur dal': 'MOSUR DAL',
+            'masur dal': 'MOSUR DAL',
+            'grass pea': 'KHESHARI DAL',
+            'grass pea (khesari dal)': 'KHESHARI DAL',
+            'kheshari dal': 'KHESHARI DAL',
+            'khesari dal': 'KHESHARI DAL',
+            'groundnut (in shell)': 'GROUND NUT',
+            'ground nut': 'GROUND NUT',
+            'non basmati boiled rice': 'RICE',
+            'fresh tomato': 'TOMATO',
+            'fresh valencia oranges (malta)': 'MALTA',
+            'malta': 'MALTA',
+            'fresh orange': 'ORANGE',
+            'orange': 'ORANGE',
+            'fresh anar (pomegranate)': 'ANAR (POMEGRANATE)',
+            'anar': 'ANAR (POMEGRANATE)',
+            'drum stick (sozna data)': 'DRUM STICK',
+            'fresh ginger (non-seed)': 'GINGER',
+            'grapes grade b': 'FRESH GRAPES'
+        };
+        Object.entries(knownAliases).forEach(([k, v]) => {
+            map.set(k.trim().toLowerCase(), v);
+        });
+
+        (products || []).forEach(p => {
+            if (p.name) {
+                const n = p.name.trim().toLowerCase();
+                map.set(n, p.name);
+                if (n.endsWith('s')) map.set(n.slice(0, -1), p.name);
+            }
+            if (p.ipName) {
+                const ip = p.ipName.trim().toLowerCase();
+                map.set(ip, p.name);
+                if (ip.endsWith('s')) map.set(ip.slice(0, -1), p.name);
+                const stripped = ip.replace(/\(.*?\)/g, '').trim();
+                if (stripped) {
+                    map.set(stripped, p.name);
+                    if (stripped.endsWith('s')) map.set(stripped.slice(0, -1), p.name);
+                }
+            }
+        });
+        return map;
+    }, [products]);
+
     const effectiveLcReceiveRecords = useMemo(() => {
         if (!effectiveStockRecords || effectiveStockRecords.length === 0) {
             return lcReceiveRecords || [];
         }
 
-        const searchLower = (lcSearchQuery || '').toLowerCase().trim();
+        const searchLower = (deferredLcSearch || '').toLowerCase().trim();
 
         const resolveProductName = (name) => {
             if (!name) return '';
-            if (!products || !Array.isArray(products)) return name;
-
-            const normalize = (str) => {
-                if (!str) return '';
-                let s = str.trim().toLowerCase();
-                if (s.endsWith('s')) {
-                    s = s.slice(0, -1);
-                }
-                return s;
-            };
-
-            const target = normalize(name);
-            if (!target) return name;
-
-            const lowerName = name.trim().toLowerCase();
-            let found = products.find(p =>
-                (p.name || '').trim().toLowerCase() === lowerName ||
-                (p.ipName || '').trim().toLowerCase() === lowerName
-            );
-            if (found) return found.name;
-
-            found = products.find(p =>
-                normalize(p.name) === target ||
-                normalize(p.ipName) === target
-            );
-            return found ? found.name : name;
+            const key = name.trim().toLowerCase();
+            const direct = productNameMap.get(key);
+            if (direct) return direct;
+            if (key.endsWith('s')) {
+                const sing = productNameMap.get(key.slice(0, -1));
+                if (sing) return sing;
+            }
+            return name;
         };
 
         const lcStock = effectiveStockRecords.filter(item => !isPurchaseReceiveItem(item));
@@ -668,7 +704,7 @@ function LCReceive({
                 productName: resolveProductName(item.productName)
             };
         });
-    }, [effectiveStockRecords, lcReceiveRecords, lcSearchQuery, lcFilters, products]);
+    }, [effectiveStockRecords, lcReceiveRecords, deferredLcSearch, lcFilters, productNameMap]);
 
     const [localHighlightId, setLocalHighlightId] = useState(null);
     const activeHighlightId = highlightId || localHighlightId;
@@ -1770,6 +1806,13 @@ function LCReceive({
 
     const resolveProductName = (name) => {
         if (!name) return '';
+        const lowerName = name.trim().toLowerCase();
+        if (productNameMap && productNameMap.has(lowerName)) {
+            return productNameMap.get(lowerName);
+        }
+        if (productNameMap && lowerName.endsWith('s') && productNameMap.has(lowerName.slice(0, -1))) {
+            return productNameMap.get(lowerName.slice(0, -1));
+        }
         if (!products || !Array.isArray(products)) return name;
 
         const normalize = (str) => {
@@ -1785,10 +1828,10 @@ function LCReceive({
         if (!target) return name;
 
         // Try exact match first
-        const lowerName = name.trim().toLowerCase();
         let found = products.find(p => 
             (p.name || '').trim().toLowerCase() === lowerName || 
-            (p.ipName || '').trim().toLowerCase() === lowerName
+            (p.ipName || '').trim().toLowerCase() === lowerName ||
+            (p.ipName || '').replace(/\(.*?\)/g, '').trim().toLowerCase() === lowerName
         );
 
         if (found) return found.name;
@@ -1796,7 +1839,8 @@ function LCReceive({
         // Try normalized match (ignoring plural 's')
         found = products.find(p => 
             normalize(p.name) === target || 
-            normalize(p.ipName) === target
+            normalize(p.ipName) === target ||
+            normalize((p.ipName || '').replace(/\(.*?\)/g, '')) === target
         );
 
         return found ? found.name : name;
@@ -3190,7 +3234,7 @@ function LCReceive({
     }, [filteredRecords]);
 
     const groupedRecordsList = useMemo(() => {
-        return Object.values(filteredRecords.reduce((acc, item) => {
+        const groups = Object.values(filteredRecords.reduce((acc, item) => {
             const groupedKey = getLCReceiveGroupKey(item);
 
             if (!acc[groupedKey]) {
@@ -3236,6 +3280,43 @@ function LCReceive({
             acc[groupedKey].entries.push(item);
             return acc;
         }, {}));
+
+        // Precompute productGroups once in memo to avoid heavy iterations during table JSX rendering
+        groups.forEach(entry => {
+            const uniqueEntriesMap = (entry.entries || []).reduce((acc, item) => {
+                const key = `${item.productName}-${item.brand || ''}-${item.truckNo}-${item.unit}`;
+                if (!acc[key]) {
+                    acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0 };
+                }
+                const itemQty = parseFloat(item.quantity) || 0;
+                const swpQty = parseFloat(item.sweepedQuantity) || 0;
+                const inHouse = parseFloat(item.inHouseQuantity) || (itemQty - swpQty);
+                acc[key].quantity += itemQty;
+                acc[key].sweepedQuantity += swpQty;
+                acc[key].inHouseQuantity += inHouse;
+                return acc;
+            }, {});
+            const uniqueEntries = Object.values(uniqueEntriesMap);
+
+            const productGroups = [];
+            uniqueEntries.forEach(item => {
+                const key = `${item.productName || ''}|${item.truckNo || ''}`;
+                let grp = productGroups.find(g => g.key === key);
+                if (!grp) {
+                    grp = {
+                        key,
+                        productName: item.productName,
+                        truckNo: item.truckNo,
+                        items: []
+                    };
+                    productGroups.push(grp);
+                }
+                grp.items.push(item);
+            });
+            entry.productGroups = productGroups;
+        });
+
+        return groups;
     }, [filteredRecords]);
 
     return (
@@ -4959,37 +5040,7 @@ function LCReceive({
                                             </tr>
                                         ) : (
                                             groupedRecordsList.map((entry) => {
-                                                const uniqueEntriesMap = entry.entries.reduce((acc, item) => {
-                                                    const key = `${item.productName}-${item.brand || ''}-${item.truckNo}-${item.unit}`;
-                                                    if (!acc[key]) {
-                                                        acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0 };
-                                                    }
-                                                    const itemQty = parseFloat(item.quantity) || 0;
-                                                    const swpQty = parseFloat(item.sweepedQuantity) || 0;
-                                                    const inHouse = parseFloat(item.inHouseQuantity) || (itemQty - swpQty);
-                                                    acc[key].quantity += itemQty;
-                                                    acc[key].sweepedQuantity += swpQty;
-                                                    acc[key].inHouseQuantity += inHouse;
-                                                    return acc;
-                                                }, {});
-                                                const uniqueEntries = Object.values(uniqueEntriesMap);
-
-                                                // Group unique entries into product groups (by productName and truckNo) to avoid repeating truck and product for each brand
-                                                const productGroups = [];
-                                                uniqueEntries.forEach(item => {
-                                                    const key = `${item.productName || ''}|${item.truckNo || ''}`;
-                                                    let grp = productGroups.find(g => g.key === key);
-                                                    if (!grp) {
-                                                        grp = {
-                                                            key,
-                                                            productName: item.productName,
-                                                            truckNo: item.truckNo,
-                                                            items: []
-                                                        };
-                                                        productGroups.push(grp);
-                                                    }
-                                                    grp.items.push(item);
-                                                });
+                                                const productGroups = entry.productGroups || [];
 
                                                 return (
                                                     <tr

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useDeferredValue, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon } from '../../Icons';
 import { generateSaleInvoicePDF, generateSaleChallanPDF } from '../../../utils/pdfGenerator';
@@ -345,6 +345,7 @@ const SaleManagement = ({
     const [cnfsList, setCnfsList] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const deferredSearch = useDeferredValue(searchQuery);
     const [editingId, setEditingId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -2774,124 +2775,7 @@ const SaleManagement = ({
         });
     };
 
-    const getFilteredData = () => {
-        let result = [];
-        if (!searchQuery) {
-            result = displayedSales;
-        } else {
-            const query = searchQuery.toLowerCase();
-            result = displayedSales.filter(s => {
-                if (saleType === 'Border') {
-                    const date = (s.date || '').toLowerCase();
-                    const lcNo = (s.lcNo || s.lcNumber || s.lc_no || s.lcNoClean || '').toLowerCase();
-                    const invNo = (s.invoiceNo || s.orderNo || s.challanNo || '').toLowerCase();
-                    const importer = (s.importer || '').toLowerCase();
-                    const port = (s.port || '').toLowerCase();
-                    const indCnf = (s.indianCnF || '').toLowerCase();
-                    const bdCnf = (s.bdCnf || '').toLowerCase();
-                    const party = (s.companyName || s.customerName || '').toLowerCase();
-                    const truck = String(s.truck || '').toLowerCase();
-                    const total = String(s.totalAmount || '').toLowerCase();
-
-                    const itemsMatch = (s.items || []).some(item => {
-                        const pName = (item.productName || item.product || '').toLowerCase();
-                        const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
-                        const itemLcNo = (item.lcNo || item.lcNumber || item.lc_no || '').toLowerCase();
-                        const brandLcMatch = (item.brandEntries || []).some(e =>
-                            (e.lcNo || e.lcNumber || e.lc_no || '').toLowerCase().includes(query) ||
-                            String(e.quantity || '').includes(query) || String(e.truck || '').includes(query) ||
-                            String(e.unitPrice || '').includes(query) || String(e.totalAmount || '').includes(query)
-                        );
-                        return pName.includes(query) || resolvedPName.includes(query) || itemLcNo.includes(query) || brandLcMatch;
-                    });
-
-                    return date.includes(query) || lcNo.includes(query) || invNo.includes(query) || importer.includes(query) ||
-                        port.includes(query) || indCnf.includes(query) || bdCnf.includes(query) ||
-                        party.includes(query) || truck.includes(query) || total.includes(query) || itemsMatch;
-                }
-
-                const matchesBasic =
-                    s.invoiceNo?.toLowerCase().includes(query) ||
-                    s.lcNo?.toLowerCase().includes(query) ||
-                    s.customerName?.toLowerCase().includes(query) ||
-                    s.companyName?.toLowerCase().includes(query) ||
-                    s.productName?.toLowerCase().includes(query) ||
-                    resolveProductName(s.productName)?.toLowerCase().includes(query) ||
-                    s.brand?.toLowerCase().includes(query) ||
-                    (s.remarks || '').toLowerCase().includes(query) ||
-                    (s.requestedBy || '').toLowerCase().includes(query) ||
-                    (s.createdByName || '').toLowerCase().includes(query) ||
-                    (s.createdBy || '').toLowerCase().includes(query) ||
-                    (s.entryBy || '').toLowerCase().includes(query) ||
-                    (s.entryByName || '').toLowerCase().includes(query) ||
-                    getEntryByFirstName(s).toLowerCase().includes(query) ||
-                    (s.acceptedBy || '').toLowerCase().includes(query) ||
-                    (s.approvedByName || '').toLowerCase().includes(query) ||
-                    getFirstNameFromIdentifier(s.acceptedBy || s.approvedByName || s.approvedBy).toLowerCase().includes(query);
-
-                if (matchesBasic) return true;
-
-                if (s.items && Array.isArray(s.items)) {
-                    return s.items.some(item => {
-                        const pName = (item.productName || item.product || '').toLowerCase();
-                        const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
-                        const itemBrand = (item.brand || item.brandName || '').toLowerCase();
-                        const itemLc = (item.lcNo || '').toLowerCase();
-                        const brandEntriesMatch = (item.brandEntries || []).some(be =>
-                            (be.lcNo || '').toLowerCase().includes(query) ||
-                            (be.brand || be.brandName || '').toLowerCase().includes(query) ||
-                            (be.warehouseName || be.whName || '').toLowerCase().includes(query)
-                        );
-                        return pName.includes(query) ||
-                            resolvedPName.includes(query) ||
-                            itemBrand.includes(query) ||
-                            itemLc.includes(query) ||
-                            brandEntriesMatch;
-                    });
-                }
-                return false;
-            });
-        }
-
-        // Apply Interactive Sort
-        return [...result].sort((a, b) => {
-            const key = sortConfig.key;
-            let valA = a[key] || '';
-            let valB = b[key] || '';
-
-            if (key === 'date') {
-                valA = new Date(valA);
-                valB = new Date(valB);
-            } else if (key === 'party') {
-                valA = (a.companyName || a.customerName || '').toString().toLowerCase();
-                valB = (b.companyName || b.customerName || '').toString().toLowerCase();
-            } else if (key === 'warehouseName') {
-                const getWhName = (sale) => {
-                    if (sale.warehouseName) return sale.warehouseName;
-                    if (sale.items && sale.items.length > 0) {
-                        const item = sale.items[0];
-                        if (item.brandEntries && item.brandEntries.length > 0) {
-                            return item.brandEntries[0].warehouseName || '';
-                        }
-                        return item.warehouseName || '';
-                    }
-                    return '';
-                };
-                valA = getWhName(a).toString().toLowerCase();
-                valB = getWhName(b).toString().toLowerCase();
-            } else if (['totalAmount', 'discount', 'paidAmount', 'dueAmount'].includes(key)) {
-                valA = parseFloat(valA) || 0;
-                valB = parseFloat(valB) || 0;
-            } else {
-                valA = valA.toString().toLowerCase();
-                valB = valB.toString().toLowerCase();
-            }
-
-            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-            return 0;
-        });
-    };
+    // Note: getFilteredData is now memoized below alongside displayedSales for high performance rendering
 
     // Handle outside clicks for dropdowns
     useEffect(() => {
@@ -4337,8 +4221,8 @@ const SaleManagement = ({
         return sales.filter(s => s.isEdited === true && (s.status || '').toLowerCase() !== 'requested').length;
     }, [sales]);
 
-    // Apply search + advanced filters
-    const displayedSales = sales.filter(sale => {
+    // Apply search + advanced filters (Memoized for high performance)
+    const displayedSales = useMemo(() => sales.filter(sale => {
         const statusLower = (sale.status || '').toLowerCase();
         if (statusLower === 'rejected') return false;
 
@@ -4354,8 +4238,8 @@ const SaleManagement = ({
         }
 
         // Text search
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
+        if (deferredSearch) {
+            const q = deferredSearch.toLowerCase();
 
             if (saleType === 'Border') {
                 // Gather searchable flat-text fields
@@ -4507,9 +4391,9 @@ const SaleManagement = ({
             if (!bc.includes(saleFilters.bdCnf.toLowerCase())) return false;
         }
         return true;
-    });
+    }), [sales, isRequestedOnly, isEditRequestedOnly, deferredSearch, saleType, saleFilters, resolveProductName]);
 
-    const stats = {
+    const stats = useMemo(() => ({
         totalSales: displayedSales.reduce((sum, s) => {
             const stored = parseFloat(s.totalAmount) || 0;
             if (stored > 0) return sum + stored;
@@ -4540,7 +4424,129 @@ const SaleManagement = ({
             }, 0);
             return sum + (items.length > 0 ? truckTotal : (parseFloat(sale.truck) || 0));
         }, 0) : 0
-    };
+    }), [displayedSales, saleType]);
+
+    // High performance memoized filtered & sorted data
+    const sortedFilteredData = useMemo(() => {
+        let result = [];
+        if (!deferredSearch) {
+            result = displayedSales;
+        } else {
+            const query = deferredSearch.toLowerCase();
+            result = displayedSales.filter(s => {
+                if (saleType === 'Border') {
+                    const date = (s.date || '').toLowerCase();
+                    const lcNo = (s.lcNo || s.lcNumber || s.lc_no || s.lcNoClean || '').toLowerCase();
+                    const invNo = (s.invoiceNo || s.orderNo || s.challanNo || '').toLowerCase();
+                    const importer = (s.importer || '').toLowerCase();
+                    const port = (s.port || '').toLowerCase();
+                    const indCnf = (s.indianCnF || '').toLowerCase();
+                    const bdCnf = (s.bdCnf || '').toLowerCase();
+                    const party = (s.companyName || s.customerName || '').toLowerCase();
+                    const truck = String(s.truck || '').toLowerCase();
+                    const total = String(s.totalAmount || '').toLowerCase();
+
+                    const itemsMatch = (s.items || []).some(item => {
+                        const pName = (item.productName || item.product || '').toLowerCase();
+                        const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
+                        const itemLcNo = (item.lcNo || item.lcNumber || item.lc_no || '').toLowerCase();
+                        const brandLcMatch = (item.brandEntries || []).some(e =>
+                            (e.lcNo || e.lcNumber || e.lc_no || '').toLowerCase().includes(query) ||
+                            String(e.quantity || '').includes(query) || String(e.truck || '').includes(query) ||
+                            String(e.unitPrice || '').includes(query) || String(e.totalAmount || '').includes(query)
+                        );
+                        return pName.includes(query) || resolvedPName.includes(query) || itemLcNo.includes(query) || brandLcMatch;
+                    });
+
+                    return date.includes(query) || lcNo.includes(query) || invNo.includes(query) || importer.includes(query) ||
+                        port.includes(query) || indCnf.includes(query) || bdCnf.includes(query) ||
+                        party.includes(query) || truck.includes(query) || total.includes(query) || itemsMatch;
+                }
+
+                const matchesBasic =
+                    s.invoiceNo?.toLowerCase().includes(query) ||
+                    s.lcNo?.toLowerCase().includes(query) ||
+                    s.customerName?.toLowerCase().includes(query) ||
+                    s.companyName?.toLowerCase().includes(query) ||
+                    s.productName?.toLowerCase().includes(query) ||
+                    resolveProductName(s.productName)?.toLowerCase().includes(query) ||
+                    s.brand?.toLowerCase().includes(query) ||
+                    (s.remarks || '').toLowerCase().includes(query) ||
+                    (s.requestedBy || '').toLowerCase().includes(query) ||
+                    (s.createdByName || '').toLowerCase().includes(query) ||
+                    (s.createdBy || '').toLowerCase().includes(query) ||
+                    (s.entryBy || '').toLowerCase().includes(query) ||
+                    (s.entryByName || '').toLowerCase().includes(query) ||
+                    getEntryByFirstName(s).toLowerCase().includes(query) ||
+                    (s.acceptedBy || '').toLowerCase().includes(query) ||
+                    (s.approvedByName || '').toLowerCase().includes(query) ||
+                    getFirstNameFromIdentifier(s.acceptedBy || s.approvedByName || s.approvedBy).toLowerCase().includes(query);
+
+                if (matchesBasic) return true;
+
+                if (s.items && Array.isArray(s.items)) {
+                    return s.items.some(item => {
+                        const pName = (item.productName || item.product || '').toLowerCase();
+                        const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
+                        const itemBrand = (item.brand || item.brandName || '').toLowerCase();
+                        const itemLc = (item.lcNo || '').toLowerCase();
+                        const brandEntriesMatch = (item.brandEntries || []).some(be =>
+                            (be.lcNo || '').toLowerCase().includes(query) ||
+                            (be.brand || be.brandName || '').toLowerCase().includes(query) ||
+                            (be.warehouseName || be.whName || '').toLowerCase().includes(query)
+                        );
+                        return pName.includes(query) ||
+                            resolvedPName.includes(query) ||
+                            itemBrand.includes(query) ||
+                            itemLc.includes(query) ||
+                            brandEntriesMatch;
+                    });
+                }
+                return false;
+            });
+        }
+
+        // Apply Interactive Sort
+        return [...result].sort((a, b) => {
+            const key = sortConfig.key;
+            let valA = a[key] || '';
+            let valB = b[key] || '';
+
+            if (key === 'date') {
+                valA = new Date(valA);
+                valB = new Date(valB);
+            } else if (key === 'party') {
+                valA = (a.companyName || a.customerName || '').toString().toLowerCase();
+                valB = (b.companyName || b.customerName || '').toString().toLowerCase();
+            } else if (key === 'warehouseName') {
+                const getWhName = (sale) => {
+                    if (sale.warehouseName) return sale.warehouseName;
+                    if (sale.items && sale.items.length > 0) {
+                        const item = sale.items[0];
+                        if (item.brandEntries && item.brandEntries.length > 0) {
+                            return item.brandEntries[0].warehouseName || '';
+                        }
+                        return item.warehouseName || '';
+                    }
+                    return '';
+                };
+                valA = getWhName(a).toString().toLowerCase();
+                valB = getWhName(b).toString().toLowerCase();
+            } else if (['totalAmount', 'discount', 'paidAmount', 'dueAmount'].includes(key)) {
+                valA = parseFloat(valA) || 0;
+                valB = parseFloat(valB) || 0;
+            } else {
+                valA = valA.toString().toLowerCase();
+                valB = valB.toString().toLowerCase();
+            }
+
+            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [displayedSales, deferredSearch, sortConfig, saleType, resolveProductName]);
+
+    const getFilteredData = useCallback(() => sortedFilteredData, [sortedFilteredData]);
 
     return (
         <div className="sale-management-container">
@@ -7257,8 +7263,8 @@ const SaleManagement = ({
                                         }];
 
 
-                                    if (searchQuery) {
-                                        const query = searchQuery.toLowerCase();
+                                    if (deferredSearch) {
+                                        const query = deferredSearch.toLowerCase();
                                         const filteredItems = items.filter(it => {
                                             const lcNoMatch = (it.lcNo || '').toLowerCase().includes(query);
                                             const prodMatch = (it.productName || '').toLowerCase().includes(query);
@@ -8016,8 +8022,8 @@ const SaleManagement = ({
                                     uom: sale.uom || 'QTY'
                                 }];
 
-                            if (searchQuery) {
-                                const query = searchQuery.toLowerCase();
+                            if (deferredSearch) {
+                                const query = deferredSearch.toLowerCase();
                                 const filteredItems = items.filter(it => {
                                     const lcNoMatch = (it.lcNo || '').toLowerCase().includes(query);
                                     const prodMatch = (it.productName || '').toLowerCase().includes(query);

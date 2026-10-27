@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
 import axios from './utils/api';
 import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
@@ -1183,6 +1183,24 @@ function App() {
 
   const [lcFilters, setLcFilters] = useState(initialLcFilterState);
   const [lcSearchQuery, setLcSearchQuery] = useState('');
+  const deferredLcSearch = useDeferredValue(lcSearchQuery);
+
+  const productNameMap = useMemo(() => {
+    const map = new Map();
+    (products || []).forEach(p => {
+      if (p.name) {
+        const n = p.name.trim().toLowerCase();
+        map.set(n, p.name);
+        if (n.endsWith('s')) map.set(n.slice(0, -1), p.name);
+      }
+      if (p.ipName) {
+        const ip = p.ipName.trim().toLowerCase();
+        map.set(ip, p.name);
+        if (ip.endsWith('s')) map.set(ip.slice(0, -1), p.name);
+      }
+    });
+    return map;
+  }, [products]);
 
   const lcStockRecords = useMemo(() => {
     return allStockRecords.filter(item => {
@@ -1197,40 +1215,18 @@ function App() {
 
   const lcReceiveRecords = useMemo(() => {
     if (!showLcReport && currentView !== 'lc-entry-section') return [];
-    const searchLower = lcSearchQuery.toLowerCase().trim();
+    const searchLower = (deferredLcSearch || '').toLowerCase().trim();
 
     const resolveProductName = (name) => {
       if (!name) return '';
-      if (!products || !Array.isArray(products)) return name;
-
-      const normalize = (str) => {
-        if (!str) return '';
-        let s = str.trim().toLowerCase();
-        if (s.endsWith('s')) {
-          s = s.slice(0, -1);
-        }
-        return s;
-      };
-
-      const target = normalize(name);
-      if (!target) return name;
-
-      // Try exact match first
-      const lowerName = name.trim().toLowerCase();
-      let found = products.find(p =>
-        (p.name || '').trim().toLowerCase() === lowerName ||
-        (p.ipName || '').trim().toLowerCase() === lowerName
-      );
-
-      if (found) return found.name;
-
-      // Try normalized match (ignoring plural 's')
-      found = products.find(p =>
-        normalize(p.name) === target ||
-        normalize(p.ipName) === target
-      );
-
-      return found ? found.name : name;
+      const key = name.trim().toLowerCase();
+      const direct = productNameMap.get(key);
+      if (direct) return direct;
+      if (key.endsWith('s')) {
+        const sing = productNameMap.get(key.slice(0, -1));
+        if (sing) return sing;
+      }
+      return name;
     };
 
     const filtered = lcStockRecords.filter(item => {
@@ -1286,7 +1282,7 @@ function App() {
         productName: resolveProductName(item.productName)
       };
     });
-  }, [showLcReport, currentView, lcStockRecords, lcSearchQuery, lcFilters, products]);
+  }, [showLcReport, currentView, lcStockRecords, deferredLcSearch, lcFilters, productNameMap]);
 
   const lcReceiveSummary = useMemo(() => {
     if (!showLcReport && currentView !== 'lc-entry-section') return { totalPackets: 0, totalQuantity: 0, totalTrucks: 0, unit: 'kg' };

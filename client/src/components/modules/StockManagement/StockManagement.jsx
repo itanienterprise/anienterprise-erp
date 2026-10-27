@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
 import { createPortal } from 'react-dom';
 import './StockManagement.css';
 import {
@@ -210,6 +210,7 @@ const StockManagement = ({
     const showQty = displayUnit === 'BOTH' || displayUnit === 'QTY';
 
     const [stockSearchQuery, setStockSearchQuery] = useState('');
+    const deferredStockSearch = useDeferredValue(stockSearchQuery);
     const [showStockFilterPanel, setShowStockFilterPanel] = useState(false);
     // stockFilters lifted to App.jsx
     const selectedProductsList = useMemo(() => {
@@ -2380,8 +2381,8 @@ const StockManagement = ({
     // --- Calculations (Memoized) ---
 
     const stockData = useMemo(() => {
-        return calculateStockData(stockRecords, { ...stockFilters, showRate: effectiveShowRate }, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline, returnsList);
-    }, [stockRecords, stockFilters, effectiveShowRate, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
+        return calculateStockData(stockRecords, { ...stockFilters, showRate: effectiveShowRate }, deferredStockSearch, warehouseData, salesRecords, products, damages, activeBaseline, returnsList);
+    }, [stockRecords, stockFilters, effectiveShowRate, deferredStockSearch, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
 
     // Function to calculate raw in-house snapshot across all warehouses for baseline
     const generateCurrentStockSnapshot = () => {
