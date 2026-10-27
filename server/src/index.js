@@ -450,6 +450,7 @@ const { encryptData, decryptData } = require('./utils/encryption');
 const { updateBrandAcrossAllCollections } = require('./services/brandCascadeService');
 const { cascadeIpUpdate, cascadeProductUpdate, cascadeProductIpNameUpdate } = require('./services/ipCascadeService');
 const { syncSaleOnSave, syncSaleOnDelete, repairAllCustomerSalesHistory } = require('./services/customerSyncService');
+const { repairCorruptedGarlicProducts } = require('./services/productHealService');
 const CryptoJS = require('crypto-js');
 const ActivityLog = require('./models/ActivityLog');
 const UserDailyActivity = require('./models/UserDailyActivity');
@@ -931,6 +932,9 @@ const runSystemSelfHealingMigrations = async () => {
     }
     if (typeof repairAllCustomerSalesHistory === 'function') {
       await repairAllCustomerSalesHistory();
+    }
+    if (typeof repairCorruptedGarlicProducts === 'function') {
+      await repairCorruptedGarlicProducts();
     }
     if (typeof invalidateMemoryCache === 'function') {
       invalidateMemoryCache();
