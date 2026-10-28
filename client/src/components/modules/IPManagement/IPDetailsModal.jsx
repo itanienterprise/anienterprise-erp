@@ -174,7 +174,7 @@ export const IPDetailsModal = ({
             const cleanN = cleanLc(n);
             return n === targetIpNo || (cleanN && cleanN === targetIpNoClean);
         }) || (lc?.ipId && targetIpId && String(lc.ipId) === targetIpId) ||
-           (Array.isArray(lc?.ipDetails) && lc.ipDetails.some(d => String(d.ipId || d._id || '') === targetIpId));
+            (Array.isArray(lc?.ipDetails) && lc.ipDetails.some(d => String(d.ipId || d._id || '') === targetIpId));
 
         if (!isMatchIp) {
             return 0;
@@ -713,60 +713,85 @@ export const IPDetailsModal = ({
     if (!ipRecord || typeof document === 'undefined' || !document.body) return null;
 
     return createPortal(
-        <div className={`fixed inset-0 ${modalZIndex} flex items-center justify-center p-3 sm:p-5`}>
+        <div className={`fixed inset-0 ${modalZIndex} flex items-center justify-center p-2 sm:p-5`}>
             <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-7xl animate-in zoom-in duration-300 flex flex-col max-h-[92vh] overflow-hidden z-10">
+            <div className="relative bg-white border border-gray-100 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-7xl animate-in zoom-in duration-300 flex flex-col max-h-[92vh] overflow-hidden z-10">
                 {/* Header - Fixed at top */}
-                <div className="bg-white px-5 sm:px-7 py-4.5 border-b border-gray-100 flex items-center justify-between z-20 shrink-0">
-                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                        <div className="p-3 rounded-2xl bg-blue-50 text-blue-600 shadow-sm border border-blue-100/60 shrink-0">
-                            <ShieldIcon className="w-6 h-6" />
+                <div className="bg-white px-3 sm:px-7 py-3 sm:py-4.5 border-b border-gray-100 flex items-start justify-between z-20 shrink-0">
+                    <div className="flex items-start gap-2 sm:gap-4 min-w-0">
+                        <div className="p-1.5 sm:p-3 rounded-xl sm:rounded-2xl bg-blue-50 text-blue-600 shadow-sm border border-blue-100/60 shrink-0 mt-0.5">
+                            <ShieldIcon className="w-4 h-4 sm:w-6 sm:h-6" />
                         </div>
                         <div className="min-w-0">
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                                <h3 className="text-lg sm:text-xl font-black text-gray-900 leading-tight">
+                            <div className="flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
+                                <h3 className="text-base sm:text-xl font-black text-gray-900 leading-tight">
                                     Import Permit (IP) Details
                                 </h3>
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs ${statusStyle}`}>
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider border shadow-2xs shrink-0 ${statusStyle}`}>
                                     <span>{computedStatus}</span>
                                     {validityDaysText && (
-                                        <span className="opacity-75 font-mono text-[9px] font-bold">({validityDaysText})</span>
+                                        <span className="opacity-75 font-mono text-[8px] sm:text-[9px] font-bold">({validityDaysText})</span>
                                     )}
                                 </span>
-                                {isExtendedFinal && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-purple-50 text-purple-700 border border-purple-200">
+                                {isExtendedFinal && computedStatus !== 'Extended' && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
                                         Extended
                                     </span>
                                 )}
                             </div>
-                            <p className="text-[11px] text-gray-500 font-bold tracking-wide mt-1 truncate">
-                                IP No: <span className="font-mono font-black text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded border border-blue-200/60">{ipRecord.ipNumber}</span>
+
+                            {/* Mobile: Clean line-by-line key-value alignment */}
+                            <div className="sm:hidden text-xs text-gray-500 mt-1.5 space-y-1 text-left">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">IP No :</span>
+                                    <span className="font-mono font-black text-blue-600 bg-blue-50/80 px-1.5 py-0.5 rounded border border-blue-200/60 text-xs">{ipRecord.ipNumber}</span>
+                                </div>
+                                {resolvedParty !== '—' && (
+                                    <div className="flex items-start gap-1.5">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0 pt-0.5">Importer :</span>
+                                        <span className="text-gray-800 font-bold break-words leading-tight">{resolvedParty}</span>
+                                    </div>
+                                )}
+                                {resolvedExporter !== '—' && (
+                                    <div className="flex items-start gap-1.5">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0 pt-0.5">Exporter :</span>
+                                        <span className="text-gray-600 font-semibold break-words leading-tight">{resolvedExporter}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Desktop: Single inline line with clean bullets */}
+                            <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 mt-1.5 flex-wrap">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP No :</span>
+                                <span className="font-mono font-black text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded border border-blue-200/60">{ipRecord.ipNumber}</span>
                                 {resolvedParty !== '—' && (
                                     <>
-                                        <span className="mx-2 text-gray-300">•</span>
-                                        <span className="text-gray-700 font-semibold">{resolvedParty}</span>
+                                        <span className="text-gray-300 mx-1">•</span>
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer :</span>
+                                        <span className="text-gray-800 font-bold">{resolvedParty}</span>
                                     </>
                                 )}
                                 {resolvedExporter !== '—' && (
                                     <>
-                                        <span className="mx-2 text-gray-300">•</span>
-                                        <span className="text-gray-500 font-medium">Exp: {resolvedExporter}</span>
+                                        <span className="text-gray-300 mx-1">•</span>
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter :</span>
+                                        <span className="text-gray-600 font-medium">{resolvedExporter}</span>
                                     </>
                                 )}
-                            </p>
+                            </div>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 transition-all active:scale-90 border border-transparent hover:border-red-100 shrink-0 cursor-pointer"
+                        className="p-1.5 sm:p-2.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 transition-all active:scale-90 border border-transparent hover:border-red-100 shrink-0 cursor-pointer mt-0.5"
                         title="Close Modal"
                     >
-                        <XIcon className="w-6 h-6" />
+                        <XIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                     </button>
                 </div>
 
                 {/* Scrollable Content Area */}
-                <div className="overflow-y-auto flex-1 px-5 sm:px-7 py-5 custom-scrollbar space-y-6">
+                <div className="overflow-y-auto flex-1 px-3 sm:px-7 py-4 sm:py-5 custom-scrollbar space-y-6">
                     {/* Originating / Current Proforma Invoice (PI) Banner (when opened from PI) */}
                     {activePiContext && (
                         <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-blue-50/70 border border-blue-200/90 rounded-2xl p-4 shadow-2xs">
@@ -839,46 +864,46 @@ export const IPDetailsModal = ({
                                             }
                                         }
                                     }}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200/80 rounded-lg text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
-                                    title="Preview Attached PDF"
+                                    className="p-1.5 sm:p-2 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 border border-red-200/80 rounded-lg transition-all shadow-2xs active:scale-95 cursor-pointer flex items-center justify-center shrink-0"
+                                    title={ipRecord.ipAttachmentName ? `Preview: ${ipRecord.ipAttachmentName}` : "Preview Attached PDF"}
+                                    aria-label="Preview Attached PDF"
                                 >
-                                    <PDFIcon className="w-3.5 h-3.5 text-red-600" />
-                                    <span className="max-w-[140px] truncate">{ipRecord.ipAttachmentName || 'Attached Document'}</span>
+                                    <PDFIcon className="w-4 h-4 text-red-600" />
                                 </button>
                             )}
                         </div>
 
                         {/* Metadata Details Grid - 8 Key Attributes */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4 text-xs">
-                            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
+                            <div className="col-span-2 sm:col-span-1 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">IP Number</span>
-                                <span className="font-mono font-black text-blue-700 text-sm">{ipRecord.ipNumber || '—'}</span>
+                                <span className="font-mono font-black text-blue-700 text-sm whitespace-nowrap sm:whitespace-normal break-all">{ipRecord.ipNumber || '—'}</span>
                             </div>
 
-                            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
+                            <div className="col-span-2 sm:col-span-1 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Importer / Party</span>
-                                <span className="font-bold text-gray-800 truncate block" title={resolvedParty}>{resolvedParty}</span>
+                                <span className="font-bold text-gray-800 break-words block" title={resolvedParty}>{resolvedParty}</span>
                             </div>
 
                             <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Exporter</span>
-                                <span className="font-bold text-gray-800 truncate block" title={resolvedExporter}>{resolvedExporter}</span>
+                                <span className="font-bold text-gray-800 break-words block" title={resolvedExporter}>{resolvedExporter}</span>
                             </div>
 
                             <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Product</span>
-                                <span className="font-bold text-gray-800 truncate block" title={resolvedProduct}>{resolvedProduct}</span>
+                                <span className="font-bold text-gray-800 break-words block" title={resolvedProduct}>{resolvedProduct}</span>
                             </div>
 
                             <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Port</span>
-                                <span className="font-bold text-gray-800 truncate block" title={resolvedPort}>{resolvedPort}</span>
+                                <span className="font-bold text-gray-800 break-words block" title={resolvedPort}>{resolvedPort}</span>
                             </div>
 
                             <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Issue / Opening Date</span>
                                 <div className="flex items-center gap-1 font-mono font-bold text-gray-700">
-                                    <CalendarIcon className="w-3.5 h-3.5 text-gray-400" />
+                                    <CalendarIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                                     <span>{formatDate(resolvedOpeningDate)}</span>
                                 </div>
                             </div>
@@ -886,7 +911,7 @@ export const IPDetailsModal = ({
                             <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Expiry / Close Date</span>
                                 <div className="flex items-center gap-1 font-mono font-bold text-rose-600">
-                                    <CalendarIcon className="w-3.5 h-3.5 text-rose-400" />
+                                    <CalendarIcon className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                                     <span>{formatDate(resolvedCloseDate)}</span>
                                 </div>
                             </div>
@@ -903,22 +928,22 @@ export const IPDetailsModal = ({
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedPiForModal(matchingPi)}
-                                                className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none tracking-tight"
+                                                className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none tracking-tight break-all"
                                                 title={`View PI Details (${resolvedReferenceNo})`}
                                             >
                                                 {resolvedReferenceNo}
                                             </button>
                                         );
                                     }
-                                    return <span className="font-bold text-gray-700 truncate block">{resolvedReferenceNo}</span>;
+                                    return <span className="font-bold text-gray-700 break-words block">{resolvedReferenceNo}</span>;
                                 })()}
                             </div>
 
                             <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Entry By</span>
-                                <div className="flex items-center gap-1 font-bold text-gray-700 truncate">
+                                <div className="flex items-center gap-1 font-bold text-gray-700">
                                     <UserIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                    <span className="truncate">{resolvedEntryByName}</span>
+                                    <span className="break-words">{resolvedEntryByName}</span>
                                 </div>
                             </div>
 
@@ -926,7 +951,7 @@ export const IPDetailsModal = ({
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Attachment Status</span>
                                 {(ipRecord.ipAttachment || ipRecord.hasAttachment) ? (
                                     <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
-                                        <PDFIcon className="w-3.5 h-3.5 text-emerald-500" /> Attached
+                                        <PDFIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Attached
                                     </span>
                                 ) : (
                                     <span className="text-gray-400 font-medium">None</span>
@@ -1060,372 +1085,371 @@ export const IPDetailsModal = ({
                                     >
                                         <div className="flex items-center justify-between gap-2">
                                             <span
-                                                className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 group-hover/picard:bg-blue-600 group-hover/picard:text-white border border-blue-200/90 group-hover/picard:border-blue-600 rounded-lg shadow-2xs transition-all tracking-tight truncate max-w-[190px]"
+                                                className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-black font-mono text-blue-700 bg-blue-50/90 group-hover/picard:bg-blue-600 group-hover/picard:text-white border border-blue-200/90 group-hover/picard:border-blue-600 rounded-lg shadow-2xs transition-all tracking-tight truncate max-w-[200px]"
                                                 title={pi.piNumber}
                                             >
                                                 {pi.piNumber}
                                             </span>
-                                            <span className="text-[10px] font-bold text-gray-500 font-mono">{formatDate(pi.date)}</span>
+                                            <span className="text-[11px] font-bold text-gray-500 font-mono">{formatDate(pi.date)}</span>
                                         </div>
-                                        <div className="flex items-center justify-between text-[11px] text-gray-600 mt-1.5">
-                                            <span className="truncate max-w-[130px] font-semibold" title={pi.exporterName}>{pi.exporterName || pi.partyName || '—'}</span>
-                                            <span className="font-mono font-bold text-gray-800">
-                                                {(parseFloat(pi.grandTotalQuantity || pi.quantity) || 0).toLocaleString('en-US')} kg
+                                                <div className="flex items-center justify-between gap-2 text-xs text-gray-700 mt-2">
+                                                    <span className="truncate font-bold text-gray-800" title={pi.exporterName || pi.partyName}>{pi.exporterName || pi.partyName || '—'}</span>
+                                                    <span className="font-mono font-black text-gray-900 shrink-0">
+                                                        {(parseFloat(pi.grandTotalQuantity || pi.quantity) || 0).toLocaleString('en-US')} kg
+                                                    </span>
+                                                </div>
+                                                {pi.grandTotal && (
+                                                        <div className="text-[11px] font-mono text-gray-500 mt-1.5 text-right font-bold">
+                                                            Total: <span className="text-gray-900 font-black">${parseFloat(pi.grandTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                                                        </div>
+                                        )}
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Linked LCs Section */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                                            <span>Letters of Credit (LCs) Under This IP</span>
+                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                {relatedLCs.length}
                                             </span>
-                                        </div>
-                                        {pi.grandTotal && (
-                                            <div className="text-[10px] font-mono text-gray-400 mt-1 text-right font-bold">
-                                                Total: ${parseFloat(pi.grandTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        </h4>
+                                    </div>
+
+                                    {/* Desktop LC Table */}
+                                    <div className="hidden md:block border border-gray-100 rounded-2xl shadow-sm overflow-x-auto overflow-y-auto max-h-[46vh] custom-scrollbar">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
+                                                <tr className="bg-gray-50 border-b border-gray-100">
+                                                    <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">Date</th>
+                                                    <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">Expire Date</th>
+                                                    <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">LC No</th>
+                                                    <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">Bank</th>
+                                                    <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">Quantity</th>
+                                                    <th className="px-4 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider text-right bg-blue-50/50 sticky top-0 bg-blue-50 z-10">IP Qty</th>
+                                                    <th className="px-4 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">LC Receive</th>
+                                                    <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">Remaining LC Qty</th>
+                                                    <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-center sticky top-0 bg-gray-50 z-10">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {relatedLCs.length > 0 ? (
+                                                    relatedLCs.flatMap((lc, lcIdx) => {
+                                                        const states = getLcStates(lc);
+                                                        const lcReceiveQtyKg = getLcReceiveQtyForIp(lc);
+
+                                                        return states.map((state, sIdx) => {
+                                                            const stateQtyKg = getLcConsumptionFromIp(state, lc, false);
+                                                            const stateIpQtyUsedKg = getLcConsumptionFromIp(state, lc);
+                                                            const isLastState = sIdx === states.length - 1;
+                                                            const isOriginalState = state.amendmentNo === 'Original LC';
+                                                            const stateRemQtyKg = isLastState ? Math.max(0, stateIpQtyUsedKg - lcReceiveQtyKg) : 0;
+
+                                                            const prevQtyKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc, false) : 0;
+                                                            const diffQtyKg = stateQtyKg - prevQtyKg;
+
+                                                            const prevStateIpQtyUsedKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc) : 0;
+                                                            const diffIpQtyUsedKg = stateIpQtyUsedKg - prevStateIpQtyUsedKg;
+
+                                                            const today = new Date();
+                                                            today.setHours(0, 0, 0, 0);
+                                                            const exp = new Date(state.expiryDate);
+                                                            exp.setHours(0, 0, 0, 0);
+                                                            const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+
+                                                            let statusText = "Active";
+                                                            let statusClass = "bg-green-50 text-green-700 border-green-100";
+
+                                                            if (!isLastState) {
+                                                                statusText = "Amended";
+                                                                statusClass = "bg-gray-50 text-gray-400 border-gray-100";
+                                                            } else if (exp < today) {
+                                                                statusText = "Expired";
+                                                                statusClass = "bg-red-50 text-red-600 border-red-100";
+                                                            } else if (diffDays <= 5) {
+                                                                statusText = "Expire Soon";
+                                                                statusClass = "bg-amber-50 text-amber-600 border-amber-100";
+                                                            }
+
+                                                            return (
+                                                                <tr key={`${lc._id || lcIdx}_${sIdx}`} className={`${isLastState ? 'hover:bg-gray-50/50' : 'bg-gray-50/20 text-gray-500'} transition-colors`}>
+                                                                    <td className="px-4 py-3 text-sm font-medium whitespace-nowrap">{formatDate(state.amendmentDate || state.openingDate || lc.openingDate)}</td>
+                                                                    <td className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${isLastState ? 'text-red-500' : 'text-red-400'}`}>{formatDate(state.expiryDate)}</td>
+                                                                    <td className="px-4 py-3 text-sm whitespace-nowrap">
+                                                                        <div className="flex flex-col items-start gap-1">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setSelectedLcForModal(lc);
+                                                                                }}
+                                                                                className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none tracking-tight"
+                                                                                title={`View LC Details (${lc.lcNo || 'N/A'})`}
+                                                                            >
+                                                                                {lc.lcNo || '-'}
+                                                                            </button>
+                                                                            {!isOriginalState && (
+                                                                                <span className={`self-start px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide border ${isLastState
+                                                                                        ? 'bg-amber-50 text-amber-600 border-amber-200/60'
+                                                                                        : 'bg-gray-100 text-gray-500 border-gray-200/60'
+                                                                                    }`}>
+                                                                                    {state.amendmentNo}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm font-medium uppercase">{lc.bankName || '-'}</td>
+                                                                    <td className="px-4 py-3 text-sm font-medium text-right whitespace-nowrap">
+                                                                        <span className={
+                                                                            sIdx > 0
+                                                                                ? (diffQtyKg > 0 ? 'text-green-600 font-black' : diffQtyKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
+                                                                                : (isLastState ? 'text-gray-900 font-bold' : '')
+                                                                        }>
+                                                                            {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
+                                                                            {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm font-bold text-right whitespace-nowrap bg-blue-50/20">
+                                                                        <span className={
+                                                                            sIdx > 0
+                                                                                ? (diffIpQtyUsedKg > 0 ? 'text-green-600 font-black' : diffIpQtyUsedKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
+                                                                                : 'text-blue-700 font-black'
+                                                                        }>
+                                                                            {sIdx > 0 && diffIpQtyUsedKg > 0 ? '+' : ''}
+                                                                            {(sIdx > 0 ? diffIpQtyUsedKg : stateIpQtyUsedKg).toLocaleString('en-US')}
+                                                                        </span> <span className="text-[10px] font-normal uppercase text-gray-500">kg</span>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm font-bold text-right whitespace-nowrap">
+                                                                        <span className={isLastState ? 'text-gray-900 font-bold' : 'text-gray-400'}>
+                                                                            {(isLastState ? lcReceiveQtyKg : 0).toLocaleString('en-US')}
+                                                                        </span> <span className="text-[10px] font-normal uppercase text-gray-500">kg</span>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-sm font-medium text-right whitespace-nowrap">
+                                                                        <span className={`font-black ${isLastState ? (stateRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>
+                                                                            {stateRemQtyKg.toLocaleString('en-US')}
+                                                                        </span> <span className="text-[10px] font-normal uppercase text-gray-400">kg</span>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusClass}`}>
+                                                                            {statusText}
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        });
+                                                    })
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan="9" className="px-5 py-12 text-center text-gray-400 font-bold">No LC records found for this IP.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                            {relatedLCs.length > 0 && (
+                                                <tfoot>
+                                                    <tr className="bg-gray-100/80 border-t-2 border-gray-200 font-black text-gray-900">
+                                                        <td colSpan="4" className="px-4 py-3 text-sm text-right uppercase tracking-wider text-gray-700">Grand Total:</td>
+                                                        <td className="px-4 py-3 text-sm text-right whitespace-nowrap">
+                                                            {relatedLCs.reduce((sum, lc) => sum + getLcConsumptionFromIp(lc, lc, false), 0).toLocaleString('en-US')} kg
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-right whitespace-nowrap bg-blue-100/50 text-blue-900">
+                                                            {totalLcQtyKg.toLocaleString('en-US')} <span className="text-[10px] font-normal uppercase text-gray-600">kg</span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-right whitespace-nowrap text-gray-900">
+                                                            {totalLcReceiveQtyKg.toLocaleString('en-US')} <span className="text-[10px] font-normal uppercase text-gray-600">kg</span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-right whitespace-nowrap text-blue-700">
+                                                            {relatedLCs.reduce((sum, lc) => {
+                                                                const lcIpQty = getLcConsumptionFromIp(lc, lc);
+                                                                const lcRecQty = getLcReceiveQtyForIp(lc);
+                                                                return sum + Math.max(0, lcIpQty - lcRecQty);
+                                                            }, 0).toLocaleString('en-US')} <span className="text-[10px] font-normal uppercase text-gray-500">kg</span>
+                                                        </td>
+                                                        <td></td>
+                                                    </tr>
+                                                </tfoot>
+                                            )}
+                                        </table>
+                                    </div>
+
+                                    {/* Mobile LC Cards */}
+                                    <div className="md:hidden space-y-3.5">
+                                        {relatedLCs.length > 0 ? (
+                                            relatedLCs.flatMap((lc, lcIdx) => {
+                                                const states = getLcStates(lc);
+                                                const lcReceiveQtyKg = getLcReceiveQtyForIp(lc);
+
+                                                return states.map((state, sIdx) => {
+                                                    const stateQtyKg = getLcConsumptionFromIp(state, lc, false);
+                                                    const stateIpQtyUsedKg = getLcConsumptionFromIp(state, lc);
+                                                    const isLastState = sIdx === states.length - 1;
+                                                    const isOriginalState = state.amendmentNo === 'Original LC';
+                                                    const stateRemQtyKg = isLastState ? Math.max(0, stateIpQtyUsedKg - lcReceiveQtyKg) : 0;
+
+                                                    const prevQtyKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc, false) : 0;
+                                                    const diffQtyKg = stateQtyKg - prevQtyKg;
+
+                                                    const prevStateIpQtyUsedKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc) : 0;
+                                                    const diffIpQtyUsedKg = stateIpQtyUsedKg - prevStateIpQtyUsedKg;
+
+                                                    const today = new Date();
+                                                    today.setHours(0, 0, 0, 0);
+                                                    const exp = new Date(state.expiryDate);
+                                                    exp.setHours(0, 0, 0, 0);
+                                                    const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+
+                                                    let statusText = "Active";
+                                                    let statusClass = "bg-green-50 text-green-700 border-green-100";
+                                                    if (!isLastState) {
+                                                        statusText = "Amended";
+                                                        statusClass = "bg-gray-50 text-gray-500 border-gray-100";
+                                                    } else if (exp < today) {
+                                                        statusText = "Expired";
+                                                        statusClass = "bg-red-50 text-red-600 border-red-100";
+                                                    } else if (diffDays <= 5) {
+                                                        statusText = "Expire Soon";
+                                                        statusClass = "bg-amber-50 text-amber-600 border-amber-100";
+                                                    }
+
+                                                    return (
+                                                        <div key={`${lc._id || lcIdx}_${sIdx}`} className={`bg-white p-4.5 rounded-2xl border shadow-sm ${isLastState ? 'border-gray-100' : 'border-gray-100/60 bg-gray-50/10'}`}>
+                                                            <div className="flex justify-between items-center mb-2.5">
+                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                    <span className="text-[11px] font-black uppercase text-blue-600 tracking-wider">LC No:</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setSelectedLcForModal(lc);
+                                                                        }}
+                                                                        className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none tracking-tight"
+                                                                        title={`View LC Details (${lc.lcNo || 'N/A'})`}
+                                                                    >
+                                                                        {lc.lcNo || '-'}
+                                                                    </button>
+                                                                    {!isOriginalState && (
+                                                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-50 text-amber-600 border border-amber-200">
+                                                                            {state.amendmentNo}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border shrink-0 ${statusClass}`}>
+                                                                        {statusText}
+                                                                    </span>
+                                                            </div>
+
+                                                            <div className="flex flex-col gap-2 pt-2.5 border-t border-gray-100 text-xs">
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Date :</span>
+                                                                    <span className="font-mono font-bold text-gray-700 whitespace-nowrap">{formatDate(state.amendmentDate || state.openingDate || lc.openingDate)}</span>
+                                                                </div>
+                                                                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100/60">
+                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Expiry Date :</span>
+                                                                    <span className="font-mono font-bold text-red-500 whitespace-nowrap">{formatDate(state.expiryDate)}</span>
+                                                                </div>
+                                                                <div className="flex items-start justify-between gap-3 pt-1.5 border-t border-gray-100/60">
+                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0 pt-0.5">Bank :</span>
+                                                                    <span className="font-bold text-gray-800 text-right break-words">{lc.bankName || '—'}</span>
+                                                                </div>
+                                                                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100/60">
+                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">LC Quantity :</span>
+                                                                    <span className="font-mono font-bold text-gray-800 whitespace-nowrap">
+                                                                        {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
+                                                                        {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100/60">
+                                                                    <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider shrink-0">IP Qty Used :</span>
+                                                                    <span className="font-mono font-black text-blue-700 whitespace-nowrap">
+                                                                        {sIdx > 0 && diffIpQtyUsedKg > 0 ? '+' : ''}
+                                                                        {(sIdx > 0 ? diffIpQtyUsedKg : stateIpQtyUsedKg).toLocaleString('en-US')} kg
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100/60">
+                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">LC Receive :</span>
+                                                                    <span className="font-mono font-bold text-gray-800 whitespace-nowrap">
+                                                                        {(isLastState ? lcReceiveQtyKg : 0).toLocaleString('en-US')} kg
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100/60">
+                                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Rem. LC Qty :</span>
+                                                                    <span className={`font-mono font-black whitespace-nowrap ${stateRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                                                        {stateRemQtyKg.toLocaleString('en-US')} kg
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                });
+                                            })
+                                        ) : (
+                                            <div className="p-6 text-center bg-gray-50 rounded-2xl border border-gray-100 border-dashed">
+                                                <p className="text-gray-400 font-bold text-xs">No LC records found for this IP.</p>
                                             </div>
                                         )}
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Linked LCs Section */}
-                    <div>
-                        <div className="flex items-center justify-between mb-3">
-                            <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                                <span>Letters of Credit (LCs) Under This IP</span>
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">
-                                    {relatedLCs.length}
-                                </span>
-                            </h4>
-                        </div>
-
-                        {/* Desktop LC Table */}
-                        <div className="hidden md:block border border-gray-100 rounded-2xl shadow-sm overflow-x-auto overflow-y-auto max-h-[46vh] custom-scrollbar">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
-                                    <tr className="bg-gray-50 border-b border-gray-100">
-                                        <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">Date</th>
-                                        <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">Expire Date</th>
-                                        <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">LC No</th>
-                                        <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">Bank</th>
-                                        <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">Quantity</th>
-                                        <th className="px-4 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider text-right bg-blue-50/50 sticky top-0 bg-blue-50 z-10">IP Qty</th>
-                                        <th className="px-4 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">LC Receive</th>
-                                        <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">Remaining LC Qty</th>
-                                        <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-center sticky top-0 bg-gray-50 z-10">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {relatedLCs.length > 0 ? (
-                                        relatedLCs.flatMap((lc, lcIdx) => {
-                                            const states = getLcStates(lc);
-                                            const lcReceiveQtyKg = getLcReceiveQtyForIp(lc);
-
-                                            return states.map((state, sIdx) => {
-                                                const stateQtyKg = getLcConsumptionFromIp(state, lc, false);
-                                                const stateIpQtyUsedKg = getLcConsumptionFromIp(state, lc);
-                                                const isLastState = sIdx === states.length - 1;
-                                                const isOriginalState = state.amendmentNo === 'Original LC';
-                                                const stateRemQtyKg = isLastState ? Math.max(0, stateIpQtyUsedKg - lcReceiveQtyKg) : 0;
-
-                                                const prevQtyKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc, false) : 0;
-                                                const diffQtyKg = stateQtyKg - prevQtyKg;
-
-                                                const prevStateIpQtyUsedKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc) : 0;
-                                                const diffIpQtyUsedKg = stateIpQtyUsedKg - prevStateIpQtyUsedKg;
-
-                                                const today = new Date();
-                                                today.setHours(0, 0, 0, 0);
-                                                const exp = new Date(state.expiryDate);
-                                                exp.setHours(0, 0, 0, 0);
-                                                const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
-
-                                                let statusText = "Active";
-                                                let statusClass = "bg-green-50 text-green-700 border-green-100";
-
-                                                if (!isLastState) {
-                                                    statusText = "Amended";
-                                                    statusClass = "bg-gray-50 text-gray-400 border-gray-100";
-                                                } else if (exp < today) {
-                                                    statusText = "Expired";
-                                                    statusClass = "bg-red-50 text-red-600 border-red-100";
-                                                } else if (diffDays <= 5) {
-                                                    statusText = "Expire Soon";
-                                                    statusClass = "bg-amber-50 text-amber-600 border-amber-100";
-                                                }
-
-                                                return (
-                                                    <tr key={`${lc._id || lcIdx}_${sIdx}`} className={`${isLastState ? 'hover:bg-gray-50/50' : 'bg-gray-50/20 text-gray-500'} transition-colors`}>
-                                                        <td className="px-4 py-3 text-sm font-medium whitespace-nowrap">{formatDate(state.amendmentDate || state.openingDate || lc.openingDate)}</td>
-                                                        <td className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${isLastState ? 'text-red-500' : 'text-red-400'}`}>{formatDate(state.expiryDate)}</td>
-                                                        <td className="px-4 py-3 text-sm whitespace-nowrap">
-                                                            <div className="flex flex-col items-start gap-1">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setSelectedLcForModal(lc);
-                                                                    }}
-                                                                    className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none tracking-tight"
-                                                                    title={`View LC Details (${lc.lcNo || 'N/A'})`}
-                                                                >
-                                                                    {lc.lcNo || '-'}
-                                                                </button>
-                                                                {!isOriginalState && (
-                                                                    <span className={`self-start px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide border ${
-                                                                        isLastState 
-                                                                            ? 'bg-amber-50 text-amber-600 border-amber-200/60' 
-                                                                            : 'bg-gray-100 text-gray-500 border-gray-200/60'
-                                                                    }`}>
-                                                                        {state.amendmentNo}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-sm font-medium uppercase">{lc.bankName || '-'}</td>
-                                                        <td className="px-4 py-3 text-sm font-medium text-right whitespace-nowrap">
-                                                            <span className={
-                                                                sIdx > 0
-                                                                    ? (diffQtyKg > 0 ? 'text-green-600 font-black' : diffQtyKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
-                                                                    : (isLastState ? 'text-gray-900 font-bold' : '')
-                                                            }>
-                                                                {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
-                                                                {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-sm font-bold text-right whitespace-nowrap bg-blue-50/20">
-                                                            <span className={
-                                                                sIdx > 0
-                                                                    ? (diffIpQtyUsedKg > 0 ? 'text-green-600 font-black' : diffIpQtyUsedKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
-                                                                    : 'text-blue-700 font-black'
-                                                            }>
-                                                                {sIdx > 0 && diffIpQtyUsedKg > 0 ? '+' : ''}
-                                                                {(sIdx > 0 ? diffIpQtyUsedKg : stateIpQtyUsedKg).toLocaleString('en-US')}
-                                                            </span> <span className="text-[10px] font-normal uppercase text-gray-500">kg</span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-sm font-bold text-right whitespace-nowrap">
-                                                            <span className={isLastState ? 'text-gray-900 font-bold' : 'text-gray-400'}>
-                                                                {(isLastState ? lcReceiveQtyKg : 0).toLocaleString('en-US')}
-                                                            </span> <span className="text-[10px] font-normal uppercase text-gray-500">kg</span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-sm font-medium text-right whitespace-nowrap">
-                                                            <span className={`font-black ${isLastState ? (stateRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>
-                                                                {stateRemQtyKg.toLocaleString('en-US')}
-                                                            </span> <span className="text-[10px] font-normal uppercase text-gray-400">kg</span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-center whitespace-nowrap">
-                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusClass}`}>
-                                                                {statusText}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            });
-                                        })
-                                    ) : (
-                                        <tr>
-                                            <td colSpan="9" className="px-5 py-12 text-center text-gray-400 font-bold">No LC records found for this IP.</td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                                {relatedLCs.length > 0 && (
-                                    <tfoot>
-                                        <tr className="bg-gray-100/80 border-t-2 border-gray-200 font-black text-gray-900">
-                                            <td colSpan="4" className="px-4 py-3 text-sm text-right uppercase tracking-wider text-gray-700">Grand Total:</td>
-                                            <td className="px-4 py-3 text-sm text-right whitespace-nowrap">
-                                                {relatedLCs.reduce((sum, lc) => sum + getLcConsumptionFromIp(lc, lc, false), 0).toLocaleString('en-US')} kg
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-right whitespace-nowrap bg-blue-100/50 text-blue-900">
-                                                {totalLcQtyKg.toLocaleString('en-US')} <span className="text-[10px] font-normal uppercase text-gray-600">kg</span>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-right whitespace-nowrap text-gray-900">
-                                                {totalLcReceiveQtyKg.toLocaleString('en-US')} <span className="text-[10px] font-normal uppercase text-gray-600">kg</span>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-right whitespace-nowrap text-blue-700">
-                                                {relatedLCs.reduce((sum, lc) => {
-                                                    const lcIpQty = getLcConsumptionFromIp(lc, lc);
-                                                    const lcRecQty = getLcReceiveQtyForIp(lc);
-                                                    return sum + Math.max(0, lcIpQty - lcRecQty);
-                                                }, 0).toLocaleString('en-US')} <span className="text-[10px] font-normal uppercase text-gray-500">kg</span>
-                                            </td>
-                                            <td></td>
-                                        </tr>
-                                    </tfoot>
-                                )}
-                            </table>
-                        </div>
-
-                        {/* Mobile LC Cards */}
-                        <div className="md:hidden space-y-3.5">
-                            {relatedLCs.length > 0 ? (
-                                relatedLCs.flatMap((lc, lcIdx) => {
-                                    const states = getLcStates(lc);
-                                    const lcReceiveQtyKg = getLcReceiveQtyForIp(lc);
-
-                                    return states.map((state, sIdx) => {
-                                        const stateQtyKg = getLcConsumptionFromIp(state, lc, false);
-                                        const stateIpQtyUsedKg = getLcConsumptionFromIp(state, lc);
-                                        const isLastState = sIdx === states.length - 1;
-                                        const isOriginalState = state.amendmentNo === 'Original LC';
-                                        const stateRemQtyKg = isLastState ? Math.max(0, stateIpQtyUsedKg - lcReceiveQtyKg) : 0;
-
-                                        const prevQtyKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc, false) : 0;
-                                        const diffQtyKg = stateQtyKg - prevQtyKg;
-
-                                        const prevStateIpQtyUsedKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc) : 0;
-                                        const diffIpQtyUsedKg = stateIpQtyUsedKg - prevStateIpQtyUsedKg;
-
-                                        const today = new Date();
-                                        today.setHours(0, 0, 0, 0);
-                                        const exp = new Date(state.expiryDate);
-                                        exp.setHours(0, 0, 0, 0);
-                                        const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
-
-                                        let statusText = "Active";
-                                        let statusClass = "bg-green-50 text-green-700 border-green-100";
-                                        if (!isLastState) {
-                                            statusText = "Amended";
-                                            statusClass = "bg-gray-50 text-gray-500 border-gray-100";
-                                        } else if (exp < today) {
-                                            statusText = "Expired";
-                                            statusClass = "bg-red-50 text-red-600 border-red-100";
-                                        } else if (diffDays <= 5) {
-                                            statusText = "Expire Soon";
-                                            statusClass = "bg-amber-50 text-amber-600 border-amber-100";
-                                        }
-
-                                        return (
-                                            <div key={`${lc._id || lcIdx}_${sIdx}`} className={`bg-white p-4.5 rounded-2xl border shadow-sm ${isLastState ? 'border-gray-100' : 'border-gray-100/60 bg-gray-50/10'}`}>
-                                                <div className="flex justify-between items-center mb-2.5">
-                                                    <div className="flex items-center gap-1.5 min-w-0">
-                                                        <span className="text-[10px] font-black uppercase text-blue-500 tracking-wider">LC No:</span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedLcForModal(lc);
-                                                            }}
-                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none tracking-tight"
-                                                            title={`View LC Details (${lc.lcNo || 'N/A'})`}
-                                                        >
-                                                            {lc.lcNo || '-'}
-                                                        </button>
-                                                        {!isOriginalState && (
-                                                            <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-50 text-amber-600 border border-amber-200">
-                                                                {state.amendmentNo}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${statusClass}`}>
-                                                        {statusText}
-                                                    </span>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-gray-50">
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Date</span>
-                                                        <span className="font-mono font-bold text-gray-700">{formatDate(state.amendmentDate || state.openingDate || lc.openingDate)}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Expiry Date</span>
-                                                        <span className="font-mono font-bold text-red-500">{formatDate(state.expiryDate)}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Bank</span>
-                                                        <span className="font-bold text-gray-800 truncate block">{lc.bankName || '—'}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">LC Quantity</span>
-                                                        <span className="font-mono font-bold text-gray-800">
-                                                            {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
-                                                            {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
-                                                        </span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-blue-600 uppercase block">IP Qty Used</span>
-                                                        <span className="font-mono font-black text-blue-700">
-                                                            {sIdx > 0 && diffIpQtyUsedKg > 0 ? '+' : ''}
-                                                            {(sIdx > 0 ? diffIpQtyUsedKg : stateIpQtyUsedKg).toLocaleString('en-US')} kg
-                                                        </span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">LC Receive</span>
-                                                        <span className="font-mono font-bold text-gray-800">
-                                                            {(isLastState ? lcReceiveQtyKg : 0).toLocaleString('en-US')} kg
-                                                        </span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Rem. LC Qty</span>
-                                                        <span className={`font-mono font-black ${stateRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
-                                                            {stateRemQtyKg.toLocaleString('en-US')} kg
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    });
-                                })
-                            ) : (
-                                <div className="p-6 text-center bg-gray-50 rounded-2xl border border-gray-100 border-dashed">
-                                    <p className="text-gray-400 font-bold text-xs">No LC records found for this IP.</p>
                                 </div>
+                            </div>
+
+                            {/* Nested Proforma Invoice (PI) Details Modal */}
+                            {selectedPiForModal && (
+                                <React.Suspense fallback={null}>
+                                    <PIDetailsModal
+                                        piRecord={selectedPiForModal}
+                                        piRecords={piRecords}
+                                        lcRecords={lcRecords}
+                                        ipRecords={ipRecords}
+                                        allStockRecords={allStockRecords}
+                                        allSalesRecords={allSalesRecords}
+                                        importers={importers}
+                                        exporters={exporters}
+                                        banks={banks}
+                                        employeesMap={employeesMap}
+                                        employeesFullNameMap={employeesFullNameMap}
+                                        currentUser={currentUser}
+                                        modalZIndex="z-[10001]"
+                                        onClose={() => setSelectedPiForModal(null)}
+                                    />
+                                </React.Suspense>
+                            )}
+
+                            {/* Nested Letter of Credit (LC) Details Modal */}
+                            {selectedLcForModal && (
+                                <React.Suspense fallback={null}>
+                                    <ViewDetailsModal
+                                        data={selectedLcForModal}
+                                        lcRecords={lcRecords}
+                                        piRecordsRaw={piRecords}
+                                        ipRecordsRaw={ipRecords}
+                                        allStockRecords={allStockRecords}
+                                        allSalesRecords={allSalesRecords}
+                                        employeesFullNameMap={employeesFullNameMap}
+                                        currentUser={currentUser}
+                                        showDetailsFirst={true}
+                                        modalZIndex="z-[10001]"
+                                        onClose={() => setSelectedLcForModal(null)}
+                                    />
+                                </React.Suspense>
+                            )}
+
+                            {/* Sub-modal for Viewing Attached PDF */}
+                            {viewingPdf && (
+                                <PDFViewerModal
+                                    pdfData={viewingPdf}
+                                    fileName={viewingPdfName}
+                                    onClose={() => {
+                                        setViewingPdf(null);
+                                        setViewingPdfName('');
+                                    }}
+                                />
                             )}
                         </div>
-                    </div>
-                </div>
-
-                {/* Nested Proforma Invoice (PI) Details Modal */}
-                {selectedPiForModal && (
-                    <React.Suspense fallback={null}>
-                        <PIDetailsModal
-                            piRecord={selectedPiForModal}
-                            piRecords={piRecords}
-                            lcRecords={lcRecords}
-                            ipRecords={ipRecords}
-                            allStockRecords={allStockRecords}
-                            allSalesRecords={allSalesRecords}
-                            importers={importers}
-                            exporters={exporters}
-                            banks={banks}
-                            employeesMap={employeesMap}
-                            employeesFullNameMap={employeesFullNameMap}
-                            currentUser={currentUser}
-                            modalZIndex="z-[10001]"
-                            onClose={() => setSelectedPiForModal(null)}
-                        />
-                    </React.Suspense>
-                )}
-
-                {/* Nested Letter of Credit (LC) Details Modal */}
-                {selectedLcForModal && (
-                    <React.Suspense fallback={null}>
-                        <ViewDetailsModal
-                            data={selectedLcForModal}
-                            lcRecords={lcRecords}
-                            piRecordsRaw={piRecords}
-                            ipRecordsRaw={ipRecords}
-                            allStockRecords={allStockRecords}
-                            allSalesRecords={allSalesRecords}
-                            employeesFullNameMap={employeesFullNameMap}
-                            currentUser={currentUser}
-                            showDetailsFirst={true}
-                            modalZIndex="z-[10001]"
-                            onClose={() => setSelectedLcForModal(null)}
-                        />
-                    </React.Suspense>
-                )}
-
-                {/* Sub-modal for Viewing Attached PDF */}
-                {viewingPdf && (
-                    <PDFViewerModal
-                        pdfData={viewingPdf}
-                        fileName={viewingPdfName}
-                        onClose={() => {
-                            setViewingPdf(null);
-                            setViewingPdfName('');
-                        }}
-                    />
-                )}
-            </div>
         </div>,
-        document.body
-    );
+                document.body
+                );
 };
 
-export default IPDetailsModal;
+                export default IPDetailsModal;

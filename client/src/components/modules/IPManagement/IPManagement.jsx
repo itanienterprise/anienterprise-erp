@@ -2451,35 +2451,51 @@ function IPManagement({
                                             }}
                                         >
                                             <div className="p-5 space-y-4">
-                                                {/* Single Line Header: IP No. & Status Tag */}
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div className="flex items-center min-w-0 flex-1">
-                                                        {isSelectionMode && (
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedItems.has(record._id)}
-                                                                onChange={(e) => { e.stopPropagation(); toggleSelection(record._id); }}
-                                                                className="w-5 h-5 accent-blue-600 shrink-0 mr-3"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            />
-                                                        )}
-                                                        <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap">IP No.</span>
-                                                        <span className="text-blue-500 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-black text-gray-900 tracking-tight truncate">{record.ipNumber}</span>
+                                                {/* Header: Status Tag on top of IP No, then Importer & Product */}
+                                                <div className="flex items-start gap-3">
+                                                    {isSelectionMode && (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(record._id)}
+                                                            onChange={(e) => { e.stopPropagation(); toggleSelection(record._id); }}
+                                                            className="w-5 h-5 accent-blue-600 shrink-0 mt-1"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    )}
+                                                    <div className="min-w-0 flex-1 space-y-1.5 text-left">
+                                                        {/* Line 1: IP No & Status Tag on the right */}
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="text-xs leading-snug min-w-0">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP No : </span>
+                                                                <span className="font-black text-gray-900 tracking-tight break-all font-mono text-sm">{record.ipNumber || '—'}</span>
+                                                            </div>
+                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                                record.computedStatus === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' :
+                                                                    record.computedStatus === 'Extended' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                                                        'bg-amber-50 text-amber-700 border-amber-100'
+                                                                }`}>
+                                                                {record.computedStatus}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Line 2: Importer */}
+                                                        <div className="text-xs leading-snug">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer : </span>
+                                                            <span className="font-bold text-gray-800 break-words">{record.ipParty || '—'}</span>
+                                                        </div>
+
+                                                        {/* Line 3: Product */}
+                                                        <div className="text-xs leading-snug">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product : </span>
+                                                            <span className="font-semibold text-gray-700 break-words">{record.productName || '—'}</span>
+                                                        </div>
                                                     </div>
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
-                                                        record.computedStatus === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' :
-                                                            record.computedStatus === 'Extended' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                                'bg-amber-50 text-amber-700 border-amber-100'
-                                                        }`}>
-                                                        {record.computedStatus}
-                                                    </span>
                                                 </div>
 
                                                 {/* Expandable Details & Actions */}
                                                 {isExpanded && (
-                                                    <div className="animate-in slide-in-from-top-2 duration-300">
-                                                        <div className="space-y-1 pt-2">
+                                                    <div className="animate-in slide-in-from-top-2 duration-300 border-t border-gray-100 pt-3">
+                                                        <div className="space-y-1">
                                                             {record.referenceNo && (
                                                                 <div className="flex items-center">
                                                                     <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Reference</span>
