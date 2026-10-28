@@ -6,7 +6,8 @@ import {
     PlusIcon, XIcon, EditIcon, TrashIcon, SearchIcon,
     LCManagerIcon, ShieldIcon, BuildingIcon, GlobeIcon,
     DollarSignIcon, CalendarIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, FileTextIcon, CheckIcon,
-    FunnelIcon, PDFIcon, BarChartIcon, BoxIcon
+    FunnelIcon, PDFIcon, BarChartIcon, BoxIcon,
+    ClockIcon, TrendingUpIcon, TruckIcon, ReceiptIcon, WalletIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
@@ -1805,20 +1806,39 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                     </button>
                                 )}
                             </div>
-                            {/* Tab Buttons */}
-                            <div className="flex items-center gap-2">
-                                {['history', 'cog', 'gp', 'bill', 'expense'].map(tab => (
-                                    <button
-                                        key={tab}
-                                        onClick={() => { setActiveTab(tab); setConsumptionSearchQuery(''); setExpandedSubRowKey(null); }}
-                                        className={`px-5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${activeTab === tab
-                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                            }`}
-                                    >
-                                        {tab === 'history' ? 'LC History' : tab === 'cog' ? 'CoG' : tab === 'gp' ? 'G.P List' : tab === 'bill' ? 'LC Bill' : 'Expense'}
-                                    </button>
-                                ))}
+                            {/* Tab Buttons (Circular matching Insurance design) */}
+                            <div className="flex items-center justify-center gap-3">
+                                {[
+                                    { id: 'history', label: 'LC History', icon: ClockIcon },
+                                    { id: 'cog', label: 'CoG', icon: TrendingUpIcon },
+                                    { id: 'gp', label: 'G.P List', icon: TruckIcon },
+                                    { id: 'bill', label: 'LC Bill', icon: ReceiptIcon },
+                                    { id: 'expense', label: 'Expense', icon: WalletIcon }
+                                ].map(({ id, label, icon: TabIcon }) => {
+                                    const isActive = activeTab === id;
+                                    return (
+                                        <button
+                                            key={id}
+                                            type="button"
+                                            onClick={() => { setActiveTab(id); setConsumptionSearchQuery(''); setExpandedSubRowKey(null); }}
+                                            className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none focus:outline-none select-none px-1.5"
+                                        >
+                                            <div
+                                                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shrink-0 ${isActive
+                                                    ? 'bg-gradient-to-br from-[#1e40af] to-[#3b82f6] text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)] scale-105'
+                                                    : 'bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b]'
+                                                }`}
+                                            >
+                                                <TabIcon className="w-5 h-5 transition-transform duration-150 group-hover:scale-105" />
+                                            </div>
+                                            <span
+                                                className={`text-[11.5px] text-center leading-none tracking-tight transition-colors ${isActive ? 'text-blue-700 font-bold' : 'text-[#475569] font-semibold'}`}
+                                            >
+                                                {label}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
@@ -1851,15 +1871,21 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                 </div>
 
                 {/* Mobile Header */}
-                <div className="md:hidden flex flex-col gap-3 px-4 py-4 border-b border-gray-100 bg-gray-50/50">
-                    {/* Top Row: Title, LC Info and Acti                    <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="min-w-0">
-                                <h3 className="text-sm font-black text-gray-900 truncate leading-none">
+                <div className="md:hidden flex flex-col gap-2.5 px-4 pt-3.5 pb-3 border-b border-gray-100 bg-white rounded-t-2xl shrink-0">
+                    {/* Top Row: Icon + Full Title + LC NO & Meta + Close (X) */}
+                    <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100/70 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                                <LCManagerIcon className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0 text-left flex-1">
+                                <h3 className="text-sm font-bold text-gray-900 leading-snug">
                                     {showConsumption ? 'LC Consumption History' : 'LC Record Details'}
                                 </h3>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1 flex items-center gap-1.5 flex-wrap">
-                                    <span>LC NO: <span className="text-xs font-black text-blue-600">{data.lcNo}</span></span>
+                                <div className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5 flex-wrap mt-0.5">
+                                    <span className="font-bold text-gray-700 whitespace-nowrap">
+                                        LC NO: <span className="font-mono font-black text-blue-600">{data.lcNo}</span>
+                                    </span>
                                     {(() => {
                                         let resolvedFullCreator = '';
                                         if (typeof getLcEntryDetails === 'function') {
@@ -1875,97 +1901,141 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                             }
                                         }
                                         return resolvedFullCreator ? (
-                                            <span className="text-[10px] text-gray-500 font-semibold normal-case">
-                                                | By: <span className="font-bold text-gray-800">{resolvedFullCreator}</span>
-                                            </span>
+                                            <>
+                                                <span className="text-gray-300">•</span>
+                                                <span className="whitespace-nowrap">
+                                                    By: <strong className="font-semibold text-gray-800">{resolvedFullCreator}</strong>
+                                                </span>
+                                            </>
                                         ) : null;
                                     })()}
-                                </p>
-                                {(() => {
-                                    const prods = data.productsList && data.productsList.length > 0
-                                        ? data.productsList.map(p => p.productName).filter(Boolean).join(', ')
-                                        : data.productName || data.product || '';
-                                    return prods ? (
-                                        <div className="mt-1">
-                                            <span className="text-[9px] font-extrabold text-blue-850 bg-blue-50/70 border border-blue-100/50 px-1.5 py-0.5 rounded uppercase tracking-wider inline-block">
-                                                {prods}
-                                            </span>
-                                        </div>
-                                    ) : null;
-                                })()}
+                                </div>
                             </div>
                         </div>
+
+                        {/* Close button aligned at top-right */}
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="w-8 h-8 rounded-full bg-gray-100/90 hover:bg-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center transition-all shrink-0 active:scale-95 cursor-pointer -mr-1 -mt-0.5"
+                            title="Close"
+                        >
+                            <XIcon className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {/* Second Row: Product Badge (Left) & Actions (Right) */}
+                    <div className="flex items-center justify-between gap-2 pt-0.5">
+                        <div className="min-w-0 flex-1 flex items-center gap-1.5 overflow-hidden">
+                            {(() => {
+                                const prods = data.productsList && data.productsList.length > 0
+                                    ? data.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                    : data.productName || data.product || '';
+                                return prods ? (
+                                    <span
+                                        className="inline-flex items-center text-[10px] font-bold text-blue-800 bg-blue-50/90 border border-blue-200/60 px-2 py-0.5 rounded-md uppercase tracking-wide truncate max-w-full"
+                                        title={prods}
+                                    >
+                                        {prods}
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] text-gray-400 font-medium italic">No products listed</span>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Action buttons (Show Details / LC History toggle + Add Bill) */}
                         <div className="flex items-center gap-1.5 shrink-0">
                             {showConsumption && activeTab === 'bill' && canAddBill && (
                                 <button
+                                    type="button"
                                     onClick={handleOpenAddBillModal}
-                                    className="h-7 flex items-center justify-center gap-1 px-2.5 rounded-lg text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm transition-all transform active:scale-95 shrink-0 leading-none"
+                                    className="h-7.5 flex items-center justify-center gap-1 px-2.5 rounded-lg text-[10.5px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs transition-all active:scale-95 shrink-0 leading-none cursor-pointer"
                                 >
                                     <PlusIcon className="w-3.5 h-3.5" />
                                     <span>Add</span>
                                 </button>
                             )}
                             <button
+                                type="button"
                                 onClick={() => setShowConsumption(!showConsumption)}
-                                className={`h-7 flex items-center justify-center gap-1 px-2.5 rounded-lg text-[10px] font-bold transition-all border leading-none ${showConsumption
-                                    ? 'bg-blue-50 text-blue-600 border-blue-100'
-                                    : 'bg-gray-50 text-gray-600 border-gray-100 hover:bg-white'
+                                className={`h-7.5 flex items-center justify-center gap-1.5 px-3 rounded-lg text-[11px] font-bold transition-all border leading-none cursor-pointer active:scale-95 shadow-2xs ${showConsumption
+                                        ? 'bg-blue-50/90 text-blue-600 border-blue-200 hover:bg-blue-100'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                                     }`}
+                                title={showConsumption ? 'Show LC Record Details' : 'Show Consumption History'}
                             >
-                                <LCManagerIcon className="w-3.5 h-3.5" />
-                                {showConsumption ? 'Details' : 'History'}
-                            </button>
-                            <button
-                                onClick={onClose}
-                                className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-all shrink-0"
-                            >
-                                <XIcon className="w-4 h-4" />
+                                <LCManagerIcon className="w-3.5 h-3.5 shrink-0" />
+                                <span>{showConsumption ? 'Show Details' : 'LC History'}</span>
                             </button>
                         </div>
                     </div>
 
-                    {/* Search Bar Row (only in consumption view) */}
+                    {/* Third Row: Search Bar (only in consumption view) */}
                     {showConsumption && (
-                        <div className="relative group w-full">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <div className="relative group w-full pt-0.5">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none pt-0.5">
                                 <SearchIcon className="h-3.5 w-3.5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                             </div>
                             <input
                                 type="text"
                                 placeholder="Search consumption history..."
                                 autoComplete="off"
-                                className="block w-full pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-xl text-[12px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
+                                className="block w-full pl-9 pr-8 py-1.5 bg-[#f8fafc] border border-gray-200 rounded-xl text-[12px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
                                 value={consumptionSearchQuery}
                                 onChange={(e) => setConsumptionSearchQuery(e.target.value)}
                             />
                             {consumptionSearchQuery && (
                                 <button
+                                    type="button"
                                     onClick={() => setConsumptionSearchQuery('')}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer p-1"
                                 >
-                                    <XIcon className="w-3 h-3" />
+                                    <XIcon className="w-3.5 h-3.5" />
                                 </button>
                             )}
                         </div>
                     )}
 
-                    {/* Tabs Row (only in consumption view) */}
+                    {/* Tabs Row (Circular Buttons matching design!) */}
                     {showConsumption && (
-                        <div className="flex items-center justify-between gap-3 w-full">
-                            <div className="flex items-center justify-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1 flex-1">
-                                {['history', 'cog', 'gp', 'bill', 'expense'].map(tab => (
+                        <div className="flex items-center justify-around gap-1.5 w-full pt-1 pb-0.5">
+                            {[
+                                { id: 'history', label: 'LC History', icon: ClockIcon },
+                                { id: 'cog', label: 'CoG', icon: TrendingUpIcon },
+                                { id: 'gp', label: 'G.P List', icon: TruckIcon },
+                                { id: 'bill', label: 'LC Bill', icon: ReceiptIcon },
+                                { id: 'expense', label: 'Expense', icon: WalletIcon }
+                            ].map(({ id, label, icon: TabIcon }) => {
+                                const isActive = activeTab === id;
+                                return (
                                     <button
-                                        key={tab}
-                                        onClick={() => { setActiveTab(tab); setConsumptionSearchQuery(''); setExpandedSubRowKey(null); }}
-                                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all whitespace-nowrap border shrink-0 ${activeTab === tab
-                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                                            }`}
+                                        key={id}
+                                        type="button"
+                                        onClick={() => {
+                                            setActiveTab(id);
+                                            setConsumptionSearchQuery('');
+                                            setExpandedSubRowKey(null);
+                                        }}
+                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-0.5 min-w-0 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none focus:outline-none select-none"
                                     >
-                                        {tab === 'history' ? 'LC History' : tab === 'cog' ? 'CoG' : tab === 'gp' ? 'G.P List' : tab === 'bill' ? 'LC Bill' : 'Expense'}
+                                        <div
+                                            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0 ${isActive
+                                                    ? 'bg-gradient-to-br from-[#1e40af] to-[#3b82f6] text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)] scale-105'
+                                                    : 'bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1]'
+                                                }`}
+                                        >
+                                            <TabIcon className="w-5 h-5 transition-transform duration-150 group-hover:scale-105" />
+                                        </div>
+                                        <span
+                                            className={`text-[11.5px] font-semibold text-center leading-[1.2] tracking-tight transition-colors ${isActive ? 'text-blue-700 font-bold' : 'text-[#475569]'
+                                                }`}
+                                        >
+                                            {label}
+                                        </span>
                                     </button>
-                                ))}
-                            </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -1976,81 +2046,111 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 w-full flex flex-col">
                             {/* Summary Cards */}
                             {activeTab === 'bill' ? (
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 w-full border border-gray-100 rounded-2xl shadow-sm divide-x divide-gray-100 overflow-hidden bg-white">
-                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-left flex flex-col justify-between">
-                                        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
-                                            <div className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg md:rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0">
-                                                <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
-                                            </div>
-                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bill Value</span>
-                                        </div>
-                                        <div className="flex items-baseline justify-between gap-2 text-left w-full">
-                                            <div className="flex flex-col">
-                                                <span className="text-lg md:text-2xl font-black text-indigo-600 leading-tight">
-                                                    ${(adj.billValueUsd || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </span>
-                                                {(adj.dollarRate || 0) > 0 && (
-                                                    <span className="text-xs md:text-sm font-bold text-gray-700 mt-0.5">
-                                                        ৳{(adj.dollarRate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 mb-6 w-full">
+                                    {/* Card 1: Bill Value */}
+                                    {(() => {
+                                        const usdVal = adj.billValueUsd || 0;
+                                        const dRate = adj.dollarRate || 0;
+                                        const bdtVal = usdVal > 0 && dRate > 0 ? (usdVal * dRate) : 0;
+                                        return (
+                                            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                                                        <DollarSignIcon className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bill Value</span>
+                                                </div>
+                                                <div className="flex flex-col mt-0.5">
+                                                    <span className="text-[13px] sm:text-base md:text-xl font-black font-mono tracking-tight text-gray-900 leading-tight">
+                                                        {bdtVal > 0 ? `৳${bdtVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
                                                     </span>
-                                                )}
+                                                    <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-gray-500 font-mono mt-1 whitespace-nowrap overflow-hidden text-ellipsis">
+                                                        <span className="text-indigo-600 font-extrabold">${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                        {dRate > 0 && (
+                                                            <>
+                                                                <span className="text-gray-300">•</span>
+                                                                <span className="text-gray-600">@ ৳{dRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="flex flex-col items-end justify-end">
-                                                <span className="text-lg md:text-2xl font-black text-gray-900 leading-tight">
-                                                    ৳{(adj.billValueUsd > 0 && adj.dollarRate > 0 ? (adj.billValueUsd * adj.dollarRate) : 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
 
-                                    <div
-                                        className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start"
-                                    >
-                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                            <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
-                                                <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                    {/* Card 2: Total Bills */}
+                                    {(() => {
+                                        const totalBillsVal = filteredBills.reduce((sum, b) => sum + (b.totalBill || 0), 0);
+                                        return (
+                                            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg shrink-0">
+                                                        <ReceiptIcon className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bills</span>
+                                                </div>
+                                                <div className="flex flex-col mt-0.5">
+                                                    <span className="text-[13px] sm:text-base md:text-xl font-black font-mono tracking-tight text-blue-600 leading-tight">
+                                                        ৳{totalBillsVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                    <span className="text-[10px] sm:text-[11px] font-semibold text-gray-400 mt-1">
+                                                        {filteredBills.length} Bill{filteredBills.length === 1 ? '' : 's'} Listed
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Bills</span>
-                                        </div>
-                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                            <span className="text-lg md:text-2xl font-black text-blue-600">
-                                                ৳{filteredBills.reduce((sum, b) => sum + b.totalBill, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                            </span>
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
 
-                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                            <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
-                                                <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                    {/* Card 3: Total Paid */}
+                                    {(() => {
+                                        const totalBillsVal = filteredBills.reduce((sum, b) => sum + (b.totalBill || 0), 0);
+                                        const totalPaidVal = filteredBills.reduce((sum, b) => sum + (b.paidBill || 0), 0);
+                                        const paidPct = totalBillsVal > 0 ? ((totalPaidVal / totalBillsVal) * 100).toFixed(1) : '0';
+                                        return (
+                                            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg shrink-0">
+                                                        <CheckIcon className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Paid</span>
+                                                </div>
+                                                <div className="flex flex-col mt-0.5">
+                                                    <span className="text-[13px] sm:text-base md:text-xl font-black font-mono tracking-tight text-emerald-600 leading-tight">
+                                                        ৳{totalPaidVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                    <span className="text-[10px] sm:text-[11px] font-bold text-emerald-600 mt-1">
+                                                        {paidPct}% Paid
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Paid</span>
-                                        </div>
-                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                            <span className="text-lg md:text-2xl font-black text-emerald-600">
-                                                ৳{filteredBills.reduce((sum, b) => sum + (b.paidBill || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                            </span>
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
 
-                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                            <div className="p-1.5 md:p-2 bg-rose-50 text-rose-600 rounded-lg md:rounded-xl group-hover:bg-rose-600 group-hover:text-white transition-colors shrink-0">
-                                                <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                    {/* Card 4: Total Balance */}
+                                    {(() => {
+                                        const bal = filteredBills.reduce((sum, b) => sum + (b.billBalance || 0), 0);
+                                        return (
+                                            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg shrink-0">
+                                                        <DollarSignIcon className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Balance</span>
+                                                </div>
+                                                <div className="flex flex-col mt-0.5">
+                                                    <span className="text-[13px] sm:text-base md:text-xl font-black font-mono tracking-tight text-rose-600 leading-tight">
+                                                        {bal < 0
+                                                            ? `-৳${Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                            : `৳${bal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                        }
+                                                    </span>
+                                                    <span className="text-[10px] sm:text-[11px] font-semibold text-gray-400 mt-1">
+                                                        Remaining Balance
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Balance</span>
-                                        </div>
-                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                            <span className="text-lg md:text-2xl font-black text-rose-600">
-                                                {(() => {
-                                                    const bal = filteredBills.reduce((sum, b) => sum + (b.billBalance || 0), 0);
-                                                    return bal < 0
-                                                        ? `-৳${Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                                                        : `৳${bal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-                                                })()}
-                                            </span>
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
                                 </div>
                             ) : activeTab === 'cog' ? (
                                 (() => {
@@ -2095,159 +2195,157 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                     const avgCostingPerKg = totalInvoiceQty > 0 ? (grandTotalBdt / totalInvoiceQty) : 0;
 
                                     return (
-                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-0 mb-8 w-full border border-gray-100 rounded-2xl shadow-sm divide-x divide-gray-100 overflow-hidden bg-white">
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 sm:gap-3 mb-6 w-full">
                                             {/* Card 1: Total Invoice Qty */}
-                                            <div className="col-span-full md:col-span-1 bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                                    <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
-                                                        <BoxIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg shrink-0">
+                                                        <BoxIcon className="w-4 h-4" />
                                                     </div>
-                                                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Invoice Qty</span>
+                                                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Invoice Qty</span>
                                                 </div>
-                                                <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                                    <span className="text-lg md:text-2xl font-black text-blue-600">
-                                                        {totalInvoiceQty.toLocaleString('en-IN')} <span className="text-xs font-bold">KG</span>
-                                                    </span>
+                                                <div className="flex items-baseline gap-1 font-mono">
+                                                    <span className="text-[13px] sm:text-base md:text-lg font-black text-blue-600">{totalInvoiceQty.toLocaleString('en-IN')}</span>
+                                                    <span className="text-[10px] sm:text-xs font-bold text-gray-400">Kg</span>
                                                 </div>
                                             </div>
 
                                             {/* Card 2: Total Receive Qty */}
-                                            <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                                    <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
-                                                        <CheckIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg shrink-0">
+                                                        <CheckIcon className="w-4 h-4" />
                                                     </div>
-                                                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Receive Qty</span>
+                                                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Receive Qty</span>
                                                 </div>
-                                                <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                                    <span className="text-lg md:text-2xl font-black text-emerald-600">
-                                                        {totalReceiveQty.toLocaleString('en-IN')} <span className="text-xs font-bold">KG</span>
-                                                    </span>
+                                                <div className="flex items-baseline gap-1 font-mono">
+                                                    <span className="text-[13px] sm:text-base md:text-lg font-black text-emerald-600">{totalReceiveQty.toLocaleString('en-IN')}</span>
+                                                    <span className="text-[10px] sm:text-xs font-bold text-gray-400">Kg</span>
                                                 </div>
                                             </div>
 
                                             {/* Card 3: Total Short */}
-                                            <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                                    <div className="p-1.5 md:p-2 bg-rose-50 text-rose-600 rounded-lg md:rounded-xl group-hover:bg-rose-600 group-hover:text-white transition-colors shrink-0">
-                                                        <XIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg shrink-0">
+                                                        <XIcon className="w-4 h-4" />
                                                     </div>
-                                                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Short</span>
+                                                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Short</span>
                                                 </div>
-                                                <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                                    <span className="text-lg md:text-2xl font-black text-rose-600">
-                                                        {totalShort.toLocaleString('en-IN')} <span className="text-xs font-bold">KG</span>
-                                                    </span>
+                                                <div className="flex items-baseline gap-1 font-mono">
+                                                    <span className="text-[13px] sm:text-base md:text-lg font-black text-rose-600">{totalShort.toLocaleString('en-IN')}</span>
+                                                    <span className="text-[10px] sm:text-xs font-bold text-gray-400">Kg</span>
                                                 </div>
                                             </div>
 
                                             {/* Card 4: Grand Total BDT */}
-                                            <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                                    <div className="p-1.5 md:p-2 bg-amber-50 text-amber-600 rounded-lg md:rounded-xl group-hover:bg-amber-600 group-hover:text-white transition-colors shrink-0">
-                                                        <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg shrink-0">
+                                                        <DollarSignIcon className="w-4 h-4" />
                                                     </div>
-                                                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Grand Total BDT</span>
+                                                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Grand Total BDT</span>
                                                 </div>
-                                                <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                                    <span className="text-lg md:text-2xl font-black text-amber-600">
+                                                <div className="flex items-baseline gap-0.5 font-mono">
+                                                    <span className="text-[13px] sm:text-base md:text-lg font-black text-amber-600">
                                                         ৳{grandTotalBdt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </span>
                                                 </div>
                                             </div>
 
                                             {/* Card 5: Avg Costing/KG */}
-                                            <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                                    <div className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg md:rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0">
-                                                        <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between col-span-2 md:col-span-1">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                                                        <DollarSignIcon className="w-4 h-4" />
                                                     </div>
-                                                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Avg Costing/KG</span>
+                                                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Avg Costing/KG</span>
                                                 </div>
-                                                <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                                    <span className="text-lg md:text-2xl font-black text-indigo-600">
-                                                        ৳{avgCostingPerKg.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/KG
+                                                <div className="flex items-baseline gap-1 font-mono">
+                                                    <span className="text-[13px] sm:text-base md:text-lg font-black text-indigo-600">
+                                                        ৳{avgCostingPerKg.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </span>
+                                                    <span className="text-[10px] sm:text-xs font-bold text-gray-400">/Kg</span>
                                                 </div>
                                             </div>
                                         </div>
                                     );
                                 })()
                             ) : (
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 w-full border border-gray-100 rounded-2xl shadow-sm divide-x divide-gray-100 overflow-hidden bg-white">
-                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                            <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
-                                                <LCManagerIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 mb-6 w-full">
+                                    <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg shrink-0">
+                                                <LCManagerIcon className="w-4 h-4" />
                                             </div>
-                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Quantity</span>
+                                            <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Quantity</span>
                                         </div>
-                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                            <span className="text-lg md:text-2xl font-black text-gray-900">{totalLcQtyKg.toLocaleString('en-US')}</span>
-                                            <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
+                                        <div className="flex items-baseline gap-1 font-mono">
+                                            <span className="text-base sm:text-xl md:text-2xl font-black text-gray-900">{totalLcQtyKg.toLocaleString('en-US')}</span>
+                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400">Kg</span>
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                            <div className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg md:rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0">
-                                                <GlobeIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                    <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                                                <GlobeIcon className="w-4 h-4" />
                                             </div>
-                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Consumption</span>
+                                            <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Consumption</span>
                                         </div>
-                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                            <span className="text-lg md:text-2xl font-black text-gray-900">{consumedQtyKg.toLocaleString('en-US')}</span>
-                                            <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
+                                        <div className="flex items-baseline gap-1 font-mono">
+                                            <span className="text-base sm:text-xl md:text-2xl font-black text-indigo-600">{consumedQtyKg.toLocaleString('en-US')}</span>
+                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400">Kg</span>
                                         </div>
                                     </div>
 
                                     {data.enableValueQtyAdjustment ? (
-                                        <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                            <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                                <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
-                                                    <PlusIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg shrink-0">
+                                                    <PlusIcon className="w-4 h-4" />
                                                 </div>
-                                                <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tolerance</span>
+                                                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tolerance</span>
                                             </div>
-                                            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                                                <div className="flex items-baseline gap-0.5 md:gap-1">
-                                                    <span className="text-lg md:text-2xl font-black text-emerald-600">
+                                            <div className="flex flex-col gap-0.5 font-mono">
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-base sm:text-xl md:text-2xl font-black text-emerald-600">
                                                         +{adj.actualAdjustmentQtyKg.toLocaleString('en-US')}
                                                     </span>
-                                                    <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
+                                                    <span className="text-[10px] sm:text-xs font-bold text-gray-400">Kg</span>
                                                 </div>
-                                                <span className="text-sm md:text-base font-black text-gray-850 shrink-0">
+                                                <span className="text-xs sm:text-sm font-black text-gray-700">
                                                     +৳{adj.addedValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                                                 </span>
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                            <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                                <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
-                                                    <ShieldIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg shrink-0">
+                                                    <ShieldIcon className="w-4 h-4" />
                                                 </div>
-                                                <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rem. Quantity</span>
+                                                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rem. Quantity</span>
                                             </div>
-                                            <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                                <span className={`text-lg md:text-2xl font-black ${remQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                            <div className="flex items-baseline gap-1 font-mono">
+                                                <span className={`text-base sm:text-xl md:text-2xl font-black ${remQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
                                                     {remQtyKg.toLocaleString('en-US')}
                                                 </span>
-                                                <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
+                                                <span className="text-[10px] sm:text-xs font-bold text-gray-400">Kg</span>
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
-                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
-                                            <div className="p-1.5 md:p-2 bg-gray-50 text-gray-600 rounded-lg md:rounded-xl group-hover:bg-gray-800 group-hover:text-white transition-colors shrink-0">
-                                                <BuildingIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                    <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all text-left flex flex-col justify-between">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="p-1.5 bg-gray-50 text-gray-600 rounded-lg shrink-0">
+                                                <BuildingIcon className="w-4 h-4" />
                                             </div>
-                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Truck</span>
+                                            <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Truck</span>
                                         </div>
-                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
-                                            <span className="text-lg md:text-2xl font-black text-gray-900">{truckCount}</span>
-                                            <span className="text-[10px] md:text-xs font-bold text-gray-400">Units</span>
+                                        <div className="flex items-baseline gap-1 font-mono">
+                                            <span className="text-base sm:text-xl md:text-2xl font-black text-gray-900">{truckCount}</span>
+                                            <span className="text-[10px] sm:text-xs font-bold text-gray-400">Units</span>
                                         </div>
                                     </div>
                                 </div>
@@ -2312,73 +2410,102 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                         </table>
                                     </div>
                                     {/* Mobile View */}
-                                    <div className="md:hidden">
+                                    <div className="md:hidden space-y-2.5">
                                         {filteredConsumptionHistory.length > 0 ? (
-                                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
-                                                {filteredConsumptionHistory.map((item, idx) => {
-                                                    const key = `history_${idx}`;
-                                                    const isExpanded = expandedSubRowKey === key;
-                                                    return (
-                                                        <div key={idx} className="transition-all hover:bg-gray-50/35">
-                                                            {/* Collapsed View Header */}
-                                                            <div
-                                                                onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
-                                                                className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
-                                                            >
-                                                                <div className={`p-2 rounded-xl shrink-0 ${item.source === 'LC Receive'
-                                                                    ? 'bg-emerald-50 text-emerald-600'
-                                                                    : 'bg-indigo-50 text-indigo-600'
-                                                                    }`}>
-                                                                    {item.source === 'LC Receive' ? (
-                                                                        <BuildingIcon className="w-4 h-4" />
-                                                                    ) : (
-                                                                        <GlobeIcon className="w-4 h-4" />
+                                            filteredConsumptionHistory.map((item, idx) => {
+                                                const key = `history_${idx}`;
+                                                const isExpanded = expandedSubRowKey === key;
+                                                return (
+                                                    <div
+                                                        key={idx}
+                                                        className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-xs hover:border-gray-200'
+                                                            }`}
+                                                    >
+                                                        {/* Collapsed View Header */}
+                                                        <div
+                                                            onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
+                                                            className="p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50/70 transition-colors"
+                                                        >
+                                                            {/* Top Row: Date, Truck info, Source Badge & Chevron */}
+                                                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                                                    <span className="text-[11px] font-bold text-gray-400 font-mono tracking-wider shrink-0">
+                                                                        {formatDate(item.date)}
+                                                                    </span>
+                                                                    {item.truck && (
+                                                                        <>
+                                                                            <span className="text-gray-300 text-[10px] shrink-0">•</span>
+                                                                            <span className="text-[10.5px] font-bold text-gray-600 font-mono shrink-0">
+                                                                                {item.truck}
+                                                                            </span>
+                                                                        </>
                                                                     )}
                                                                 </div>
-                                                                <div className="flex-1 min-w-0 text-left">
-                                                                    <p className="text-xs font-bold text-gray-900 truncate">{item.product || '-'}</p>
-                                                                    <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(item.date)}</p>
-                                                                </div>
-                                                                <div className="text-right shrink-0">
-                                                                    <p className="text-xs font-black text-gray-900">{parseNum(item.quantity).toLocaleString('en-US')} kg</p>
-                                                                    <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded mt-1 border ${item.source === 'LC Receive'
-                                                                        ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
-                                                                        : 'bg-indigo-50/50 text-indigo-700 border-indigo-100/30'
-                                                                        }`}>
+
+                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                    <span
+                                                                        className={`px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border shrink-0 ${item.source === 'LC Receive'
+                                                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70'
+                                                                                : 'bg-indigo-50 text-indigo-700 border-indigo-200/70'
+                                                                            }`}
+                                                                    >
                                                                         {item.source}
                                                                     </span>
-                                                                </div>
-                                                                <div className="shrink-0 text-gray-400 pl-1">
-                                                                    {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                    <div
+                                                                        className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0 ${isExpanded ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'
+                                                                            }`}
+                                                                    >
+                                                                        {isExpanded ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
+                                                                    </div>
                                                                 </div>
                                                             </div>
 
-                                                            {/* Expanded Details */}
-                                                            {isExpanded && (
-                                                                <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
-                                                                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={item.importer}>{item.importer || '-'}</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={item.exporter}>{item.exporter || '-'}</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-blue-600 uppercase truncate text-[11px]">{item.truck || '-'}</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Source</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-semibold text-gray-700 truncate text-[11px]">{item.source || '-'}</span>
-                                                                    </div>
+                                                            {/* Full Product Name (NO TRUNCATION!) */}
+                                                            <div className="text-left mt-1">
+                                                                <h4 className="text-xs sm:text-sm font-bold text-gray-900 leading-snug break-words">
+                                                                    {item.product || '-'}
+                                                                </h4>
+                                                                <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500 font-mono flex-wrap">
+                                                                    <span>
+                                                                        Qty: <strong className="text-gray-900 font-bold">{parseNum(item.quantity).toLocaleString('en-US')} kg</strong>
+                                                                    </span>
+                                                                    {item.importer && (
+                                                                        <>
+                                                                            <span className="text-gray-300">•</span>
+                                                                            <span className="font-sans font-medium text-gray-600 truncate max-w-[150px]" title={item.importer}>
+                                                                                {item.importer}
+                                                                            </span>
+                                                                        </>
+                                                                    )}
                                                                 </div>
-                                                            )}
+                                                            </div>
                                                         </div>
-                                                    );
-                                                })}
-                                            </div>
+
+                                                        {/* Expanded Details */}
+                                                        {isExpanded && (
+                                                            <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                                <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-gray-900 uppercase break-words text-[11px]">{item.importer || '-'}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-gray-900 uppercase break-words text-[11px]">{item.exporter || '-'}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-blue-600 uppercase break-words text-[11px]">{item.truck || '-'}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Source</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-semibold text-gray-700 break-words text-[11px]">{item.source || '-'}</span>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
                                         ) : (
                                             <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
                                                 {consumptionSearchQuery ? 'No results match your search.' : 'No consumption history found for this LC.'}
@@ -2603,115 +2730,141 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                         </table>
                                     </div>
                                     {/* Mobile View */}
-                                    <div className="md:hidden">
+                                    <div className="md:hidden space-y-2.5">
                                         {filteredCogRecords.length > 0 ? (
-                                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
-                                                {filteredCogRecords.map((record, idx) => {
-                                                    const key = `cog_${idx}`;
-                                                    const isExpanded = expandedSubRowKey === key;
+                                            filteredCogRecords.map((record, idx) => {
+                                                const key = `cog_${idx}`;
+                                                const isExpanded = expandedSubRowKey === key;
 
-                                                    const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
-                                                    const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
-                                                    const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
-                                                    const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
-                                                    const qtyVal = parseFloat(record.quantity) || 0;
-                                                    const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
-                                                    const dollarRateVal = parseFloat(record.rsToDollar) || 0;
-                                                    const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
-                                                    const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
-                                                    const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
-                                                    const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
-                                                    const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+                                                const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
+                                                const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
+                                                const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                                const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
+                                                const qtyVal = parseFloat(record.quantity) || 0;
+                                                const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                                const dollarRateVal = parseFloat(record.rsToDollar) || 0;
+                                                const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                                const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
+                                                const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                                const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
+                                                const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
 
-                                                    const matchingStocks = allStockRecords.filter(s => {
-                                                        const status = (s.status || '').toLowerCase();
-                                                        const isAccepted = status === 'accepted' || status === 'in stock';
-                                                        return isAccepted &&
-                                                            cleanLc(s.lcNo) === lcNoClean &&
-                                                            String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
-                                                            String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
-                                                    });
+                                                const matchingStocks = allStockRecords.filter(s => {
+                                                    const status = (s.status || '').toLowerCase();
+                                                    const isAccepted = status === 'accepted' || status === 'in stock';
+                                                    return isAccepted &&
+                                                        cleanLc(s.lcNo) === lcNoClean &&
+                                                        String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                        String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                });
 
-                                                    const lcReceiveDates = [...new Set(matchingStocks.map(s => s.date).filter(Boolean))];
-                                                    const lcReceiveDateStr = lcReceiveDates.length > 0
-                                                        ? lcReceiveDates.map(d => formatDate(d)).join(', ')
-                                                        : '—';
+                                                const lcReceiveDates = [...new Set(matchingStocks.map(s => s.date).filter(Boolean))];
+                                                const lcReceiveDateStr = lcReceiveDates.length > 0
+                                                    ? lcReceiveDates.map(d => formatDate(d)).join(', ')
+                                                    : '—';
 
-                                                    const lcReceiveQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
-                                                    const inhouseQty = matchingStocks.reduce((sum, s) => {
-                                                        const val = s.inHouseQuantity !== undefined && s.inHouseQuantity !== null && s.inHouseQuantity !== '' ? parseFloat(s.inHouseQuantity) : NaN;
-                                                        return sum + (!isNaN(val) ? val : ((parseFloat(s.quantity) || 0) - (parseFloat(s.sweepedQuantity) || 0)));
-                                                    }, 0);
+                                                const lcReceiveQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
+                                                const inhouseQty = matchingStocks.reduce((sum, s) => {
+                                                    const val = s.inHouseQuantity !== undefined && s.inHouseQuantity !== null && s.inHouseQuantity !== '' ? parseFloat(s.inHouseQuantity) : NaN;
+                                                    return sum + (!isNaN(val) ? val : ((parseFloat(s.quantity) || 0) - (parseFloat(s.sweepedQuantity) || 0)));
+                                                }, 0);
 
-                                                    return (
-                                                        <div key={idx} className="transition-all hover:bg-gray-50/35">
-                                                            {/* Collapsed View Header */}
-                                                            <div
-                                                                onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
-                                                                className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
-                                                            >
-                                                                <div className="p-2 rounded-xl shrink-0 bg-blue-50 text-blue-600">
-                                                                    <BoxIcon className="w-4 h-4" />
+                                                return (
+                                                    <div
+                                                        key={idx}
+                                                        className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-xs hover:border-gray-200'
+                                                            }`}
+                                                    >
+                                                        {/* Collapsed View Header */}
+                                                        <div
+                                                            onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
+                                                            className="p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50/70 transition-colors"
+                                                        >
+                                                            {/* Top Row: Date, Invoice No, Chevron */}
+                                                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                                                    <span className="text-[11px] font-bold text-gray-400 font-mono tracking-wider shrink-0">
+                                                                        {formatDate(record.date)}
+                                                                    </span>
+                                                                    {record.invoiceNo && (
+                                                                        <>
+                                                                            <span className="text-gray-300 text-[10px] shrink-0">•</span>
+                                                                            <span className="text-[10.5px] font-bold text-blue-700 bg-blue-50/90 border border-blue-200/80 px-1.5 py-0.5 rounded-md font-mono shrink-0">
+                                                                                Inv: {record.invoiceNo}
+                                                                            </span>
+                                                                        </>
+                                                                    )}
                                                                 </div>
-                                                                <div className="flex-1 min-w-0 text-left">
-                                                                    <p className="text-xs font-bold text-gray-900 truncate">{record.supplier || '-'}</p>
-                                                                    <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(record.date)} • Inv: {record.invoiceNo || '-'}</p>
-                                                                </div>
-                                                                <div className="text-right shrink-0">
-                                                                    <p className="text-xs font-black text-emerald-600">৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg</p>
-                                                                    <p className="text-[10px] text-gray-500 font-semibold mt-0.5">{qtyVal.toLocaleString('en-IN')} KG</p>
-                                                                </div>
-                                                                <div className="shrink-0 text-gray-400 pl-1">
-                                                                    {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                <div
+                                                                    className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0 ${isExpanded ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'
+                                                                        }`}
+                                                                >
+                                                                    {isExpanded ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
                                                                 </div>
                                                             </div>
 
-                                                            {/* Expanded Content */}
-                                                            {isExpanded && (
-                                                                <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
-                                                                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invoice Value</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-semibold text-gray-700 text-[11px]">{record.amount ? `₹${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Bill</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-semibold text-gray-700 text-[11px]">₹{netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate/KG (BDT)</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-blue-600 text-[11px]">{rateKgBdtVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-semibold text-gray-700 text-[11px]">{record.truckNo || '—'}</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Receive Date</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-semibold text-gray-700 text-[11px]">{lcReceiveDateStr}</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Receive Qty</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-semibold text-gray-700 text-[11px]">{lcReceiveQty.toLocaleString('en-IN')} kg</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Receive Total Price</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-emerald-600 text-[11px]">৳{(costingKgVal * lcReceiveQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Inhouse QTY</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-semibold text-gray-700 text-[11px]">{inhouseQty.toLocaleString('en-IN')} kg</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stock Price</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-emerald-600 text-[11px]">৳{(costingKgVal * inhouseQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                                    </div>
+                                                            {/* Full Supplier Name (NO TRUNCATION!) */}
+                                                            <div className="text-left mt-1">
+                                                                <h4 className="text-xs sm:text-sm font-bold text-gray-900 leading-snug break-words">
+                                                                    {record.supplier || '-'}
+                                                                </h4>
+                                                                <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500 font-mono flex-wrap">
+                                                                    <span>
+                                                                        Costing: <strong className="text-emerald-600 font-bold">৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg</strong>
+                                                                    </span>
+                                                                    <span className="text-gray-300">•</span>
+                                                                    <span>
+                                                                        Qty: <strong className="text-gray-900 font-bold">{qtyVal.toLocaleString('en-IN')} KG</strong>
+                                                                    </span>
                                                                 </div>
-                                                            )}
+                                                            </div>
                                                         </div>
-                                                    );
-                                                })}
-                                            </div>
+
+                                                        {/* Expanded Content */}
+                                                        {isExpanded && (
+                                                            <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                                <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invoice Value</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-semibold text-gray-700 text-[11px]">{record.amount ? `₹${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Bill</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-semibold text-gray-700 text-[11px]">₹{netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate/KG (BDT)</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-blue-600 text-[11px]">{rateKgBdtVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-semibold text-gray-700 text-[11px]">{record.truckNo || '—'}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Receive Date</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-semibold text-gray-700 text-[11px]">{lcReceiveDateStr}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Receive Qty</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-semibold text-gray-700 text-[11px]">{lcReceiveQty.toLocaleString('en-IN')} kg</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Receive Total Price</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-emerald-600 text-[11px]">৳{(costingKgVal * lcReceiveQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Inhouse QTY</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-semibold text-gray-700 text-[11px]">{inhouseQty.toLocaleString('en-IN')} kg</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stock Price</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-emerald-600 text-[11px]">৳{(costingKgVal * inhouseQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
                                         ) : (
                                             <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
                                                 {consumptionSearchQuery ? 'No CoG records match your search.' : 'No Cost of Goods records found for this LC.'}
@@ -2782,68 +2935,96 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                         </table>
                                     </div>
                                     {/* Mobile View */}
-                                    <div className="md:hidden">
+                                    <div className="md:hidden space-y-2.5">
                                         {filteredGpRecords.length > 0 ? (
-                                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
-                                                {filteredGpRecords.map((gp, idx) => {
-                                                    const key = `gp_${idx}`;
-                                                    const isExpanded = expandedSubRowKey === key;
-                                                    return (
-                                                        <div key={gp._id || idx} className="transition-all hover:bg-gray-50/35">
-                                                            {/* Collapsed View Header */}
-                                                            <div
-                                                                onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
-                                                                className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
-                                                            >
-                                                                <div className="p-2 rounded-xl shrink-0 bg-indigo-50 text-indigo-600">
-                                                                    <FileTextIcon className="w-4 h-4" />
+                                            filteredGpRecords.map((gp, idx) => {
+                                                const key = `gp_${idx}`;
+                                                const isExpanded = expandedSubRowKey === key;
+                                                return (
+                                                    <div
+                                                        key={gp._id || idx}
+                                                        className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-xs hover:border-gray-200'
+                                                            }`}
+                                                    >
+                                                        {/* Collapsed View Header */}
+                                                        <div
+                                                            onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
+                                                            className="p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50/70 transition-colors"
+                                                        >
+                                                            {/* Top Row: Date, Status, Chevron */}
+                                                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                                                    <span className="text-[11px] font-bold text-gray-400 font-mono tracking-wider shrink-0">
+                                                                        {formatDate(gp.gpDate)}
+                                                                    </span>
                                                                 </div>
-                                                                <div className="flex-1 min-w-0 text-left">
-                                                                    <p className="text-xs font-bold text-gray-900 truncate">{gp.productName || '-'}</p>
-                                                                    <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(gp.gpDate)}</p>
-                                                                </div>
-                                                                <div className="text-right shrink-0">
-                                                                    <p className="text-xs font-black text-gray-900">{parseNum(gp.gpQuantity).toLocaleString('en-US')} kg</p>
-                                                                    <p className="text-[10px] text-gray-500 font-bold mt-0.5">৳{parseNum(gp.gpValue).toLocaleString('en-IN')}</p>
-                                                                </div>
-                                                                <div className="shrink-0 text-gray-400 pl-1">
-                                                                    {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                    <span
+                                                                        className={`px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border shrink-0 ${gp.status === 'Active'
+                                                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70'
+                                                                                : 'bg-gray-50 text-gray-500 border-gray-200/70'
+                                                                            }`}
+                                                                    >
+                                                                        {gp.status || 'Active'}
+                                                                    </span>
+                                                                    <div
+                                                                        className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0 ${isExpanded ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'
+                                                                            }`}
+                                                                    >
+                                                                        {isExpanded ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
+                                                                    </div>
                                                                 </div>
                                                             </div>
 
-                                                            {/* Expanded Details */}
-                                                            {isExpanded && (
-                                                                <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
-                                                                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Party Name</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={gp.partyName}>{gp.partyName || '-'}</span>
+                                                            {/* Full Product Name (NO TRUNCATION!) */}
+                                                            <div className="text-left mt-1">
+                                                                <h4 className="text-xs sm:text-sm font-bold text-gray-900 leading-snug break-words">
+                                                                    {gp.productName || '-'}
+                                                                </h4>
+                                                                <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500 font-mono flex-wrap">
+                                                                    <span>
+                                                                        Qty: <strong className="text-gray-900 font-bold">{parseNum(gp.gpQuantity).toLocaleString('en-US')} kg</strong>
+                                                                    </span>
+                                                                    <span className="text-gray-300">•</span>
+                                                                    <span>
+                                                                        Value: <strong className="text-emerald-600 font-bold">৳{parseNum(gp.gpValue).toLocaleString('en-IN')}</strong>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
 
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sold To</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={gp.party}>{gp.party || '-'}</span>
+                                                        {/* Expanded Details */}
+                                                        {isExpanded && (
+                                                            <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                                <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Party Name</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={gp.partyName}>{gp.partyName || '-'}</span>
 
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">GP Value</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-black text-gray-900 truncate text-[11px]">৳{parseNum(gp.gpValue).toLocaleString('en-IN')}</span>
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sold To</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={gp.party}>{gp.party || '-'}</span>
 
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <div className="flex items-center">
-                                                                            <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border shrink-0 ${gp.status === 'Active'
-                                                                                ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
-                                                                                : 'bg-gray-50 text-gray-500 border-gray-200/30'
-                                                                                }`}>
-                                                                                {gp.status || 'Active'}
-                                                                            </span>
-                                                                        </div>
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">GP Value</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-black text-gray-900 truncate text-[11px]">৳{parseNum(gp.gpValue).toLocaleString('en-IN')}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <div className="flex items-center">
+                                                                        <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border shrink-0 ${gp.status === 'Active'
+                                                                            ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
+                                                                            : 'bg-gray-50 text-gray-500 border-gray-200/30'
+                                                                            }`}>
+                                                                            {gp.status || 'Active'}
+                                                                        </span>
                                                                     </div>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
                                         ) : (
                                             <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
                                                 {consumptionSearchQuery ? 'No G.P records match your search.' : 'No Gate Pass records found for this LC.'}
@@ -3000,91 +3181,114 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                         </table>
                                     </div>
                                     {/* Mobile View */}
-                                    <div className="md:hidden">
+                                    <div className="md:hidden space-y-2.5">
                                         {filteredBills.length > 0 ? (
-                                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
-                                                {filteredBills.map((bill, idx) => {
-                                                    const key = `bill_${idx}`;
-                                                    const isExpanded = expandedSubRowKey === key;
-                                                    return (
-                                                        <div key={idx} className="transition-all hover:bg-gray-50/35">
-                                                            {/* Collapsed View Header */}
-                                                            <div
-                                                                onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
-                                                                className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
-                                                            >
-                                                                <div className="p-2 rounded-xl shrink-0 bg-blue-50 text-blue-600">
-                                                                    <DollarSignIcon className="w-4 h-4" />
+                                            filteredBills.map((bill, idx) => {
+                                                const key = `bill_${idx}`;
+                                                const isExpanded = expandedSubRowKey === key;
+                                                return (
+                                                    <div
+                                                        key={idx}
+                                                        className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-xs hover:border-gray-200'
+                                                            }`}
+                                                    >
+                                                        {/* Collapsed View Header */}
+                                                        <div
+                                                            onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
+                                                            className="p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50/70 transition-colors"
+                                                        >
+                                                            {/* Top Row: Date, Status, Chevron */}
+                                                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                                                    <span className="text-[11px] font-bold text-gray-400 font-mono tracking-wider shrink-0">
+                                                                        {formatDate(bill.date)}
+                                                                    </span>
                                                                 </div>
-                                                                <div className="flex-1 min-w-0 text-left">
-                                                                    <p className="text-xs font-bold text-blue-600 truncate">{bill.billHead || '-'}</p>
-                                                                    <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(bill.date)}</p>
-                                                                </div>
-                                                                <div className="text-right shrink-0">
-                                                                    <p className="text-xs font-black text-gray-900">৳{bill.totalBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                                                                    <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded mt-1 border ${bill.status === 'Paid'
-                                                                        ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
-                                                                        : bill.status === 'Partial Paid'
-                                                                            ? 'bg-amber-50/50 text-amber-700 border-amber-100/30'
-                                                                            : 'bg-rose-50/50 text-rose-700 border-rose-100/30'
-                                                                        }`}>
+                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                    <span
+                                                                        className={`px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border shrink-0 ${bill.status === 'Paid'
+                                                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70'
+                                                                                : bill.status === 'Partial Paid'
+                                                                                    ? 'bg-amber-50 text-amber-700 border-amber-200/70'
+                                                                                    : 'bg-rose-50 text-rose-700 border-rose-200/70'
+                                                                            }`}
+                                                                    >
                                                                         {bill.status}
                                                                     </span>
                                                                 </div>
-                                                                <div className="shrink-0 text-gray-400 pl-1">
-                                                                    {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
-                                                                </div>
                                                             </div>
 
-                                                            {/* Expanded Content */}
-                                                            {isExpanded && (
-                                                                <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
-                                                                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Name</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-gray-900 uppercase truncate text-[11px]" title={bill.name}>{bill.name || '-'}</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Paid Amount</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-emerald-600 truncate text-[11px]">৳{(bill.paidBill || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bill Balance</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-rose-600 truncate text-[11px]">
-                                                                            {bill.billBalance < 0
-                                                                                ? `-৳${Math.abs(bill.billBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                                                                                : `৳${(bill.billBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                                                                            }
-                                                                        </span>
-                                                                    </div>
-                                                                    {bill.isDbRecord && (canEditBill || isAdmin) && (
-                                                                        <div className="flex justify-end items-center gap-2 pt-2 border-t border-gray-100 mt-2">
-                                                                            {canEditBill && (
-                                                                                <button
-                                                                                    onClick={(e) => { e.stopPropagation(); handleOpenEditBillModal(bill); }}
-                                                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 text-[10px] font-bold transition-all transform active:scale-95 cursor-pointer"
-                                                                                >
-                                                                                    <EditIcon className="w-3.5 h-3.5" />
-                                                                                    <span>Edit Bill</span>
-                                                                                </button>
-                                                                            )}
-                                                                            {isAdmin && (
-                                                                                <button
-                                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteBill(bill._id); }}
-                                                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-[10px] font-bold transition-all transform active:scale-95 cursor-pointer"
-                                                                                >
-                                                                                    <TrashIcon className="w-3.5 h-3.5" />
-                                                                                    <span>Delete Bill</span>
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
+                                                            {/* Full Bill Head Name (Expense Head) */}
+                                                            <div className="text-left mt-1">
+                                                                <h4 className="text-xs sm:text-sm font-bold text-blue-600 leading-snug break-words">
+                                                                    {bill.billHead || '-'}
+                                                                </h4>
+                                                                {bill.name && (
+                                                                    <p className="text-xs sm:text-[13px] font-semibold text-gray-700 leading-snug break-words mt-0.5" title={bill.name}>
+                                                                        {bill.name}
+                                                                    </p>
+                                                                )}
+                                                                <div className="flex items-center gap-1.5 mt-1 text-[11px] font-mono">
+                                                                    <span className="text-gray-500 font-medium">Paid Amount:</span>
+                                                                    <strong className="text-emerald-600 font-bold">
+                                                                        ৳{(bill.paidBill || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                    </strong>
                                                                 </div>
-                                                            )}
+                                                            </div>
                                                         </div>
-                                                    );
-                                                })}
-                                            </div>
+
+                                                        {/* Expanded Content */}
+                                                        {isExpanded && (
+                                                            <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                                <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Name</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-gray-900 uppercase break-words text-[11px]" title={bill.name}>{bill.name || '-'}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-blue-600 font-mono text-[11px]">৳{(bill.totalBill || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Paid Amount</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-emerald-600 font-mono text-[11px]">৳{(bill.paidBill || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bill Balance</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-rose-600 font-mono text-[11px]">
+                                                                        {bill.billBalance < 0
+                                                                            ? `-৳${Math.abs(bill.billBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                            : `৳${(bill.billBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                        }
+                                                                    </span>
+                                                                </div>
+                                                                {bill.isDbRecord && (canEditBill || isAdmin) && (
+                                                                    <div className="flex justify-end items-center gap-2 pt-2 border-t border-gray-100 mt-2">
+                                                                        {canEditBill && (
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleOpenEditBillModal(bill); }}
+                                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 text-[10px] font-bold transition-all transform active:scale-95 cursor-pointer"
+                                                                            >
+                                                                                <EditIcon className="w-3.5 h-3.5" />
+                                                                                <span>Edit Bill</span>
+                                                                            </button>
+                                                                        )}
+                                                                        {isAdmin && (
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleDeleteBill(bill._id); }}
+                                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-[10px] font-bold transition-all transform active:scale-95 cursor-pointer"
+                                                                            >
+                                                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                                                <span>Delete Bill</span>
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
                                         ) : (
                                             <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
                                                 {consumptionSearchQuery ? 'No bills match your search.' : 'No bills found for this LC.'}
@@ -3154,64 +3358,85 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                         </table>
                                     </div>
                                     {/* Mobile View */}
-                                    <div className="md:hidden">
+                                    <div className="md:hidden space-y-2.5">
                                         {(() => {
                                             const filtered = expenseTabRecords;
 
                                             return filtered.length > 0 ? (
-                                                <>
-                                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
-                                                        {filtered.map((exp, idx) => {
-                                                            const key = `expense_${idx}`;
-                                                            const isExpanded = expandedSubRowKey === key;
-                                                            return (
-                                                                <div key={exp._id || idx} className="transition-all hover:bg-gray-50/35">
-                                                                    {/* Collapsed View Header */}
-                                                                    <div
-                                                                        onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
-                                                                        className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
-                                                                    >
-                                                                        <div className="p-2 rounded-xl shrink-0 bg-rose-50 text-rose-600">
-                                                                            <BuildingIcon className="w-4 h-4" />
-                                                                        </div>
-                                                                        <div className="flex-1 min-w-0 text-left">
-                                                                            <p className="text-xs font-bold text-gray-900 truncate">{exp.expenseHead || '-'}</p>
-                                                                            <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(exp.date)}</p>
-                                                                        </div>
-                                                                        <div className="text-right shrink-0">
-                                                                            <p className={`text-xs font-black ${parseNum(exp.amount) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                                                {parseNum(exp.amount) < 0
-                                                                                    ? `-৳${Math.abs(parseNum(exp.amount)).toLocaleString('en-IN')}`
-                                                                                    : `৳${parseNum(exp.amount).toLocaleString('en-IN')}`}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div className="shrink-0 text-gray-400 pl-1">
-                                                                            {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                filtered.map((exp, idx) => {
+                                                    const key = `expense_${idx}`;
+                                                    const isExpanded = expandedSubRowKey === key;
+                                                    const isNegative = parseNum(exp.amount) < 0;
+                                                    const beneficiary = exp.cnfAgent || exp.bankName || exp.insuranceCo || exp.insuranceName || exp.name;
+                                                    return (
+                                                        <div
+                                                            key={exp._id || idx}
+                                                            className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-rose-200 shadow-md ring-1 ring-rose-50' : 'border-gray-100 shadow-xs hover:border-gray-200'
+                                                                }`}
+                                                        >
+                                                            {/* Collapsed View Header */}
+                                                            <div
+                                                                onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
+                                                                className="p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50/70 transition-colors"
+                                                            >
+                                                                {/* Top Row: Date, Chevron */}
+                                                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                                                        <span className="text-[11px] font-bold text-gray-400 font-mono tracking-wider shrink-0">
+                                                                            {formatDate(exp.date)}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                        <div
+                                                                            className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0 ${isExpanded ? 'bg-rose-50 text-rose-600' : 'bg-gray-50 text-gray-400'
+                                                                                }`}
+                                                                        >
+                                                                            {isExpanded ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
                                                                         </div>
                                                                     </div>
-
-                                                                    {/* Expanded Details */}
-                                                                    {isExpanded && (
-                                                                        <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
-                                                                            <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
-                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Beneficiary Name</span>
-                                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                                <span className="font-bold text-gray-900 uppercase truncate text-[11px]">
-                                                                                    {exp.cnfAgent || exp.bankName || exp.insuranceCo || exp.insuranceName || exp.name || '-'}
-                                                                                </span>
-
-                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
-                                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                                <span className="font-semibold text-gray-700 truncate text-[11px]" title={exp.remarks}>{exp.remarks || '-'}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
                                                                 </div>
-                                                            );
-                                                        })}
-                                                    </div>
 
-                                                </>
+                                                                {/* Second Row: Expense Head & Amount */}
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <div className="flex-1 min-w-0 text-left">
+                                                                        <h4 className="text-xs sm:text-sm font-bold text-gray-900 leading-snug break-words">
+                                                                            {exp.expenseHead || '-'}
+                                                                        </h4>
+                                                                        {beneficiary && (
+                                                                            <p className="text-xs sm:text-[13px] font-semibold text-gray-700 leading-snug break-words mt-0.5" title={beneficiary}>
+                                                                                {beneficiary}
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-right shrink-0">
+                                                                        <span className={`text-xs sm:text-sm font-black font-mono ${isNegative ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                            {isNegative
+                                                                                ? `-৳${Math.abs(parseNum(exp.amount)).toLocaleString('en-IN')}`
+                                                                                : `৳${parseNum(exp.amount).toLocaleString('en-IN')}`}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Expanded Details */}
+                                                            {isExpanded && (
+                                                                <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Beneficiary Name</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-gray-900 uppercase break-words text-[11px]">
+                                                                            {beneficiary || '-'}
+                                                                        </span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 break-words text-[11px]">{exp.remarks || '-'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })
                                             ) : (
                                                 <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
                                                     No expense records found for this LC.
@@ -3305,16 +3530,16 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
                                             <div className="flex flex-col gap-1.5 mt-0.5">
                                                 {(() => {
-                                                     const isLastState = activeMilestoneIndex === timeline.length - 1;
-                                                     const milestoneState = {
-                                                         ...data,
-                                                         ...activeMilestone,
-                                                         enableValueQtyAdjustment: isLastState ? data.enableValueQtyAdjustment : false,
-                                                         adjustedQuantity: isLastState ? data.adjustedQuantity : null,
-                                                     };
-                                                     const ips = milestoneState.ipNumbers || [];
-                                                     if (ips.length === 0) return <span className="text-sm font-bold text-gray-800">N/A</span>;
-                                                     const breakdown = getIpContributionBreakdown(milestoneState, ips, ipRecordsRaw, lcRecords);
+                                                    const isLastState = activeMilestoneIndex === timeline.length - 1;
+                                                    const milestoneState = {
+                                                        ...data,
+                                                        ...activeMilestone,
+                                                        enableValueQtyAdjustment: isLastState ? data.enableValueQtyAdjustment : false,
+                                                        adjustedQuantity: isLastState ? data.adjustedQuantity : null,
+                                                    };
+                                                    const ips = milestoneState.ipNumbers || [];
+                                                    if (ips.length === 0) return <span className="text-sm font-bold text-gray-800">N/A</span>;
+                                                    const breakdown = getIpContributionBreakdown(milestoneState, ips, ipRecordsRaw, lcRecords);
                                                     return ips.map((ip, idx) => {
                                                         const item = breakdown.find(b => b.ipNo === ip);
                                                         return (
@@ -3806,7 +4031,7 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                     {/* Delete Amendment Confirmation Modal Card */}
                     {showDeleteAmendmentConfirm && (
                         <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
-                            <div 
+                            <div
                                 className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
                                 onClick={() => {
                                     if (deleteAmendmentStatus !== 'loading') {
@@ -5167,9 +5392,8 @@ const ReportDropdown = React.memo(({ onGeneralReport, onBillReport }) => {
             <button
                 type="button"
                 onClick={() => setIsOpen(prev => !prev)}
-                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl border h-[40px] shadow-sm transition-all transform active:scale-95 md:hover:scale-105 ${
-                    isOpen ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-blue-500/10' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                }`}
+                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl border h-[40px] shadow-sm transition-all transform active:scale-95 md:hover:scale-105 ${isOpen ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-blue-500/10' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
             >
                 <BarChartIcon className={`w-4 h-4 ${isOpen ? 'text-blue-600' : 'text-gray-400'}`} />
                 <span className="text-sm font-medium">Report</span>
@@ -5410,6 +5634,8 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         amendmentBill: '',
         amendmentLcBillEnabled: false
     });
+    const [isCurrentLcExpanded, setIsCurrentLcExpanded] = useState(true);
+    const [isProductInsExpanded, setIsProductInsExpanded] = useState(false);
 
     // Advanced Filter states
     const [showLcFilterPanel, setShowLcFilterPanel] = useState(false);
@@ -6303,7 +6529,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 let d = emp;
                 if (emp && emp.data) {
                     if (typeof emp.data === 'string') {
-                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) { }
                     } else if (typeof emp.data === 'object') {
                         d = { ...emp.data, _id: emp._id };
                     }
@@ -7074,7 +7300,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
             // Update local state
             setLcRecords(prev => prev.map(r => r._id === record._id ? updatedRecord : r));
-            
+
             // Update viewData if open
             if (viewData && viewData._id === record._id) {
                 setViewData(updatedRecord);
@@ -7837,6 +8063,38 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleCloseAmendmentForm = () => {
+        setShowAmendmentForm(false);
+        setSelectedAmendmentLcId('');
+        setAmendmentSearchQuery('');
+        setEditingAmendmentNo('');
+        setAmendmentFormData({
+            amendmentNo: '',
+            amendmentDate: '',
+            expiryDate: '',
+            quantity: '',
+            rate: '',
+            dollarRate: '',
+            remarks: '',
+            addnNo: '',
+            addnDate: '',
+            port: '',
+            extendedShipmentDate: '',
+            piNo: '',
+            amendmentMargin: '',
+            amendmentCommission: '',
+            amendmentVatOnCommission: '',
+            amendmentSwiftCharge: '',
+            amendmentVatOnSwift: '',
+            amendmentMarginBill: '',
+            amendmentMarginPaid: '',
+            amendmentBankBill: '',
+            totalAmendmentBankBill: '',
+            amendmentBill: '',
+            amendmentLcBillEnabled: false
+        });
     };
 
     const resetForm = () => {
@@ -10548,16 +10806,26 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             )}
 
             {showAmendmentForm && (
-                <div className="lc-form-container relative bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 pb-10">
+                <div className="lc-form-container relative bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-3.5 sm:p-5 md:p-8 pb-6 md:pb-10">
 
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
-                        {/* Title */}
-                        <div className="flex items-center gap-2 shrink-0">
-                            <FileTextIcon className="w-5 h-5 text-blue-500" />
-                            <span className="text-base font-bold text-gray-800">LC Amendment Registration</span>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 mb-5 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
+                        {/* Top row on mobile: Title + Close button */}
+                        <div className="flex items-center justify-between w-full md:w-auto">
+                            <div className="flex items-center gap-2 shrink-0">
+                                <FileTextIcon className="w-5 h-5 text-blue-500" />
+                                <span className="text-base font-bold text-gray-800">LC Amendment Registration</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseAmendmentForm}
+                                className="md:hidden p-2 hover:bg-gray-100 rounded-xl transition-all active:scale-95 text-gray-400 hover:text-rose-500 shrink-0"
+                                title="Close Form"
+                            >
+                                <XIcon className="w-5 h-5" />
+                            </button>
                         </div>
 
-                        {/* Search Dropdown in same line */}
+                        {/* Search Dropdown */}
                         <div className="flex-1 max-w-md w-full relative dropdown-container" ref={amendmentLcRef}>
                             <div className="relative w-full">
                                 <input
@@ -10597,174 +10865,153 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                             )}
                         </div>
 
-                        {/* Close button */}
+                        {/* Desktop Close button */}
                         <button
-                            onClick={() => {
-                                setShowAmendmentForm(false);
-                                setSelectedAmendmentLcId('');
-                                setAmendmentSearchQuery('');
-                                setEditingAmendmentNo('');
-                                setAmendmentFormData({
-                                    amendmentNo: '',
-                                    amendmentDate: '',
-                                    expiryDate: '',
-                                    quantity: '',
-                                    rate: '',
-                                    dollarRate: '',
-                                    remarks: '',
-                                    addnNo: '',
-                                    addnDate: '',
-                                    port: '',
-                                    extendedShipmentDate: '',
-                                    piNo: '',
-                                    amendmentMargin: '',
-                                    amendmentCommission: '',
-                                    amendmentVatOnCommission: '',
-                                    amendmentSwiftCharge: '',
-                                    amendmentVatOnSwift: '',
-                                    amendmentMarginBill: '',
-                                    amendmentMarginPaid: '',
-                                    amendmentBankBill: '',
-                                    totalAmendmentBankBill: '',
-                                    amendmentBill: '',
-                                    amendmentLcBillEnabled: false
-                                });
-                            }}
-                            className="p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
+                            type="button"
+                            onClick={handleCloseAmendmentForm}
+                            className="hidden md:flex p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
                             title="Close Form"
                         >
                             <XIcon className="w-5 h-5 text-gray-400 group-hover:text-rose-500" />
                         </button>
                     </div>
 
-                    <form onSubmit={handleAmendmentSubmit} className="space-y-8 relative z-10 w-full">
+                    <form onSubmit={handleAmendmentSubmit} className="space-y-6 md:space-y-8 relative z-10 w-full">
                         {selectedAmendmentLcId && selectedLcForAmendment && (
-                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full text-left">
+                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 md:gap-6 lg:gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full text-left">
                                 {/* Left Side: Original Details View (Read-Only) */}
-                                <div className="lg:col-span-1 space-y-6 bg-gray-50/50 border border-gray-100 rounded-2xl p-6">
-                                    <div>
-                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Current LC Details</h4>
-                                        <div className="space-y-4">
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
-                                                <p className="text-sm font-bold text-blue-600 truncate" title={selectedLcForAmendment.piNo}>
-                                                    {(() => {
-                                                        const rawPiNo = selectedLcForAmendment.piNo || '';
-                                                        if (!rawPiNo) return 'N/A';
-                                                        if (rawPiNo.endsWith(' (REVISED)')) return rawPiNo;
-                                                        const cleanPi = rawPiNo.replace(' (REVISED)', '');
-                                                        const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
-                                                        if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
-                                                            return `${cleanPi} (REVISED)`;
-                                                        }
-                                                        return rawPiNo;
-                                                    })()}
-                                                </p>
+                                <div className="lg:col-span-1 space-y-4 bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 md:p-6">
+                                    <div
+                                        onClick={() => setIsCurrentLcExpanded(!isCurrentLcExpanded)}
+                                        className="flex items-center justify-between cursor-pointer select-none"
+                                    >
+                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest">Current LC Details</h4>
+                                        <div className="lg:hidden p-1 text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
+                                            {isCurrentLcExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                        </div>
+                                    </div>
+
+                                    <div className={`${isCurrentLcExpanded ? 'block' : 'hidden'} lg:block animate-in fade-in duration-200`}>
+                                        <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[120px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI NUMBER</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-bold text-blue-600 break-words" title={selectedLcForAmendment.piNo}>
+                                                {(() => {
+                                                    const rawPiNo = selectedLcForAmendment.piNo || '';
+                                                    if (!rawPiNo) return 'N/A';
+                                                    if (rawPiNo.endsWith(' (REVISED)')) return rawPiNo;
+                                                    const cleanPi = rawPiNo.replace(' (REVISED)', '');
+                                                    const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
+                                                    if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
+                                                        return `${cleanPi} (REVISED)`;
+                                                    }
+                                                    return rawPiNo;
+                                                })()}
+                                            </span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP NUMBER</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <div className="flex flex-col gap-1.5 min-w-0">
+                                                {(() => {
+                                                    const ips = selectedLcForAmendment.ipNumbers?.length
+                                                        ? selectedLcForAmendment.ipNumbers
+                                                        : (selectedLcForAmendment.ipNo ? selectedLcForAmendment.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                                                    if (ips.length === 0) return <span className="text-xs font-bold text-gray-800">N/A</span>;
+                                                    const breakdown = getIpContributionBreakdown(selectedLcForAmendment, ips, ipRecordsRaw, lcRecords);
+                                                    return ips.map((ip, idx) => {
+                                                        const item = breakdown.find(b => b.ipNo === ip);
+                                                        return (
+                                                            <div key={idx} className="flex flex-col gap-0.5">
+                                                                <span className="text-xs font-bold text-gray-850 font-mono">{ip}</span>
+                                                                {item && (
+                                                                    <span className="inline-flex self-start text-[10px] font-extrabold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200/60 shadow-2xs">
+                                                                        {item.qtyKg.toLocaleString('en-IN')} kg ({item.qtyTon.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 3 })} Ton)
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    });
+                                                })()}
                                             </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
-                                                <div className="flex flex-col gap-1.5 mt-0.5">
-                                                    {(() => {
-                                                        const ips = selectedLcForAmendment.ipNumbers?.length
-                                                            ? selectedLcForAmendment.ipNumbers
-                                                            : (selectedLcForAmendment.ipNo ? selectedLcForAmendment.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
-                                                        if (ips.length === 0) return <span className="text-sm font-bold text-gray-800">N/A</span>;
-                                                        const breakdown = getIpContributionBreakdown(selectedLcForAmendment, ips, ipRecordsRaw, lcRecords);
-                                                        return ips.map((ip, idx) => {
-                                                            const item = breakdown.find(b => b.ipNo === ip);
-                                                            return (
-                                                                <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-sm font-bold text-gray-800 bg-gray-50/80 p-1.5 px-2 rounded-lg border border-gray-100">
-                                                                    <span>{ip}</span>
-                                                                    {item && (
-                                                                        <span className="text-xs font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60 shadow-xs">
-                                                                            {item.qtyKg.toLocaleString('en-IN')} kg ({item.qtyTon.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 3 })} Ton)
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        });
-                                                    })()}
-                                                </div>
-                                            </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
-                                                <p className="text-sm font-bold text-gray-800 truncate">{selectedLcForAmendment.importerName}</p>
-                                            </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
-                                                <p className="text-sm font-bold text-gray-800 truncate">{selectedLcForAmendment.exporterName}</p>
-                                            </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
-                                                <p className="text-sm font-bold text-gray-800 truncate" title={selectedLcForAmendment.bankName}>{selectedLcForAmendment.bankName}</p>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
-                                                    <p className="text-sm font-bold text-gray-800 font-mono">{formatDate(selectedLcForAmendment.openingDate)}</p>
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Expiry Date</span>
-                                                    <p className="text-sm font-bold text-rose-500 font-mono">{formatDate(selectedLcForAmendment.expiryDate)}</p>
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Latest Shipment Date</span>
-                                                    <p className="text-sm font-bold text-gray-800 font-mono">{formatDate(selectedLcForAmendment.latestShipmentDate) || 'N/A'}</p>
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Quantity</span>
-                                                    <p className="text-sm font-bold text-gray-800">
-                                                        {prevMilestoneForAmendment
-                                                            ? `${parseFloat(getMilestoneTotalQty(prevMilestoneForAmendment) || 0).toLocaleString('en-US')} Ton`
-                                                            : 'N/A'
-                                                        }
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Rate</span>
-                                                    <p className="text-sm font-bold text-gray-800">
-                                                        {prevMilestoneForAmendment
-                                                            ? `$${parseFloat(getMilestoneRate(prevMilestoneForAmendment, selectedLcForAmendment) || 0).toLocaleString('en-IN')}`
-                                                            : 'N/A'
-                                                        }
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Dollar</span>
-                                                    <p className="text-sm font-bold text-blue-600">
-                                                        {prevMilestoneForAmendment
-                                                            ? `$${parseFloat(getMilestoneTotalDollar(prevMilestoneForAmendment, selectedLcForAmendment) || 0).toLocaleString('en-IN')}`
-                                                            : 'N/A'
-                                                        }
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
-                                                    <p className="text-sm font-bold text-gray-800">
-                                                        {prevMilestoneForAmendment
-                                                            ? `৳${parseFloat(
-                                                                (getMilestoneTotalDollar(prevMilestoneForAmendment, selectedLcForAmendment) *
-                                                                    (parseFloat(prevMilestoneForAmendment.dollarRate || selectedLcForAmendment.dollarRate) || 0)
-                                                                ).toFixed(2)
-                                                            ).toLocaleString('en-IN')}`
-                                                            : 'N/A'
-                                                        }
-                                                    </p>
-                                                </div>
-                                            </div>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IMPORTER</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-bold text-gray-850 break-words">{selectedLcForAmendment.importerName || '-'}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">EXPORTER</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-semibold text-gray-850 break-words">{selectedLcForAmendment.exporterName || '-'}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BANK NAME</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-semibold text-gray-850 break-words" title={selectedLcForAmendment.bankName}>{selectedLcForAmendment.bankName || '-'}</span>
+
+                                            {/* Divider */}
+                                            <div className="col-span-3 h-[1px] bg-gray-200/60 my-1"></div>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">OPENING DATE</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-mono font-semibold text-gray-800">{formatDate(selectedLcForAmendment.openingDate)}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">EXPIRY DATE</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-mono font-bold text-rose-500">{formatDate(selectedLcForAmendment.expiryDate)}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 tracking-wider">L.S. DATE</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-mono font-semibold text-gray-800">{formatDate(selectedLcForAmendment.latestShipmentDate) || '—'}</span>
+
+                                            {/* Divider */}
+                                            <div className="col-span-3 h-[1px] bg-gray-200/60 my-1"></div>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QUANTITY</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-bold text-gray-800">
+                                                {prevMilestoneForAmendment
+                                                    ? `${parseFloat(getMilestoneTotalQty(prevMilestoneForAmendment) || 0).toLocaleString('en-US')} Ton`
+                                                    : 'N/A'
+                                                }
+                                            </span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">RATE</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-bold text-gray-800">
+                                                {prevMilestoneForAmendment
+                                                    ? `$${parseFloat(getMilestoneRate(prevMilestoneForAmendment, selectedLcForAmendment) || 0).toLocaleString('en-IN')}`
+                                                    : 'N/A'
+                                                }
+                                            </span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL USD</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-bold text-blue-600">
+                                                {prevMilestoneForAmendment
+                                                    ? `$${parseFloat(getMilestoneTotalDollar(prevMilestoneForAmendment, selectedLcForAmendment) || 0).toLocaleString('en-IN')}`
+                                                    : 'N/A'
+                                                }
+                                            </span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL AMOUNT</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="text-xs font-black text-gray-900">
+                                                {prevMilestoneForAmendment
+                                                    ? `৳${parseFloat(
+                                                        (getMilestoneTotalDollar(prevMilestoneForAmendment, selectedLcForAmendment) *
+                                                            (parseFloat(prevMilestoneForAmendment.dollarRate || selectedLcForAmendment.dollarRate) || 0)
+                                                        ).toFixed(2)
+                                                    ).toLocaleString('en-IN')}`
+                                                    : 'N/A'
+                                                }
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Right Side: Amendment Details Inputs */}
-                                <div className="lg:col-span-2 space-y-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                                <div className="lg:col-span-2 space-y-6 bg-white border border-gray-100 rounded-2xl p-4 sm:p-6 shadow-sm">
                                     <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Amendment Details</h4>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                                         <div className="space-y-1.5">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Number *</label>
                                             <input
@@ -11334,48 +11581,18 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         </div>
                                     </div>
 
-                                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                                    <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-gray-100">
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                setShowAmendmentForm(false);
-                                                setSelectedAmendmentLcId('');
-                                                setAmendmentSearchQuery('');
-                                                setEditingAmendmentNo('');
-                                                setAmendmentFormData({
-                                                    amendmentNo: '',
-                                                    amendmentDate: '',
-                                                    expiryDate: '',
-                                                    quantity: '',
-                                                    rate: '',
-                                                    dollarRate: '',
-                                                    remarks: '',
-                                                    addnNo: '',
-                                                    addnDate: '',
-                                                    port: '',
-                                                    extendedShipmentDate: '',
-                                                    piNo: '',
-                                                    amendmentMargin: '',
-                                                    amendmentCommission: '',
-                                                    amendmentVatOnCommission: '',
-                                                    amendmentSwiftCharge: '',
-                                                    amendmentVatOnSwift: '',
-                                                    amendmentMarginBill: '',
-                                                    amendmentMarginPaid: '',
-                                                    amendmentBankBill: '',
-                                                    totalAmendmentBankBill: '',
-                                                    amendmentBill: '',
-                                                    amendmentLcBillEnabled: false
-                                                });
-                                            }}
-                                            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-all active:scale-95"
+                                            onClick={handleCloseAmendmentForm}
+                                            className="w-full sm:w-auto px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-all active:scale-95 text-center"
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             type="submit"
                                             disabled={isSaving || !!duplicateRevisedCoverNoteInfo}
-                                            className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${(isSaving || !!duplicateRevisedCoverNoteInfo) ? 'grayscale opacity-50 cursor-not-allowed' : ''}`}
+                                            className={`w-full sm:w-auto px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${(isSaving || !!duplicateRevisedCoverNoteInfo) ? 'grayscale opacity-50 cursor-not-allowed' : ''} text-center`}
                                         >
                                             {isSaving ? 'Saving...' : 'Save Amendment'}
                                         </button>
@@ -11383,174 +11600,175 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                 </div>
 
                                 {/* Right Side: Product & Insurance Details (Read-Only) */}
-                                <div className="lg:col-span-1 space-y-6 bg-gray-50/50 border border-gray-100 rounded-2xl p-6">
-                                    <div>
-                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Product & Insurance</h4>
-                                        <div className="space-y-4">
-                                            {/* Product Details Section */}
-                                            <div className="bg-blue-50/30 p-3 rounded-xl border border-blue-100/50 space-y-3">
-                                                <div className="flex items-center gap-1.5 border-b border-blue-100/50 pb-1.5 mb-1">
-                                                    <DollarSignIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Product Info</span>
-                                                </div>
-                                                {amendmentDisplayProducts && amendmentDisplayProducts.length > 0 ? (
-                                                    <div className="space-y-3">
-                                                        {amendmentDisplayProducts.map((prod, pIdx) => (
-                                                            <div key={pIdx} className="border-b border-gray-200/40 pb-2 last:border-0 last:pb-0 text-left">
-                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Item {amendmentDisplayProducts.length > 1 ? pIdx + 1 : ''}</span>
-                                                                <p className="text-xs font-bold text-gray-800 truncate" title={prod.productName}>{prod.productName || '-'}</p>
-                                                                <div className="grid grid-cols-2 gap-2 mt-1">
-                                                                    <div>
-                                                                        <span className="text-[8px] font-semibold text-gray-400 uppercase">Qty</span>
-                                                                        <p className="text-[11px] font-bold text-gray-700">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} Ton</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-[8px] font-semibold text-gray-400 uppercase">Rate</span>
-                                                                        <p className="text-[11px] font-bold text-gray-700">${parseFloat(prod.rate || 0).toLocaleString('en-IN')}</p>
-                                                                    </div>
+                                <div className="lg:col-span-1 space-y-4 bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 md:p-6">
+                                    <div
+                                        onClick={() => setIsProductInsExpanded(!isProductInsExpanded)}
+                                        className="flex items-center justify-between cursor-pointer select-none"
+                                    >
+                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest">Product & Insurance</h4>
+                                        <div className="lg:hidden p-1 text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
+                                            {isProductInsExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                        </div>
+                                    </div>
+
+                                    <div className={`${isProductInsExpanded ? 'block' : 'hidden'} lg:block space-y-4 animate-in fade-in duration-200`}>
+                                        {/* Product Details Section */}
+                                        <div className="bg-blue-50/30 p-3 rounded-xl border border-blue-100/50 space-y-3">
+                                            <div className="flex items-center gap-1.5 border-b border-blue-100/50 pb-1.5 mb-1">
+                                                <DollarSignIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Product Info</span>
+                                            </div>
+                                            {amendmentDisplayProducts && amendmentDisplayProducts.length > 0 ? (
+                                                <div className="space-y-3">
+                                                    {amendmentDisplayProducts.map((prod, pIdx) => (
+                                                        <div key={pIdx} className="border-b border-gray-200/40 pb-2.5 last:border-0 last:pb-0 text-left">
+                                                            {amendmentDisplayProducts.length > 1 && (
+                                                                <div className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wider mb-1.5">
+                                                                    Item {pIdx + 1}
                                                                 </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-2 text-left">
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Product Name</span>
-                                                            <p className="text-xs font-bold text-gray-800 truncate">
-                                                                {selectedPiForAmendment
-                                                                    ? (selectedPiForAmendment.productName || '-')
-                                                                    : (selectedLcForAmendment.productName || selectedLcForAmendment.product || '-')}
-                                                            </p>
-                                                        </div>
-                                                        <div className="grid grid-cols-2 gap-2 text-left">
-                                                            <div>
-                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
-                                                                <p className="text-xs font-bold text-gray-800">
-                                                                    {selectedPiForAmendment
-                                                                        ? `${((parseFloat(selectedPiForAmendment.grandTotalQuantity || selectedPiForAmendment.quantity) || 0) / 1000).toLocaleString('en-US')} Ton`
-                                                                        : `${parseFloat(selectedLcForAmendment.quantity || 0).toLocaleString('en-US')} Ton`}
-                                                                </p>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Rate</span>
-                                                                <p className="text-xs font-bold text-gray-800">
-                                                                    {selectedPiForAmendment
-                                                                        ? `$${parseFloat(selectedPiForAmendment.rate || 0).toLocaleString('en-IN')}`
-                                                                        : `$${parseFloat(selectedLcForAmendment.rate || 0).toLocaleString('en-IN')}`}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                <div className="border-t border-blue-100/50 pt-2 mt-2 text-left">
-                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
-                                                    <p className="text-xs font-bold text-gray-800">{amendmentDisplayPort}</p>
-                                                </div>
-                                            </div>
+                                                            )}
+                                                            <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">ITEM</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="text-xs font-bold text-gray-850 break-words">{prod.productName || '-'}</span>
 
-                                            {/* Bank Details Section */}
-                                            <div className="bg-blue-50/30 p-3 rounded-xl border border-blue-100/50 space-y-3">
-                                                <div className="flex items-center gap-1.5 border-b border-blue-100/50 pb-1.5 mb-1">
-                                                    <BuildingIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Bank Info</span>
-                                                </div>
-                                                <div className="space-y-2 text-left">
-                                                    <div>
-                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Issuing Bank</span>
-                                                        <p className="text-xs font-bold text-gray-800 truncate" title={selectedLcForAmendment.bankName}>{selectedLcForAmendment.bankName || '-'}</p>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Branch</span>
-                                                            <p className="text-xs font-bold text-gray-800 truncate">{selectedLcForAmendment.bankBranch || '-'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
-                                                            <p className="text-xs font-bold text-gray-800">{selectedLcForAmendment.bankMargin ? `${selectedLcForAmendment.bankMargin}%` : '-'}</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="text-xs font-bold text-gray-800">{parseFloat(prod.quantity || 0).toLocaleString("en-US")} Ton</span>
 
-                                            {/* Insurance Details Section */}
-                                            <div className="bg-indigo-50/30 p-3 rounded-xl border border-indigo-100/50 space-y-3">
-                                                <div className="flex items-center gap-1.5 border-b border-indigo-100/50 pb-1.5 mb-1">
-                                                    <ShieldIcon className="w-3.5 h-3.5 text-indigo-500" />
-                                                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-wider">Insurance Info</span>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">RATE</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="text-xs font-bold text-gray-800">${parseFloat(prod.rate || 0).toLocaleString("en-IN")}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                <div className="space-y-2 text-left">
-                                                    <div>
-                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Company</span>
-                                                        <p className="text-xs font-bold text-gray-800 truncate" title={selectedLcForAmendment.insuranceCo}>{selectedLcForAmendment.insuranceCo || '-'}</p>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Policy Type</span>
-                                                            <p className="text-xs font-bold text-gray-800 truncate">{selectedLcForAmendment.policyType || '-'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Cover Note No</span>
-                                                            <p className="text-xs font-bold text-gray-800 truncate" title={selectedLcForAmendment.marineCoverNote}>{selectedLcForAmendment.marineCoverNote || '-'}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">C.N Date</span>
-                                                            <p className="text-xs font-bold text-gray-800 truncate">{selectedLcForAmendment.marineCNDate ? formatDate(selectedLcForAmendment.marineCNDate) : '-'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Policy No</span>
-                                                            <p className="text-xs font-bold text-gray-800 truncate" title={selectedLcForAmendment.policyNo}>{selectedLcForAmendment.policyNo || '-'}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2 border-t border-indigo-100/50 pt-1.5">
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Extra %</span>
-                                                            <p className="text-xs font-bold text-gray-800">{selectedLcForAmendment.extraPercent || '0'}%</p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Premium Rate</span>
-                                                            <p className="text-xs font-bold text-gray-800">{selectedLcForAmendment.premium || '0'}%</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Premium Return</span>
-                                                            <p className="text-xs font-bold text-blue-600">{selectedLcForAmendment.premiumReturn || '0'}%</p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
-                                                            <p className="text-xs font-bold text-blue-600 truncate">৳{parseFloat(amendmentInsuranceInfo?.expectedReturnAmount || 0).toLocaleString('en-IN')}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">VAT ({selectedLcForAmendment.premiumVat || '0'}%)</span>
-                                                            <p className="text-xs font-bold text-gray-800 truncate">
-                                                                ৳{parseFloat(amendmentInsuranceInfo?.vatAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                            </p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
-                                                            <p className="text-xs font-bold text-gray-800">৳0</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2 border-t border-indigo-100/50 pt-1.5 mt-1">
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
-                                                            <p className="text-xs font-bold text-gray-800">৳{parseFloat(amendmentInsuranceInfo?.grossPremium || 0).toLocaleString('en-US')}</p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Net Premium</span>
-                                                            <p className="text-xs font-bold text-indigo-600 truncate">৳{parseFloat(amendmentInsuranceInfo?.netPremium || 0).toLocaleString('en-US')}</p>
-                                                        </div>
-                                                    </div>
+                                            ) : (
+                                                <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRODUCT NAME</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-bold text-gray-850 break-words">
+                                                        {selectedPiForAmendment
+                                                            ? (selectedPiForAmendment.productName || "-")
+                                                            : (selectedLcForAmendment.productName || selectedLcForAmendment.product || "-")}
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QUANTITY</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-bold text-gray-800">
+                                                        {selectedPiForAmendment
+                                                            ? `${((parseFloat(selectedPiForAmendment.grandTotalQuantity || selectedPiForAmendment.quantity) || 0) / 1000).toLocaleString("en-US")} Ton`
+                                                            : `${parseFloat(selectedLcForAmendment.quantity || 0).toLocaleString("en-US")} Ton`}
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">RATE</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-bold text-gray-800">
+                                                        {selectedPiForAmendment
+                                                            ? `$${parseFloat(selectedPiForAmendment.rate || 0).toLocaleString("en-IN")}`
+                                                            : `$${parseFloat(selectedLcForAmendment.rate || 0).toLocaleString("en-IN")}`}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            <div className="border-t border-blue-100/60 pt-2 mt-2">
+                                                <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PORT</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-bold text-gray-850 break-words">{amendmentDisplayPort || "-"}</span>
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {/* Bank Details Section */}
+                                        <div className="bg-blue-50/30 p-3 rounded-xl border border-blue-100/50 space-y-3">
+                                            <div className="flex items-center gap-1.5 border-b border-blue-100/50 pb-1.5 mb-1">
+                                                <BuildingIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Bank Info</span>
+                                            </div>
+                                            <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">ISSUING BANK</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-gray-850 break-words" title={selectedLcForAmendment.bankName}>{selectedLcForAmendment.bankName || "-"}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRANCH</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-850 break-words">{selectedLcForAmendment.bankBranch || "-"}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MARGIN</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-gray-800">{selectedLcForAmendment.bankMargin ? `${selectedLcForAmendment.bankMargin}%` : "-"}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Insurance Details Section */}
+                                        <div className="bg-indigo-50/30 p-3 rounded-xl border border-indigo-100/50 space-y-3">
+                                            <div className="flex items-center gap-1.5 border-b border-indigo-100/50 pb-1.5 mb-1">
+                                                <ShieldIcon className="w-3.5 h-3.5 text-indigo-500" />
+                                                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-wider">Insurance Info</span>
+                                            </div>
+                                            <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">COMPANY</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-gray-850 break-words" title={selectedLcForAmendment.insuranceCo}>{selectedLcForAmendment.insuranceCo || "-"}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">POLICY TYPE</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-850 break-words">{selectedLcForAmendment.policyType || "-"}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">COVER NOTE NO</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-mono font-semibold text-gray-850 break-all" title={selectedLcForAmendment.marineCoverNote}>{selectedLcForAmendment.marineCoverNote || "-"}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">C.N DATE</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-mono font-semibold text-gray-800">{selectedLcForAmendment.marineCNDate ? formatDate(selectedLcForAmendment.marineCNDate) : "-"}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">POLICY NO</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-850 break-words" title={selectedLcForAmendment.policyNo}>{selectedLcForAmendment.policyNo || "-"}</span>
+
+                                                {/* Divider */}
+                                                <div className="col-span-3 h-[1px] bg-indigo-100/60 my-1"></div>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">EXTRA %</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-800">{selectedLcForAmendment.extraPercent || "0"}%</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PREMIUM RATE</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-800">{selectedLcForAmendment.premium || "0"}%</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PREM. RETURN</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-blue-600">{selectedLcForAmendment.premiumReturn || "0"}%</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">RETURN AMT</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-blue-600">৳{parseFloat(amendmentInsuranceInfo?.expectedReturnAmount || 0).toLocaleString("en-IN")}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({selectedLcForAmendment.premiumVat || "0"}%)</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-800">৳{parseFloat(amendmentInsuranceInfo?.vatAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">STAMP DUTY</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-800">৳0</span>
+
+                                                {/* Divider */}
+                                                <div className="col-span-3 h-[1px] bg-indigo-100/60 my-1"></div>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">GROSS PREMIUM</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-gray-850">৳{parseFloat(amendmentInsuranceInfo?.grossPremium || 0).toLocaleString("en-US")}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">NET PREMIUM</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-black text-indigo-600">৳{parseFloat(amendmentInsuranceInfo?.netPremium || 0).toLocaleString("en-US")}</span>
+                                            </div>
+                                        </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
                         )}
                     </form>
                 </div>
@@ -12702,6 +12920,86 @@ style={
                                                     })()}
                                                 </div>
 
+                                                {/* Card Actions - Standard Grouped Layout */}
+                                                <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1 mt-4">
+                                                    {/* Charges Toggle */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setExpandedLcKey(prev => prev === record._id ? null : record._id);
+                                                        }}
+                                                        data-action={`Toggle Charges (${record.lcNo || 'LC'})`}
+                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                        title={isExpanded ? 'Hide Charges' : 'Show Charges'}
+                                                    >
+                                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center border shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:scale-105 group-active:scale-95 shrink-0 ${
+                                                            isExpanded
+                                                                ? 'bg-blue-600 border-blue-600 text-white shadow-blue-500/20'
+                                                                : 'bg-[#f8fafc] border-[#e2e8f0] text-[#475569] group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1]'
+                                                        }`}>
+                                                            <ReceiptIcon className="w-5 h-5 transition-transform duration-150" />
+                                                        </div>
+                                                        <span className={`text-[11.5px] font-semibold text-center leading-[1.2] tracking-[-0.01em] transition-colors ${
+                                                            isExpanded ? 'text-blue-600 font-bold' : 'text-[#475569] group-hover:text-[#1e293b]'
+                                                        }`}>
+                                                            Charges
+                                                        </span>
+                                                    </button>
+
+                                                    {/* View Details */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => { e.stopPropagation(); setViewData(record); }}
+                                                        data-action={`View Details (${record.lcNo || 'LC'})`}
+                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                        title="View Details"
+                                                    >
+                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                            <EyeIcon className="w-5 h-5 transition-transform duration-150" />
+                                                        </div>
+                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                            View
+                                                        </span>
+                                                    </button>
+
+                                                    {/* Edit Record */}
+                                                    {canManage && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                            data-action={`Edit LC (${record.lcNo || 'LC'})`}
+                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                            title="Edit Record"
+                                                        >
+                                                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                <EditIcon className="w-5 h-5 transition-transform duration-150" />
+                                                            </div>
+                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                Edit
+                                                            </span>
+                                                        </button>
+                                                    )}
+
+                                                    {/* Delete Record */}
+                                                    {canManage && canDelete && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
+                                                            data-action={`Delete LC (${record.lcNo || 'LC'})`}
+                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                            title="Delete Record"
+                                                        >
+                                                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-red-50 group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                <TrashIcon className="w-5 h-5 transition-transform duration-150" />
+                                                            </div>
+                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                                                Delete
+                                                            </span>
+                                                        </button>
+                                                    )}
+                                                </div>
+
                                                 {/* Expanded details (LC Bill and Amendment Bill Charges) */}
                                                 {isExpanded && (
                                                     <div className="mt-4 border-t border-gray-100 pt-4 space-y-4 animate-in slide-in-from-top-2 duration-300">
@@ -13018,60 +13316,22 @@ style={
                                                                 </div>
                                                             </div>
                                                         )}
+                                                        {/* Quick Close Button at bottom of charges */}
+                                                        <div className="pt-2 text-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setExpandedLcKey(null);
+                                                                }}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
+                                                            >
+                                                                <ChevronUpIcon className="w-3.5 h-3.5" />
+                                                                Hide Charges
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 )}
-
-                                                {/* Card Footer: Action buttons and Collapse trigger */}
-                                                <div className="flex items-center justify-between border-t border-gray-100 pt-3 mt-3">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setExpandedLcKey(prev => prev === record._id ? null : record._id);
-                                                        }}
-                                                        className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
-                                                    >
-                                                        {isExpanded ? (
-                                                            <>
-                                                                <ChevronUpIcon className="w-4 h-4" />
-                                                                Hide Charges
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <ChevronDownIcon className="w-4 h-4" />
-                                                                Show Charges
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                    <div className="flex items-center gap-2">
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setViewData(record); }}
-                                                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                                                            title="View Details"
-                                                        >
-                                                            <EyeIcon className="w-4.5 h-4.5" />
-                                                        </button>
-                                                        {canManage && (
-                                                            <>
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
-                                                                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                                                                    title="Edit Record"
-                                                                >
-                                                                    <EditIcon className="w-4.5 h-4.5" />
-                                                                </button>
-                                                                {canDelete && (
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
-                                                                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                                                                        title="Delete Record"
-                                                                    >
-                                                                        <TrashIcon className="w-4.5 h-4.5" />
-                                                                    </button>
-                                                                )}
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
                                             </div>
                                         )}
                                     </div>

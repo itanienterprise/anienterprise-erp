@@ -1429,85 +1429,90 @@ function IPManagement({
         });
     };
 
-    const filteredIpRecords = enrichedIpRecords.filter(record => {
-        // Apply text search
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
-            const matchesText =
-                (record.ipNumber || '').toLowerCase().includes(query) ||
-                (record.ipParty || '').toLowerCase().includes(query) ||
-                (record.productName || '').toLowerCase().includes(query) ||
-                (record.referenceNo || '').toLowerCase().includes(query) ||
-                (record.entryBy || '').toLowerCase().includes(query) ||
-                (entryByName || '').toLowerCase().includes(query);
-            if (!matchesText) return false;
-        }
-
-        // Apply filters
-        if (filters.port && record.port !== filters.port) return false;
-        if (filters.importer && record.ipParty !== filters.importer) return false;
-        if (filters.productName && record.productName !== filters.productName) return false;
-
-        // Status filter: when searching, show all status IP records
-        const isSearching = Boolean(searchQuery && searchQuery.trim());
-        if (!isSearching) {
-            const recStatus = (record.computedStatus || '').trim().toLowerCase();
-            if (filters.status === 'except_expired') {
-                if (recStatus === 'expired') return false;
-            } else if (filters.status && filters.status !== 'all') {
-                if (recStatus !== filters.status.trim().toLowerCase()) return false;
+    const filteredIpRecords = useMemo(() => {
+        return enrichedIpRecords.filter(record => {
+            // Apply text search
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
+                const matchesText =
+                    (record.ipNumber || '').toLowerCase().includes(query) ||
+                    (record.ipParty || '').toLowerCase().includes(query) ||
+                    (record.productName || '').toLowerCase().includes(query) ||
+                    (record.referenceNo || '').toLowerCase().includes(query) ||
+                    (record.entryBy || '').toLowerCase().includes(query) ||
+                    (entryByName || '').toLowerCase().includes(query);
+                if (!matchesText) return false;
             }
-        }
 
-        // Date filtering
-        if (filters.startDate || filters.endDate) {
-            const recordDate = new Date(record.openingDate);
-            if (filters.startDate && recordDate < new Date(filters.startDate)) return false;
-            if (filters.endDate && recordDate > new Date(filters.endDate)) return false;
-        }
+            // Apply filters
+            if (filters.port && record.port !== filters.port) return false;
+            if (filters.importer && record.ipParty !== filters.importer) return false;
+            if (filters.productName && record.productName !== filters.productName) return false;
 
-        // Quick range filtering
-        if (filters.quickRange !== 'all' && filters.quickRange !== 'custom') {
-            const now = new Date();
-            const recordDate = new Date(record.openingDate);
-            if (filters.quickRange === 'weekly') {
-                // Running week: Monday to Sunday of current week
-                const dayOfWeek = now.getDay();
-                const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
-                const weekStart = new Date(now);
-                weekStart.setDate(now.getDate() + diffToMonday);
-                weekStart.setHours(0, 0, 0, 0);
-                const weekEnd = new Date(weekStart);
-                weekEnd.setDate(weekStart.getDate() + 6);
-                weekEnd.setHours(23, 59, 59, 999);
-                if (recordDate < weekStart || recordDate > weekEnd) return false;
+            // Status filter: when searching, show all status IP records
+            const isSearching = Boolean(searchQuery && searchQuery.trim());
+            if (!isSearching) {
+                const recStatus = (record.computedStatus || '').trim().toLowerCase();
+                if (filters.status === 'except_expired') {
+                    if (recStatus === 'expired') return false;
+                } else if (filters.status && filters.status !== 'all') {
+                    if (recStatus !== filters.status.trim().toLowerCase()) return false;
+                }
             }
-            if (filters.quickRange === 'monthly') {
-                const month = filters.selectedMonth || (now.getMonth() + 1);
-                const year = filters.selectedYear || now.getFullYear();
-                if (recordDate.getMonth() + 1 !== month || recordDate.getFullYear() !== year) return false;
-            }
-            if (filters.quickRange === 'yearly') {
-                const year = filters.selectedYear || now.getFullYear();
-                if (recordDate.getFullYear() !== year) return false;
-            }
-        }
 
-        return true;
-    });
+            // Date filtering
+            if (filters.startDate || filters.endDate) {
+                const recordDate = new Date(record.openingDate);
+                if (filters.startDate && recordDate < new Date(filters.startDate)) return false;
+                if (filters.endDate && recordDate > new Date(filters.endDate)) return false;
+            }
+
+            // Quick range filtering
+            if (filters.quickRange !== 'all' && filters.quickRange !== 'custom') {
+                const now = new Date();
+                const recordDate = new Date(record.openingDate);
+                if (filters.quickRange === 'weekly') {
+                    // Running week: Monday to Sunday of current week
+                    const dayOfWeek = now.getDay();
+                    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                    const weekStart = new Date(now);
+                    weekStart.setDate(now.getDate() + diffToMonday);
+                    weekStart.setHours(0, 0, 0, 0);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekStart.getDate() + 6);
+                    weekEnd.setHours(23, 59, 59, 999);
+                    if (recordDate < weekStart || recordDate > weekEnd) return false;
+                }
+                if (filters.quickRange === 'monthly') {
+                    const month = filters.selectedMonth || (now.getMonth() + 1);
+                    const year = filters.selectedYear || now.getFullYear();
+                    if (recordDate.getMonth() + 1 !== month || recordDate.getFullYear() !== year) return false;
+                }
+                if (filters.quickRange === 'yearly') {
+                    const year = filters.selectedYear || now.getFullYear();
+                    if (recordDate.getFullYear() !== year) return false;
+                }
+            }
+
+            return true;
+        });
+    }, [enrichedIpRecords, searchQuery, filters, getEntryByName]);
+
+    const sortedIpRecords = useMemo(() => {
+        return sortData(filteredIpRecords);
+    }, [filteredIpRecords, sortConfig.ip]);
 
     const generatePDFReport = () => {
-        const sortedData = sortData(filteredIpRecords);
         const totals = {
-            totalQuantity: sortedData.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0),
-            totalRemainingQuantity: sortedData.reduce((sum, r) => sum + (parseFloat(r.remainingQuantity) || 0), 0),
-            totalIpBalance: sortedData.reduce((sum, r) => sum + (parseFloat(r.ipBalance) || 0), 0),
-            totalLcCount: sortedData.reduce((sum, r) => sum + (parseInt(r.totalLcCount) || 0), 0)
+            totalQuantity: sortedIpRecords.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0),
+            totalRemainingQuantity: sortedIpRecords.reduce((sum, r) => sum + (parseFloat(r.remainingQuantity) || 0), 0),
+            totalIpBalance: sortedIpRecords.reduce((sum, r) => sum + (parseFloat(r.ipBalance) || 0), 0),
+            totalLcCount: sortedIpRecords.reduce((sum, r) => sum + (parseInt(r.totalLcCount) || 0), 0)
         };
 
         generateIPManagementReportPDF(
-            sortedData,
+            sortedIpRecords,
             totals,
             searchQuery,
             filters
@@ -2313,7 +2318,7 @@ function IPManagement({
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {sortData(filteredIpRecords).map((record, idx) => (
+                                        {sortedIpRecords.map((record, idx) => (
                                             <tr
                                                 key={record._id}
                                                 className={`${selectedItems.has(record._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none ${highlightId && (String(record._id) === String(highlightId) || (record.ipNumber && String(record.ipNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
@@ -2430,7 +2435,7 @@ function IPManagement({
 
                             {/* Mobile Card View */}
                             <div className="block md:hidden px-2 py-3 space-y-3">
-                                {sortData(filteredIpRecords).map((record) => {
+                                {sortedIpRecords.map((record) => {
                                     const isExpanded = expandedIpId === record._id;
                                     return (
                                         <div
@@ -2560,42 +2565,72 @@ function IPManagement({
                                                         </div>
 
                                                         {/* Card Actions - Grouped Layout */}
-                                                        <div className="flex flex-col gap-2 mt-4 pt-2">
-                                                            <div className="flex flex-row gap-2">
+                                                        <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1 mt-4">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); setViewIpLcData(record); }}
+                                                                data-action={`View LCs (${record.ipNumber || 'IP'})`}
+                                                                className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                title="View LCs"
+                                                            >
+                                                                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                    <EyeIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                </div>
+                                                                <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                    LCs
+                                                                </span>
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleViewAttachment(record);
+                                                                }}
+                                                                data-action={`View PDF (${record.ipNumber || 'IP'})`}
+                                                                disabled={!(record.ipAttachment || record.hasAttachment)}
+                                                                className={`group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 bg-transparent border-0 ${(record.ipAttachment || record.hasAttachment) ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                                                                title="View PDF"
+                                                            >
+                                                                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                    <PDFIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                </div>
+                                                                <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                    PDF
+                                                                </span>
+                                                            </button>
+
+                                                            {canManage && (
                                                                 <button
-                                                                    onClick={(e) => { e.stopPropagation(); setViewIpLcData(record); }}
-                                                                    data-action={`View LCs (${record.ipNumber || 'IP'})`}
-                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-indigo-50 text-indigo-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                                                                    type="button"
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                                    data-action={`Edit IP (${record.ipNumber || 'Record'})`}
+                                                                    className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                    title="Edit IP"
                                                                 >
-                                                                    <EyeIcon className="w-3.5 h-3.5" /> LCs
+                                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                        <EditIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                    </div>
+                                                                    <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                        Edit
+                                                                    </span>
                                                                 </button>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleViewAttachment(record);
-                                                                    }}
-                                                                    data-action={`View PDF (${record.ipNumber || 'IP'})`}
-                                                                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 ${(record.ipAttachment || record.hasAttachment) ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'} rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95`}
-                                                                >
-                                                                    <PDFIcon className="w-3.5 h-3.5" /> PDF
-                                                                </button>
-                                                                {canManage && (
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
-                                                                        data-action={`Edit IP (${record.ipNumber || 'Record'})`}
-                                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
-                                                                    >
-                                                                        <EditIcon className="w-3.5 h-3.5" /> Edit
-                                                                    </button>
-                                                                )}
-                                                            </div>
+                                                            )}
+
                                                             {canManage && canDelete && (
                                                                 <button
+                                                                    type="button"
                                                                     onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
                                                                     data-action={`Delete IP (${record.ipNumber || 'Record'})`}
-                                                                    className="w-full flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                                                                    className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                    title="Delete IP"
                                                                 >
-                                                                    <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-red-50 group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                        <TrashIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                    </div>
+                                                                    <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                                                        Delete
+                                                                    </span>
                                                                 </button>
                                                             )}
                                                         </div>

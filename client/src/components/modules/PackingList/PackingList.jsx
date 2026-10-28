@@ -3083,7 +3083,7 @@ function PackingList({
                                         <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-150 text-sm">
+                                <tbody className="divide-y divide-gray-100 text-sm">
                                     {filteredRecords.map(rec => {
                                         let totalBags = 0;
                                         let totalNet = 0;
@@ -3224,8 +3224,8 @@ function PackingList({
                             <TableScrollNav className="hidden md:flex" count={filteredRecords.length} />
 
                             {/* Mobile Card Layout */}
-                            <div className="md:hidden grid grid-cols-1 gap-4 p-4">
-                                {filteredRecords.map(rec => {
+                            <div className="block md:hidden space-y-4 px-2 pb-10">
+                                {filteredRecords.map((rec, index) => {
                                     let totalBags = 0;
                                     let totalNet = 0;
                                     let totalGross = 0;
@@ -3237,131 +3237,242 @@ function PackingList({
                                         });
                                     }
                                     const isExpanded = expandedCardId === rec._id;
+                                    const displayProducts = Array.isArray(rec.productsList) && rec.productsList.length > 0
+                                        ? rec.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                        : (rec.productName || '—');
+
+                                    const isHighlighted = highlightId && (
+                                        String(rec._id) === String(highlightId) ||
+                                        (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                        (rec.invoiceNo && String(rec.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                        (rec.piNumber && String(rec.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+                                    );
 
                                     return (
-                                        <div key={rec._id} className="bg-white rounded-xl border border-gray-150 shadow-sm p-4 relative overflow-hidden transition-all duration-300">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div>
-                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Invoice No</span>
-                                                    <h4 className="text-base font-bold text-gray-800 leading-tight">{rec.packingListNumber}</h4>
-                                                    <span className="text-xs text-gray-500 font-medium">{formatDate(rec.date)}</span>
+                                        <div
+                                            key={rec._id}
+                                            ref={el => {
+                                                if (rec.packingListNumber) rowRefs.current[rec.packingListNumber] = el;
+                                                if (rec.invoiceNo) rowRefs.current[rec.invoiceNo] = el;
+                                                if (rec.piNumber) rowRefs.current[rec.piNumber] = el;
+                                                if (rec._id) rowRefs.current[rec._id] = el;
+                                            }}
+                                            className={`bg-white rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer ${
+                                                isHighlighted ? 'notif-row-highlight' : ''
+                                            } ${
+                                                isExpanded ? 'border-blue-200 shadow-lg ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'
+                                            }`}
+                                            style={isHighlighted ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                            onClick={() => setExpandedCardId(isExpanded ? null : rec._id)}
+                                        >
+                                            <div className="p-5 space-y-3">
+                                                {/* Line 1: SL, Invoice No & Status Badge */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-1.5 text-xs leading-snug min-w-0 flex-wrap">
+                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md shrink-0">
+                                                            SL: {index + 1}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Invoice No : </span>
+                                                        <span className="font-black text-gray-900 tracking-tight break-all font-mono text-sm">
+                                                            {rec.packingListNumber || rec.invoiceNo || '—'}
+                                                        </span>
+                                                    </div>
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${
+                                                        (rec.status || 'Active') === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                        'bg-red-50 text-red-600 border-red-100'
+                                                    }`}>
+                                                        {rec.status || 'Active'}
+                                                    </span>
                                                 </div>
-                                                <span className={`status-badge ${rec.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                                                    {rec.status}
-                                                </span>
-                                            </div>
 
-                                            <div className="grid grid-cols-2 gap-y-3 gap-x-2 my-4 border-t border-b border-gray-100 py-3 text-xs">
-                                                <div>
-                                                    <span className="block font-medium text-gray-400">Importer</span>
-                                                    <span className="font-semibold text-gray-800 truncate max-w-[120px] block">{rec.partyName}</span>
+                                                {/* Line 2: Importer */}
+                                                <div className="text-xs leading-snug">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer : </span>
+                                                    <span className="font-bold text-gray-800 break-words">{rec.partyName || '—'}</span>
                                                 </div>
-                                                <div>
-                                                    <span className="block font-medium text-gray-400">PI Ref</span>
-                                                    {rec.piNumber ? (
-                                                        (() => {
-                                                            const piList = String(rec.piNumber).split(',').map(s => s.trim()).filter(Boolean);
-                                                            if (piList.length === 0) return <span className="font-semibold text-gray-800 block">N/A</span>;
+
+                                                {/* Line 3: Product */}
+                                                <div className="text-xs leading-snug">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product : </span>
+                                                    <span className="font-semibold text-gray-700 break-words">{displayProducts}</span>
+                                                </div>
+
+                                                {/* Expandable Details & Actions */}
+                                                {isExpanded && (
+                                                    <div className="animate-in fade-in slide-in-from-top-2 duration-300 border-t border-gray-100 pt-3 space-y-2.5">
+                                                        <div className="flex items-center">
+                                                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Date</span>
+                                                            <span className="text-gray-400 font-bold mx-2">-</span>
+                                                            <span className="text-sm font-bold text-gray-700">{formatDate(rec.date)}</span>
+                                                        </div>
+
+                                                        <div className="flex items-start">
+                                                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0 mt-0.5">PI Ref</span>
+                                                            <span className="text-gray-400 font-bold mx-2 mt-0.5">-</span>
+                                                            <div className="flex-1 text-sm font-bold text-gray-800">
+                                                                {rec.piNumber ? (
+                                                                    (() => {
+                                                                        const piList = String(rec.piNumber).split(',').map(s => s.trim()).filter(Boolean);
+                                                                        if (piList.length === 0) return <span className="text-gray-400 font-medium">N/A</span>;
+                                                                        return (
+                                                                            <div className="flex flex-wrap gap-1.5">
+                                                                                {piList.map((piNo, idx) => (
+                                                                                    <button
+                                                                                        key={idx}
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleOpenPiDetails(rec.piNumber, rec);
+                                                                                        }}
+                                                                                        className="inline-flex items-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                                        title={`View PI Details (${piNo})`}
+                                                                                    >
+                                                                                        {piNo}
+                                                                                    </button>
+                                                                                ))}
+                                                                            </div>
+                                                                        );
+                                                                    })()
+                                                                ) : (
+                                                                    <span className="text-gray-400 font-medium">N/A</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center">
+                                                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Importer</span>
+                                                            <span className="text-gray-400 font-bold mx-2">-</span>
+                                                            <span className="text-sm font-bold text-gray-800 truncate">{rec.partyName || '—'}</span>
+                                                        </div>
+
+                                                        {rec.trNumber && (
+                                                            <div className="flex items-center">
+                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">TR No</span>
+                                                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                <span className="text-sm font-bold text-gray-800 truncate">{rec.trNumber}</span>
+                                                            </div>
+                                                        )}
+
+                                                        <div className="flex items-center">
+                                                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Total Bags</span>
+                                                            <span className="text-gray-400 font-bold mx-2">-</span>
+                                                            <span className="text-sm font-bold text-gray-800">{totalBags.toLocaleString('en-US')}</span>
+                                                        </div>
+
+                                                        <div className="flex items-center">
+                                                            <span className="w-[100px] text-[11px] font-black text-blue-600 uppercase tracking-widest shrink-0">Net Wt</span>
+                                                            <span className="text-blue-500 font-bold mx-2">-</span>
+                                                            <span className="text-sm font-black text-blue-700">{Math.round(totalNet).toLocaleString('en-US')} KG</span>
+                                                        </div>
+
+                                                        <div className="flex items-center">
+                                                            <span className="w-[100px] text-[11px] font-black text-indigo-500 uppercase tracking-widest shrink-0">Gross Wt</span>
+                                                            <span className="text-indigo-500 font-bold mx-2">-</span>
+                                                            <span className="text-sm font-black text-indigo-600 tracking-tight">{Math.round(totalGross).toLocaleString('en-US')} KG</span>
+                                                        </div>
+
+                                                        {Array.isArray(rec.productsList) && rec.productsList.length > 0 && (
+                                                            <div className="flex items-start">
+                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0 mt-1">Products</span>
+                                                                <span className="text-gray-400 font-bold mx-2 mt-1">-</span>
+                                                                <div className="flex-1 space-y-1.5">
+                                                                    {rec.productsList.map((p, pIdx) => (
+                                                                        <div key={pIdx} className="flex justify-between items-center bg-gray-50 px-2.5 py-1.5 rounded-lg text-xs">
+                                                                            <span className="font-semibold text-gray-700">{p.productName}</span>
+                                                                            <span className="text-gray-500 font-medium">
+                                                                                {p.bagCount ? `${parseInt(p.bagCount).toLocaleString('en-US')} bags` : ''}
+                                                                                {p.bagCount && p.netWeight ? ' • ' : ''}
+                                                                                {p.netWeight ? <span className="text-blue-600 font-bold">{Math.round(parseFloat(p.netWeight)).toLocaleString('en-US')} KG</span> : ''}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {canShowEntryBy && (() => {
+                                                            const mobileEntryInfo = getPlEntryDetails(rec);
                                                             return (
+                                                                <div className="flex items-center">
+                                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Entry By</span>
+                                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                    <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                                                                        <span className="font-semibold text-gray-800">{mobileEntryInfo.creator}</span>
+                                                                        {mobileEntryInfo.editor && (
+                                                                            <span className="text-[10px] text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded" title="Edited By">
+                                                                                ✎ {mobileEntryInfo.editor}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
+
+                                                        {/* Card Actions - Modern Circular Buttons with labels underneath */}
+                                                        <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1 mt-4">
+                                                            <button
+                                                                type="button"
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    try {
+                                                                        await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups, products);
+                                                                    } catch (err) {
+                                                                        console.error('PDF generation failed:', err);
+                                                                        showToast('Failed to generate PDF.', 'error');
+                                                                    }
+                                                                }}
+                                                                className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                title="Download PDF"
+                                                            >
+                                                                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                    <PDFIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                </div>
+                                                                <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                    PDF
+                                                                </span>
+                                                            </button>
+
+                                                            {canManage && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        handleOpenPiDetails(rec.piNumber, rec);
+                                                                        handleEditClick(rec);
                                                                     }}
-                                                                    className="inline-flex flex-col items-start px-2 py-0.5 mt-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none text-left"
-                                                                    title={`View PI Details (${rec.piNumber})`}
+                                                                    className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                    title="Edit Packing List"
                                                                 >
-                                                                    {piList.map((piNo, idx) => (
-                                                                        <span key={idx} className="whitespace-nowrap leading-tight">
-                                                                            {piNo}
-                                                                        </span>
-                                                                    ))}
+                                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                        <EditIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                    </div>
+                                                                    <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                        Edit
+                                                                    </span>
                                                                 </button>
-                                                            );
-                                                        })()
-                                                    ) : (
-                                                        <span className="font-semibold text-gray-800 block">N/A</span>
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <span className="block font-medium text-gray-400">Total Bags</span>
-                                                    <span className="font-bold text-gray-800 block">{totalBags.toLocaleString('en-US')}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="block font-medium text-gray-400">Net Wt / Gross Wt</span>
-                                                    <span className="font-bold text-blue-600 block">{Math.round(totalNet).toLocaleString('en-US')} / {Math.round(totalGross).toLocaleString('en-US')} KG</span>
-                                                </div>
-                                                {canShowEntryBy && (() => {
-                                                    const mobileEntryInfo = getPlEntryDetails(rec);
-                                                    return (
-                                                        <div className="col-span-2">
-                                                            <span className="block font-medium text-gray-400">Entry By</span>
-                                                            <span className="font-semibold text-gray-800 block">{mobileEntryInfo.creator}</span>
-                                                            {mobileEntryInfo.editor && (
-                                                                <span className="text-[10px] text-amber-600 font-semibold">✎ {mobileEntryInfo.editor}</span>
                                                             )}
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </div>
 
-                                            <div className="flex justify-between items-center pt-2">
-                                                <button
-                                                    onClick={() => setExpandedCardId(isExpanded ? null : rec._id)}
-                                                    className="text-xs font-semibold text-gray-500 hover:text-blue-600 flex items-center gap-1.5 focus:outline-none"
-                                                >
-                                                    <span>{isExpanded ? 'Hide products' : 'Show products'}</span>
-                                                    <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'transform rotate-180' : ''}`} />
-                                                </button>
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={async () => {
-                                                            try {
-                                                                await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups, products);
-                                                            } catch (err) {
-                                                                console.error('PDF generation failed:', err);
-                                                                showToast('Failed to generate PDF.', 'error');
-                                                            }
-                                                        }}
-                                                        className="p-2 text-blue-600 bg-blue-50 border border-blue-100 rounded-lg"
-                                                    >
-                                                        <PDFIcon className="w-4 h-4" />
-                                                    </button>
-                                                    {canManage && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleEditClick(rec)}
-                                                                className="p-2 text-amber-600 bg-amber-50 border border-amber-100 rounded-lg"
-                                                            >
-                                                                <EditIcon className="w-4 h-4" />
-                                                            </button>
-                                                            {canDelete && (
+                                                            {canManage && canDelete && (
                                                                 <button
-                                                                    onClick={() => handleDeleteClick(rec._id)}
-                                                                    className="p-2 text-red-600 bg-red-50 border border-red-100 rounded-lg"
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDeleteClick(rec._id);
+                                                                    }}
+                                                                    className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                    title="Delete Packing List"
                                                                 >
-                                                                    <TrashIcon className="w-4 h-4" />
+                                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-red-50 group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                        <TrashIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                    </div>
+                                                                    <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                                                        Delete
+                                                                    </span>
                                                                 </button>
                                                             )}
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {isExpanded && rec.productsList && (
-                                                <div className="mt-4 pt-3 border-t border-dashed border-gray-150 bg-gray-50/50 p-2.5 rounded-lg space-y-2 animate-in">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Details</span>
-                                                    {rec.productsList.map((p, pIdx) => (
-                                                        <div key={pIdx} className="text-xs flex justify-between items-center border-b border-gray-100 pb-1.5 last:border-b-0 last:pb-0">
-                                                            <span className="font-semibold text-gray-700">{p.productName}</span>
-                                                            <span className="text-gray-500">
-                                                                {p.bagCount ? `${p.bagCount} bags` : ''} ({Math.round(parseFloat(p.netWeight)).toLocaleString('en-US')} KG Net)
-                                                            </span>
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}

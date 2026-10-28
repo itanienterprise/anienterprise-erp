@@ -1168,7 +1168,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 </div>
 
                 {!showAddModal && (
-                    <div className="flex-1 w-full max-w-none md:max-w-xl mx-auto flex flex-col items-center gap-2">
+                    <div className="flex-1 w-full max-w-none md:max-w-xl mx-auto">
                         <div className="w-full relative group">
                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                 <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
@@ -1181,26 +1181,10 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                 className="block w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
                             />
                         </div>
-
-                        <div className="flex items-center gap-2">
-                            {canViewPaymentRequest && (
-                                <button
-                                    onClick={() => setIsRequestedOnly(!isRequestedOnly)}
-                                    className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
-                                >
-                                    Requested
-                                    {requestedCount > 0 && (
-                                        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
-                                            {requestedCount}
-                                        </span>
-                                    )}
-                                </button>
-                            )}
-                        </div>
                     </div>
                 )}
 
-                <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto">
+                <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto flex-wrap">
                     {!showAddModal && (
                         <>
                             <div className="relative">
@@ -1274,6 +1258,24 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                             <BarChartIcon className="w-4 h-4 text-gray-400 hidden sm:block" />
                             <span className="text-sm font-medium">Report</span>
                         </button>
+
+                        {canViewPaymentRequest && (
+                            <button
+                                onClick={() => setIsRequestedOnly(!isRequestedOnly)}
+                                className={`relative h-10 px-3.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 active:scale-95 cursor-pointer ${
+                                    isRequestedOnly
+                                        ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                        : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'
+                                }`}
+                            >
+                                <span>Requested</span>
+                                {requestedCount > 0 && (
+                                    <span className="flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse">
+                                        {requestedCount}
+                                    </span>
+                                )}
+                            </button>
+                        )}
                     </>
                 )}
 
@@ -1954,37 +1956,43 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             ) : (
                 /* Main View: Summary Cards + Table */
                 <>
-                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="grid grid-cols-2 gap-3 md:gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         {/* Total Paid (Premium) */}
-                        <div className="bg-white p-3.5 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group">
-                            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
-                                <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                        <div className="bg-white p-3 sm:p-3.5 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group">
+                            <div className="flex items-center gap-2 md:gap-3 mb-1.5 md:mb-3">
+                                <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
                                     <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
                                 </div>
-                                <span className="text-[9px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider truncate">Total Paid (Premium)</span>
+                                <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider leading-tight">
+                                    <span className="hidden sm:inline">Total Paid (Premium)</span>
+                                    <span className="sm:hidden">Paid Premium</span>
+                                </span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-lg md:text-2xl font-black text-gray-900 truncate">৳{filteredPayments.reduce((sum, p) => {
+                                <span className="text-base sm:text-lg md:text-2xl font-black text-gray-900 font-mono">৳{filteredPayments.reduce((sum, p) => {
                                     if (p.type === 'Return Collection') return sum;
                                     return sum + (p.amount || 0) + (p.adjustedAmount || 0);
-                                }, 0).toLocaleString('en-IN')}</span>
+                                }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
 
                         {/* Total Collected (Return) */}
-                        <div className="bg-white p-3.5 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
-                            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
-                                <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                        <div className="bg-white p-3 sm:p-3.5 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
+                            <div className="flex items-center gap-2 md:gap-3 mb-1.5 md:mb-3">
+                                <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
                                     <TrendingUpIcon className="w-4 h-4 md:w-5 md:h-5" />
                                 </div>
-                                <span className="text-[9px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider truncate">Total Collected (Return)</span>
+                                <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider leading-tight">
+                                    <span className="hidden sm:inline">Total Collected (Return)</span>
+                                    <span className="sm:hidden">Collected Return</span>
+                                </span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-lg md:text-2xl font-black text-emerald-600 truncate">৳{filteredPayments.reduce((sum, p) => {
+                                <span className="text-base sm:text-lg md:text-2xl font-black text-emerald-600 font-mono">৳{filteredPayments.reduce((sum, p) => {
                                     const amount = p.type === 'Return Collection' ? (p.amount || 0) : 0;
                                     const adjustment = p.adjustedAmount || 0;
                                     return sum + amount + adjustment;
-                                }, 0).toLocaleString('en-IN')}</span>
+                                }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
                     </div>
@@ -2208,47 +2216,69 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                     <div key={p._id} className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
                                         {/* Card Toggle Header */}
                                         <div
-                                            className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                            className="p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50/70 transition-colors"
                                             onClick={() => setExpandedPaymentIdx(isExpanded ? null : idx)}
                                         >
-                                            <div className="flex-1 min-w-0 pr-4">
-                                                <div className="flex items-center gap-1.5 text-xs text-left min-w-0 overflow-hidden flex-wrap">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
+                                            {/* Top Row: Date, LC Pill (if present), Status Badge & Chevron */}
+                                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                                    <span className="text-[11px] font-bold text-gray-400 font-mono tracking-wider shrink-0">
                                                         {formatDate(p.date)}
                                                     </span>
-                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
-                                                    <span className="font-bold text-gray-800 truncate max-w-[120px] shrink-0" title={p.companyName}>
-                                                        {p.companyName}
-                                                    </span>
-                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
-                                                    <span className="text-gray-500 font-medium truncate max-w-[80px] shrink-0">
-                                                        {p.method}
-                                                    </span>
+                                                    {p.lcNo && (
+                                                        <>
+                                                            <span className="text-gray-300 text-[10px] shrink-0">•</span>
+                                                            <span className="inline-flex items-center px-2 py-0.5 text-[10.5px] font-bold text-blue-700 bg-blue-50/90 border border-blue-200/80 rounded-md font-mono shrink-0">
+                                                                {p.lcNo}
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    {p.status === 'Requested' ? (
+                                                        <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200 shrink-0">
+                                                            Requested
+                                                        </span>
+                                                    ) : p.isAdjustReturn ? (
+                                                        <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/60 shrink-0">
+                                                            Adjust
+                                                        </span>
+                                                    ) : p.type === 'Return Collection' ? (
+                                                        <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/60 shrink-0">
+                                                            Return
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/60 shrink-0">
+                                                            Paid
+                                                        </span>
+                                                    )}
+                                                    <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0 ${isExpanded ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                        {isExpanded ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                {p.status === 'Requested' ? (
-                                                    <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200">
-                                                        Requested
+
+                                            {/* Full Company Name (NO TRUNCATION!) */}
+                                            <div className="text-left mt-1">
+                                                <h4 className="text-xs sm:text-sm font-bold text-gray-900 leading-snug break-words">
+                                                    {p.companyName}
+                                                </h4>
+                                                <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500 font-mono flex-wrap">
+                                                    <span>
+                                                        Amount: <strong className="text-gray-900 font-bold">
+                                                            ৳{((p.amount || 0) + (p.adjustedAmount || 0)).toLocaleString('en-IN')}
+                                                        </strong>
                                                     </span>
-                                                ) : p.isAdjustReturn ? (
-                                                    <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
-                                                        Adjust
-                                                    </span>
-                                                ) : p.type === 'Return Collection' ? (
-                                                    <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
-                                                        Return
-                                                    </span>
-                                                ) : (
-                                                    <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
-                                                        Paid
-                                                    </span>
-                                                )}
-                                                {isExpanded ? (
-                                                    <ChevronUpIcon className="w-4 h-4 text-gray-400" />
-                                                ) : (
-                                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                                                )}
+                                                    <span className="text-gray-300">•</span>
+                                                    <span className="font-sans font-medium text-gray-600">{p.method}</span>
+                                                    {p.reference && (
+                                                        <>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="truncate text-gray-400 font-sans">Ref: {p.reference}</span>
+                                                        </>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
 
@@ -2340,37 +2370,65 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                     )}
 
                                                     {canManage && (
-                                                        <div className="col-span-3 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
+                                                        <div className="col-span-3 pt-3 mt-1 border-t border-gray-100 w-full flex items-start justify-around gap-1">
                                                             {p.status === 'Requested' && canApprove && (
                                                                 <>
                                                                     <button
+                                                                        type="button"
                                                                         onClick={() => handleApprovePayment(p)}
-                                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs active:scale-95 transition-all shadow-sm"
+                                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                        title="Accept Payment"
                                                                     >
-                                                                        <CheckIcon className="w-3.5 h-3.5" /> Accept
+                                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-emerald-50 border border-emerald-200 text-emerald-600 shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                            <CheckIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                        </div>
+                                                                        <span className="text-[11.5px] font-semibold text-emerald-700 text-center leading-[1.2] tracking-[-0.01em]">
+                                                                            Accept
+                                                                        </span>
                                                                     </button>
                                                                     <button
+                                                                        type="button"
                                                                         onClick={() => handleRejectPayment(p)}
-                                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-rose-600 text-white rounded-xl font-bold text-xs active:scale-95 transition-all shadow-sm"
+                                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                        title="Reject Payment"
                                                                     >
-                                                                        <XIcon className="w-3.5 h-3.5" /> Reject
+                                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-rose-50 border border-rose-200 text-rose-600 shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-rose-600 group-hover:text-white group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                            <XIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                        </div>
+                                                                        <span className="text-[11.5px] font-semibold text-rose-700 text-center leading-[1.2] tracking-[-0.01em]">
+                                                                            Reject
+                                                                        </span>
                                                                     </button>
                                                                 </>
                                                             )}
                                                             {canEdit && (
                                                                 <button
+                                                                    type="button"
                                                                     onClick={() => handleEditPayment(p)}
-                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                                    className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                    title="Edit Payment"
                                                                 >
-                                                                    <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                        <EditIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                    </div>
+                                                                    <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                        Edit
+                                                                    </span>
                                                                 </button>
                                                             )}
                                                             {p.status !== 'Requested' && canDelete && (
                                                                 <button
+                                                                    type="button"
                                                                     onClick={() => handleDeletePayment(p)}
-                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                                    className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                    title="Delete Payment"
                                                                 >
-                                                                    <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-red-50 group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                        <TrashIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                    </div>
+                                                                    <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                                                        Delete
+                                                                    </span>
                                                                 </button>
                                                             )}
                                                         </div>

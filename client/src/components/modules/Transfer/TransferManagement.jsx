@@ -197,36 +197,36 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             const damagesCached = queryClient.getQueryData(['damages']);
 
             const [whRes, stockRes, prodRes, salesRes, damagesRes, baselineRes] = await Promise.all([
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['rawWarehouses'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/warehouses`).then(r => Array.isArray(r.data) ? r.data : []),
                     staleTime: 30000
                 }),
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['stock'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : []),
                     staleTime: 30000
                 }),
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['products'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : []),
                     staleTime: 60000
                 }),
                 salesCached && Array.isArray(salesCached) && salesCached.length > 0
                     ? Promise.resolve(salesCached)
-                    : queryClient.fetchQuery({
+                    : queryClient.ensureQueryData({
                         queryKey: ['sales'],
                         queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : []),
                         staleTime: 60000
                     }),
                 damagesCached && Array.isArray(damagesCached) && damagesCached.length > 0
                     ? Promise.resolve(damagesCached)
-                    : queryClient.fetchQuery({
+                    : queryClient.ensureQueryData({
                         queryKey: ['damages'],
                         queryFn: () => axios.get(`${API_BASE_URL}/api/damages`).then(r => Array.isArray(r.data) ? r.data : []),
                         staleTime: 60000
                     }),
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['stock-baseline-active'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/stock-baseline/active`).then(r => r.data || null).catch(() => null),
                     staleTime: 60000
@@ -569,9 +569,6 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         if (socket) {
             socket.on('data_updated', handleRealtimeUpdate);
             socket.on('connect', handleConnect);
-            if (socket.connected) {
-                fetchData(true);
-            }
         }
         const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
         window.addEventListener('erp_data_updated', onCustomEvent);

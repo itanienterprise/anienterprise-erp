@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { SearchIcon, PlusIcon, EditIcon, TrashIcon, ShieldIcon, XIcon, ChevronDownIcon, ChevronUpIcon, DollarSignIcon, BarChartIcon, TrendingUpIcon, EyeIcon, PrinterIcon, FunnelIcon } from '../../Icons';
+import { SearchIcon, PlusIcon, EditIcon, TrashIcon, ShieldIcon, XIcon, ChevronDownIcon, ChevronUpIcon, DollarSignIcon, BarChartIcon, TrendingUpIcon, EyeIcon, PrinterIcon, FunnelIcon, ReceiptIcon, FileTextIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
@@ -1120,27 +1120,51 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                 </div>
                                             </div>
  
-                                            <div className="flex flex-row gap-2 pt-2 border-t border-gray-100">
+                                            {/* Card Actions - Modern Circular Buttons with labels underneath */}
+                                            <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1 mt-4">
                                                 <button
+                                                    type="button"
                                                     onClick={(e) => { e.stopPropagation(); handleView(item); }}
-                                                    className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                    className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                    title="View Insurance Details"
                                                 >
-                                                    <EyeIcon className="w-3.5 h-3.5" /> View
+                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                        <EyeIcon className="w-5 h-5 transition-transform duration-150" />
+                                                    </div>
+                                                    <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                        View
+                                                    </span>
                                                 </button>
+
                                                 {!cannotAddEdit && (
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
-                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                        title="Edit Insurance"
                                                     >
-                                                        <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                            <EditIcon className="w-5 h-5 transition-transform duration-150" />
+                                                        </div>
+                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                            Edit
+                                                        </span>
                                                     </button>
                                                 )}
+
                                                 {!cannotDelete && (
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
-                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                        title="Delete Insurance"
                                                     >
-                                                        <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-red-50 group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                            <TrashIcon className="w-5 h-5 transition-transform duration-150" />
+                                                        </div>
+                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                                            Delete
+                                                        </span>
                                                     </button>
                                                 )}
                                             </div>
@@ -1226,21 +1250,46 @@ const Insurance = ({ onDeleteConfirm }) => {
 
 
                         {/* Mobile Header */}
-                        <div className="relative md:hidden px-6 py-5 border-b border-gray-100 bg-white rounded-t-2xl flex-shrink-0">
-                            <div className="mb-4">
-                                <div className="flex items-center justify-between gap-4">
-                                    <h3 className="text-lg font-bold text-gray-900 truncate min-w-0 flex-1" title={viewData.companyName}>{viewData.companyName}</h3>
-                                    <button onClick={() => setViewData(null)} className="p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all shrink-0 -mr-2">
-                                        <XIcon className="w-5 h-5" />
-                                    </button>
+                        <div className="relative md:hidden px-4 py-3.5 border-b border-gray-100 bg-white rounded-t-2xl flex-shrink-0">
+                            {/* Company & Policy Row */}
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100/80 shadow-2xs shrink-0">
+                                        <ShieldIcon className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="text-base font-black text-gray-900 tracking-tight truncate leading-snug" title={viewData.companyName}>
+                                            {viewData.companyName}
+                                        </h3>
+                                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-gray-500 min-w-0">
+                                            {viewData.policyType && (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold text-blue-700 bg-blue-50/90 border border-blue-200/70 uppercase tracking-wide shrink-0">
+                                                    {viewData.policyType}
+                                                </span>
+                                            )}
+                                            {viewData.policyType && viewData.email && <span className="text-gray-300 text-[10px] shrink-0">•</span>}
+                                            {viewData.email && (
+                                                <span className="text-gray-400 text-[11px] truncate font-medium lowercase" title={viewData.email}>
+                                                    {viewData.email}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <p className="text-xs text-gray-500 mt-1">{viewData.policyType} | {viewData.email || 'No Email'}</p>
+                                <button
+                                    onClick={() => setViewData(null)}
+                                    className="w-8 h-8 rounded-full bg-gray-100/80 hover:bg-gray-200 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-all shrink-0 active:scale-95 cursor-pointer -mr-1"
+                                    title="Close"
+                                >
+                                    <XIcon className="w-4 h-4" />
+                                </button>
                             </div>
-                            <div className="flex flex-col gap-3">
-                                {/* Search + Filter button row */}
-                                <div className="flex gap-2">
+
+                            <div className="flex flex-col gap-2.5">
+                                {/* Search + Actions Row */}
+                                <div className="flex items-center gap-2">
                                     <div className="relative group flex-1">
-                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                         </div>
                                         <input
@@ -1248,71 +1297,124 @@ const Insurance = ({ onDeleteConfirm }) => {
                                             placeholder={activeHistoryTab === 'payments' ? 'Search records...' : 'Search LC history...'}
                                             value={historySearchQuery}
                                             onChange={(e) => setHistorySearchQuery(e.target.value)}
-                                            className="block w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-center"
+                                            className="block w-full h-10 pl-9 pr-8 text-xs bg-gray-50/80 hover:bg-gray-50 focus:bg-white border border-gray-200/90 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-gray-400"
                                         />
+                                        {historySearchQuery && (
+                                            <button
+                                                onClick={() => setHistorySearchQuery('')}
+                                                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                                            >
+                                                <XIcon className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
                                     </div>
+
                                     <button
                                         ref={filterButtonMobileRef}
                                         onClick={() => setShowHistoryFilterPanel(prev => !prev)}
-                                        className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all border ${
+                                        className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all border shrink-0 active:scale-95 relative cursor-pointer ${
                                             showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
-                                                ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-500/30'
-                                                : 'bg-white border-gray-200 hover:border-blue-200'
+                                                ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/25'
+                                                : 'bg-gray-50/80 border-gray-200/90 hover:bg-white hover:border-blue-200 text-gray-500 hover:text-blue-600 shadow-2xs'
                                         }`}
+                                        title="Filter records"
                                     >
-                                        <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                        <FunnelIcon className="w-4 h-4" />
+                                        {Object.values(historyFilters).some(v => v !== '') && (
+                                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white"></span>
+                                        )}
                                     </button>
 
                                     <button
                                         type="button"
                                         onClick={() => setShowHistoryReportFormatModal(true)}
-                                        className="w-11 h-11 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 hover:border-blue-200 text-gray-600 shrink-0 active:scale-95 shadow-sm"
+                                        className="w-10 h-10 flex items-center justify-center rounded-xl transition-all border bg-gray-50/80 border-gray-200/90 hover:bg-white hover:border-blue-200 text-gray-500 hover:text-blue-600 shrink-0 active:scale-95 shadow-2xs cursor-pointer"
                                         title="Print / Export Report"
                                     >
-                                        <PrinterIcon className="w-4 h-4 text-gray-500" />
+                                        <PrinterIcon className="w-4 h-4" />
                                     </button>
                                 </div>
 
-                                <div className="flex p-1 bg-gray-100 rounded-xl">
-                                    {['payments', 'lcs'].map(tab => (
-                                        <button
-                                            key={tab}
-                                            onClick={() => {
-                                                setActiveHistoryTab(tab);
-                                                setExpandedHistoryIdx(null);
-                                            }}
-                                            className={`flex-1 py-2 text-xs font-black rounded-lg transition-all uppercase tracking-widest ${activeHistoryTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                        >
-                                            {tab === 'payments' ? 'Payments' : 'LCs'}
-                                        </button>
-                                    ))}
+                                {/* Tabs: Circular Icon on Top, Label Below (like Photo 2) */}
+                                <div className="flex items-center justify-center gap-12 py-2 px-2 bg-transparent">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setActiveHistoryTab('payments');
+                                            setExpandedHistoryIdx(null);
+                                        }}
+                                        className="group flex flex-col items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none focus:outline-none focus:ring-0 select-none"
+                                    >
+                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0 ${
+                                            activeHistoryTab === 'payments'
+                                                ? 'bg-gradient-to-br from-[#1e40af] to-[#3b82f6] text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]'
+                                                : 'bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b]'
+                                        }`}>
+                                            <ReceiptIcon className="w-5.5 h-5.5 transition-transform duration-150 group-hover:scale-105" />
+                                        </div>
+                                        <span className={`text-[11.5px] text-center leading-[1.2] tracking-[-0.01em] transition-colors ${
+                                            activeHistoryTab === 'payments'
+                                                ? 'font-bold text-[#1e40af]'
+                                                : 'font-semibold text-[#475569] group-hover:text-[#1e293b]'
+                                        }`}>
+                                            Payments
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setActiveHistoryTab('lcs');
+                                            setExpandedHistoryIdx(null);
+                                        }}
+                                        className="group flex flex-col items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none focus:outline-none focus:ring-0 select-none"
+                                    >
+                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0 ${
+                                            activeHistoryTab === 'lcs'
+                                                ? 'bg-gradient-to-br from-[#1e40af] to-[#3b82f6] text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]'
+                                                : 'bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b]'
+                                        }`}>
+                                            <FileTextIcon className="w-5.5 h-5.5 transition-transform duration-150 group-hover:scale-105" />
+                                        </div>
+                                        <span className={`text-[11.5px] text-center leading-[1.2] tracking-[-0.01em] transition-colors ${
+                                            activeHistoryTab === 'lcs'
+                                                ? 'font-bold text-[#1e40af]'
+                                                : 'font-semibold text-[#475569] group-hover:text-[#1e293b]'
+                                        }`}>
+                                            LCs
+                                        </span>
+                                    </button>
                                 </div>
 
                                 {/* Statistics: High Density for Mobile */}
-                                <div className="space-y-2 mt-1">
-                                    <div className="flex flex-row gap-1">
-                                        {[
-                                            { label: 'Tot. Prem', value: viewData.aggregates.totalPremium, color: 'blue' },
-                                            { label: 'Pd. Prem', value: viewData.paidPremium, color: 'emerald' },
-                                            { label: 'Prem. Bal', value: viewData.premiumBalance, color: 'rose' }
-                                        ].map((stat, i) => (
-                                            <div key={i} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate">{stat.label}</p>
-                                                <p className={`text-xs font-black text-${stat.color}-600 truncate`}>৳{stat.value.toLocaleString('en-IN')}</p>
-                                            </div>
-                                        ))}
+                                <div className="space-y-1.5 pt-0.5">
+                                    <div className="grid grid-cols-3 gap-1.5">
+                                        <div className="bg-gray-50/80 px-1 py-2 rounded-xl border border-gray-100 text-center min-w-0">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 truncate">Tot. Prem</p>
+                                            <p className="text-[10px] sm:text-[11px] font-mono font-black text-blue-600 leading-tight tracking-tight whitespace-nowrap overflow-hidden" title={`৳${viewData.aggregates.totalPremium.toLocaleString('en-IN')}`}>৳{viewData.aggregates.totalPremium.toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="bg-gray-50/80 px-1 py-2 rounded-xl border border-gray-100 text-center min-w-0">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 truncate">Pd. Prem</p>
+                                            <p className="text-[10px] sm:text-[11px] font-mono font-black text-emerald-600 leading-tight tracking-tight whitespace-nowrap overflow-hidden" title={`৳${viewData.paidPremium.toLocaleString('en-IN')}`}>৳{viewData.paidPremium.toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="bg-gray-50/80 px-1 py-2 rounded-xl border border-gray-100 text-center min-w-0">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 truncate">Prem. Bal</p>
+                                            <p className="text-[10px] sm:text-[11px] font-mono font-black text-rose-600 leading-tight tracking-tight whitespace-nowrap overflow-hidden" title={`৳${viewData.premiumBalance.toLocaleString('en-IN')}`}>৳{viewData.premiumBalance.toLocaleString('en-IN')}</p>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-row gap-1">
-                                        {[
-                                            { label: 'Ret. Amt', value: viewData.aggregates.returnAmount, color: 'indigo' },
-                                            { label: 'Pd. Ret', value: viewData.paidReturn, color: 'emerald' },
-                                            { label: 'Ret. Bal', value: viewData.returnBalance, color: 'orange' }
-                                        ].map((stat, i) => (
-                                            <div key={i} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate">{stat.label}</p>
-                                                <p className={`text-xs font-black text-${stat.color}-600 truncate`}>৳{stat.value.toLocaleString('en-IN')}</p>
-                                            </div>
-                                        ))}
+                                    <div className="grid grid-cols-3 gap-1.5">
+                                        <div className="bg-gray-50/80 px-1 py-2 rounded-xl border border-gray-100 text-center min-w-0">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 truncate">Ret. Amt</p>
+                                            <p className="text-[10px] sm:text-[11px] font-mono font-black text-indigo-600 leading-tight tracking-tight whitespace-nowrap overflow-hidden" title={`৳${viewData.aggregates.returnAmount.toLocaleString('en-IN')}`}>৳{viewData.aggregates.returnAmount.toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="bg-gray-50/80 px-1 py-2 rounded-xl border border-gray-100 text-center min-w-0">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 truncate">Pd. Ret</p>
+                                            <p className="text-[10px] sm:text-[11px] font-mono font-black text-emerald-600 leading-tight tracking-tight whitespace-nowrap overflow-hidden" title={`৳${viewData.paidReturn.toLocaleString('en-IN')}`}>৳{viewData.paidReturn.toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="bg-gray-50/80 px-1 py-2 rounded-xl border border-gray-100 text-center min-w-0">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 truncate">Ret. Bal</p>
+                                            <p className="text-[10px] sm:text-[11px] font-mono font-black text-amber-600 leading-tight tracking-tight whitespace-nowrap overflow-hidden" title={`৳${viewData.returnBalance.toLocaleString('en-IN')}`}>৳{viewData.returnBalance.toLocaleString('en-IN')}</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1647,81 +1749,106 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                 <div key={idx} className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
                                                     {/* Card Toggle Header */}
                                                     <div
-                                                        className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                                        className="p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50/70 transition-colors"
                                                         onClick={() => setExpandedHistoryIdx(isExpanded ? null : idx)}
                                                     >
-                                                        <div className="flex-1 min-w-0 pr-4">
-                                                            <div className="flex items-center gap-1.5 text-xs text-left min-w-0 overflow-hidden flex-wrap">
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
+                                                        {/* Top Row: Date, LC Pill, Status Badge & Chevron */}
+                                                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                                                <span className="text-[11px] font-bold text-gray-400 font-mono tracking-wider shrink-0">
                                                                     {activeHistoryTab === 'payments' ? formatDate(item.date) : formatDate(item.openingDate)}
                                                                 </span>
-                                                                <span className="text-gray-300 font-bold shrink-0">•</span>
-                                                                <span className="font-bold text-gray-800 truncate max-w-[120px] shrink-0" title={activeHistoryTab === 'payments' ? item.method : item.exporterName}>
-                                                                    {activeHistoryTab === 'payments' ? item.method : item.exporterName || '-'}
-                                                                </span>
-                                                                {item.lcNo ? (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleOpenLcConsumption(item.lcNo);
-                                                                        }}
-                                                                        className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white border border-blue-200 rounded-md font-mono active:scale-95 transition-all"
-                                                                        title={`View LC Details (${item.lcNo})`}
-                                                                    >
-                                                                        {item.lcNo}
-                                                                    </button>
-                                                                ) : (
-                                                                    <span className="font-black text-blue-600 truncate min-w-0">-</span>
+                                                                {item.lcNo && (
+                                                                    <>
+                                                                        <span className="text-gray-300 text-[10px] shrink-0">•</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleOpenLcConsumption(item.lcNo);
+                                                                            }}
+                                                                            className="inline-flex items-center px-2 py-0.5 text-[10.5px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/80 rounded-md font-mono active:scale-95 transition-all shrink-0 cursor-pointer shadow-2xs"
+                                                                            title={`View LC Details (${item.lcNo})`}
+                                                                        >
+                                                                            {item.lcNo}
+                                                                        </button>
+                                                                    </>
                                                                 )}
                                                             </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 shrink-0">
-                                                            {activeHistoryTab === 'payments' ? (
-                                                                item.isAdjustReturn ? (
-                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
-                                                                        Adjust
-                                                                    </span>
-                                                                ) : item.type === 'Return Collection' ? (
-                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
-                                                                        Return
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
-                                                                        Paid
-                                                                    </span>
-                                                                )
-                                                            ) : (() => {
-                                                                const status = getLcInsuranceStatus(item, insurancePayments);
-                                                                if (status === 'complete') {
-                                                                    return (
-                                                                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
-                                                                            complete
+
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                {activeHistoryTab === 'payments' ? (
+                                                                    item.isAdjustReturn ? (
+                                                                        <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/60 shrink-0">
+                                                                            Adjust
                                                                         </span>
-                                                                    );
-                                                                } else if (status === 'return recived') {
-                                                                    return (
-                                                                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-600 border-amber-100/50">
-                                                                            return recived
+                                                                    ) : item.type === 'Return Collection' ? (
+                                                                        <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/60 shrink-0">
+                                                                            Return
                                                                         </span>
-                                                                    );
-                                                                } else if (status === 'premium paid') {
-                                                                    return (
-                                                                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
-                                                                            premium paid
+                                                                    ) : (
+                                                                        <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/60 shrink-0">
+                                                                            Paid
                                                                         </span>
-                                                                    );
-                                                                } else {
-                                                                    return (
-                                                                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
-                                                                            not paid
-                                                                        </span>
-                                                                    );
-                                                                }
-                                                            })()}
-                                                            <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'}`}>
-                                                                {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                    )
+                                                                ) : (() => {
+                                                                    const status = getLcInsuranceStatus(item, insurancePayments);
+                                                                    if (status === 'complete') {
+                                                                        return (
+                                                                            <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/60 shrink-0">
+                                                                                complete
+                                                                            </span>
+                                                                        );
+                                                                    } else if (status === 'return recived') {
+                                                                        return (
+                                                                            <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-600 border-amber-100/60 shrink-0">
+                                                                                return recived
+                                                                            </span>
+                                                                        );
+                                                                    } else if (status === 'premium paid') {
+                                                                        return (
+                                                                            <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/60 shrink-0">
+                                                                                premium paid
+                                                                            </span>
+                                                                        );
+                                                                    } else {
+                                                                        return (
+                                                                            <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/60 shrink-0">
+                                                                                not paid
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                })()}
+                                                                <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0 ${isExpanded ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                                    {isExpanded ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
+                                                                </div>
                                                             </div>
+                                                        </div>
+
+                                                        {/* Full Name & Summary Row */}
+                                                        <div className="text-left mt-1">
+                                                            <h4 className="text-xs sm:text-sm font-bold text-gray-900 leading-snug break-words">
+                                                                {activeHistoryTab === 'payments'
+                                                                    ? (item.method || 'Payment')
+                                                                    : (item.exporterName || '-')}
+                                                            </h4>
+                                                            {activeHistoryTab === 'payments' ? (
+                                                                <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500 font-mono">
+                                                                    <span>Amount: <strong className="text-gray-900 font-bold">৳{parseFloat(item.amount || 0).toLocaleString('en-IN')}</strong></span>
+                                                                    {item.reference && (
+                                                                        <>
+                                                                            <span className="text-gray-300">•</span>
+                                                                            <span className="truncate">Ref: {item.reference}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-2 mt-1 text-[10.5px] text-gray-500 font-mono">
+                                                                    <span>Gross: <strong className="text-blue-600 font-bold">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-IN')}</strong></span>
+                                                                    <span className="text-gray-300">•</span>
+                                                                    <span>Net: <strong className="text-rose-600 font-bold">৳{parseFloat(item.netPremium || 0).toLocaleString('en-IN')}</strong></span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
 

@@ -1343,13 +1343,18 @@ function App() {
 
 
   useEffect(() => {
-    const handleWheel = (e) => {
-      if (document.activeElement.type === 'number') {
-        e.preventDefault();
+    // Attach wheel listener only to the active number input element, avoiding scroll-blocking on window
+    const handleFocusIn = (e) => {
+      if (e.target && e.target.tagName === 'INPUT' && e.target.type === 'number') {
+        const preventWheel = (we) => we.preventDefault();
+        e.target.addEventListener('wheel', preventWheel, { passive: false });
+        e.target.addEventListener('blur', () => {
+          e.target.removeEventListener('wheel', preventWheel);
+        }, { once: true });
       }
     };
-    window.addEventListener('wheel', handleWheel, { passive: false });
-    return () => window.removeEventListener('wheel', handleWheel);
+    document.addEventListener('focusin', handleFocusIn, { passive: true });
+    return () => document.removeEventListener('focusin', handleFocusIn);
   }, []);
 
   useEffect(() => {
@@ -4274,7 +4279,7 @@ function App() {
         </header>
 
         {/* Dashboard Content */}
-        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
+        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-3 sm:p-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
           <div key={currentView} data-current-view={currentView} className="page-transition-enter h-full">
             <ErrorBoundary key={currentView}>
               {renderContent()}

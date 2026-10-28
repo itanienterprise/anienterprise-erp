@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
     FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, FileTextIcon, CheckIcon, SaveIcon
@@ -650,22 +650,30 @@ function PI({
         };
     };
 
-    const checkIsLcDone = (rec) => {
-        if (!rec || !rec.piNumber || !lcRecords || lcRecords.length === 0) return false;
-        const cleanPi = String(rec.piNumber).replace(' (REVISED)', '').trim().toLowerCase();
-        if (!cleanPi) return false;
-        return lcRecords.some(lc => {
+    // Pre-indexed set of LC PI numbers for O(1) instantaneous lookup
+    const lcDonePiSet = useMemo(() => {
+        const set = new Set();
+        if (!Array.isArray(lcRecords) || lcRecords.length === 0) return set;
+        for (let i = 0; i < lcRecords.length; i++) {
+            const lc = lcRecords[i];
             const mainPi = String(lc.piNo || lc.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
-            if (mainPi && mainPi === cleanPi) return true;
+            if (mainPi) set.add(mainPi);
             if (Array.isArray(lc.amendments)) {
-                return lc.amendments.some(a => {
-                    const amdPi = String(a.piNo || a.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
-                    return amdPi && amdPi === cleanPi;
-                });
+                for (let j = 0; j < lc.amendments.length; j++) {
+                    const amd = lc.amendments[j];
+                    const amdPi = String(amd.piNo || amd.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
+                    if (amdPi) set.add(amdPi);
+                }
             }
-            return false;
-        });
-    };
+        }
+        return set;
+    }, [lcRecords]);
+
+    const checkIsLcDone = useCallback((rec) => {
+        if (!rec || !rec.piNumber) return false;
+        const cleanPi = String(rec.piNumber).replace(' (REVISED)', '').trim().toLowerCase();
+        return cleanPi ? lcDonePiSet.has(cleanPi) : false;
+    }, [lcDonePiSet]);
 
     useEffect(() => {
         fetchRecords();
@@ -3973,120 +3981,131 @@ function PI({
         }
     };
 
+    // High-performance product name lookup map (O(1))
+    const productNameMap = useMemo(() => {
+        const map = new Map();
+        if (!Array.isArray(products) || products.length === 0) return map;
+        for (let i = 0; i < products.length; i++) {
+            const p = products[i];
+            const pIpName = (p.ipName || '').trim().toLowerCase();
+            const pName = (p.name || '').trim().toLowerCase();
+            if (pIpName) map.set(pIpName, p.name);
+            if (pName) map.set(pName, p.name);
+        }
+        return map;
+    }, [products]);
+
     // Helper: Map raw / IP product name to standard ERP product name for table display
-    const getStandardProductName = (rawName) => {
+    const getStandardProductName = useCallback((rawName) => {
         if (!rawName) return '';
         const clean = String(rawName).trim().toLowerCase();
         if (!clean) return '';
-        const matched = products.find(p => {
-            const pIpName = (p.ipName || '').trim().toLowerCase();
-            const pName = (p.name || '').trim().toLowerCase();
-            return (pIpName && pIpName === clean) || (pName && pName === clean);
-        });
-        return matched?.name || rawName;
-    };
+        return productNameMap.get(clean) || rawName;
+    }, [productNameMap]);
 
-    const filteredRecords = records.filter(record => {
-        // Search Query Filter
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
-                getStandardProductName(record.productName).toLowerCase().includes(query) ||
-                (record.productsList && record.productsList.some(p =>
-                    (p.productName || '').toLowerCase().includes(query) ||
-                    getStandardProductName(p.productName).toLowerCase().includes(query)
-                ));
-            const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
-            const isLcDone = checkIsLcDone(record);
-            const computedStatus = isLcDone ? 'lc done' : ((!record.ipNumber && (!record.ipNumbers || record.ipNumbers.length === 0)) ? 'ip missing' : (record.status || '').toLowerCase());
-            const matchesSearch = (record.piNumber || '').toLowerCase().includes(query) ||
-                (record.piNumbers && record.piNumbers.some(p => String(p).toLowerCase().includes(query))) ||
-                (record.ipNumber || '').toLowerCase().includes(query) ||
-                (record.ipNumbers && record.ipNumbers.some(ip => String(ip).toLowerCase().includes(query))) ||
-                (record.partyName || '').toLowerCase().includes(query) ||
-                (record.exporterName || '').toLowerCase().includes(query) ||
-                (record.entryBy || '').toLowerCase().includes(query) ||
-                (entryByName || '').toLowerCase().includes(query) ||
-                computedStatus.includes(query) ||
-                matchesProduct;
-            if (!matchesSearch) return false;
-        }
+    const filteredRecords = useMemo(() => {
+        return records.filter(record => {
+            // Search Query Filter
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
+                    getStandardProductName(record.productName).toLowerCase().includes(query) ||
+                    (record.productsList && record.productsList.some(p =>
+                        (p.productName || '').toLowerCase().includes(query) ||
+                        getStandardProductName(p.productName).toLowerCase().includes(query)
+                    ));
+                const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
+                const isLcDone = checkIsLcDone(record);
+                const computedStatus = isLcDone ? 'lc done' : ((!record.ipNumber && (!record.ipNumbers || record.ipNumbers.length === 0)) ? 'ip missing' : (record.status || '').toLowerCase());
+                const matchesSearch = (record.piNumber || '').toLowerCase().includes(query) ||
+                    (record.piNumbers && record.piNumbers.some(p => String(p).toLowerCase().includes(query))) ||
+                    (record.ipNumber || '').toLowerCase().includes(query) ||
+                    (record.ipNumbers && record.ipNumbers.some(ip => String(ip).toLowerCase().includes(query))) ||
+                    (record.partyName || '').toLowerCase().includes(query) ||
+                    (record.exporterName || '').toLowerCase().includes(query) ||
+                    (record.entryBy || '').toLowerCase().includes(query) ||
+                    (entryByName || '').toLowerCase().includes(query) ||
+                    computedStatus.includes(query) ||
+                    matchesProduct;
+                if (!matchesSearch) return false;
+            }
 
-        // Advanced Filters
-        if (piFilters.startDate && record.date && record.date < piFilters.startDate) return false;
-        if (piFilters.endDate && record.date && record.date > piFilters.endDate) return false;
+            // Advanced Filters
+            if (piFilters.startDate && record.date && record.date < piFilters.startDate) return false;
+            if (piFilters.endDate && record.date && record.date > piFilters.endDate) return false;
 
-        // Quick range filtering
-        if (piFilters.quickRange && piFilters.quickRange !== 'all' && piFilters.quickRange !== 'custom') {
-            const parseLocalDate = (dVal) => {
-                if (!dVal) return null;
-                if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
-                const str = String(dVal).trim();
-                if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-                    const [y, m, d] = str.split('T')[0].split('-').map(Number);
-                    return new Date(y, m - 1, d);
-                }
-                const d = new Date(str);
-                return isNaN(d.getTime()) ? null : d;
-            };
+            // Quick range filtering
+            if (piFilters.quickRange && piFilters.quickRange !== 'all' && piFilters.quickRange !== 'custom') {
+                const parseLocalDate = (dVal) => {
+                    if (!dVal) return null;
+                    if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
+                    const str = String(dVal).trim();
+                    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                        const [y, m, d] = str.split('T')[0].split('-').map(Number);
+                        return new Date(y, m - 1, d);
+                    }
+                    const d = new Date(str);
+                    return isNaN(d.getTime()) ? null : d;
+                };
 
-            const latestRevDate = record.revisions && record.revisions.length > 0
-                ? record.revisions[record.revisions.length - 1].reviseDate
-                : null;
+                const latestRevDate = record.revisions && record.revisions.length > 0
+                    ? record.revisions[record.revisions.length - 1].reviseDate
+                    : null;
 
-            const targetDate = parseLocalDate(latestRevDate) || parseLocalDate(record.date) || parseLocalDate(record.piDate) || parseLocalDate(record.createdAt);
-            if (!targetDate) return false;
+                const targetDate = parseLocalDate(latestRevDate) || parseLocalDate(record.date) || parseLocalDate(record.piDate) || parseLocalDate(record.createdAt);
+                if (!targetDate) return false;
 
-            const now = new Date();
-            if (piFilters.quickRange === 'weekly') {
-                const dayOfWeek = now.getDay();
-                const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
-                const weekStart = new Date(now);
-                weekStart.setDate(now.getDate() + diffToMonday);
-                weekStart.setHours(0, 0, 0, 0);
-                const weekEnd = new Date(weekStart);
-                weekEnd.setDate(weekStart.getDate() + 6);
-                weekEnd.setHours(23, 59, 59, 999);
+                const now = new Date();
+                if (piFilters.quickRange === 'weekly') {
+                    const dayOfWeek = now.getDay();
+                    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                    const weekStart = new Date(now);
+                    weekStart.setDate(now.getDate() + diffToMonday);
+                    weekStart.setHours(0, 0, 0, 0);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekStart.getDate() + 6);
+                    weekEnd.setHours(23, 59, 59, 999);
 
-                const rollingWeekStart = new Date(now);
-                rollingWeekStart.setDate(now.getDate() - 7);
-                rollingWeekStart.setHours(0, 0, 0, 0);
+                    const rollingWeekStart = new Date(now);
+                    rollingWeekStart.setDate(now.getDate() - 7);
+                    rollingWeekStart.setHours(0, 0, 0, 0);
 
-                const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
-                if (!matchesWeekly) return false;
-            } else if (piFilters.quickRange === 'monthly') {
-                const month = parseInt(piFilters.selectedMonth || (now.getMonth() + 1));
-                const year = parseInt(piFilters.selectedYear || now.getFullYear());
-                if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
-                    return false;
-                }
-            } else if (piFilters.quickRange === 'yearly') {
-                const year = parseInt(piFilters.selectedYear || now.getFullYear());
-                if (targetDate.getFullYear() !== year) {
-                    return false;
+                    const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
+                    if (!matchesWeekly) return false;
+                } else if (piFilters.quickRange === 'monthly') {
+                    const month = parseInt(piFilters.selectedMonth || (now.getMonth() + 1));
+                    const year = parseInt(piFilters.selectedYear || now.getFullYear());
+                    if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
+                        return false;
+                    }
+                } else if (piFilters.quickRange === 'yearly') {
+                    const year = parseInt(piFilters.selectedYear || now.getFullYear());
+                    if (targetDate.getFullYear() !== year) {
+                        return false;
+                    }
                 }
             }
-        }
 
-        if (piFilters.port) {
-            const filterPort = piFilters.port.trim().toLowerCase();
-            const recordPort = (record.port || '').trim().toLowerCase();
-            const recordDischarge = (record.portOfDischarge || '').trim().toLowerCase();
-            const recordLoading = (record.portOfLoading || '').trim().toLowerCase();
-            if (recordPort !== filterPort && recordDischarge !== filterPort && recordLoading !== filterPort) return false;
-        }
+            if (piFilters.port) {
+                const filterPort = piFilters.port.trim().toLowerCase();
+                const recordPort = (record.port || '').trim().toLowerCase();
+                const recordDischarge = (record.portOfDischarge || '').trim().toLowerCase();
+                const recordLoading = (record.portOfLoading || '').trim().toLowerCase();
+                if (recordPort !== filterPort && recordDischarge !== filterPort && recordLoading !== filterPort) return false;
+            }
 
-        if (piFilters.importerName && (record.partyName || '').trim().toLowerCase() !== piFilters.importerName.toLowerCase()) return false;
-        if (piFilters.exporterName && (record.exporterName || '').trim().toLowerCase() !== piFilters.exporterName.toLowerCase()) return false;
+            if (piFilters.importerName && (record.partyName || '').trim().toLowerCase() !== piFilters.importerName.toLowerCase()) return false;
+            if (piFilters.exporterName && (record.exporterName || '').trim().toLowerCase() !== piFilters.exporterName.toLowerCase()) return false;
 
-        if (piFilters.productName) {
-            const matchesFilterProduct = (record.productName || '').trim().toLowerCase() === piFilters.productName.toLowerCase() ||
-                (record.productsList && record.productsList.some(p => (p.productName || '').trim().toLowerCase() === piFilters.productName.toLowerCase()));
-            if (!matchesFilterProduct) return false;
-        }
+            if (piFilters.productName) {
+                const matchesFilterProduct = (record.productName || '').trim().toLowerCase() === piFilters.productName.toLowerCase() ||
+                    (record.productsList && record.productsList.some(p => (p.productName || '').trim().toLowerCase() === piFilters.productName.toLowerCase()));
+                if (!matchesFilterProduct) return false;
+            }
 
-        return true;
-    });
+            return true;
+        });
+    }, [records, searchQuery, piFilters, checkIsLcDone, getStandardProductName, getEntryByName]);
 
     // Date and Column Sorting (default: create date descending)
     const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
@@ -6063,14 +6082,25 @@ function PI({
             )}
 
             {showReviseForm && (
-                <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-5 md:p-8 transition-all duration-300">
+                <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-3 sm:p-6 md:p-8 transition-all duration-300 w-full min-w-0 max-w-full">
 
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
-                        <div className="flex items-center gap-2 shrink-0">
-                            <FileTextIcon className="w-5 h-5 text-blue-500" />
-                            <span className="text-base font-bold text-gray-800">
-                                {editingRevisionOriginalNo ? `Edit PI Revision (${editingRevisionOriginalNo})` : 'PI Revise Registration'}
-                            </span>
+                        <div className="flex items-center justify-between gap-3 w-full md:w-auto">
+                            <div className="flex items-center gap-2 shrink-0">
+                                <FileTextIcon className="w-5 h-5 text-blue-500" />
+                                <span className="text-base font-bold text-gray-800">
+                                    {editingRevisionOriginalNo ? `Edit PI Revision (${editingRevisionOriginalNo})` : 'PI Revise Registration'}
+                                </span>
+                            </div>
+                            {/* Close button on mobile (top-right) */}
+                            <button
+                                type="button"
+                                onClick={resetReviseForm}
+                                className="md:hidden p-1.5 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0 text-gray-400 hover:text-rose-500"
+                                title="Close Form"
+                            >
+                                <XIcon className="w-5 h-5" />
+                            </button>
                         </div>
 
                         <div className="flex-1 max-w-md w-full relative dropdown-container" ref={revisePiRef}>
@@ -6114,63 +6144,61 @@ function PI({
                             )}
                         </div>
 
+                        {/* Close button on desktop */}
                         <button
+                            type="button"
                             onClick={resetReviseForm}
-                            className="p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0"
+                            className="hidden md:flex p-2 hover:bg-gray-100 rounded-xl transition-all group active:scale-95 shrink-0 text-gray-400 hover:text-rose-500"
                             title="Close Form"
                         >
-                            <XIcon className="w-5 h-5 text-gray-400 group-hover:text-rose-500" />
+                            <XIcon className="w-5 h-5" />
                         </button>
                     </div>
 
-                    <form onSubmit={handleReviseSubmit} className="space-y-8 relative z-10 w-full">
+                    <form onSubmit={handleReviseSubmit} className="space-y-6 sm:space-y-8 relative z-10 w-full min-w-0 max-w-full">
                         {selectedRevisePiId && selectedPiForRevise && (
-                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full text-left">
-                                <div className="lg:col-span-1 space-y-6 bg-gray-50/50 border border-gray-100 rounded-2xl p-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 lg:gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full min-w-0 max-w-full text-left">
+                                <div className="lg:col-span-1 min-w-0 max-w-full space-y-4 bg-gray-50/60 border border-gray-100 rounded-2xl p-3.5 sm:p-5">
                                     <div>
-                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Current PI Details</h4>
-                                        <div className="space-y-4">
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
-                                                <p className="text-sm font-bold text-gray-800 truncate">{selectedPiForRevise.piNumber}</p>
+                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-3">Current PI Details</h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2.5">
+                                            <div className="bg-white/80 p-2.5 rounded-xl border border-gray-100 min-w-0">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">PI Number</span>
+                                                <p className="text-xs sm:text-sm font-bold text-gray-900 font-mono break-all">{selectedPiForRevise.piNumber}</p>
                                             </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
-                                                <p className="text-sm font-bold text-gray-800 truncate">{selectedPiForRevise.partyName}</p>
+                                            <div className="bg-white/80 p-2.5 rounded-xl border border-gray-100 min-w-0">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Importer</span>
+                                                <p className="text-xs sm:text-sm font-bold text-gray-800 break-words">{selectedPiForRevise.partyName || '-'}</p>
                                             </div>
-                                            <div className="border-b border-gray-200/50 pb-2">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
-                                                <p className="text-sm font-bold text-gray-800 truncate">{selectedPiForRevise.exporterName}</p>
+                                            <div className="bg-white/80 p-2.5 rounded-xl border border-gray-100 min-w-0">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Exporter</span>
+                                                <p className="text-xs sm:text-sm font-bold text-gray-800 break-words">{selectedPiForRevise.exporterName || '-'}</p>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Date</span>
-                                                    <p className="text-sm font-bold text-gray-800 font-mono">{formatDate(selectedPiForRevise.date)}</p>
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Validity</span>
-                                                    <p className="text-sm font-bold text-rose-500 font-mono">{formatDate(selectedPiForRevise.validityDate)}</p>
-                                                </div>
+                                            <div className="bg-white/80 p-2.5 rounded-xl border border-gray-100 min-w-0">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">PI Date</span>
+                                                <p className="text-xs sm:text-sm font-bold text-gray-800 font-mono">{formatDate(selectedPiForRevise.date)}</p>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Qty</span>
-                                                    <p className="text-sm font-bold text-gray-800">
-                                                        {parseFloat(selectedPiForRevise.grandTotalQuantity || 0).toLocaleString('en-US')} kg
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Grand Total</span>
-                                                    <p className="text-sm font-bold text-blue-600">${parseFloat(selectedPiForRevise.grandTotal || 0).toLocaleString()}</p>
-                                                </div>
+                                            <div className="bg-white/80 p-2.5 rounded-xl border border-gray-100 min-w-0">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Current Validity</span>
+                                                <p className="text-xs sm:text-sm font-bold text-rose-500 font-mono">{formatDate(selectedPiForRevise.validityDate)}</p>
+                                            </div>
+                                            <div className="bg-white/80 p-2.5 rounded-xl border border-gray-100 min-w-0">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Qty</span>
+                                                <p className="text-xs sm:text-sm font-bold text-gray-800">
+                                                    {parseFloat(selectedPiForRevise.grandTotalQuantity || 0).toLocaleString('en-US')} kg
+                                                </p>
+                                            </div>
+                                            <div className="bg-white/80 p-2.5 rounded-xl border border-gray-100 sm:col-span-2 lg:col-span-1 min-w-0">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Grand Total</span>
+                                                <p className="text-xs sm:text-sm font-bold text-blue-600">${parseFloat(selectedPiForRevise.grandTotal || 0).toLocaleString()}</p>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="lg:col-span-2 space-y-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                                    <div className="relative flex items-center justify-center min-h-[36px] mb-4">
-                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest absolute left-0 top-1/2 -translate-y-1/2">Revise Details</h4>
+                                <div className="lg:col-span-2 min-w-0 max-w-full space-y-5 sm:space-y-6 bg-white border border-gray-100 rounded-2xl p-3.5 sm:p-6 shadow-sm">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest">Revise Details</h4>
                                         <div className="relative dropdown-container">
                                             {(() => {
                                                 const amendmentOptionsList = [
@@ -6220,7 +6248,7 @@ function PI({
                                                         >
                                                             <span>Amendment</span>
                                                             {displayText && (
-                                                                <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-md whitespace-nowrap" title={selectedAmendments.join(', ')}>
+                                                                <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-md truncate max-w-[170px] sm:max-w-none inline-block align-middle" title={selectedAmendments.join(', ')}>
                                                                     : {displayText}
                                                                 </span>
                                                             )}
@@ -6228,7 +6256,7 @@ function PI({
                                                         </button>
 
                                                         {activeDropdown === 'reviseAmendment' && (
-                                                            <div className="absolute left-1/2 -translate-x-1/2 mt-1.5 w-auto min-w-[390px] sm:min-w-[420px] max-w-[calc(100vw-3rem)] bg-white border border-gray-100 rounded-xl shadow-xl z-[70] py-1.5 overflow-hidden animate-in fade-in duration-150">
+                                                            <div className="absolute left-0 sm:left-1/2 sm:-translate-x-1/2 mt-1.5 w-[calc(100vw-3rem)] sm:w-auto sm:min-w-[420px] max-w-[420px] bg-white border border-gray-100 rounded-xl shadow-xl z-[70] py-1.5 overflow-hidden animate-in fade-in duration-150">
                                                                 <div className="px-3.5 py-2 text-[10px] font-black text-gray-400 uppercase tracking-wider border-b border-gray-50 flex items-center justify-between">
                                                                     <span>Amendment Options</span>
                                                                     {selectedAmendments.length > 0 && (
@@ -6262,7 +6290,7 @@ function PI({
                                                                                 }`}>
                                                                                     {idx + 1}
                                                                                 </span>
-                                                                                <span className="whitespace-nowrap">{option}</span>
+                                                                                <span className="whitespace-normal sm:whitespace-nowrap leading-snug">{option}</span>
                                                                             </div>
                                                                             {selected && (
                                                                                 <CheckIcon className="w-4 h-4 text-blue-600 shrink-0 ml-2" />
@@ -6278,19 +6306,19 @@ function PI({
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        <div className="space-y-1.5">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 min-w-0">
+                                        <div className="space-y-1.5 min-w-0">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Revise Number *</label>
                                             <input
                                                 type="text"
                                                 value={reviseFormData.reviseNo}
                                                 onChange={(e) => setReviseFormData(prev => ({ ...prev, reviseNo: e.target.value }))}
                                                 placeholder="e.g. REVISE NO-01"
-                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
                                                 required
                                             />
                                         </div>
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-1.5 min-w-0">
                                             <CustomDatePicker
                                                 label="Revise Date *"
                                                 value={reviseFormData.reviseDate}
@@ -6299,7 +6327,7 @@ function PI({
                                                 compact={true}
                                             />
                                         </div>
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-1.5 min-w-0">
                                             <CustomDatePicker
                                                 label="New Validity Date"
                                                 value={reviseFormData.validityDate}
@@ -6310,8 +6338,8 @@ function PI({
                                     </div>
 
                                     {(reviseFormData.amendmentType === 'Extension of Shipment and Expiry Dates' || (reviseFormData.amendmentType || '').toLowerCase().includes('extension')) && (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4 bg-blue-50/60 border border-blue-200/80 rounded-2xl animate-in fade-in duration-200">
-                                            <div className="space-y-1.5">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 p-3.5 sm:p-4 bg-blue-50/60 border border-blue-200/80 rounded-2xl animate-in fade-in duration-200 min-w-0">
+                                            <div className="space-y-1.5 min-w-0">
                                                 <CustomDatePicker
                                                     label="New Latest Shipment Date *"
                                                     value={reviseFormData.extendedShipmentDate}
@@ -6319,7 +6347,7 @@ function PI({
                                                     compact={true}
                                                 />
                                             </div>
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1.5 min-w-0">
                                                 <CustomDatePicker
                                                     label="New Expiry Date *"
                                                     value={reviseFormData.extendedExpiryDate}
@@ -6335,9 +6363,9 @@ function PI({
                                     )}
 
                                     {/* First Line: Place of Receipt, Port of Loading, Port of Discharge */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 min-w-0">
                                         {/* Place of Receipt */}
-                                        <div className="space-y-1.5 relative dropdown-container">
+                                        <div className="space-y-1.5 relative dropdown-container min-w-0">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Place of Receipt</label>
                                             <div className="relative">
                                                 <input
@@ -6376,7 +6404,7 @@ function PI({
                                         </div>
 
                                         {/* Port of Loading */}
-                                        <div className="space-y-1.5 relative dropdown-container">
+                                        <div className="space-y-1.5 relative dropdown-container min-w-0">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port of Loading</label>
                                             <div className="relative">
                                                 <input
@@ -6415,7 +6443,7 @@ function PI({
                                         </div>
 
                                         {/* Port of Discharge */}
-                                        <div className="space-y-1.5 relative dropdown-container">
+                                        <div className="space-y-1.5 relative dropdown-container min-w-0">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port of Discharge</label>
                                             <div className="relative">
                                                 <input
@@ -6455,9 +6483,9 @@ function PI({
                                     </div>
 
                                     {/* Second Line: IP Search & Selection, Certification */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
                                         {/* IP Search & Selection */}
-                                        <div className="space-y-1.5 relative dropdown-container">
+                                        <div className="space-y-1.5 relative dropdown-container min-w-0">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Search & Selection</label>
                                             <div className="relative">
                                                 <input
@@ -6624,106 +6652,194 @@ function PI({
                                     {/* IP rows - one per IP number */}
                                     {selectedPiReviseIpInfo.length > 0 ? (
                                         <div className="space-y-3">
-                                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-center">
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP</label>
+                                            {/* Desktop / Tablet Header */}
+                                            <div className="hidden sm:grid grid-cols-[1.2fr_1fr_1fr_1fr_auto] gap-3 items-center">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Number</label>
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Balance</label>
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC REM</label>
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Expiry Date</label>
                                                 <div className="w-8"></div>
                                             </div>
+
+                                            {/* IP rows: Mobile Cards (sm:hidden) vs Desktop Grid (hidden sm:grid) */}
                                             {selectedPiReviseIpInfo.map((ipInfo, idx) => (
-                                                <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-center">
-                                                    <div>
-                                                        <input
-                                                            type="text"
-                                                            readOnly
-                                                            value={ipInfo.ipNumber}
-                                                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-800 font-semibold text-sm"
-                                                        />
+                                                <div key={idx}>
+                                                    {/* Mobile Card (< sm) */}
+                                                    <div className="sm:hidden bg-gray-50 border border-gray-200/80 rounded-xl p-3 space-y-2">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="font-mono font-bold text-xs text-gray-900 break-all">{ipInfo.ipNumber}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleReviseIpSelectToggle(ipInfo.ipNumber)}
+                                                                className="text-red-500 hover:text-red-700 p-1 rounded-lg hover:bg-red-50 shrink-0"
+                                                                title="Remove IP"
+                                                            >
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-200/50 text-[11px]">
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block">IP Bal</span>
+                                                                <span className={`font-bold ${ipInfo.isLowBalance ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                                    {ipInfo.balanceDisplay}
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block">LC REM</span>
+                                                                <span className={`font-bold ${ipInfo.isLowLcBalance ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                                    {ipInfo.lcBalanceDisplay}
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Expiry</span>
+                                                                <span className="font-bold text-red-600 font-mono">
+                                                                    {ipInfo.expiryDisplay}
+                                                                </span>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <input
-                                                            type="text"
-                                                            readOnly
-                                                            value={ipInfo.balanceDisplay}
-                                                            className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm ${ipInfo.isLowBalance ? 'text-red-600' : 'text-emerald-600'
-                                                                }`}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <input
-                                                            type="text"
-                                                            readOnly
-                                                            value={ipInfo.lcBalanceDisplay}
-                                                            className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm ${ipInfo.isLowLcBalance ? 'text-red-600' : 'text-emerald-600'
-                                                                }`}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <input
-                                                            type="text"
-                                                            readOnly
-                                                            value={ipInfo.expiryDisplay}
-                                                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-red-600 font-bold text-sm"
-                                                        />
-                                                    </div>
-                                                    <div className="flex-shrink-0 flex items-center justify-center">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleReviseIpSelectToggle(ipInfo.ipNumber)}
-                                                            className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-all duration-200"
-                                                            title="Remove IP"
-                                                        >
-                                                            <XIcon className="w-4 h-4" />
-                                                        </button>
+
+                                                    {/* Desktop Grid Row (>= sm) */}
+                                                    <div className="hidden sm:grid grid-cols-[1.2fr_1fr_1fr_1fr_auto] gap-3 items-center">
+                                                        <div>
+                                                            <input
+                                                                type="text"
+                                                                readOnly
+                                                                value={ipInfo.ipNumber}
+                                                                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-800 font-semibold text-xs sm:text-sm font-mono truncate"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <input
+                                                                type="text"
+                                                                readOnly
+                                                                value={ipInfo.balanceDisplay}
+                                                                className={`w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-xs sm:text-sm ${ipInfo.isLowBalance ? 'text-red-600' : 'text-emerald-600'
+                                                                    }`}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <input
+                                                                type="text"
+                                                                readOnly
+                                                                value={ipInfo.lcBalanceDisplay}
+                                                                className={`w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-xs sm:text-sm ${ipInfo.isLowLcBalance ? 'text-red-600' : 'text-emerald-600'
+                                                                    }`}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <input
+                                                                type="text"
+                                                                readOnly
+                                                                value={ipInfo.expiryDisplay}
+                                                                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-red-600 font-bold text-xs sm:text-sm font-mono"
+                                                            />
+                                                        </div>
+                                                        <div className="flex-shrink-0 flex items-center justify-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleReviseIpSelectToggle(ipInfo.ipNumber)}
+                                                                className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-all duration-200"
+                                                                title="Remove IP"
+                                                            >
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-4 gap-6">
-                                            <div className="space-y-1.5">
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 min-w-0">
+                                            <div className="space-y-1.5 min-w-0">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP</label>
-                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                                <input type="text" readOnly value="N/A" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
                                             </div>
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1.5 min-w-0">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Balance</label>
-                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                                <input type="text" readOnly value="N/A" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
                                             </div>
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1.5 min-w-0">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC REM</label>
-                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                                <input type="text" readOnly value="N/A" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
                                             </div>
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1.5 min-w-0">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">IP Expiry Date</label>
-                                                <input type="text" readOnly value="N/A" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
+                                                <input type="text" readOnly value="N/A" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-gray-400 text-sm" />
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="space-y-3">
+                                    <div className="space-y-3 min-w-0 max-w-full">
                                         <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product Updates</h5>
-                                        <div className="overflow-x-auto rounded-xl border border-gray-100">
-                                            <table className="w-full text-left text-sm">
+
+                                        {/* Mobile Card Layout (< sm) */}
+                                        <div className="sm:hidden space-y-3">
+                                            {(reviseFormData.productsList || []).map((prod, idx) => (
+                                                <div key={idx} className="bg-gray-50/80 border border-gray-200/80 rounded-xl p-3 space-y-2.5">
+                                                    <div className="flex items-center justify-between gap-2 border-b border-gray-200/60 pb-2">
+                                                        <span className="font-bold text-xs text-gray-800 break-words flex-1">{prod.productName || '-'}</span>
+                                                        <span className="font-bold text-blue-600 text-xs font-mono shrink-0">
+                                                            ${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <div>
+                                                            <label className="text-[9px] font-bold text-gray-400 uppercase block mb-1">Qty (kg)</label>
+                                                            <input
+                                                                type="number"
+                                                                value={prod.quantity}
+                                                                onChange={(e) => handleReviseProductChange(idx, 'quantity', e.target.value)}
+                                                                className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-blue-500 outline-none"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[9px] font-bold text-gray-400 uppercase block mb-1">Rate ($)</label>
+                                                            <input
+                                                                type="number"
+                                                                step="0.001"
+                                                                value={prod.rate}
+                                                                onChange={(e) => handleReviseProductChange(idx, 'rate', e.target.value)}
+                                                                className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-blue-500 outline-none"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[9px] font-bold text-gray-400 uppercase block mb-1">Freight</label>
+                                                            <input
+                                                                type="number"
+                                                                step="0.001"
+                                                                value={prod.freight}
+                                                                onChange={(e) => handleReviseProductChange(idx, 'freight', e.target.value)}
+                                                                className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-blue-500 outline-none"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Desktop / Tablet Table (>= sm) */}
+                                        <div className="hidden sm:block overflow-x-auto rounded-xl border border-gray-100 w-full min-w-0 max-w-full">
+                                            <table className="w-full text-left text-sm min-w-[500px]">
                                                 <thead>
                                                     <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-wider">
-                                                        <th className="px-3 py-2">Product</th>
-                                                        <th className="px-3 py-2">Qty (kg)</th>
-                                                        <th className="px-3 py-2">Rate ($)</th>
-                                                        <th className="px-3 py-2">Freight</th>
-                                                        <th className="px-3 py-2">Amount</th>
+                                                        <th className="px-3 py-2.5">Product</th>
+                                                        <th className="px-3 py-2.5 w-[110px]">Qty (kg)</th>
+                                                        <th className="px-3 py-2.5 w-[100px]">Rate ($)</th>
+                                                        <th className="px-3 py-2.5 w-[100px]">Freight</th>
+                                                        <th className="px-3 py-2.5 w-[110px] text-right">Amount</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-50">
                                                     {(reviseFormData.productsList || []).map((prod, idx) => (
                                                         <tr key={idx}>
-                                                            <td className="px-3 py-2 font-semibold text-gray-700">{prod.productName || '-'}</td>
+                                                            <td className="px-3 py-2 font-semibold text-gray-700 text-xs sm:text-sm">{prod.productName || '-'}</td>
                                                             <td className="px-3 py-2">
                                                                 <input
                                                                     type="number"
                                                                     value={prod.quantity}
                                                                     onChange={(e) => handleReviseProductChange(idx, 'quantity', e.target.value)}
-                                                                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
+                                                                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs sm:text-sm focus:ring-1 focus:ring-blue-500 outline-none"
                                                                 />
                                                             </td>
                                                             <td className="px-3 py-2">
@@ -6732,7 +6848,7 @@ function PI({
                                                                     step="0.001"
                                                                     value={prod.rate}
                                                                     onChange={(e) => handleReviseProductChange(idx, 'rate', e.target.value)}
-                                                                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
+                                                                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs sm:text-sm focus:ring-1 focus:ring-blue-500 outline-none"
                                                                 />
                                                             </td>
                                                             <td className="px-3 py-2">
@@ -6741,26 +6857,28 @@ function PI({
                                                                     step="0.001"
                                                                     value={prod.freight}
                                                                     onChange={(e) => handleReviseProductChange(idx, 'freight', e.target.value)}
-                                                                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
+                                                                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs sm:text-sm focus:ring-1 focus:ring-blue-500 outline-none"
                                                                 />
                                                             </td>
-                                                            <td className="px-3 py-2 font-bold text-blue-600">${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                                            <td className="px-3 py-2 font-bold text-blue-600 text-xs sm:text-sm text-right whitespace-nowrap">
+                                                                ${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                            </td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
                                             </table>
                                         </div>
-                                        <div className="flex justify-end gap-6 text-sm font-bold">
+                                        <div className="flex flex-col sm:flex-row items-end sm:justify-end gap-1.5 sm:gap-6 text-xs sm:text-sm font-bold pt-1">
                                             <span className="text-gray-500">Total Qty: {parseFloat(reviseFormData.grandTotalQuantity || 0).toLocaleString('en-US')} kg</span>
                                             <span className="text-blue-600">Grand Total: ${parseFloat(reviseFormData.grandTotal || 0).toLocaleString()}</span>
                                         </div>
                                     </div>
 
-                                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                                    <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 sm:gap-3 pt-4 border-t border-gray-100">
                                         <button
                                             type="button"
                                             onClick={resetReviseForm}
-                                            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-all active:scale-95"
+                                            className="w-full sm:w-auto px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition-all active:scale-95 text-center text-sm"
                                         >
                                             Cancel
                                         </button>
@@ -6768,7 +6886,7 @@ function PI({
                                             <button
                                                 type="button"
                                                 onClick={handlePrintReviseBankApplication}
-                                                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+                                                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 text-center"
                                                 title="Preview / Print Amendment Bank Application"
                                             >
                                                 <FileTextIcon className="w-4 h-4 text-white shrink-0" />
@@ -6778,23 +6896,23 @@ function PI({
                                         <button
                                             type="submit"
                                             disabled={isReviseSaving}
-                                            className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-sm rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50"
+                                            className="w-full sm:w-auto px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-sm rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 text-center"
                                         >
                                             {isReviseSaving ? 'Saving...' : editingRevisionOriginalNo ? 'Update Revision' : 'Save PI Revise'}
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="lg:col-span-1 space-y-6 bg-gray-50/50 border border-gray-100 rounded-2xl p-6">
+                                <div className="lg:col-span-1 min-w-0 max-w-full space-y-6 bg-gray-50/50 border border-gray-100 rounded-2xl p-3.5 sm:p-5">
                                     <div>
                                         <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">Current Products</h4>
                                         <div className="space-y-3">
                                             {getPiProductsList(selectedPiForRevise).map((prod, pIdx) => (
-                                                <div key={pIdx} className="border-b border-gray-200/40 pb-2 last:border-0 last:pb-0">
-                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                                <div key={pIdx} className="bg-white/80 p-2.5 rounded-xl border border-gray-100">
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">
                                                         Item {getPiProductsList(selectedPiForRevise).length > 1 ? pIdx + 1 : ''}
                                                     </span>
-                                                    <p className="text-xs font-bold text-gray-800 truncate" title={prod.productName}>{prod.productName || '-'}</p>
+                                                    <p className="text-xs font-bold text-gray-800 break-words" title={prod.productName}>{prod.productName || '-'}</p>
                                                     <div className="grid grid-cols-2 gap-2 mt-1">
                                                         <div>
                                                             <span className="text-[8px] font-semibold text-gray-400 uppercase">Qty</span>
@@ -7618,56 +7736,73 @@ function PI({
                                         onClick={() => setExpandedCardId(isExpanded ? null : record._id)}
                                     >
                                         <div className="p-5 space-y-4">
-                                            {/* Single Line Header: PI Number & Status Tag */}
-                                            <div className="flex items-center justify-between gap-3">
-                                                <div className="flex items-start min-w-0 flex-1">
-                                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md mr-2 shrink-0">
-                                                        SL: {index + 1}
-                                                    </span>
-                                                    <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap mt-0.5">PI No.</span>
-                                                    <span className="text-blue-500 font-bold mx-2 mt-0.5">-</span>
-                                                    <div className="flex flex-col gap-0.5 min-w-0">
-                                                        {piList.length > 1 ? (
-                                                            piList.map((pNum, idx) => (
-                                                                <span key={idx} className="text-sm font-black text-gray-900 tracking-tight truncate">
-                                                                    {pNum}
+                                            {/* Header: PI No & Status Badges, then Importer & Product */}
+                                            <div className="min-w-0 flex-1 space-y-1.5 text-left">
+                                                {/* Line 1: SL, PI No & Status Badges on the right */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-1.5 text-xs leading-snug min-w-0 flex-wrap">
+                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md shrink-0">
+                                                            SL: {index + 1}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">PI No : </span>
+                                                        <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                                                            {piList.length > 1 ? (
+                                                                piList.map((pNum, idx) => (
+                                                                    <span key={idx} className="font-black text-gray-900 tracking-tight break-all font-mono text-sm">
+                                                                        {pNum}
+                                                                    </span>
+                                                                ))
+                                                            ) : (
+                                                                <span className="font-black text-gray-900 tracking-tight break-all font-mono text-sm">
+                                                                    {record.piNumber || '—'}
                                                                 </span>
-                                                            ))
-                                                        ) : (
-                                                            <span className="text-sm font-black text-gray-900 tracking-tight truncate">
-                                                                {record.piNumber || 'N/A'}
+                                                            )}
+                                                            {record.revisions && record.revisions.length > 0 && (
+                                                                <span className="text-[9px] font-black uppercase text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                                                    REVISED
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                                                        {isLcDone && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 bg-blue-50 text-blue-700 border-blue-200">
+                                                                LC Done
                                                             </span>
                                                         )}
-                                                        {record.revisions && record.revisions.length > 0 && (
-                                                            <span className="text-[10px] font-bold text-amber-600 leading-tight">(REVISED)</span>
+                                                        {ipList.length === 0 && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 bg-red-50 text-red-700 border-red-200">
+                                                                IP MISSING
+                                                            </span>
+                                                        )}
+                                                        {!isLcDone && ipList.length > 0 && (
+                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                                record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
+                                                                    'bg-amber-50 text-amber-700 border-amber-100'
+                                                                }`}>
+                                                                {record.status}
+                                                            </span>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="flex flex-col items-end gap-1 shrink-0">
-                                                    {isLcDone && (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 bg-blue-50 text-blue-700 border-blue-200">
-                                                            LC Done
-                                                        </span>
-                                                    )}
-                                                    {ipList.length === 0 && (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 bg-red-50 text-red-700 border-red-200">
-                                                            IP MISSING
-                                                        </span>
-                                                    )}
-                                                    {!isLcDone && ipList.length > 0 && (
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
-                                                            record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
-                                                                'bg-amber-50 text-amber-700 border-amber-100'
-                                                            }`}>
-                                                            {record.status}
-                                                        </span>
-                                                    )}
+
+                                                {/* Line 2: Importer */}
+                                                <div className="text-xs leading-snug">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer : </span>
+                                                    <span className="font-bold text-gray-800 break-words">{record.partyName || '—'}</span>
+                                                </div>
+
+                                                {/* Line 3: Product */}
+                                                <div className="text-xs leading-snug">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product : </span>
+                                                    <span className="font-semibold text-gray-700 break-words">{displayProducts || '—'}</span>
                                                 </div>
                                             </div>
 
                                             {/* Expandable Details */}
                                             {isExpanded && (
-                                                <div className="space-y-2.5 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                <div className="space-y-2.5 pt-3 border-t border-gray-100 animate-in fade-in slide-in-from-top-2 duration-300">
                                                     <div className="flex items-start">
                                                         <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0 mt-0.5">IP Number</span>
                                                         <span className="text-gray-400 font-bold mx-2 mt-0.5">-</span>
@@ -7786,19 +7921,28 @@ function PI({
                                         {/* Expandable Actions */}
                                         {isExpanded && (
                                             <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-300">
-                                                <div className="pt-2 flex flex-row gap-2">
+                                                <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1">
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             setViewHistoryRecord(record);
                                                             const tl = getHistoryTimeline(record);
                                                             setActiveHistoryIndex(tl.length > 1 ? tl.length - 1 : 0);
                                                         }}
-                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                        title="View PI History"
                                                     >
-                                                        <EyeIcon className="w-3.5 h-3.5" /> View
+                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                            <EyeIcon className="w-5 h-5 transition-transform duration-150" />
+                                                        </div>
+                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                            View
+                                                        </span>
                                                     </button>
+
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             const enriched = getEnrichedPiForPdf(record);
@@ -7809,27 +7953,48 @@ function PI({
                                                                 generatePIPDF(enriched);
                                                             }
                                                         }}
-                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                        title="Generate PDF"
                                                     >
-                                                        <PDFIcon className="w-3.5 h-3.5" /> PDF
+                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                            <PDFIcon className="w-5 h-5 transition-transform duration-150" />
+                                                        </div>
+                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                            PDF
+                                                        </span>
                                                     </button>
+
                                                     {canEdit && (
                                                         <button
+                                                            type="button"
                                                             onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-amber-50 text-amber-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
                                                             title="Edit Original PI"
                                                             data-action="Edit Original PI"
                                                             aria-label="Edit Original PI"
                                                         >
-                                                            <EditIcon className="w-3.5 h-3.5" /> Edit Original
+                                                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                <EditIcon className="w-5 h-5 transition-transform duration-150" />
+                                                            </div>
+                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                Edit Original
+                                                            </span>
                                                         </button>
                                                     )}
+
                                                     {canDelete && (
                                                         <button
+                                                            type="button"
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                            title="Delete Record"
                                                         >
-                                                            <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-red-50 group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                <TrashIcon className="w-5 h-5 transition-transform duration-150" />
+                                                            </div>
+                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                                                Delete
+                                                            </span>
                                                         </button>
                                                     )}
                                                 </div>
