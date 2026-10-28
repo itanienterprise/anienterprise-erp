@@ -356,103 +356,150 @@ export const PIDetailsModal = ({
     if (!resolvedPi || typeof document === 'undefined' || !document.body) return null;
 
     return createPortal(
-        <div className={`fixed inset-0 ${modalZIndex} flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200`}>
-            <div className="bg-white w-full max-w-[95vw] 2xl:max-w-[1550px] xl:max-w-[1450px] h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+        <div className={`fixed inset-0 ${modalZIndex} flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200`}>
+            <div className="bg-white w-full max-w-[95vw] 2xl:max-w-[1550px] xl:max-w-[1450px] h-[92vh] sm:h-[85vh] rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
                 {/* Modal Header */}
-                <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-blue-100 text-blue-600 rounded-2xl">
-                            <EyeIcon className="w-6 h-6" />
+                <div className="px-4 sm:px-8 py-3.5 sm:py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                        <div className="p-2 sm:p-2.5 bg-blue-100 text-blue-600 rounded-xl sm:rounded-2xl shrink-0">
+                            <EyeIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-black text-gray-900 tracking-tight">Proforma Invoice History Explorer</h3>
-                            <p className="text-sm text-gray-500 font-medium">
-                                PI Number:{' '}
-                                <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 border border-blue-200/90 rounded-lg shadow-2xs">
-                                    {resolvedPi.piNumber}{resolvedPi.revisions && resolvedPi.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}
+                        <div className="min-w-0">
+                            <h3 className="text-base sm:text-lg font-black text-gray-900 tracking-tight truncate">Proforma Invoice History Explorer</h3>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-gray-500 font-medium mt-0.5">
+                                <span>
+                                    PI Number:{' '}
+                                    <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 border border-blue-200/90 rounded-lg shadow-2xs">
+                                        {resolvedPi.piNumber}{resolvedPi.revisions && resolvedPi.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}
+                                    </span>
                                 </span>
-                                {' • '}Date: <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate || resolvedPi.date)}</span>
+                                <span className="text-gray-300">•</span>
+                                <span>
+                                    Date: <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate || resolvedPi.date)}</span>
+                                </span>
                                 {linkedLcNo && (
                                     <>
-                                        {' • '}LC:{' '}
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedLcForModal(linkedLcRecord)}
-                                            className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none"
-                                            title={`View LC Details (${linkedLcNo})`}
-                                        >
-                                            {linkedLcNo}
-                                        </button>
+                                        <span className="text-gray-300">•</span>
+                                        <span>
+                                            LC:{' '}
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedLcForModal(linkedLcRecord)}
+                                                className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none"
+                                                title={`View LC Details (${linkedLcNo})`}
+                                            >
+                                                {linkedLcNo}
+                                            </button>
+                                        </span>
                                     </>
                                 )}
-                            </p>
+                            </div>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 rounded-xl hover:bg-gray-200 text-gray-400 hover:text-gray-600 active:scale-95 transition-all cursor-pointer"
+                        className="p-1.5 sm:p-2 rounded-xl hover:bg-gray-200 text-gray-400 hover:text-gray-600 active:scale-95 transition-all cursor-pointer shrink-0 ml-2"
                         title="Close Modal"
                     >
                         <XIcon className="w-5 h-5" />
                     </button>
                 </div>
 
-                {/* Modal Body */}
-                <div className="flex-1 flex overflow-hidden min-h-0">
-                    {/* Left Sidebar: Timeline */}
-                    <div className="w-72 border-r border-gray-100 overflow-y-auto p-6 bg-gray-50/30 flex-shrink-0">
-                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Revision Timeline</h4>
-                        <div className="relative border-l border-gray-200 pl-6 ml-3 space-y-8">
-                            {timeline.map((rev, idx) => {
-                                const isActive = activeHistoryIndex === idx;
-                                return (
-                                    <div
-                                        key={idx}
-                                        onClick={() => setActiveHistoryIndex(idx)}
-                                        className="relative cursor-pointer group"
-                                    >
-                                        {/* Timeline Bullet */}
-                                        <div className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${isActive
-                                            ? rev.isTenPercent
-                                                ? 'bg-purple-600 border-purple-600 ring-4 ring-purple-100 scale-110 shadow-sm'
-                                                : 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
-                                            : rev.isTenPercent
-                                                ? 'bg-white border-purple-300 group-hover:border-purple-400 group-hover:scale-105'
-                                                : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
-                                            }`} />
-
-                                        {/* Timeline Content Card */}
-                                        <div className={`p-4 rounded-2xl border transition-all ${isActive
-                                            ? rev.isTenPercent
-                                                ? 'bg-white border-purple-200 shadow-md shadow-purple-500/5 ring-1 ring-purple-100'
-                                                : 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
-                                            : 'bg-white/50 border-gray-100 hover:border-gray-200 hover:bg-white hover:shadow-sm'
-                                            }`}>
-                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isTenPercent
-                                                ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                                                : rev.isOriginal
-                                                    ? 'bg-blue-50 text-blue-700'
-                                                    : 'bg-amber-50 text-amber-700'
-                                                }`}>
-                                                {rev.reviseNo}
-                                            </span>
-                                            <p className="text-sm font-bold text-gray-800 mt-2">
-                                                {rev.isTenPercent
-                                                    ? '10% Value Added State'
-                                                    : rev.isOriginal ? 'Initial Creation' : 'Revised State'}
-                                            </p>
-                                            <p className="text-sm font-medium text-gray-500 mt-1 font-mono">
-                                                {formatDate(rev.reviseDate)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                {/* Mobile Action Buttons: Circular Design Before Timeline */}
+                <div className="md:hidden border-b border-gray-100 bg-gray-50/50 px-4 py-3 shrink-0">
+                    <div className="flex items-center justify-around gap-2 max-w-sm mx-auto">
+                        {/* 1. Print PI PDF */}
+                        <div className="flex flex-col items-center gap-1">
+                            <button
+                                type="button"
+                                onClick={handlePrintPDF}
+                                className="w-11 h-11 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-200/80 shadow-sm flex items-center justify-center transition-all transform active:scale-95"
+                                title={activeRevision.isTenPercent ? 'Print 10% PI PDF' : 'Print PI PDF'}
+                                aria-label={activeRevision.isTenPercent ? 'Print 10% PI PDF' : 'Print PI PDF'}
+                            >
+                                <PDFIcon className="w-5 h-5 shrink-0" />
+                            </button>
+                            <span className="text-[10px] font-bold text-gray-600 text-center leading-tight">
+                                {activeRevision.isTenPercent ? '10% PDF' : 'PI PDF'}
+                            </span>
                         </div>
+
+                        {/* 2. Bank Application */}
+                        {!activeRevision.isTenPercent && (
+                            <div className="flex flex-col items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={handlePrintBankApplication}
+                                    className="w-11 h-11 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200/80 shadow-sm flex items-center justify-center transition-all transform active:scale-95"
+                                    title="Bank Application"
+                                    aria-label="Bank Application"
+                                >
+                                    <FileTextIcon className="w-5 h-5 shrink-0" />
+                                </button>
+                                <span className="text-[10px] font-bold text-gray-600 text-center leading-tight">Bank App</span>
+                            </div>
+                        )}
                     </div>
+                </div>
+
+                {/* Modal Body */}
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+                    {/* Revision Timeline: Top scrollable section on mobile, sidebar on desktop (matching LC Record Details) */}
+                    {timeline.length > 1 && (
+                        <div className="w-full md:w-72 border-b md:border-b-0 md:border-r border-gray-100 p-5 md:p-6 bg-gray-50/30 overflow-y-auto max-h-[35vh] md:max-h-full flex-shrink-0 text-left custom-scrollbar">
+                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Revision Timeline</h4>
+                            <div className="relative border-l border-gray-200 pl-6 ml-3 space-y-6">
+                                {timeline.map((rev, idx) => {
+                                    const isActive = activeHistoryIndex === idx;
+                                    return (
+                                        <div
+                                            key={idx}
+                                            onClick={() => setActiveHistoryIndex(idx)}
+                                            className="relative cursor-pointer group"
+                                        >
+                                            {/* Timeline Bullet */}
+                                            <div className={`absolute -left-[31px] top-1.5 w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${isActive
+                                                ? rev.isTenPercent
+                                                    ? 'bg-purple-600 border-purple-600 ring-4 ring-purple-100 scale-110 shadow-sm'
+                                                    : 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
+                                                : rev.isTenPercent
+                                                    ? 'bg-white border-purple-300 group-hover:border-purple-400 group-hover:scale-105'
+                                                    : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
+                                                }`} />
+
+                                            {/* Timeline Content Card */}
+                                            <div className={`p-4 rounded-2xl border transition-all ${isActive
+                                                ? rev.isTenPercent
+                                                    ? 'bg-white border-purple-200 shadow-md shadow-purple-500/5 ring-1 ring-purple-100'
+                                                    : 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
+                                                : 'bg-white/50 border-gray-100 hover:border-gray-200 hover:bg-white hover:shadow-sm'
+                                                }`}>
+                                                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isTenPercent
+                                                    ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                                    : rev.isOriginal
+                                                        ? 'bg-blue-50 text-blue-700'
+                                                        : 'bg-amber-50 text-amber-700'
+                                                    }`}>
+                                                    {rev.reviseNo}
+                                                </span>
+                                                <p className="text-sm font-bold text-gray-800 mt-2">
+                                                    {rev.isTenPercent
+                                                        ? '10% Value Added State'
+                                                        : rev.isOriginal ? 'Initial Creation' : 'Revised State'}
+                                                </p>
+                                                <p className="text-[11px] font-medium text-gray-500 mt-1 font-mono">
+                                                    {formatDate(rev.reviseDate)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Right Pane: Details */}
-                    <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 sm:space-y-8 min-w-0">
                         {activeRevision.isPlaceholder ? (
                             <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-gray-50/50 rounded-3xl border border-gray-100">
                                 <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-4">
@@ -469,119 +516,161 @@ export const PIDetailsModal = ({
                         ) : (
                             <>
                                 {/* Details Section */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                                     {/* Card 1: Logistics */}
-                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4">
+                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 space-y-3">
                                         <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Logistics & Route</h5>
-                                        <div className="space-y-3 text-sm">
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Place of Receipt</span>
-                                                <span className="font-bold text-gray-800 mt-0.5 block">{activeRevision.placeOfReceipt || 'N/A'}</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Port of Loading</span>
-                                                <span className="font-bold text-gray-800 mt-0.5 block">{activeRevision.portOfLoading || 'N/A'}</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Port of Discharge</span>
-                                                <span className="font-bold text-gray-800 mt-0.5 block">{activeRevision.portOfDischarge || 'N/A'}</span>
-                                            </div>
+                                        <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Place of Receipt</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-gray-800 break-words">{activeRevision.placeOfReceipt || 'N/A'}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port of Loading</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-gray-800 break-words">{activeRevision.portOfLoading || 'N/A'}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port of Discharge</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-gray-800 break-words">{activeRevision.portOfDischarge || 'N/A'}</span>
                                         </div>
                                     </div>
 
                                     {/* Card 2: Dates & Certifications */}
-                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4">
+                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 space-y-3">
                                         <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Dates & Certification</h5>
-                                        <div className="space-y-3 text-sm">
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Revise / Original Date</span>
-                                                <span className="font-bold text-gray-800 mt-0.5 block font-mono">{formatDate(activeRevision.reviseDate)}</span>
+                                        <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Revise / PI Date</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate)}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Validity Date</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-rose-500 font-mono">{formatDate(activeRevision.validityDate)}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Certification</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <div className="space-y-0.5 min-w-0">
+                                                {activeRevision.certification
+                                                    ? activeRevision.certification.split(',').map((cert, cIdx) => (
+                                                        <span key={cIdx} className="font-bold text-gray-800 block text-xs">{cert.trim()}</span>
+                                                    ))
+                                                    : <span className="font-bold text-gray-800 block text-xs">N/A</span>
+                                                }
                                             </div>
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Validity Date</span>
-                                                <span className="font-bold text-rose-500 mt-0.5 block font-mono">{formatDate(activeRevision.validityDate)}</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Certification</span>
-                                                <div className="space-y-1">
-                                                    {activeRevision.certification
-                                                        ? activeRevision.certification.split(',').map((cert, cIdx) => (
-                                                            <span key={cIdx} className="font-bold text-gray-800 block text-sm">{cert.trim()}</span>
-                                                        ))
-                                                        : <span className="font-bold text-gray-800 block text-sm">N/A</span>
-                                                    }
-                                                </div>
-                                                {activeRevision.certification && activeRevision.certification.split(',').map(s => s.trim().toLowerCase()).includes('packing') && (
-                                                    <div className="mt-3">
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Packing Type</span>
-                                                        <div className="space-y-1">
-                                                            {activeRevision.packingType
-                                                                ? activeRevision.packingType.split(',').map((pack, pIdx) => (
-                                                                    <span key={pIdx} className="font-bold text-gray-800 block text-sm">{pack.trim()}</span>
-                                                                ))
-                                                                : <span className="font-bold text-gray-800 block text-sm">N/A</span>
-                                                            }
-                                                        </div>
+
+                                            {activeRevision.certification && activeRevision.certification.split(',').map(s => s.trim().toLowerCase()).includes('packing') && (
+                                                <>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Packing Type</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <div className="space-y-0.5 min-w-0">
+                                                        {activeRevision.packingType
+                                                            ? activeRevision.packingType.split(',').map((pack, pIdx) => (
+                                                                <span key={pIdx} className="font-bold text-gray-800 block text-xs">{pack.trim()}</span>
+                                                            ))
+                                                            : <span className="font-bold text-gray-800 block text-xs">N/A</span>
+                                                        }
                                                     </div>
-                                                )}
-                                            </div>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
 
                                     {/* Card 3: IP Records, LC & Reference */}
-                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 space-y-4">
+                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 space-y-3">
                                         <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">IP Records, LC & Remarks</h5>
-                                        <div className="space-y-3 text-sm">
+                                        <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Number</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
                                             <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">LC Number</span>
                                                 {linkedLcNo ? (
                                                     <button
                                                         type="button"
                                                         onClick={() => setSelectedLcForModal(linkedLcRecord)}
-                                                        className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none mt-1"
+                                                        className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold font-mono text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer select-none"
                                                         title={`View LC Details (${linkedLcNo})`}
                                                     >
                                                         {linkedLcNo}
                                                     </button>
                                                 ) : (
-                                                    <span className="text-gray-500 font-bold text-sm">No LC Linked</span>
+                                                    <span className="text-gray-500 font-bold text-xs">No LC Linked</span>
                                                 )}
                                             </div>
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Import Permission (IP)</span>
-                                                <div className="flex flex-wrap gap-1.5 mt-1">
-                                                    {activeIps.length > 0 ? (
-                                                        activeIps.map((ip, i) => (
-                                                            <button
-                                                                key={i}
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleOpenIpDetails(ip);
-                                                                }}
-                                                                className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
-                                                                title={`View IP Details (${ip})`}
-                                                            >
-                                                                {ip}
-                                                            </button>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-gray-500 font-bold text-sm">N/A</span>
-                                                    )}
-                                                </div>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Import Permission</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <div className="flex flex-wrap gap-1.5 min-w-0">
+                                                {activeIps.length > 0 ? (
+                                                    activeIps.map((ip, i) => (
+                                                        <button
+                                                            key={i}
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleOpenIpDetails(ip);
+                                                            }}
+                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                            title={`View IP Details (${ip})`}
+                                                        >
+                                                            {ip}
+                                                        </button>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-gray-500 font-bold text-xs">N/A</span>
+                                                )}
                                             </div>
-                                            <div>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remarks</span>
-                                                <p className="text-sm font-bold text-gray-800 mt-1 max-h-16 overflow-y-auto">{activeRevision.remarks || 'No remarks provided.'}</p>
-                                            </div>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <p className="text-xs font-bold text-gray-800 break-words">{activeRevision.remarks || 'No remarks provided.'}</p>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Products Table */}
-                                <div className="space-y-3">
+                                {/* Products Breakdown on Mobile Cards */}
+                                <div className="md:hidden space-y-3">
                                     <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Products Breakdown</h5>
-                                    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+                                    <div className="space-y-3">
+                                        {activeProducts.map((prod, pIdx) => (
+                                            <div key={pIdx} className="bg-gray-50/60 p-4 rounded-2xl border border-gray-100 text-left">
+                                                {activeProducts.length > 1 && (
+                                                    <div className="text-[10px] font-black text-blue-600 uppercase tracking-wider mb-2">
+                                                        Product #{pIdx + 1}
+                                                    </div>
+                                                )}
+                                                <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRODUCT NAME</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-bold text-gray-900 break-words">{prod.productName || 'N/A'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS CODE</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-mono font-semibold text-gray-700">{prod.hsCode || 'N/A'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QUANTITY</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-bold text-gray-900">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} kg</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">RATE</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-semibold text-gray-800">${parseFloat(prod.rate || 0).toFixed(3)}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">FREIGHT</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-semibold text-gray-800">${parseFloat(prod.freight || 0).toFixed(3)}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL AMOUNT</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-black text-blue-600">${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Products Breakdown on Desktop Table */}
+                                <div className="hidden md:block space-y-3">
+                                    <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Products Breakdown</h5>
+                                    <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white">
                                         <table className="w-full text-left border-collapse">
                                             <thead>
                                                 <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">
@@ -607,46 +696,46 @@ export const PIDetailsModal = ({
                                             </tbody>
                                         </table>
                                     </div>
+                                </div>
 
-                                    {/* Totals Summary Cards */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg mx-auto pt-6">
-                                        {/* Total Quantity Card */}
-                                        <div className="bg-blue-50/40 border border-blue-100 rounded-2xl p-5 text-center shadow-sm">
-                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Total Quantity</span>
-                                            <span className="text-xl font-black text-gray-900 mt-1 block">
-                                                {parseFloat(activeRevision.grandTotalQuantity || 0).toLocaleString('en-US')} kg
-                                            </span>
-                                        </div>
-                                        {/* Grand Total Card */}
-                                        <div className="bg-blue-600 text-white rounded-2xl p-5 text-center shadow-lg shadow-blue-500/20">
-                                            <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest block">Grand Total Value</span>
-                                            <span className="text-xl font-black text-white mt-1 block">
-                                                ${parseFloat(activeRevision.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                            </span>
-                                        </div>
+                                {/* Totals Summary Cards */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 max-w-lg mx-auto pt-4 sm:pt-6">
+                                    {/* Total Quantity Card */}
+                                    <div className="bg-blue-50/40 border border-blue-100 rounded-2xl p-4 sm:p-5 text-center shadow-sm">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Total Quantity</span>
+                                        <span className="text-lg sm:text-xl font-black text-gray-900 mt-1 block">
+                                            {parseFloat(activeRevision.grandTotalQuantity || 0).toLocaleString('en-US')} kg
+                                        </span>
                                     </div>
+                                    {/* Grand Total Card */}
+                                    <div className="bg-blue-600 text-white rounded-2xl p-4 sm:p-5 text-center shadow-lg shadow-blue-500/20">
+                                        <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest block">Grand Total Value</span>
+                                        <span className="text-lg sm:text-xl font-black text-white mt-1 block">
+                                            ${parseFloat(activeRevision.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
+                                </div>
 
-                                    {/* Action Buttons under Cards */}
-                                    <div className="flex items-center justify-center gap-4 pt-6 pb-2">
+                                {/* Action Buttons under Cards (Desktop only - mobile has circular buttons above timeline) */}
+                                <div className="hidden md:flex flex-wrap items-center justify-center gap-3 pt-6 pb-2">
+                                    <button
+                                        type="button"
+                                        onClick={handlePrintPDF}
+                                        className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <PDFIcon className="w-4 h-4 text-white" />
+                                        <span>{activeRevision.isTenPercent ? 'Print 10% PI PDF' : 'Print PI PDF'}</span>
+                                    </button>
+                                    {!activeRevision.isTenPercent && (
                                         <button
                                             type="button"
-                                            onClick={handlePrintPDF}
-                                            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                                            onClick={handlePrintBankApplication}
+                                            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                                         >
-                                            <PDFIcon className="w-4 h-4 text-white" />
-                                            <span>{activeRevision.isTenPercent ? 'Print 10% PI PDF' : 'Print PI PDF'}</span>
+                                            <FileTextIcon className="w-4 h-4 text-white" />
+                                            <span>Bank Application</span>
                                         </button>
-                                        {!activeRevision.isTenPercent && (
-                                            <button
-                                                type="button"
-                                                onClick={handlePrintBankApplication}
-                                                className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-                                            >
-                                                <FileTextIcon className="w-4 h-4 text-white" />
-                                                <span>Bank Application</span>
-                                            </button>
-                                        )}
-                                    </div>
+                                    )}
                                 </div>
                             </>
                         )}

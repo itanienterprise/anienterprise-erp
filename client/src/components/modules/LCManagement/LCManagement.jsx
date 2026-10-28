@@ -3503,105 +3503,108 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                             <div className="flex-1 space-y-8 min-w-0">
                                 {/* Section 1: General Information */}
                                 <div>
-                                    <div className="flex items-center gap-2 mb-4">
+                                    <div className="flex items-center gap-2 mb-3">
                                         <GlobeIcon className="w-4 h-4 text-gray-400" />
                                         <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">General Information</h4>
                                     </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2 text-left">
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI Number</span>
-                                            <p className="text-sm font-bold text-blue-600">
-                                                {(() => {
-                                                    const rawPiNo = activeMilestone.piNo || data.piNo || '';
-                                                    if (!rawPiNo) return 'N/A';
-                                                    // If already has (REVISED) suffix, display as-is
-                                                    if (rawPiNo.endsWith(' (REVISED)')) return rawPiNo;
-                                                    // Dynamically check if the referenced PI has revisions
-                                                    const cleanPi = rawPiNo.replace(' (REVISED)', '');
-                                                    const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
-                                                    if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
-                                                        return `${cleanPi} (REVISED)`;
-                                                    }
-                                                    return rawPiNo;
-                                                })()}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1 col-span-2 sm:col-span-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
-                                            <div className="flex flex-col gap-1.5 mt-0.5">
-                                                {(() => {
-                                                    const isLastState = activeMilestoneIndex === timeline.length - 1;
-                                                    const milestoneState = {
-                                                        ...data,
-                                                        ...activeMilestone,
-                                                        enableValueQtyAdjustment: isLastState ? data.enableValueQtyAdjustment : false,
-                                                        adjustedQuantity: isLastState ? data.adjustedQuantity : null,
-                                                    };
-                                                    const ips = milestoneState.ipNumbers || [];
-                                                    if (ips.length === 0) return <span className="text-sm font-bold text-gray-800">N/A</span>;
-                                                    const breakdown = getIpContributionBreakdown(milestoneState, ips, ipRecordsRaw, lcRecords);
-                                                    return ips.map((ip, idx) => {
-                                                        const item = breakdown.find(b => b.ipNo === ip);
-                                                        return (
-                                                            <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-sm font-bold text-gray-800 bg-gray-50/80 p-1.5 px-2 rounded-lg border border-gray-100">
-                                                                <span>{ip}</span>
-                                                                {item && (
-                                                                    <span className="text-xs font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60 shadow-xs">
-                                                                        {item.qtyKg.toLocaleString('en-IN')} kg ({item.qtyTon.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 3 })} Ton)
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    });
-                                                })()}
+                                    <div className="bg-gray-50/50 p-4 sm:p-5 rounded-2xl border border-gray-100/80">
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2.5">
+                                            {/* Left Column: Identifiers & Parties */}
+                                            <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[125px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PI NUMBER</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-blue-600 break-words">
+                                                    {(() => {
+                                                        const rawPiNo = activeMilestone.piNo || data.piNo || '';
+                                                        if (!rawPiNo) return 'N/A';
+                                                        if (rawPiNo.endsWith(' (REVISED)')) return rawPiNo;
+                                                        const cleanPi = rawPiNo.replace(' (REVISED)', '');
+                                                        const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
+                                                        if (piRecord && piRecord.revisions && piRecord.revisions.length > 0) {
+                                                            return `${cleanPi} (REVISED)`;
+                                                        }
+                                                        return rawPiNo;
+                                                    })()}
+                                                </span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP NUMBER</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <div className="flex flex-col gap-1 min-w-0">
+                                                    {(() => {
+                                                        const isLastState = activeMilestoneIndex === timeline.length - 1;
+                                                        const milestoneState = {
+                                                            ...data,
+                                                            ...activeMilestone,
+                                                            enableValueQtyAdjustment: isLastState ? data.enableValueQtyAdjustment : false,
+                                                            adjustedQuantity: isLastState ? data.adjustedQuantity : null,
+                                                        };
+                                                        const ips = milestoneState.ipNumbers || [];
+                                                        if (ips.length === 0) return <span className="text-xs font-bold text-gray-800">N/A</span>;
+                                                        const breakdown = getIpContributionBreakdown(milestoneState, ips, ipRecordsRaw, lcRecords);
+                                                        return ips.map((ip, idx) => {
+                                                            const item = breakdown.find(b => b.ipNo === ip);
+                                                            return (
+                                                                <div key={idx} className="flex flex-col gap-0.5">
+                                                                    <span className="text-xs font-mono font-bold text-gray-850">{ip}</span>
+                                                                    {item && (
+                                                                        <span className="inline-flex self-start text-[10px] font-extrabold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200/60 shadow-2xs">
+                                                                            {item.qtyKg.toLocaleString('en-IN')} kg ({item.qtyTon.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 3 })} Ton)
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        });
+                                                    })()}
+                                                </div>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IMPORTER</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-gray-850 break-words">{data.importerName || '-'}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">EXPORTER</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-850 break-words">{data.exporterName || '-'}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BANK NAME</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-850 break-words" title={data.bankName}>{data.bankName || '-'}</span>
                                             </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Opening Date</span>
-                                            <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{formatDate(data.openingDate)}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Expiry Date</span>
-                                            <p className={`text-sm font-bold font-mono tracking-tight ${getExpiryColorClass(activeMilestone.expiryDate || data.expiryDate)}`}>{formatDate(activeMilestone.expiryDate || data.expiryDate)}</p>
-                                        </div>
-                                        <div className="space-y-1 col-span-2">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
-                                            <p className="text-sm font-bold text-gray-800 truncate" title={data.bankName}>{data.bankName}</p>
-                                        </div>
-                                        <div className="space-y-1 col-span-2">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
-                                            <p className="text-sm font-bold text-gray-800 truncate" title={data.importerName}>{data.importerName}</p>
-                                        </div>
-                                        <div className="col-span-2 md:col-span-4 grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
-                                            <div className="space-y-1">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
-                                                <p className="text-sm font-bold text-gray-800 truncate" title={data.exporterName}>{data.exporterName}</p>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Latest Shipment Date</span>
-                                                <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">
+
+                                            {/* Divider on mobile */}
+                                            <div className="lg:hidden col-span-1 h-[1px] bg-gray-200/60 my-1"></div>
+
+                                            {/* Right Column: Dates */}
+                                            <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[125px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">OPENING DATE</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-mono font-semibold text-gray-800">{formatDate(data.openingDate)}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">EXPIRY DATE</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className={`text-xs font-mono font-bold ${getExpiryColorClass(activeMilestone.expiryDate || data.expiryDate)}`}>{formatDate(activeMilestone.expiryDate || data.expiryDate)}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">L.S. DATE</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-mono font-semibold text-gray-800">
                                                     {(() => {
                                                         if (!activeMilestone.isOriginal && activeMilestoneIndex > 0) {
-                                                            // For amendments: show the previous milestone's shipment date (before this amendment extended it)
                                                             const prev = timeline[activeMilestoneIndex - 1];
                                                             return formatDate(prev.extendedShipmentDate || prev.latestShipmentDate) || 'N/A';
                                                         }
-                                                        // For Original LC: only use the snapshot's own latestShipmentDate.
-                                                        // Do NOT fall back to data.latestShipmentDate — that gets overwritten with the latest amendment's extended date.
                                                         return formatDate(activeMilestone.latestShipmentDate) || formatDate(data.latestShipmentDate) || 'N/A';
                                                     })()}
-                                                </p>
+                                                </span>
+
+                                                {!activeMilestone.isOriginal && (
+                                                    <>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">EXTENDED DATE</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-mono font-bold text-blue-600">
+                                                            {formatDate(activeMilestone.extendedShipmentDate) || 'N/A'}
+                                                        </span>
+                                                    </>
+                                                )}
                                             </div>
-                                            {!activeMilestone.isOriginal ? (
-                                                <div className="space-y-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extended Shipment Date</span>
-                                                    <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">
-                                                        {formatDate(activeMilestone.extendedShipmentDate) || 'N/A'}
-                                                    </p>
-                                                </div>
-                                            ) : (
-                                                <div />
-                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -3613,59 +3616,128 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                         <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Product & Financial Details</h4>
                                     </div>
                                     <div className="space-y-4">
-                                        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-gray-50/50">
-                                            <table className="w-full text-left border-collapse min-w-[650px] md:min-w-0">
-                                                <thead>
-                                                    <tr className="bg-gray-100/50 border-b border-gray-200/60">
-                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</th>
-                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</th>
-                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Quantity (Ton)</th>
-                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Rate (/Ton)</th>
-                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Freight (/Ton)</th>
-                                                        <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Total Dollar</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {activeProducts.map((item, idx) => (
-                                                        <tr key={idx} className="hover:bg-white/40 transition-colors">
-                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm font-bold text-gray-900">{item.productName || '-'}</td>
-                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-gray-600 font-medium">{item.hsCode || '-'}</td>
-                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-gray-900 font-black">{parseFloat(item.quantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Ton</span></td>
-                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.rate || 0).toLocaleString('en-US')}</td>
-                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.freight || 0).toLocaleString('en-US')}</td>
-                                                            <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-blue-600 font-black">${parseFloat(item.totalDollar || 0).toLocaleString('en-US')}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                        {/* Mobile View: Product Cards in Label : Value Grid */}
+                                        <div className="md:hidden space-y-3">
+                                            {activeProducts.map((item, idx) => (
+                                                <div key={idx} className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100/80 text-left">
+                                                    {activeProducts.length > 1 && (
+                                                        <div className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wider mb-2">
+                                                            Item {idx + 1}
+                                                        </div>
+                                                    )}
+                                                    <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[125px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRODUCT NAME</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-bold text-gray-900 break-words">{item.productName || '-'}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS CODE</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-mono font-semibold text-gray-700">{item.hsCode || '-'}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QUANTITY</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-bold text-gray-900">{parseFloat(item.quantity || 0).toLocaleString('en-US')} Ton</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">RATE</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-bold text-gray-800">${parseFloat(item.rate || 0).toLocaleString('en-US')} /Ton</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">FREIGHT</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-semibold text-gray-800">${parseFloat(item.freight || 0).toLocaleString('en-US')} /Ton</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL DOLLAR</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-black text-blue-600">${parseFloat(item.totalDollar || 0).toLocaleString('en-US')}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            {/* Financial Summary Card on Mobile */}
+                                            <div className="bg-blue-50/30 p-4 rounded-2xl border border-blue-100/60 text-left">
+                                                <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[125px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PORT</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-bold text-gray-850 break-words">{activeMilestone.port || data.port || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DOLLAR RATE</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-mono font-bold text-gray-850">৳{parseFloat(activeMilestone.isOriginal ? (data.openingDollarRate || activeMilestone.dollarRate || data.dollarRate || 0) : (activeMilestone.dollarRate || data.dollarRate || 0)).toLocaleString('en-IN')}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL DOLLAR</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-black text-blue-700">${activeProducts.reduce((sum, item) => sum + (parseFloat(item.totalDollar) || 0), 0).toLocaleString('en-US')}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL LC VALUE</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-sm font-black text-gray-950">
+                                                        ৳{(() => {
+                                                            const totalDollar = activeProducts.reduce((sum, item) => sum + (parseFloat(item.totalDollar) || 0), 0);
+                                                            const dRate = parseFloat(activeMilestone.isOriginal ? (data.openingDollarRate || activeMilestone.dollarRate || data.dollarRate || 0) : (activeMilestone.dollarRate || data.dollarRate || 0));
+                                                            const calcVal = (totalDollar > 0 && dRate > 0) ? (totalDollar * dRate) : parseFloat(activeMilestone.totalAmount || data.totalAmount || 0);
+                                                            return calcVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                                        })()}
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
 
-                                        {/* Summary Stats */}
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-                                            <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
-                                                <p className="text-sm font-bold text-gray-800">{activeMilestone.port || data.port || '-'}</p>
+                                        {/* Desktop View: Full Table + Summary Stats */}
+                                        <div className="hidden md:block space-y-4">
+                                            <div className="overflow-x-auto rounded-xl border border-gray-100 bg-gray-50/50">
+                                                <table className="w-full text-left border-collapse min-w-[650px] md:min-w-0">
+                                                    <thead>
+                                                        <tr className="bg-gray-100/50 border-b border-gray-200/60">
+                                                            <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product Name</th>
+                                                            <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</th>
+                                                            <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Quantity (Ton)</th>
+                                                            <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Rate (/Ton)</th>
+                                                            <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Freight (/Ton)</th>
+                                                            <th className="px-2.5 md:px-4 py-2 md:py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Total Dollar</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {activeProducts.map((item, idx) => (
+                                                            <tr key={idx} className="hover:bg-white/40 transition-colors">
+                                                                <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm font-bold text-gray-900">{item.productName || '-'}</td>
+                                                                <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-gray-600 font-medium">{item.hsCode || '-'}</td>
+                                                                <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-gray-900 font-black">{parseFloat(item.quantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Ton</span></td>
+                                                                <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.rate || 0).toLocaleString('en-US')}</td>
+                                                                <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-gray-700 font-semibold">${parseFloat(item.freight || 0).toLocaleString('en-US')}</td>
+                                                                <td className="px-2.5 md:px-4 py-2 md:py-3 text-sm text-right text-blue-600 font-black">${parseFloat(item.totalDollar || 0).toLocaleString('en-US')}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
                                             </div>
-                                            <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
-                                                <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.isOriginal ? (data.openingDollarRate || activeMilestone.dollarRate || data.dollarRate || 0) : (activeMilestone.dollarRate || data.dollarRate || 0)).toLocaleString('en-IN')}</p>
+
+                                            {/* Summary Stats */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                                                <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                                    <p className="text-sm font-bold text-gray-800">{activeMilestone.port || data.port || '-'}</p>
+                                                </div>
+                                                <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
+                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.isOriginal ? (data.openingDollarRate || activeMilestone.dollarRate || data.dollarRate || 0) : (activeMilestone.dollarRate || data.dollarRate || 0)).toLocaleString('en-IN')}</p>
+                                                </div>
+                                                <div className="p-4 bg-blue-50/40 rounded-xl border border-blue-100/50 flex justify-between items-center">
+                                                    <span className="text-xs font-black text-blue-800 uppercase tracking-widest text-left">Total Dollar</span>
+                                                    <span className="text-lg font-black text-blue-700">${activeProducts.reduce((sum, item) => sum + (parseFloat(item.totalDollar) || 0), 0).toLocaleString('en-US')}</span>
+                                                </div>
                                             </div>
-                                            <div className="p-4 bg-blue-50/40 rounded-xl border border-blue-100/50 flex justify-between items-center">
-                                                <span className="text-xs font-black text-blue-800 uppercase tracking-widest text-left">Total Dollar</span>
-                                                <span className="text-lg font-black text-blue-700">${activeProducts.reduce((sum, item) => sum + (parseFloat(item.totalDollar) || 0), 0).toLocaleString('en-US')}</span>
+                                            <div className="mt-4 p-4 bg-gray-50 rounded-xl flex justify-between items-center text-left">
+                                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total LC Value</span>
+                                                <span className="text-xl font-black text-gray-900">
+                                                    ৳{(() => {
+                                                        const totalDollar = activeProducts.reduce((sum, item) => sum + (parseFloat(item.totalDollar) || 0), 0);
+                                                        const dRate = parseFloat(activeMilestone.isOriginal ? (data.openingDollarRate || activeMilestone.dollarRate || data.dollarRate || 0) : (activeMilestone.dollarRate || data.dollarRate || 0));
+                                                        const calcVal = (totalDollar > 0 && dRate > 0) ? (totalDollar * dRate) : parseFloat(activeMilestone.totalAmount || data.totalAmount || 0);
+                                                        return calcVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                                    })()}
+                                                </span>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div className="mt-4 p-4 bg-gray-50 rounded-xl flex justify-between items-center text-left">
-                                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total LC Value</span>
-                                        <span className="text-xl font-black text-gray-900">
-                                            ৳{(() => {
-                                                const totalDollar = activeProducts.reduce((sum, item) => sum + (parseFloat(item.totalDollar) || 0), 0);
-                                                const dRate = parseFloat(activeMilestone.isOriginal ? (data.openingDollarRate || activeMilestone.dollarRate || data.dollarRate || 0) : (activeMilestone.dollarRate || data.dollarRate || 0));
-                                                const calcVal = (totalDollar > 0 && dRate > 0) ? (totalDollar * dRate) : parseFloat(activeMilestone.totalAmount || data.totalAmount || 0);
-                                                return calcVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                            })()}
-                                        </span>
                                     </div>
 
                                     {!activeMilestone.isOriginal && (
@@ -3835,145 +3907,171 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
 
                                 {/* Section 2.5: Bank Information */}
                                 <div className="pt-6 border-t border-gray-100">
-                                    <div className="flex items-center gap-2 mb-4">
+                                    <div className="flex items-center gap-2 mb-3">
                                         <BuildingIcon className="w-4 h-4 text-gray-400" />
                                         <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest text-left">Bank Information</h4>
                                     </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2 text-left">
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Issuing Bank</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.bankName || '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Branch</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.bankBranch || '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margin</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.bankMargin ? `${data.bankMargin}%` : '-'}</p>
-                                        </div>
-                                        {(data.lcBillEnabled !== undefined ? data.lcBillEnabled : !!(data.bankLcCommission || data.bankSwiftCharge || data.bankLcApplicationForm || data.bankMpCharge || data.bankStampCharge)) && (
-                                            <>
-                                                <div className="space-y-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
-                                                    <p className="text-sm font-bold text-gray-800">{data.bankLcCommission ? `${data.bankLcCommission}%` : '-'}</p>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
-                                                    <p className="text-sm font-bold text-gray-800">{data.bankVatOnCommission ? `${data.bankVatOnCommission}%` : '-'}</p>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Swift Charge</span>
-                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankSwiftCharge || 0).toLocaleString('en-IN')}</p>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Swift Charge</span>
-                                                    <p className="text-sm font-bold text-gray-800">{data.bankVatOnSwiftCharge ? `${data.bankVatOnSwiftCharge}%` : '-'}</p>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
-                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankLcApplicationForm || 0).toLocaleString('en-IN')}</p>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
-                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankMpCharge || 0).toLocaleString('en-IN')}</p>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
-                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.bankStampCharge || 0).toLocaleString('en-IN')}</p>
-                                                </div>
-                                            </>
-                                        )}
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
-                                            <p className="text-sm font-bold text-gray-800">
-                                                {activeBankInfo.marginBill ? `৳${parseFloat(activeBankInfo.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                            </p>
-                                        </div>
-                                        {(data.lcBillEnabled !== undefined ? data.lcBillEnabled : !!(data.bankLcCommission || data.bankSwiftCharge || data.bankLcApplicationForm || data.bankMpCharge || data.bankStampCharge)) && (
-                                            <div className="space-y-1">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Bill</span>
-                                                <p className="text-sm font-bold text-gray-800">
-                                                    {activeBankInfo.bankBill ? `৳${parseFloat(activeBankInfo.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                </p>
+                                    <div className="bg-gray-50/50 p-4 sm:p-5 rounded-2xl border border-gray-100/80">
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2.5">
+                                            {/* Left Column: Bank Basics */}
+                                            <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[125px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">ISSUING BANK</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-gray-850 break-words">{data.bankName || '-'}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRANCH</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-850 break-words">{data.bankBranch || '-'}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MARGIN</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-gray-800">{data.bankMargin ? `${data.bankMargin}%` : '-'}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MARGIN BILL</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-gray-800">
+                                                    {activeBankInfo.marginBill ? `৳${parseFloat(activeBankInfo.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                </span>
+
+                                                {(data.lcBillEnabled !== undefined ? data.lcBillEnabled : !!(data.bankLcCommission || data.bankSwiftCharge || data.bankLcApplicationForm || data.bankMpCharge || data.bankStampCharge)) && (
+                                                    <>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BANK BILL</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-bold text-gray-800">
+                                                            {activeBankInfo.bankBill ? `৳${parseFloat(activeBankInfo.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                        </span>
+                                                    </>
+                                                )}
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL BANK BILL</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-black text-blue-600">
+                                                    {activeBankInfo.totalBankBill ? `৳${parseFloat(activeBankInfo.totalBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                </span>
                                             </div>
-                                        )}
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Bank Bill</span>
-                                            <p className="text-sm font-black text-blue-600">
-                                                {activeBankInfo.totalBankBill ? `৳${parseFloat(activeBankInfo.totalBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                            </p>
+
+                                            {/* Right Column: Detailed Bank Charges (if enabled) */}
+                                            {(data.lcBillEnabled !== undefined ? data.lcBillEnabled : !!(data.bankLcCommission || data.bankSwiftCharge || data.bankLcApplicationForm || data.bankMpCharge || data.bankStampCharge)) ? (
+                                                <>
+                                                    <div className="lg:hidden col-span-1 h-[1px] bg-gray-200/60 my-1"></div>
+                                                    <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[125px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC COMMISSION</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-semibold text-gray-800">{data.bankLcCommission ? `${data.bankLcCommission}%` : '-'}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ON COMM.</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-semibold text-gray-800">{data.bankVatOnCommission ? `${data.bankVatOnCommission}%` : '-'}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SWIFT CHARGE</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-semibold text-gray-800">৳{parseFloat(data.bankSwiftCharge || 0).toLocaleString('en-IN')}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ON SWIFT</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-semibold text-gray-800">{data.bankVatOnSwiftCharge ? `${data.bankVatOnSwiftCharge}%` : '-'}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC APPL. FORM</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-semibold text-gray-800">৳{parseFloat(data.bankLcApplicationForm || 0).toLocaleString('en-IN')}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MP CHARGE</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-semibold text-gray-800">৳{parseFloat(data.bankMpCharge || 0).toLocaleString('en-IN')}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">STAMP CHARGE</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="text-xs font-semibold text-gray-800">৳{parseFloat(data.bankStampCharge || 0).toLocaleString('en-IN')}</span>
+                                                    </div>
+                                                </>
+                                            ) : null}
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Section 3: Insurance Details */}
                                 <div className="pt-6 border-t border-gray-100">
-                                    <div className="flex items-center gap-2 mb-4">
+                                    <div className="flex items-center gap-2 mb-3">
                                         <ShieldIcon className="w-4 h-4 text-gray-400" />
                                         <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest text-left">Insurance Information</h4>
                                     </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-2 text-left">
-                                        <div className="space-y-1 col-span-2">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Insurance Company</span>
-                                            <p className="text-sm font-bold text-gray-800 truncate">{data.insuranceCo || '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Policy Type</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.policyType || '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra %</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.extraPercent || '0'}%</p>
-                                        </div>
+                                    <div className="bg-gray-50/50 p-4 sm:p-5 rounded-2xl border border-gray-100/80">
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2.5">
+                                            {/* Left Column: Policy & Cover Note */}
+                                            <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[125px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">COMPANY</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-gray-850 break-words" title={data.insuranceCo}>{data.insuranceCo || '-'}</span>
 
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marine Cover Note</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.marineCoverNote || '-'}</p>
-                                            {activeMilestone.addnNo && (
-                                                <p className="text-[11px] font-bold text-amber-600 mt-1 whitespace-nowrap">
-                                                    AMENDMENT NO: {activeMilestone.addnNo}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marine C.N Date</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.marineCNDate ? formatDate(data.marineCNDate) : '-'}</p>
-                                            {activeMilestone.addnNo && (activeMilestone.addnDate || activeMilestone.amendmentDate) && (
-                                                <p className="text-[11px] font-bold text-amber-600 mt-1 whitespace-nowrap">
-                                                    DATE: {formatDate(activeMilestone.addnDate || activeMilestone.amendmentDate)}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Rate</span>
-                                            <p className="text-sm font-bold text-gray-800">{data.premium || '0'}%</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Premium Return</span>
-                                            <p className="text-sm font-bold text-blue-600">{data.premiumReturn || '0'}%</p>
-                                        </div>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">POLICY TYPE</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-850 break-words">{data.policyType || '-'}</span>
 
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
-                                            <p className="text-sm font-bold text-blue-600">৳{parseFloat(activeMilestone.expectedReturnAmount || data.expectedReturnAmount || 0).toLocaleString('en-IN')}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat || '0'}%)</span>
-                                            <p className="text-sm font-bold text-gray-800">
-                                                ৳{(parseFloat(activeMilestone.netPremium || data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
-                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.isOriginal ? data.stampCharge || 0 : 0).toLocaleString('en-IN')}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
-                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.grossPremium || data.grossPremium || 0).toLocaleString('en-US')}</p>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">COVER NOTE NO</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <div className="flex flex-col gap-0.5 min-w-0">
+                                                    <span className="text-xs font-mono font-semibold text-gray-850 break-all">{data.marineCoverNote || '-'}</span>
+                                                    {activeMilestone.addnNo && (
+                                                        <span className="inline-flex self-start text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">
+                                                            AMENDMENT NO: {activeMilestone.addnNo}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">C.N DATE</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <div className="flex flex-col gap-0.5 min-w-0">
+                                                    <span className="text-xs font-mono font-semibold text-gray-800">{data.marineCNDate ? formatDate(data.marineCNDate) : '-'}</span>
+                                                    {activeMilestone.addnNo && (activeMilestone.addnDate || activeMilestone.amendmentDate) && (
+                                                        <span className="text-[10px] font-bold text-amber-600 font-mono">
+                                                            DATE: {formatDate(activeMilestone.addnDate || activeMilestone.amendmentDate)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Divider on mobile */}
+                                            <div className="lg:hidden col-span-1 h-[1px] bg-gray-200/60 my-1"></div>
+
+                                            {/* Right Column: Premiums & Financials */}
+                                            <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[125px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">EXTRA %</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-800">{data.extraPercent || '0'}%</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PREMIUM RATE</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-800">{data.premium || '0'}%</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PREM. RETURN</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-blue-600">{data.premiumReturn || '0'}%</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">RETURN AMT</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-blue-600">৳{parseFloat(activeMilestone.expectedReturnAmount || data.expectedReturnAmount || 0).toLocaleString('en-IN')}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat || '0'}%)</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-800">
+                                                    ৳{(parseFloat(activeMilestone.netPremium || data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">STAMP DUTY</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-semibold text-gray-800">৳{parseFloat(activeMilestone.isOriginal ? data.stampCharge || 0 : 0).toLocaleString('en-IN')}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">GROSS PREMIUM</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-bold text-gray-850">৳{parseFloat(activeMilestone.grossPremium || data.grossPremium || 0).toLocaleString('en-US')}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">NET PREMIUM</span>
+                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                <span className="text-xs font-black text-blue-700">৳{parseFloat(activeMilestone.netPremium || data.netPremium || 0).toLocaleString('en-US')}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="mt-4 p-4 bg-blue-50 rounded-xl flex justify-between items-center border border-blue-100 text-left">
+                                    <div className="mt-4 p-4 bg-blue-50/60 rounded-xl flex justify-between items-center border border-blue-100/80 text-left">
                                         <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Net Payable Premium</span>
                                         <span className="text-lg font-black text-blue-700">৳{parseFloat(activeMilestone.netPremium || data.netPremium || 0).toLocaleString('en-US')}</span>
                                     </div>
@@ -12722,43 +12820,34 @@ style={
                                             onClick={() => setExpandedCardKey(isCardExpanded ? null : record._id)}
                                             className="flex items-center justify-between gap-4 cursor-pointer select-none py-1"
                                         >
-                                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                {/* Main Info Column */}
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="text-sm font-black text-gray-955 font-sans tracking-tight">{record.lcNo}</span>
-                                                        {record.amendments?.length > 0 && (
-                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-150/40 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                                                AMENDMENT
-                                                            </span>
-                                                        )}
-                                                        {record.enableValueQtyAdjustment && (
-                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-150/40 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                                                {(() => {
-                                                                    const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
-                                                                    return `${addedPercent.toFixed(2)}% added`;
-                                                                })()}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-xs font-semibold text-gray-500 truncate mt-0.5">
-                                                        {record.productsList && record.productsList.length > 0
-                                                            ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
-                                                            : record.productName || '-'}
-                                                    </p>
+                                            {/* Main Info Column */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-sm font-black text-gray-955 font-sans tracking-tight">{record.lcNo}</span>
+                                                    {record.amendments?.length > 0 && (
+                                                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-150/40 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                            AMENDMENT
+                                                        </span>
+                                                    )}
+                                                    {record.enableValueQtyAdjustment && (
+                                                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-150/40 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                            {(() => {
+                                                                const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
+                                                                return `${addedPercent.toFixed(2)}% added`;
+                                                            })()}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                {/* Date Info Column */}
-                                                <div className="text-right shrink-0">
-                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Date</span>
-                                                    <span className="text-xs font-bold text-gray-800 font-mono mt-0.5 block">{formatDate(record.openingDate)}</span>
-                                                </div>
+                                                <p className="text-xs font-semibold text-gray-500 truncate mt-0.5">
+                                                    {record.productsList && record.productsList.length > 0
+                                                        ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                                        : record.productName || '-'}
+                                                </p>
                                             </div>
-                                            <div className={`shrink-0 flex items-center justify-center p-1.5 rounded-lg border transition-all ${isCardExpanded ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-400 border-gray-100 hover:text-gray-600'}`}>
-                                                {isCardExpanded ? (
-                                                    <ChevronUpIcon className="w-4 h-4" />
-                                                ) : (
-                                                    <ChevronDownIcon className="w-4 h-4" />
-                                                )}
+                                            {/* Date Info Column */}
+                                            <div className="text-right shrink-0">
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Date</span>
+                                                <span className="text-xs font-bold text-gray-800 font-mono mt-0.5 block">{formatDate(record.openingDate)}</span>
                                             </div>
                                         </div>
                                         {isCardExpanded && (
