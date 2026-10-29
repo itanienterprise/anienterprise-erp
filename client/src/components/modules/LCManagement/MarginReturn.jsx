@@ -30,11 +30,15 @@ import { isProductMatch } from '../../../utils/lcValueUtils';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { getSocket } from '../../../utils/socket';
+import { useProducts } from '../../../hooks/useQueries';
 
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, highlightId, isRequestedNotif }) => {
+    const { data: productsData = [] } = useProducts();
+    const [productsState, setProductsState] = useState([]);
+    const products = productsData.length > 0 ? productsData : productsState;
     const [localHighlightId, setLocalHighlightId] = useState(null);
     const activeHighlightId = highlightId || localHighlightId;
     const [marginReturns, setMarginReturns] = useState([]);
@@ -427,12 +431,13 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
     const fetchData = async (silent = false) => {
         if (!silent) setIsLoading(true);
         try {
-            const [returnsRes, lcRes, bankRes, stockRes, salesRes] = await Promise.all([
+            const [returnsRes, lcRes, bankRes, stockRes, salesRes, productsRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/margin-returns?_t=${Date.now()}`),
                 axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`),
                 axios.get(`${API_BASE_URL}/api/banks?_t=${Date.now()}`),
                 axios.get(`${API_BASE_URL}/api/stock?_t=${Date.now()}`).catch(() => ({ data: [] })),
-                axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`).catch(() => ({ data: [] }))
+                axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/api/products?_t=${Date.now()}`).catch(() => ({ data: [] }))
             ]);
 
             setMarginReturns(Array.isArray(returnsRes.data) ? returnsRes.data : []);
@@ -440,6 +445,9 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
             setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
             setStockRecords(Array.isArray(stockRes.data) ? stockRes.data : []);
             setSalesRecords(Array.isArray(salesRes.data) ? salesRes.data : []);
+            if (Array.isArray(productsRes?.data)) {
+                setProductsState(productsRes.data);
+            }
         } catch (error) {
             console.error('Error fetching Margin Return data:', error);
             if (!silent) addNotification?.('Failed to load Margin Return records', 'error');
@@ -824,6 +832,52 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
         };
     }, [lcRecords, marginReturns]);
 
+    // Helper to resolve clean Product Name (e.g. "MALTA") instead of IP Product Name (e.g. "FRESH VALENCIA ORANGES (MALTA)")
+    const getCleanProductName = useMemo(() => {
+        const ipToNameMap = new Map();
+        (products || []).forEach(p => {
+            if (p.ipName && p.name) {
+                ipToNameMap.set(String(p.ipName).trim().toLowerCase(), p.name);
+            }
+            if (p.name) {
+                ipToNameMap.set(String(p.name).trim().toLowerCase(), p.name);
+            }
+        });
+
+        const cleanSingle = (raw) => {
+            if (!raw) return '';
+            const trimmed = String(raw).trim();
+            const lower = trimmed.toLowerCase();
+            if (ipToNameMap.has(lower)) {
+                return ipToNameMap.get(lower);
+            }
+            // Fallback: if name contains parentheses e.g. "FRESH VALENCIA ORANGES (MALTA)", extract content inside parentheses
+            const match = trimmed.match(/\(([^)]+)\)/);
+            if (match && match[1]) {
+                const inner = match[1].trim();
+                const innerLower = inner.toLowerCase();
+                if (ipToNameMap.has(innerLower)) {
+                    return ipToNameMap.get(innerLower);
+                }
+                return inner;
+            }
+            return trimmed;
+        };
+
+        return (rawName) => {
+            if (!rawName) return '';
+            const rawStr = String(rawName).trim();
+            if (rawStr.includes(',')) {
+                return rawStr
+                    .split(',')
+                    .map(part => cleanSingle(part.trim()))
+                    .filter(Boolean)
+                    .join(', ');
+            }
+            return cleanSingle(rawStr);
+        };
+    }, [products]);
+
     // Filtered Return Records
     const filteredRecords = useMemo(() => {
         return marginReturns.filter(item => {
@@ -837,11 +891,13 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                 const q = searchQuery.toLowerCase();
                 const entryRaw = (item.entryByName || item.entryBy || item.requestedBy || item.createdBy || item.createdByName || '').toLowerCase();
                 const entryFirst = getEntryByFirstName(item).toLowerCase();
+                const cleanProd = getCleanProductName(itemProduct).toLowerCase();
                 const matchesSearch =
                     (item.lcNo || '').toLowerCase().includes(q) ||
                     itemImporter.toLowerCase().includes(q) ||
                     itemBank.toLowerCase().includes(q) ||
                     itemProduct.toLowerCase().includes(q) ||
+                    cleanProd.includes(q) ||
                     (item.remarks || '').toLowerCase().includes(q) ||
                     entryRaw.includes(q) ||
                     entryFirst.includes(q);
@@ -857,7 +913,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
 
             return true;
         });
-    }, [marginReturns, searchQuery, marginReturnFilters, lcMarginMap]);
+    }, [marginReturns, searchQuery, marginReturnFilters, lcMarginMap, getCleanProductName]);
 
     // Open Modal for Add
     const handleOpenAddModal = () => {
@@ -1004,7 +1060,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                 r.returnDate || '',
                 `"${r.lcNo || ''}"`,
                 `"${r.importerName || ''}"`,
-                `"${lcDetails.productName || r.productName || ''}"`,
+                `"${getCleanProductName(lcDetails.productName || r.productName || '')}"`,
                 `"${r.bankName || ''}"`,
                 `"${lcDetails.bankBranch || r.bankBranch || ''}"`,
                 `"${lcDetails.accountNo || r.accountNo || ''}"`,
@@ -1335,8 +1391,8 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                                         <td className="px-4 py-3.5 text-sm text-blue-600 font-medium max-w-[140px] truncate" title={record.importerName}>
                                             {record.importerName || '-'}
                                         </td>
-                                        <td className="px-4 py-3.5 text-sm text-gray-700 font-medium max-w-[150px] truncate" title={lcDetails.productName || record.productName}>
-                                            {lcDetails.productName || record.productName || '-'}
+                                        <td className="px-4 py-3.5 text-sm text-gray-700 font-medium max-w-[150px] truncate" title={getCleanProductName(lcDetails.productName || record.productName)}>
+                                            {getCleanProductName(lcDetails.productName || record.productName) || '-'}
                                         </td>
                                         <td className="px-4 py-3.5 whitespace-nowrap text-sm text-gray-600 font-medium">
                                             {record.bankName || '-'}
@@ -1413,6 +1469,9 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                     filteredRecords.map((record, idx) => {
                         const isExpanded = expandedRecordIdx === idx;
                         const lcDetails = lcMarginMap[record.lcId] || {};
+                        const cleanProduct = getCleanProductName(lcDetails.productName || record.productName);
+                        const bankName = record.bankName || lcDetails.bankName || lcDetails.issuingBank;
+
                         return (
                             <div
                                 key={record._id}
@@ -1429,20 +1488,59 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                                 className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isHighlighted(record) ? 'notif-row-highlight ring-2 ring-amber-500' : ''} ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}
                                 style={isHighlighted(record) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                             >
+                                {/* Card Toggle Header */}
                                 <div
-                                    className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                    className="flex justify-between items-start p-4 cursor-pointer select-none active:bg-gray-50 transition-colors gap-3"
                                     onClick={() => setExpandedRecordIdx(isExpanded ? null : idx)}
                                 >
-                                    <div>
-                                        <span className="text-xs text-gray-400 font-medium block mb-0.5">{formatDate(record.returnDate)}</span>
-                                        <h4 className="text-sm font-bold text-gray-900">{record.lcNo}</h4>
-                                        <span className="text-xs text-blue-600 font-medium block">{record.importerName}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm font-black text-emerald-600">
-                                            ৳{parseFloat(record.returnAmount || 0).toLocaleString('en-IN')}
+                                    {/* Left Info: Date -> LC No -> Importer Name -> Bank Name */}
+                                    <div className="flex-1 min-w-0 text-left space-y-1">
+                                        {/* Date */}
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono block">
+                                            {formatDate(record.returnDate)}
                                         </span>
-                                        {isExpanded ? <ChevronUpIcon className="w-4 h-4 text-gray-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400" />}
+
+                                        {/* LC No in next line */}
+                                        <div className="text-sm font-black text-gray-900 font-sans tracking-tight">
+                                            {record.lcNo || '-'}
+                                        </div>
+
+                                        {/* Full Importer Name */}
+                                        <div className="text-xs font-bold text-gray-800 leading-snug break-words" title={record.importerName}>
+                                            {record.importerName || '-'}
+                                        </div>
+
+                                        {/* Bank Name in next line */}
+                                        {bankName && (
+                                            <div className="text-[11px] font-medium text-gray-600 leading-snug break-words" title={bankName}>
+                                                {bankName}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Right Info: Product Name on top of Amount + Chevron */}
+                                    <div className="flex flex-col items-end text-right shrink-0 pt-0.5">
+                                        {/* Product Name on top of Amount */}
+                                        {cleanProduct && (
+                                            <span
+                                                className="inline-flex items-center text-[10px] font-extrabold text-blue-800 bg-blue-50/90 border border-blue-200/60 px-2 py-0.5 rounded-md uppercase tracking-wide truncate max-w-[130px] mb-1.5"
+                                                title={cleanProduct}
+                                            >
+                                                {cleanProduct}
+                                            </span>
+                                        )}
+
+                                        {/* Amount + Chevron */}
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs sm:text-sm font-black text-emerald-600 font-sans">
+                                                ৳{parseFloat(record.returnAmount || 0).toLocaleString('en-IN')}
+                                            </span>
+                                            {isExpanded ? (
+                                                <ChevronUpIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                            ) : (
+                                                <ChevronDownIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1451,11 +1549,11 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                                         <div className="grid grid-cols-[120px_8px_1fr] gap-y-2 pt-3 items-baseline">
                                             <span className="font-bold text-gray-400 uppercase text-[10px]">Product</span>
                                             <span className="text-gray-400">:</span>
-                                            <span className="font-semibold text-gray-800">{lcDetails.productName || record.productName || '-'}</span>
+                                            <span className="font-bold text-gray-900">{cleanProduct || '-'}</span>
 
                                             <span className="font-bold text-gray-400 uppercase text-[10px]">Bank Name</span>
                                             <span className="text-gray-400">:</span>
-                                            <span className="font-semibold text-gray-800">{record.bankName || '-'}</span>
+                                            <span className="font-semibold text-gray-800">{bankName || '-'}</span>
 
                                             <span className="font-bold text-gray-400 uppercase text-[10px]">Branch</span>
                                             <span className="text-gray-400">:</span>
@@ -1513,10 +1611,10 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
 
             {/* Add/Edit Modal */}
             {isModalOpen && typeof document !== 'undefined' && document.body && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
-                    <div className="bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl max-w-xl w-full p-6 md:p-8 border border-white/60 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-md p-3 sm:p-4 pb-28 sm:pb-6 animate-in fade-in duration-200">
+                    <div className="bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl max-w-xl w-full p-4 sm:p-6 md:p-8 border border-white/60 animate-in zoom-in-95 duration-200 flex flex-col max-h-[calc(100dvh-8.5rem)] sm:max-h-[90vh] overflow-hidden">
                         {/* Header */}
-                        <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100 shrink-0">
                             <div>
                                 <h3 className="text-lg md:text-xl font-bold text-gray-900">
                                     {isEditMode ? 'Edit Margin Return' : 'Add New Margin Return'}
@@ -1535,176 +1633,206 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                         </div>
 
                         {/* Body Form */}
-                        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 space-y-4 pr-1 pb-44">
-                            {/* Searchable LC Autocomplete Dropdown */}
-                            <div className="space-y-1.5 text-left relative" ref={lcDropdownRef}>
-                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                    Select LC Record <span className="text-rose-500">*</span>
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        value={lcSearchText}
-                                        onChange={(e) => {
-                                            setLcSearchText(e.target.value);
-                                            setIsLcDropdownOpen(true);
-                                            setHighlightedIndex(0);
-                                            if (!e.target.value) {
-                                                setFormData(prev => ({ ...prev, lcId: '', lcNo: '', importerName: '', bankName: '' }));
-                                            }
-                                        }}
-                                        onFocus={() => {
-                                            setIsLcDropdownOpen(true);
-                                            setHighlightedIndex(0);
-                                        }}
-                                        onKeyDown={handleLcKeyDown}
-                                        placeholder="Search & Select LC No / Importer / Bank..."
-                                        className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all pr-16"
-                                        required={!formData.lcId}
-                                    />
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                        {(lcSearchText || formData.lcId) && (
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setLcSearchText('');
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        lcId: '',
-                                                        lcNo: '',
-                                                        importerName: '',
-                                                        bankName: '',
-                                                        returnAmount: ''
-                                                    }));
-                                                    setIsLcDropdownOpen(true);
-                                                }}
-                                                className="p-0.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all cursor-pointer"
-                                                title="Remove selected LC"
-                                            >
-                                                <XIcon className="w-4 h-4" />
-                                            </button>
-                                        )}
-                                        <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
-                                        <ChevronDownIcon className={`w-4 h-4 text-gray-400 pointer-events-none transition-transform ${isLcDropdownOpen ? 'transform rotate-180' : ''}`} />
-                                    </div>
-                                </div>
-
-                                {isLcDropdownOpen && (
-                                    <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-56 overflow-y-auto py-1 animate-in fade-in duration-150">
-                                        {filteredLcRecords.length === 0 ? (
-                                            <div className="px-4 py-3 text-xs text-gray-400 text-center font-medium">
-                                                No matching LC records found
-                                            </div>
-                                        ) : (
-                                            filteredLcRecords.map((lc, idx) => (
+                        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+                            <div className="overflow-y-auto flex-1 min-h-0 space-y-4 pr-1 pb-4">
+                                {/* Searchable LC Autocomplete Dropdown */}
+                                <div className="space-y-1.5 text-left relative" ref={lcDropdownRef}>
+                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        Select LC Record <span className="text-rose-500">*</span>
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={lcSearchText}
+                                            onChange={(e) => {
+                                                setLcSearchText(e.target.value);
+                                                setIsLcDropdownOpen(true);
+                                                setHighlightedIndex(0);
+                                                if (!e.target.value) {
+                                                    setFormData(prev => ({ ...prev, lcId: '', lcNo: '', importerName: '', bankName: '' }));
+                                                }
+                                            }}
+                                            onFocus={() => {
+                                                setIsLcDropdownOpen(true);
+                                                setHighlightedIndex(0);
+                                            }}
+                                            onKeyDown={handleLcKeyDown}
+                                            placeholder="Search & Select LC No / Importer / Bank..."
+                                            className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all pr-20"
+                                            required={!formData.lcId}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                            {(lcSearchText || formData.lcId) && (
                                                 <button
-                                                    key={lc._id}
                                                     type="button"
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        const lcDetails = lcMarginMap[lc._id];
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setLcSearchText('');
                                                         setFormData(prev => ({
                                                             ...prev,
-                                                            lcId: lc._id,
-                                                            lcNo: lc.lcNo || '',
-                                                            importerName: lc.importerName || '',
-                                                            bankName: lc.bankName || '',
-                                                            returnAmount: prev.returnAmount || (lcDetails?.calcReturnAmount !== undefined ? String(lcDetails.calcReturnAmount) : '')
+                                                            lcId: '',
+                                                            lcNo: '',
+                                                            importerName: '',
+                                                            bankName: '',
+                                                            returnAmount: ''
                                                         }));
-                                                        setLcSearchText(`${lc.lcNo}${lc.importerName ? ` (${lc.importerName})` : ''} - ${lc.bankName}`);
-                                                        setIsLcDropdownOpen(false);
+                                                        setIsLcDropdownOpen(true);
                                                     }}
-                                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full px-4 py-2.5 text-left text-xs transition-colors flex items-center justify-between border-b border-gray-50 last:border-none ${highlightedIndex === idx ? 'bg-blue-50/90 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50/70'}`}
+                                                    className="p-0.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all cursor-pointer"
+                                                    title="Remove selected LC"
                                                 >
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold text-gray-900">LC: {lc.lcNo}</span>
-                                                        <span className="text-[11px] text-gray-500">{lc.importerName} • {lc.bankName}</span>
-                                                    </div>
-                                                    {formData.lcId === lc._id && (
-                                                        <span className="text-[11px] font-bold text-blue-600">Selected</span>
-                                                    )}
+                                                    <XIcon className="w-4 h-4" />
                                                 </button>
-                                            ))
-                                        )}
+                                            )}
+                                            <SearchIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                                            <ChevronDownIcon className={`w-4 h-4 text-gray-400 pointer-events-none transition-transform ${isLcDropdownOpen ? 'transform rotate-180' : ''}`} />
+                                        </div>
+                                    </div>
+
+                                    {isLcDropdownOpen && (
+                                        <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-56 overflow-y-auto py-1 animate-in fade-in duration-150">
+                                            {filteredLcRecords.length === 0 ? (
+                                                <div className="px-4 py-3 text-xs text-gray-400 text-center font-medium">
+                                                    No matching LC records found
+                                                </div>
+                                            ) : (
+                                                filteredLcRecords.map((lc, idx) => (
+                                                    <button
+                                                        key={lc._id}
+                                                        type="button"
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            const lcDetails = lcMarginMap[lc._id];
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                lcId: lc._id,
+                                                                lcNo: lc.lcNo || '',
+                                                                importerName: lc.importerName || '',
+                                                                bankName: lc.bankName || '',
+                                                                returnAmount: prev.returnAmount || (lcDetails?.calcReturnAmount !== undefined ? String(lcDetails.calcReturnAmount) : '')
+                                                            }));
+                                                            setLcSearchText(`${lc.lcNo}${lc.importerName ? ` (${lc.importerName})` : ''} - ${lc.bankName}`);
+                                                            setIsLcDropdownOpen(false);
+                                                        }}
+                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                        className={`w-full px-4 py-2.5 text-left text-xs transition-colors flex items-center justify-between border-b border-gray-50 last:border-none ${highlightedIndex === idx ? 'bg-blue-50/90 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50/70'}`}
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-gray-900">LC: {lc.lcNo}</span>
+                                                            <span className="text-[11px] text-gray-500">
+                                                                {lc.importerName} • {lc.bankName}
+                                                                {lc.productName && ` • ${getCleanProductName(lc.productName)}`}
+                                                            </span>
+                                                        </div>
+                                                        {formData.lcId === lc._id && (
+                                                            <span className="text-[11px] font-bold text-blue-600">Selected</span>
+                                                        )}
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* LC Margin Info Banner - Premium Label : Value Grid */}
+                                {selectedLcDetails && (
+                                    <div className="p-3.5 bg-blue-50/50 rounded-2xl border border-blue-100/80">
+                                        <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[125px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                            {selectedLcDetails.importerName && (
+                                                <>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-gray-800 break-words">{selectedLcDetails.importerName}</span>
+                                                </>
+                                            )}
+                                            {selectedLcDetails.productName && (
+                                                <>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-blue-700 break-words">{getCleanProductName(selectedLcDetails.productName)}</span>
+                                                </>
+                                            )}
+                                            {selectedLcDetails.bankName && (
+                                                <>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-700 break-words">{selectedLcDetails.bankName}</span>
+                                                </>
+                                            )}
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Value</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-black text-gray-900 font-sans">৳{selectedLcDetails.totalValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margin Paid</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-black text-blue-600 font-sans">৳{selectedLcDetails.marginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-black text-emerald-600 font-sans">৳{selectedLcDetails.calcReturnAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                        </div>
                                     </div>
                                 )}
-                            </div>
 
-                            {/* LC Margin Info Banner */}
-                            {selectedLcDetails && (
-                                <div className="p-3.5 bg-blue-50/60 rounded-2xl border border-blue-100/80 grid grid-cols-3 gap-2 text-center">
-                                    <div>
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Value</span>
-                                        <span className="text-xs font-black text-gray-800">৳{selectedLcDetails.totalValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5 text-left">
+                                        <CustomDatePicker
+                                            label="Return Date"
+                                            value={formData.returnDate}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, returnDate: e.target.value }))}
+                                            compact={true}
+                                            required
+                                        />
                                     </div>
-                                    <div>
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Margin Paid</span>
-                                        <span className="text-xs font-black text-blue-600">৳{selectedLcDetails.marginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Return Amount</span>
-                                        <span className="text-xs font-black text-emerald-600">৳{selectedLcDetails.calcReturnAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                                    </div>
-                                </div>
-                            )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1.5 text-left">
-                                    <CustomDatePicker
-                                        label="Return Date"
-                                        value={formData.returnDate}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, returnDate: e.target.value }))}
-                                        compact={true}
-                                        required
-                                    />
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                            Return Amount (BDT) <span className="text-rose-500">*</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            placeholder="0.00"
+                                            value={formData.returnAmount}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, returnAmount: e.target.value }))}
+                                            required
+                                            className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="space-y-1.5 text-left">
                                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                        Return Amount (BDT) <span className="text-rose-500">*</span>
+                                        Remarks
                                     </label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        placeholder="0.00"
-                                        value={formData.returnAmount}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, returnAmount: e.target.value }))}
-                                        required
-                                        className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+                                    <textarea
+                                        rows="2"
+                                        placeholder="Optional notes or details..."
+                                        value={formData.remarks}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                                        className="w-full px-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
                                     />
                                 </div>
                             </div>
 
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                    Remarks
-                                </label>
-                                <textarea
-                                    rows="3"
-                                    placeholder="Optional notes or details..."
-                                    value={formData.remarks}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
-                                    className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
-                                />
-                            </div>
-
-                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs rounded-xl transition-all"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={isSaving}
-                                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 disabled:opacity-50 text-xs"
-                                >
-                                    {isSaving ? 'Saving...' : (isEditMode ? 'Update Return' : 'Save Return')}
-                                </button>
+                            {/* Modal Actions Footer - Always Visible (shrink-0) */}
+                            <div className="shrink-0 pt-3 border-t border-gray-100 mt-auto bg-white/95">
+                                <div className="grid grid-cols-2 sm:flex sm:justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsModalOpen(false)}
+                                        className="w-full sm:w-auto px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all active:scale-95 text-center flex items-center justify-center cursor-pointer"
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSaving}
+                                        className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 transition-all active:scale-95 disabled:opacity-50 text-xs text-center flex items-center justify-center cursor-pointer"
+                                    >
+                                        {isSaving ? 'Saving...' : (isEditMode ? 'Update Return' : 'Save Return')}
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
