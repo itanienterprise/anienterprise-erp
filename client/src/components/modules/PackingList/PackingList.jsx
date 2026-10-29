@@ -235,6 +235,9 @@ function PackingList({
     };
 
     const initialPlFilterState = {
+        quickRange: localStorage.getItem('pl_quick_range_default') || 'all',
+        selectedMonth: new Date().getMonth() + 1,
+        selectedYear: new Date().getFullYear(),
         startDate: '',
         endDate: '',
         port: '',
@@ -244,6 +247,12 @@ function PackingList({
     };
 
     const [plFilters, setPlFilters] = useState(initialPlFilterState);
+
+    useEffect(() => {
+        if (plFilters.quickRange && plFilters.quickRange !== 'custom') {
+            localStorage.setItem('pl_quick_range_default', plFilters.quickRange);
+        }
+    }, [plFilters.quickRange]);
     const [showPlFilterPanel, setShowPlFilterPanel] = useState(false);
     const [filterSearchInputs, setFilterSearchInputs] = useState({
         portSearch: '',
@@ -1534,18 +1543,78 @@ function PackingList({
     };
 
     const filteredRecords = records.filter(record => {
+        const isSearching = Boolean(searchQuery && searchQuery.trim());
+
         // Search Query Filter
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
+        if (isSearching) {
+            const query = searchQuery.trim().toLowerCase();
+            const cleanQuery = query.replace(/[\s\-_/]/g, '');
+            const cleanPl = String(record.packingListNumber || record.invoiceNo || '').toLowerCase().replace(/[\s\-_/]/g, '');
+            const cleanPi = String(record.piNumber || '').toLowerCase().replace(/[\s\-_/]/g, '');
+
             const matchesSearch = (record.packingListNumber || '').toLowerCase().includes(query) ||
+                (record.invoiceNo || '').toLowerCase().includes(query) ||
+                (cleanQuery && cleanPl && cleanPl.includes(cleanQuery)) ||
                 (record.partyName || '').toLowerCase().includes(query) ||
-                (record.piNumber || '').toLowerCase().includes(query);
+                (record.exporterName || '').toLowerCase().includes(query) ||
+                (record.piNumber || '').toLowerCase().includes(query) ||
+                (cleanQuery && cleanPi && cleanPi.includes(cleanQuery));
             if (!matchesSearch) return false;
         }
 
-        // Advanced Filters
-        if (plFilters.startDate && record.date && record.date < plFilters.startDate) return false;
-        if (plFilters.endDate && record.date && record.date > plFilters.endDate) return false;
+        // Advanced Filters (Date range bypassed when searching)
+        if (!isSearching) {
+            if (plFilters.startDate && record.date && record.date < plFilters.startDate) return false;
+            if (plFilters.endDate && record.date && record.date > plFilters.endDate) return false;
+
+            // Quick range filtering
+            if (plFilters.quickRange && plFilters.quickRange !== 'all' && plFilters.quickRange !== 'custom') {
+                const parseLocalDate = (dVal) => {
+                    if (!dVal) return null;
+                    if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
+                    const str = String(dVal).trim();
+                    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                        const [y, m, d] = str.split('T')[0].split('-').map(Number);
+                        return new Date(y, m - 1, d);
+                    }
+                    const d = new Date(str);
+                    return isNaN(d.getTime()) ? null : d;
+                };
+
+                const targetDate = parseLocalDate(record.date) || parseLocalDate(record.trDate) || parseLocalDate(record.createdAt);
+                if (!targetDate) return false;
+
+                const now = new Date();
+                if (plFilters.quickRange === 'weekly') {
+                    const dayOfWeek = now.getDay();
+                    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                    const weekStart = new Date(now);
+                    weekStart.setDate(now.getDate() + diffToMonday);
+                    weekStart.setHours(0, 0, 0, 0);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekStart.getDate() + 6);
+                    weekEnd.setHours(23, 59, 59, 999);
+
+                    const rollingWeekStart = new Date(now);
+                    rollingWeekStart.setDate(now.getDate() - 7);
+                    rollingWeekStart.setHours(0, 0, 0, 0);
+
+                    const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
+                    if (!matchesWeekly) return false;
+                } else if (plFilters.quickRange === 'monthly') {
+                    const month = parseInt(plFilters.selectedMonth || (now.getMonth() + 1));
+                    const year = parseInt(plFilters.selectedYear || now.getFullYear());
+                    if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
+                        return false;
+                    }
+                } else if (plFilters.quickRange === 'yearly') {
+                    const year = parseInt(plFilters.selectedYear || now.getFullYear());
+                    if (targetDate.getFullYear() !== year) {
+                        return false;
+                    }
+                }
+            }
+        }
 
         if (plFilters.port) {
             const filterPort = plFilters.port.trim().toLowerCase();
@@ -1810,9 +1879,9 @@ function PackingList({
                             <button
                                 ref={plFilterButtonRef}
                                 onClick={() => setShowPlFilterPanel(!showPlFilterPanel)}
-                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showPlFilterPanel || Object.values(plFilters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showPlFilterPanel || (plFilters && ((plFilters.quickRange && plFilters.quickRange !== 'all') || plFilters.startDate || plFilters.endDate || plFilters.port || plFilters.productName || plFilters.importerName || plFilters.exporterName)) ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                             >
-                                <FunnelIcon className={`w-4 h-4 ${(showPlFilterPanel || (plFilters && Object.values(plFilters).some(v => v !== ''))) ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-4 h-4 ${(showPlFilterPanel || (plFilters && ((plFilters.quickRange && plFilters.quickRange !== 'all') || plFilters.startDate || plFilters.endDate || plFilters.port || plFilters.productName || plFilters.importerName || plFilters.exporterName))) ? 'text-white' : 'text-gray-400'}`} />
                                 <span className="text-sm font-medium">Filter</span>
                             </button>
 
@@ -1824,7 +1893,8 @@ function PackingList({
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                setPlFilters(initialPlFilterState);
+                                                localStorage.setItem('pl_quick_range_default', 'all');
+                                                setPlFilters({ ...initialPlFilterState, quickRange: 'all', startDate: '', endDate: '' });
                                                 setFilterSearchInputs({
                                                     portSearch: '',
                                                     exporterSearch: '',
@@ -1841,18 +1911,75 @@ function PackingList({
                                     </div>
 
                                     <div className="space-y-5">
+                                        {/* Quick Range */}
+                                        <div className="space-y-2 text-center">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">FILTER BY RANGE</label>
+                                            <div className="flex flex-wrap justify-center gap-2">
+                                                {['all', 'weekly', 'monthly', 'yearly'].map(range => (
+                                                    <button
+                                                        key={range}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            localStorage.setItem('pl_quick_range_default', range);
+                                                            setPlFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }));
+                                                        }}
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${plFilters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                                    >
+                                                        {range.charAt(0).toUpperCase() + range.slice(1)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {/* Month dropdown for monthly */}
+                                            {plFilters.quickRange === 'monthly' && (
+                                                <div className="flex items-center justify-center gap-2 mt-1">
+                                                    <select
+                                                        value={plFilters.selectedMonth || new Date().getMonth() + 1}
+                                                        onChange={(e) => setPlFilters(prev => ({ ...prev, selectedMonth: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => (
+                                                            <option key={i + 1} value={i + 1}>{m}</option>
+                                                        ))}
+                                                    </select>
+                                                    <select
+                                                        value={plFilters.selectedYear || new Date().getFullYear()}
+                                                        onChange={(e) => setPlFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                            <option key={y} value={y}>{y}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                            {/* Year dropdown for yearly */}
+                                            {plFilters.quickRange === 'yearly' && (
+                                                <div className="flex items-center justify-center gap-2 mt-1">
+                                                    <select
+                                                        value={plFilters.selectedYear || new Date().getFullYear()}
+                                                        onChange={(e) => setPlFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                            <option key={y} value={y}>{y}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
+
                                         {/* Date Range Row */}
                                         <div className="grid grid-cols-2 gap-4">
                                             <CustomDatePicker
                                                 label="From Date"
                                                 value={plFilters.startDate}
-                                                onChange={(e) => setPlFilters({ ...plFilters, startDate: e.target.value })}
+                                                onChange={(e) => setPlFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
                                                 compact={true}
                                             />
                                             <CustomDatePicker
                                                 label="To Date"
                                                 value={plFilters.endDate}
-                                                onChange={(e) => setPlFilters({ ...plFilters, endDate: e.target.value })}
+                                                onChange={(e) => setPlFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
                                                 compact={true}
                                                 rightAlign={true}
                                             />
