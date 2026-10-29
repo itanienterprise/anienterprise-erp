@@ -420,53 +420,80 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
 };
 
 export const getLcMilestoneFinances = (lc, amendmentNo) => {
-    if (!lc) return { grossPrem: 0, expReturn: 0 };
+    if (!lc) return { grossPrem: 0, expReturn: 0, netPayable: 0, netPrem: 0 };
     const amnds = Array.isArray(lc.amendments) ? lc.amendments : [];
     const nonOrigAmnds = amnds.filter(a => a.amendmentNo !== 'Original LC');
     const origSnapshot = amnds.find(a => a.amendmentNo === 'Original LC');
 
     if (nonOrigAmnds.length === 0) {
+        const grossPrem = parseFloat(lc.grossPremium || 0);
+        const expReturn = parseFloat(lc.expectedReturnAmount || 0);
+        const netPrem = parseFloat(lc.netPremium || 0);
         return {
-            grossPrem: parseFloat(lc.grossPremium || 0),
-            expReturn: parseFloat(lc.expectedReturnAmount || 0)
+            grossPrem,
+            expReturn,
+            netPayable: Math.max(0, grossPrem - expReturn),
+            netPrem
         };
     }
 
     if (amendmentNo === 'All (Entire LC)') {
+        const grossPrem = parseFloat(lc.grossPremium || 0);
+        const expReturn = parseFloat(lc.expectedReturnAmount || 0);
+        const netPrem = parseFloat(lc.netPremium || 0);
         return {
-            grossPrem: parseFloat(lc.grossPremium || 0),
-            expReturn: parseFloat(lc.expectedReturnAmount || 0)
+            grossPrem,
+            expReturn,
+            netPayable: Math.max(0, grossPrem - expReturn),
+            netPrem
         };
     }
 
     if (amendmentNo && amendmentNo !== 'Original LC') {
         const matched = nonOrigAmnds.find(a => a.amendmentNo === amendmentNo);
         if (matched) {
+            const grossPrem = parseFloat(matched.grossPremium || 0);
+            const expReturn = parseFloat(matched.expectedReturnAmount || 0);
+            const netPrem = parseFloat(matched.netPremium || 0);
             return {
-                grossPrem: parseFloat(matched.grossPremium || 0),
-                expReturn: parseFloat(matched.expectedReturnAmount || 0)
+                grossPrem,
+                expReturn,
+                netPayable: Math.max(0, grossPrem - expReturn),
+                netPrem
             };
         }
     }
 
     // Original LC (or when amendmentNo is not provided or is 'Original LC')
     if (origSnapshot) {
+        const grossPrem = parseFloat(origSnapshot.grossPremium || 0);
+        const expReturn = parseFloat(origSnapshot.expectedReturnAmount || 0);
+        const netPrem = parseFloat(origSnapshot.netPremium || 0);
         return {
-            grossPrem: parseFloat(origSnapshot.grossPremium || 0),
-            expReturn: parseFloat(origSnapshot.expectedReturnAmount || 0)
+            grossPrem,
+            expReturn,
+            netPayable: Math.max(0, grossPrem - expReturn),
+            netPrem
         };
     }
 
     let sumAmndGross = 0;
     let sumAmndReturn = 0;
+    let sumAmndNet = 0;
     nonOrigAmnds.forEach(a => {
         sumAmndGross += (parseFloat(a.grossPremium) || 0);
         sumAmndReturn += (parseFloat(a.expectedReturnAmount) || 0);
+        sumAmndNet += (parseFloat(a.netPremium) || 0);
     });
 
+    const grossPrem = Math.max(0, (parseFloat(lc.grossPremium) || 0) - sumAmndGross);
+    const expReturn = Math.max(0, (parseFloat(lc.expectedReturnAmount) || 0) - sumAmndReturn);
+    const netPrem = Math.max(0, (parseFloat(lc.netPremium) || 0) - sumAmndNet);
     return {
-        grossPrem: Math.max(0, (parseFloat(lc.grossPremium) || 0) - sumAmndGross),
-        expReturn: Math.max(0, (parseFloat(lc.expectedReturnAmount) || 0) - sumAmndReturn)
+        grossPrem,
+        expReturn,
+        netPayable: Math.max(0, grossPrem - expReturn),
+        netPrem
     };
 };
 

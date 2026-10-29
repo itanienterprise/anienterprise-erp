@@ -145,6 +145,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     const [banks, setBanks] = useState([]);
     const lcDropdownRef = useRef(null);
     const amendmentDropdownRef = useRef(null);
+    const prevSelectionKeyRef = useRef('');
     const [highlightedLcIndex, setHighlightedLcIndex] = useState(-1);
     const [highlightedInsuranceIndex, setHighlightedInsuranceIndex] = useState(-1);
 
@@ -897,6 +898,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     };
 
     const resetNewPayment = () => {
+        prevSelectionKeyRef.current = '';
         setNewPayment({
             insuranceId: '',
             lcNo: '',
@@ -924,6 +926,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     const handleEditPayment = (payment) => {
         setIsEditMode(true);
         setEditingPayment(payment);
+        prevSelectionKeyRef.current = `${payment.lcNo || ''}|${payment.amendmentNo || ''}|${payment.insuranceId || ''}|${payment.isAdjustReturn !== undefined ? payment.isAdjustReturn : true}|${payment.type || 'Premium Payment'}`;
         setNewPayment({
             insuranceId: payment.insuranceId,
             lcNo: payment.lcNo || '',
@@ -1159,6 +1162,33 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             }
         }
     }
+
+    const displayNetPayable = Math.max(0, displayPremiumBalance - displayReturnBalance);
+
+    // Auto-fill payment amount when selection / mode changes (new payment only)
+    useEffect(() => {
+        if (isEditMode) return;
+        if (!newPayment.lcNo && !newPayment.insuranceId) return;
+
+        const currentKey = `${newPayment.lcNo}|${newPayment.amendmentNo}|${newPayment.insuranceId}|${newPayment.isAdjustReturn}|${newPayment.type}`;
+        if (prevSelectionKeyRef.current !== currentKey) {
+            prevSelectionKeyRef.current = currentKey;
+
+            let defaultAmt = '';
+            if (newPayment.isAdjustReturn) {
+                const netPayable = Math.max(0, displayPremiumBalance - displayReturnBalance);
+                defaultAmt = netPayable > 0 ? netPayable.toFixed(2) : (displayReturnBalance > 0 ? '0' : '');
+            } else if (newPayment.type === 'Premium Payment') {
+                defaultAmt = displayPremiumBalance > 0 ? displayPremiumBalance.toFixed(2) : '';
+            } else if (newPayment.type === 'Return Collection') {
+                defaultAmt = displayReturnBalance > 0 ? displayReturnBalance.toFixed(2) : '';
+            }
+
+            if (defaultAmt !== '') {
+                setNewPayment(prev => ({ ...prev, amount: defaultAmt }));
+            }
+        }
+    }, [newPayment.lcNo, newPayment.amendmentNo, newPayment.insuranceId, newPayment.isAdjustReturn, newPayment.type, displayPremiumBalance, displayReturnBalance, isEditMode]);
 
     return (
         <div className="space-y-6">
@@ -1828,7 +1858,19 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                     <>
                                         {/* Adjustment Mode: Show Premium, Return and Payable */}
                                         <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Premium Bal.</label>
+                                            <div className="flex items-center justify-between ml-1">
+                                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Prem. Bal.</label>
+                                                {(newPayment.lcNo || newPayment.insuranceId) && displayPremiumBalance > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setNewPayment(prev => ({ ...prev, amount: displayPremiumBalance.toFixed(2) }))}
+                                                        className="text-[9px] font-bold text-blue-600 hover:underline cursor-pointer"
+                                                        title="Fill amount with Gross Premium Balance"
+                                                    >
+                                                        Use
+                                                    </button>
+                                                )}
+                                            </div>
                                             <div className="relative">
                                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                                     <span className="text-gray-400 font-bold text-[10px]">৳</span>
@@ -1837,12 +1879,30 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                     type="text"
                                                     readOnly
                                                     value={(newPayment.lcNo || newPayment.insuranceId) ? displayPremiumBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
+                                                    onClick={() => {
+                                                        if (displayPremiumBalance > 0) {
+                                                            setNewPayment(prev => ({ ...prev, amount: displayPremiumBalance.toFixed(2) }));
+                                                        }
+                                                    }}
+                                                    title="Click to use Gross Premium Balance"
+                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-pointer hover:border-blue-300 transition-colors"
                                                 />
                                             </div>
                                         </div>
                                         <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Return Bal.</label>
+                                            <div className="flex items-center justify-between ml-1">
+                                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Bal.</label>
+                                                {(newPayment.lcNo || newPayment.insuranceId) && displayReturnBalance > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setNewPayment(prev => ({ ...prev, amount: displayReturnBalance.toFixed(2) }))}
+                                                        className="text-[9px] font-bold text-blue-600 hover:underline cursor-pointer"
+                                                        title="Fill amount with Return Balance"
+                                                    >
+                                                        Use
+                                                    </button>
+                                                )}
+                                            </div>
                                             <div className="relative">
                                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                                     <span className="text-gray-400 font-bold text-[10px]">৳</span>
@@ -1851,21 +1911,45 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                     type="text"
                                                     readOnly
                                                     value={(newPayment.lcNo || newPayment.insuranceId) ? displayReturnBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
+                                                    onClick={() => {
+                                                        if (displayReturnBalance > 0) {
+                                                            setNewPayment(prev => ({ ...prev, amount: displayReturnBalance.toFixed(2) }));
+                                                        }
+                                                    }}
+                                                    title="Click to use Return Balance"
+                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-pointer hover:border-blue-300 transition-colors"
                                                 />
                                             </div>
                                         </div>
                                         <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Net Payable</label>
+                                            <div className="flex items-center justify-between ml-1">
+                                                <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Net Payable</label>
+                                                {(newPayment.lcNo || newPayment.insuranceId) && displayNetPayable > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setNewPayment(prev => ({ ...prev, amount: displayNetPayable.toFixed(2) }))}
+                                                        className="text-[9px] font-bold text-blue-600 hover:underline cursor-pointer"
+                                                        title="Fill amount with Net Payable"
+                                                    >
+                                                        Use
+                                                    </button>
+                                                )}
+                                            </div>
                                             <div className="relative">
                                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                    <span className="text-gray-400 font-bold text-[10px]">৳</span>
+                                                    <span className="text-blue-500 font-bold text-[10px]">৳</span>
                                                 </div>
                                                 <input
                                                     type="text"
                                                     readOnly
-                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? (displayPremiumBalance - displayReturnBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
+                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? displayNetPayable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                                                    onClick={() => {
+                                                        if (displayNetPayable > 0) {
+                                                            setNewPayment(prev => ({ ...prev, amount: displayNetPayable.toFixed(2) }));
+                                                        }
+                                                    }}
+                                                    title="Click to use Net Payable Amount"
+                                                    className="w-full pl-6 pr-3 py-2.5 bg-blue-50/40 border border-blue-200/80 rounded-xl text-sm font-black text-blue-700 shadow-sm outline-none cursor-pointer hover:border-blue-400 transition-colors"
                                                 />
                                             </div>
                                         </div>
@@ -1878,6 +1962,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                 </div>
                                                 <input
                                                     type="number"
+                                                    step="any"
                                                     value={newPayment.amount}
                                                     onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
                                                     placeholder="0.00"
@@ -1891,9 +1976,24 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                     <>
                                         {/* Direct Mode: Show only active type balance and Amount next to it */}
                                         <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">
-                                                {newPayment.type === 'Premium Payment' ? 'Premium Balance' : 'Return Balance'}
-                                            </label>
+                                            <div className="flex items-center justify-between ml-1">
+                                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                    {newPayment.type === 'Premium Payment' ? 'Gross Premium Bal.' : 'Return Balance'}
+                                                </label>
+                                                {(newPayment.lcNo || newPayment.insuranceId) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const val = newPayment.type === 'Premium Payment' ? displayPremiumBalance : displayReturnBalance;
+                                                            if (val > 0) setNewPayment(prev => ({ ...prev, amount: val.toFixed(2) }));
+                                                        }}
+                                                        className="text-[9px] font-bold text-blue-600 hover:underline cursor-pointer"
+                                                        title="Fill amount with Balance"
+                                                    >
+                                                        Use
+                                                    </button>
+                                                )}
+                                            </div>
                                             <div className="relative">
                                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                                     <span className="text-gray-400 font-bold text-[10px]">৳</span>
@@ -1902,7 +2002,12 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                     type="text"
                                                     readOnly
                                                     value={(newPayment.lcNo || newPayment.insuranceId) ? (newPayment.type === 'Premium Payment' ? displayPremiumBalance : displayReturnBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
+                                                    onClick={() => {
+                                                        const val = newPayment.type === 'Premium Payment' ? displayPremiumBalance : displayReturnBalance;
+                                                        if (val > 0) setNewPayment(prev => ({ ...prev, amount: val.toFixed(2) }));
+                                                    }}
+                                                    title="Click to use Balance"
+                                                    className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-pointer hover:border-blue-300 transition-colors"
                                                 />
                                             </div>
                                         </div>
@@ -1915,6 +2020,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                 </div>
                                                 <input
                                                     type="number"
+                                                    step="any"
                                                     value={newPayment.amount}
                                                     onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
                                                     placeholder="0.00"
