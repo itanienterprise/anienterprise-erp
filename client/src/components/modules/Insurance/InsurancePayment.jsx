@@ -1306,24 +1306,6 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                             <BarChartIcon className="w-4 h-4 text-gray-400 hidden sm:block" />
                             <span className="text-sm font-medium">Report</span>
                         </button>
-
-                        {canViewPaymentRequest && (
-                            <button
-                                onClick={() => setIsRequestedOnly(!isRequestedOnly)}
-                                className={`md:hidden relative h-10 px-3.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 active:scale-95 cursor-pointer ${
-                                    isRequestedOnly
-                                        ? 'bg-blue-600 border-blue-600 text-white shadow-md'
-                                        : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'
-                                }`}
-                            >
-                                <span>Requested</span>
-                                {requestedCount > 0 && (
-                                    <span className="flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse">
-                                        {requestedCount}
-                                    </span>
-                                )}
-                            </button>
-                        )}
                     </>
                 )}
 
@@ -1337,6 +1319,24 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                         >
                             <PlusIcon className="w-4 h-4" />
                             <span>{!canApprove && canPaymentRequest ? 'Request Payment' : 'Add Payment'}</span>
+                        </button>
+                    )}
+
+                    {!showAddModal && canViewPaymentRequest && (
+                        <button
+                            onClick={() => setIsRequestedOnly(!isRequestedOnly)}
+                            className={`md:hidden relative h-10 px-4 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer ${
+                                isRequestedOnly
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'
+                            }`}
+                        >
+                            <span>Requested</span>
+                            {requestedCount > 0 && (
+                                <span className="flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse">
+                                    {requestedCount}
+                                </span>
+                            )}
                         </button>
                     )}
                 </div>
