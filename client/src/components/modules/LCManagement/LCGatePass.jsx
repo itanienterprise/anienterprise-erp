@@ -13,8 +13,12 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { getSocket } from '../../../utils/socket';
+import { useProducts } from '../../../hooks/useQueries';
 
 const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNotif }) => {
+    const { data: productsData = [] } = useProducts();
+    const [productsState, setProductsState] = useState([]);
+    const products = productsData.length > 0 ? productsData : productsState;
     const [localHighlightId, setLocalHighlightId] = useState(null);
     const activeHighlightId = highlightId || localHighlightId;
     const [records, setRecords] = useState([]);
@@ -274,16 +278,18 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
     const fetchRecords = async (silent = false) => {
         if (!silent) setIsLoading(true);
         try {
-            const [gpRes, lcRes, custRes, salesRes] = await Promise.all([
+            const [gpRes, lcRes, custRes, salesRes, prodRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-gp?_t=${Date.now()}`),
                 axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`),
                 axios.get(`${API_BASE_URL}/api/customers?_t=${Date.now()}`),
-                axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`)
+                axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`),
+                axios.get(`${API_BASE_URL}/api/products?_t=${Date.now()}`)
             ]);
             setRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
             setLcRecordsRaw(Array.isArray(lcRes.data) ? lcRes.data : []);
             setCustomerRecordsRaw(Array.isArray(custRes.data) ? custRes.data : []);
             setSalesRecordsRaw(Array.isArray(salesRes.data) ? salesRes.data : []);
+            setProductsState(Array.isArray(prodRes.data) ? prodRes.data : []);
         } catch (error) {
             console.error('Error fetching records:', error);
             if (!silent) addNotification?.('Failed to fetch records', 'error');
@@ -348,15 +354,50 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
         }));
     }, [formData.lcQuantity, formData.lcRate, formData.gpQuantity, formData.gpRate, formData.dollarRate]);
 
+    // Helper to resolve clean Product Name (e.g. "MALTA") instead of IP Product Name (e.g. "FRESH VALENCIA ORANGES (MALTA)")
+    const getCleanProductName = useMemo(() => {
+        const ipToNameMap = new Map();
+        (products || []).forEach(p => {
+            if (p.ipName && p.name) {
+                ipToNameMap.set(String(p.ipName).trim().toLowerCase(), p.name);
+            }
+            if (p.name) {
+                ipToNameMap.set(String(p.name).trim().toLowerCase(), p.name);
+            }
+        });
+
+        return (rawName) => {
+            if (!rawName) return '';
+            const trimmed = String(rawName).trim();
+            const key = trimmed.toLowerCase();
+            if (ipToNameMap.has(key)) {
+                return ipToNameMap.get(key);
+            }
+            // Fallback: check if rawName has parentheses anywhere e.g. "FRESH VALENCIA ORANGES (MALTA)" -> "MALTA"
+            const parenMatch = trimmed.match(/\(([^)]+)\)/);
+            if (parenMatch && parenMatch[1]) {
+                const inner = parenMatch[1].trim();
+                const innerKey = inner.toLowerCase();
+                if (ipToNameMap.has(innerKey)) {
+                    return ipToNameMap.get(innerKey);
+                }
+                return inner;
+            }
+            return trimmed;
+        };
+    }, [products]);
+
     const filteredRecords = useMemo(() => {
         return records.filter(record => {
             const entry = (record.entryByName || record.entryBy || record.createdBy || record.createdByName || '').toLowerCase();
             const entryFirst = getEntryByFirstName(record).toLowerCase();
+            const cleanProd = getCleanProductName(record.productName).toLowerCase();
             const matchesSearch = 
                 (record.partyName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (record.party || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (record.lcNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (record.productName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                cleanProd.includes(searchQuery.toLowerCase()) ||
                 entry.includes(searchQuery.toLowerCase()) ||
                 entryFirst.includes(searchQuery.toLowerCase());
             
@@ -364,12 +405,12 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                 (!filters.startDate || record.gpDate >= filters.startDate) &&
                 (!filters.endDate || record.gpDate <= filters.endDate);
             
-            const matchesProduct = !filters.product || record.productName === filters.product;
+            const matchesProduct = !filters.product || record.productName === filters.product || getCleanProductName(record.productName) === filters.product;
             const matchesStatus = !filters.status || record.status === filters.status;
 
             return matchesSearch && matchesDate && matchesProduct && matchesStatus;
         });
-    }, [records, searchQuery, filters, employeesFirstNameMap]);
+    }, [records, searchQuery, filters, employeesFirstNameMap, getCleanProductName]);
 
     const stats = useMemo(() => {
         return {
@@ -485,7 +526,7 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
             ...prev,
             lcNumber: lc.lcNo,
             partyName: lc.importerName || '',
-            productName: lc.productName || '',
+            productName: getCleanProductName(lc.productName) || lc.productName || '',
             lcQuantity: (parseFloat(lc.quantity || 0) * 1000).toString(),
             lcRate: (parseFloat(lc.rate || 0) / 1000).toString(),
             gpRate: (parseFloat(lc.rate || 0) / 1000).toString(),
@@ -625,7 +666,7 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                                                 <p className="text-sm font-medium text-gray-700">{record.partyName}</p>
                                             </td>
                                             <td className="px-6 py-4 font-medium text-sm text-gray-700">{record.party || '-'}</td>
-                                            <td className="px-6 py-4 font-bold text-sm text-gray-900">{record.productName}</td>
+                                            <td className="px-6 py-4 font-bold text-sm text-gray-900">{getCleanProductName(record.productName)}</td>
                                             <td className="px-6 py-4 text-right">
                                                 <span className="text-sm font-bold text-gray-900">
                                                     {parseFloat(record.lcQuantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
@@ -770,33 +811,56 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                                     >
                                         {/* Card Toggle Header */}
                                         <div
-                                            className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                            className="flex justify-between items-start p-4 cursor-pointer select-none active:bg-gray-50 transition-colors gap-3"
                                             onClick={() => setExpandedGpIdx(isExpanded ? null : idx)}
                                         >
-                                            <div className="flex-1 min-w-0 pr-4">
-                                                <div className="flex items-center gap-1.5 text-xs text-left min-w-0 overflow-hidden flex-wrap">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
-                                                        {formatDate(record.gpDate)}
-                                                    </span>
-                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
-                                                    <span className="font-bold text-gray-800 truncate max-w-[120px] shrink-0" title={record.lcNumber}>
-                                                        {record.lcNumber}
-                                                    </span>
-                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
-                                                    <span className="text-gray-500 font-medium truncate max-w-[120px] shrink-0">
-                                                        {record.partyName}
-                                                    </span>
+                                            {/* Left Info: Date -> LC No -> Importer Full Name -> Party Name */}
+                                            <div className="flex-1 min-w-0 text-left space-y-1">
+                                                {/* Date */}
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono block">
+                                                    {formatDate(record.gpDate)}
+                                                </span>
+
+                                                {/* LC No in next line */}
+                                                <div className="text-sm font-black text-gray-900 font-sans tracking-tight">
+                                                    {record.lcNumber}
+                                                </div>
+
+                                                {/* Full Importer Name */}
+                                                <div className="text-xs font-bold text-gray-800 leading-snug break-words" title={record.partyName}>
+                                                    {record.partyName}
+                                                </div>
+
+                                                {/* Party Name in next line */}
+                                                <div className="text-[11px] font-medium text-gray-600 leading-snug break-words">
+                                                    <span className="text-gray-400 font-normal">Party: </span>
+                                                    <span className="font-semibold text-gray-700">{record.party || '-'}</span>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                <span className="text-xs font-bold text-blue-600">
-                                                    {parseFloat(record.gpQuantity || 0).toLocaleString('en-US')} Kg
-                                                </span>
-                                                {isExpanded ? (
-                                                    <ChevronUpIcon className="w-4 h-4 text-gray-400" />
-                                                ) : (
-                                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+
+                                            {/* Right Info: Product Name on top of Qty + Chevron */}
+                                            <div className="flex flex-col items-end text-right shrink-0 pt-0.5">
+                                                {/* Product Name on top of Qty */}
+                                                {record.productName && (
+                                                    <span
+                                                        className="inline-flex items-center text-[10px] font-extrabold text-blue-800 bg-blue-50/90 border border-blue-200/60 px-2 py-0.5 rounded-md uppercase tracking-wide truncate max-w-[130px] mb-1.5"
+                                                        title={getCleanProductName(record.productName)}
+                                                    >
+                                                        {getCleanProductName(record.productName)}
+                                                    </span>
                                                 )}
+
+                                                {/* Quantity + Chevron */}
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-xs sm:text-sm font-black text-blue-600 font-sans">
+                                                        {parseFloat(record.gpQuantity || 0).toLocaleString('en-US')} <span className="text-[10px] font-normal text-gray-400">Kg</span>
+                                                    </span>
+                                                    {isExpanded ? (
+                                                        <ChevronUpIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                                    ) : (
+                                                        <ChevronDownIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
 
@@ -806,15 +870,15 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                                                 <div className="grid grid-cols-[125px_8px_1fr] gap-y-2 pt-3 text-xs items-baseline">
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{record.partyName}</span>
+                                                    <span className="font-semibold text-gray-700 text-[11px] break-words">{record.partyName}</span>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Party</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{record.party || '-'}</span>
+                                                    <span className="font-semibold text-gray-700 text-[11px] break-words">{record.party || '-'}</span>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-bold text-gray-900 text-[11px] truncate max-w-[180px]">{record.productName}</span>
+                                                    <span className="font-bold text-gray-900 text-[11px] break-words">{getCleanProductName(record.productName)}</span>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Qty</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
@@ -1015,7 +1079,7 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                                                             <p className="font-bold">{lc.lcNo}</p>
                                                             <p className="text-[10px] text-gray-400 uppercase tracking-wider">{lc.importerName}</p>
                                                         </div>
-                                                        <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500 font-bold uppercase">{lc.productName}</span>
+                                                        <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500 font-bold uppercase">{getCleanProductName(lc.productName)}</span>
                                                     </button>
                                                 ))}
                                         </div>
