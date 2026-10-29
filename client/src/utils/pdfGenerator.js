@@ -5103,7 +5103,7 @@ export const generatePaymentCollectionReportPDF = async (payments, filters, date
             6: { cellWidth: 20, halign: 'left', overflow: 'hidden' }, // Branch 20
             7: { cellWidth: 28 },                      // Acct No   28
             8: { cellWidth: 27, halign: 'right' },     // Amount    27
-            9: { cellWidth: 40, overflow: 'hidden' }   // Remark    40
+            9: { cellWidth: 40, overflow: 'linebreak' } // Remark    40
         };
 
         const tableStyles = {
@@ -5112,7 +5112,7 @@ export const generatePaymentCollectionReportPDF = async (payments, filters, date
             lineColor: [0, 0, 0],
             lineWidth: 0.1,
             textColor: [0, 0, 0],
-            noWrap: true
+            valign: 'middle'
         };
 
         const headStyles = {
@@ -8721,7 +8721,7 @@ export const generatePayToCustomerReportPDF = async (payments, filters, dateStr)
             6: { cellWidth: 20, halign: 'left', overflow: 'hidden' }, // Branch
             7: { cellWidth: 28 },                     // Account No
             8: { cellWidth: 27, halign: 'right' },    // Amount
-            9: { cellWidth: 40, overflow: 'hidden' }  // Remark
+            9: { cellWidth: 40, overflow: 'linebreak' } // Remark
         };
 
         const tableStyles = {
@@ -8730,7 +8730,7 @@ export const generatePayToCustomerReportPDF = async (payments, filters, dateStr)
             lineColor: [0, 0, 0],
             lineWidth: 0.1,
             textColor: [0, 0, 0],
-            noWrap: true
+            valign: 'middle'
         };
 
         const headStyles = {
