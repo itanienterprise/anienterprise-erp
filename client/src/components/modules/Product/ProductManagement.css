@@ -32,10 +32,6 @@
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-    .product-management .grid {
-        grid-template-columns: 1fr;
-    }
-
     .product-management td,
     .product-management th {
         padding: 0.75rem 0.5rem;

@@ -288,14 +288,14 @@ const ProductManagement = ({
 
     return (
         <div className="product-management space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
                 <div className="w-full md:w-auto md:shrink-0 text-center md:text-left">
                     <h2 className="text-xl md:text-2xl font-bold text-gray-800">Products Management</h2>
                 </div>
 
-                {/* Center Aligned Search Bar */}
-                <div className="flex-1 w-full max-w-none md:max-w-md mx-auto">
-                    <div className="w-full relative group">
+                {/* Search Bar + Mobile Add Button */}
+                <div className="flex items-center gap-2 w-full md:flex-1 md:max-w-md md:mx-auto">
+                    <div className="flex-1 relative group">
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                             <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                         </div>
@@ -304,7 +304,7 @@ const ProductManagement = ({
                             placeholder="Search by Product, Brand, HS Code..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full pl-10 pr-10 py-2 bg-white/50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                            className="block w-full h-10 pl-10 pr-10 bg-white/50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
                         />
                         {searchQuery && (
                             <button
@@ -315,21 +315,33 @@ const ProductManagement = ({
                             </button>
                         )}
                     </div>
-                </div>
 
-                <div className="w-full md:w-auto flex justify-end">
-                    {!showProductForm && (
+                    {/* Mobile-only inline Add Button */}
+                    {!showProductForm && canAdd && (
                         <button
                             onClick={() => setShowProductForm(true)}
                             data-action="Create New Product"
-                            className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 text-sm md:text-base"
+                            className="md:hidden h-10 flex items-center justify-center px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-md shadow-blue-500/20 transition-all transform active:scale-95 text-sm shrink-0 whitespace-nowrap"
                         >
-                            <span className="text-lg font-light mr-1 md:mr-2">+</span>
-                            <span className="hidden sm:inline">Add New Product</span>
-                            <span className="sm:hidden">Add</span>
+                            <PlusIcon className="w-4 h-4 mr-1" />
+                            <span>Add</span>
                         </button>
                     )}
                 </div>
+
+                {/* Desktop-only Add Button */}
+                {!showProductForm && canAdd && (
+                    <div className="hidden md:flex w-auto justify-end">
+                        <button
+                            onClick={() => setShowProductForm(true)}
+                            data-action="Create New Product"
+                            className="h-10 flex items-center px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 text-sm md:text-base whitespace-nowrap"
+                        >
+                            <PlusIcon className="w-5 h-5 mr-1.5" />
+                            <span>Add New Product</span>
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Add/Edit Modal */}
@@ -628,115 +640,196 @@ const ProductManagement = ({
                         <div className="md:hidden divide-y divide-gray-100">
                             {filteredProducts.map((product) => {
                                 const isExpanded = expandedCard === product._id;
+                                const brandCount = product.brands?.length || 0;
+                                const displayName = product.ipName && product.ipName.trim() !== product.name?.trim()
+                                    ? `${product.ipName} / ${product.name}`
+                                    : product.name;
+
                                 return (
                                     <div
                                         key={product._id}
-                                        className="p-4 bg-white hover:bg-gray-50 transition-all cursor-pointer"
+                                        className="p-4 bg-white hover:bg-gray-50/80 transition-all cursor-pointer select-none text-left"
                                         onClick={() => toggleCard(product._id)}
                                     >
                                         {/* Card Header */}
-                                        <div className={`flex justify-between items-center ${isExpanded ? 'mb-3' : ''}`}>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between w-full pr-2">
-                                                    <div className="flex items-center gap-2 overflow-hidden mr-2">
-                                                        <div className="text-sm font-bold text-gray-900 truncate"> {product.ipName ? `${product.ipName} / ${product.name}` : product.name}</div>
-                                                        {!isExpanded && product.hsCode && (
-                                                            <span className="text-sm font-bold text-gray-900 shrink-0 uppercase tracking-tighter"> | HS CODE:  {product.hsCode}</span>
-                                                        )}
-
-                                                    </div>
+                                        <div className="space-y-1.5">
+                                            {/* Row 1: Product Name (Left) + Category Badge & Chevron (Right) */}
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="text-sm font-black text-gray-900 font-sans tracking-tight leading-snug break-words flex-1 min-w-0">
+                                                    {displayName}
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0 pt-0.5">
                                                     {product.category && (
-                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">{product.category}</span>
+                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100/80 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
+                                                            {product.category}
+                                                        </span>
+                                                    )}
+                                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180 text-blue-600' : ''}`} />
+                                                </div>
+                                            </div>
+
+                                            {/* Row 2: HS Code (Left) & Brands Count (Right) */}
+                                            <div className="flex items-center justify-between gap-2 text-xs">
+                                                <div className="text-gray-600 font-mono text-[11px] font-semibold truncate">
+                                                    {product.hsCode ? (
+                                                        <span><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-sans">HS:</span> {product.hsCode}</span>
+                                                    ) : (
+                                                        <span className="text-gray-400 font-sans font-normal text-[11px]">—</span>
                                                     )}
                                                 </div>
-                                                {!isExpanded && (
-                                                    <div className="text-[11px] text-gray-400 mt-0.5">
-                                                        {product.brands?.length > 0 ? `${product.brands.length} brand${product.brands.length > 1 ? 's' : ''}` : 'No brands'}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2 shrink-0 ml-2">
-                                                {isExpanded && (
-                                                    <>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setViewData((products || []).find(p => p._id === product._id) || product); }}
-                                                            data-action={`View Product (${product.name || ''})`}
-                                                            className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
-                                                        >
-                                                            <EyeIcon className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleProductEdit(product); }}
-                                                            data-action={`Edit Product (${product.name || ''})`}
-                                                            className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
-                                                        >
-                                                            <EditIcon className="w-4 h-4" />
-                                                        </button>
-                                                         {!cannotDelete && (
-                                                             <button
-                                                                 onClick={(e) => { e.stopPropagation(); handleProductDelete(product._id); }}
-                                                                 data-action={`Delete Product (${product.name || ''})`}
-                                                                 className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
-                                                             >
-                                                                 <TrashIcon className="w-4 h-4" />
-                                                             </button>
-                                                         )}
-                                                    </>
-                                                )}
-
+                                                <div className="text-[11px] font-medium text-gray-400 shrink-0">
+                                                    {brandCount > 0 ? `${brandCount} brand${brandCount > 1 ? 's' : ''}` : 'No brands'}
+                                                </div>
                                             </div>
                                         </div>
 
                                         {/* Expanded Details */}
                                         {isExpanded && (
-                                            <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                {/* Info Row */}
-                                                <div className="flex justify-between items-start pt-4 border-t border-gray-100 mb-4">
-                                                    <div className="">
-                                                        <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">HS Code</span>
-                                                        <div className="text-gray-700 text-xs font-semibold font-mono">{product.hsCode || '-'}</div>
+                                            <div className="mt-3 pt-3 border-t border-gray-100 space-y-3.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                {/* Key Details Rows - Label : Value */}
+                                                <div className="space-y-2 text-xs text-left">
+                                                    <div className="flex items-baseline">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider w-28 shrink-0">HS Code</span>
+                                                        <span className="text-gray-400 font-bold mx-2 shrink-0">:</span>
+                                                        <span className="font-semibold text-gray-700 font-mono break-all">{product.hsCode || '-'}</span>
                                                     </div>
-                                                    <div className="text-right">
-                                                        <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">HS Code (IND)</span>
-                                                        <div className="text-gray-700 text-xs font-semibold font-mono">{product.hsCodeInd || '-'}</div>
+
+                                                    <div className="flex items-baseline">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider w-28 shrink-0">HS Code (IND)</span>
+                                                        <span className="text-gray-400 font-bold mx-2 shrink-0">:</span>
+                                                        <span className="font-semibold text-gray-700 font-mono break-all">{product.hsCodeInd || '-'}</span>
                                                     </div>
-                                                </div>
-                                                {product.ipName && (
-                                                    <div className="mb-4">
-                                                        <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">IP Product Name</span>
-                                                        <div className="text-gray-700 text-xs font-semibold">{product.ipName}</div>
+
+                                                    {product.ipName && (
+                                                        <div className="flex items-baseline">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider w-28 shrink-0">IP Product</span>
+                                                            <span className="text-gray-400 font-bold mx-2 shrink-0">:</span>
+                                                            <span className="font-semibold text-gray-700 break-words flex-1">{product.ipName}</span>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex items-baseline">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider w-28 shrink-0">Category</span>
+                                                        <span className="text-gray-400 font-bold mx-2 shrink-0">:</span>
+                                                        <span className="font-semibold text-gray-700">{product.category || '-'}</span>
                                                     </div>
-                                                )}
-                                                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+
+                                                    <div className="flex items-baseline">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider w-28 shrink-0">UOM / Unit</span>
+                                                        <span className="text-gray-400 font-bold mx-2 shrink-0">:</span>
+                                                        <span className="font-semibold text-gray-700">{product.uom || product.unit || 'kg'}</span>
+                                                    </div>
+
+                                                    {(product.cnfOther || product.cnf || product.other) && (
+                                                        <div className="flex items-baseline">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider w-28 shrink-0">C&F & Other</span>
+                                                            <span className="text-gray-400 font-bold mx-2 shrink-0">:</span>
+                                                            <span className="font-semibold text-gray-700 break-words flex-1">
+                                                                {product.cnfOther || (product.cnf && product.other ? `${product.cnf} / ${product.other}` : product.cnf || product.other || '-')}
+                                                            </span>
+                                                        </div>
+                                                    )}
+
                                                     {product.description && (
-                                                        <div className="col-span-2">
-                                                            <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">Description</span>
-                                                            <div className="text-gray-600 text-xs leading-relaxed">{product.description}</div>
+                                                        <div className="flex items-baseline">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider w-28 shrink-0">Description</span>
+                                                            <span className="text-gray-400 font-bold mx-2 shrink-0">:</span>
+                                                            <span className="font-semibold text-gray-700 leading-relaxed break-words flex-1">{product.description}</span>
                                                         </div>
                                                     )}
                                                 </div>
 
-                                                {/* Brands */}
+                                                {/* Brands Section */}
                                                 {product.brands && product.brands.length > 0 && (
-                                                    <div className="pt-4 border-t border-gray-100">
-                                                        <div className="flex px-1 mb-2">
-                                                            <div className="w-[55%] text-[9px] text-gray-400 uppercase font-black tracking-widest pl-2">Brand</div>
-                                                            <div className="w-[20%] text-[9px] text-gray-400 uppercase font-black tracking-widest text-right">BAG</div>
-                                                            <div className="w-[20%] text-[9px] text-gray-400 uppercase font-black tracking-widest text-right">UOM</div>
-
+                                                    <div className="pt-2 border-t border-gray-100">
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                                                            Brands ({product.brands.length})
                                                         </div>
-                                                        <div className="bg-gray-50/50 rounded-xl border border-gray-100 divide-y divide-gray-100/80">
+                                                        <div className="bg-gray-50/70 rounded-xl border border-gray-200/70 divide-y divide-gray-200/60 overflow-hidden">
                                                             {product.brands.map((b, i) => (
-                                                                <div key={i} className="flex items-center px-2 py-3">
-                                                                    <div className="w-[55%] text-[10px] md:text-xs font-semibold text-gray-800 px-1 truncate">{b.brand || '-'}</div>
-                                                                    <div className="w-[20%] text-[10px] md:text-xs font-semibold text-gray-800 text-right">{b.packetSize || '-'}</div>
-                                                                    <div className="w-[20%] text-[10px] md:text-xs font-semibold text-gray-400 text-right">{product.uom || product.unit || 'kg'}</div>
-
+                                                                <div key={i} className="p-2.5 flex items-center justify-between gap-2 text-xs">
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <div className="font-bold text-gray-800 truncate">{b.brand || '-'}</div>
+                                                                        {b.quality && (
+                                                                            <div className="text-[10px] text-gray-400 font-medium">{b.quality}</div>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-right shrink-0">
+                                                                        <div className="font-semibold text-gray-700">
+                                                                            {b.packetSize ? `${b.packetSize} ${product.uom || product.unit || 'kg'}` : '-'}
+                                                                        </div>
+                                                                        {b.purchasedPrice && (
+                                                                            <div className="text-[11px] font-bold text-emerald-600">
+                                                                                ৳{parseFloat(b.purchasedPrice).toLocaleString('en-IN')}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     </div>
                                                 )}
+
+                                                {/* Card Actions - Bottom Round Shape Buttons */}
+                                                <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1 mt-2">
+                                                    {/* View */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setViewData((products || []).find(p => p._id === product._id) || product);
+                                                        }}
+                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                        title={`View Product (${product.name || ''})`}
+                                                    >
+                                                        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-blue-600 shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                            <EyeIcon className="w-5 h-5 transition-transform duration-150" />
+                                                        </div>
+                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-blue-700">
+                                                            View
+                                                        </span>
+                                                    </button>
+
+                                                    {/* Edit */}
+                                                    {canEdit && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleProductEdit(product);
+                                                            }}
+                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                            title={`Edit Product (${product.name || ''})`}
+                                                        >
+                                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                <EditIcon className="w-5 h-5 transition-transform duration-150" />
+                                                            </div>
+                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                Edit
+                                                            </span>
+                                                        </button>
+                                                    )}
+
+                                                    {/* Delete */}
+                                                    {!cannotDelete && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleProductDelete(product._id);
+                                                            }}
+                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                            title={`Delete Product (${product.name || ''})`}
+                                                        >
+                                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-red-50 group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                <TrashIcon className="w-5 h-5 transition-transform duration-150" />
+                                                            </div>
+                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                                                Delete
+                                                            </span>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
