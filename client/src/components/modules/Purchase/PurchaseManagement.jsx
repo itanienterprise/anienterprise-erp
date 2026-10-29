@@ -16,6 +16,23 @@ import { getSocket } from '../../../utils/socket';
 import PurchaseReport from './PurchaseReport';
 import '../Sale/SaleManagement.css';
 
+const getSavedPurchaseStatusFilter = () => {
+    try {
+        const saved = localStorage.getItem('purchase_status_filter_default');
+        if (!saved) return ['all'];
+        try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            if (typeof parsed === 'string' && parsed) return [parsed];
+        } catch (_) {
+            if (typeof saved === 'string' && saved.trim()) return [saved.trim()];
+        }
+        return ['all'];
+    } catch (e) {
+        return ['all'];
+    }
+};
+
 const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
     
     const recentStatusUpdatesRef = useRef(new Map());
@@ -90,15 +107,16 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(null);
-    const [filters, setFilters] = useState({
+    const [filters, setFilters] = useState(() => ({
         startDate: '',
         endDate: '',
         quickRange: 'all',
         companyName: '',
         warehouse: '',
         productName: '',
-        brand: ''
-    });
+        brand: '',
+        status: getSavedPurchaseStatusFilter()
+    }));
     const [filterSearchInputs, setFilterSearchInputs] = useState({
         companyName: '',
         warehouse: '',
@@ -156,6 +174,35 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         }
     };
 
+    const handleStatusToggle = (val) => {
+        let nextStatuses;
+        const current = Array.isArray(filters.status)
+            ? filters.status
+            : (filters.status ? [filters.status] : ['all']);
+
+        if (val === 'all') {
+            nextStatuses = ['all'];
+        } else {
+            if (current.includes('all')) {
+                nextStatuses = [val];
+            } else {
+                if (current.includes(val)) {
+                    const filtered = current.filter(s => s !== val);
+                    nextStatuses = filtered.length > 0 ? filtered : ['all'];
+                } else {
+                    nextStatuses = [...current, val];
+                }
+            }
+        }
+
+        try {
+            localStorage.setItem('purchase_status_filter_default', JSON.stringify(nextStatuses));
+        } catch (e) {
+            console.error(e);
+        }
+        setFilters(prev => ({ ...prev, status: nextStatuses }));
+    };
+
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({
             ...prev,
@@ -166,6 +213,9 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
     };
 
     const resetFilters = () => {
+        try {
+            localStorage.setItem('purchase_status_filter_default', JSON.stringify(['all']));
+        } catch (e) {}
         setFilters({
             startDate: '',
             endDate: '',
@@ -173,7 +223,8 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
             companyName: '',
             warehouse: '',
             productName: '',
-            brand: ''
+            brand: '',
+            status: ['all']
         });
         setFilterSearchInputs({
             companyName: '',
@@ -183,6 +234,8 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         });
         setFilterDropdownOpen(null);
     };
+
+    const currentStatusList = Array.isArray(filters.status) ? filters.status : (filters.status ? [filters.status] : ['all']);
 
     const hasActiveFilters = Boolean(
         filters.startDate ||
@@ -609,92 +662,6 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         return [...list].sort();
     }, [purchases, filters.productName]);
 
-    const filteredPurchases = useMemo(() => {
-        return purchases.filter(p => {
-            const statusLower = (p.status || 'Accepted').toLowerCase();
-            if (isRequestedOnly && statusLower !== 'requested') return false;
-            if (!isRequestedOnly && statusLower === 'requested') return false;
-
-            // Date filtering
-            const pDate = p.date ? p.date.split('T')[0] : '';
-            if (filters.startDate && pDate && pDate < filters.startDate) return false;
-            if (filters.endDate && pDate && pDate > filters.endDate) return false;
-
-            // Warehouse filter
-            if (filters.warehouse && filters.warehouse !== 'All') {
-                const wh = (p.warehouse || 'HILI').toLowerCase();
-                if (wh !== filters.warehouse.toLowerCase()) return false;
-            }
-
-            // Supplier / Company filter
-            if (filters.companyName) {
-                const comp = (p.companyName || p.supplierName || '').toLowerCase();
-                if (!comp.includes(filters.companyName.toLowerCase())) return false;
-            }
-
-            // Product & Brand filter
-            if (filters.productName || filters.brand) {
-                const items = p.items || [];
-                const matchesItem = items.some(item => {
-                    const itemProd = (item.productName || item.product || '').toLowerCase();
-                    const prodMatch = !filters.productName || itemProd.includes(filters.productName.toLowerCase());
-                    if (!prodMatch) return false;
-
-                    if (filters.brand) {
-                        const brandEntries = item.brandEntries || [{ brand: item.brand || '' }];
-                        return brandEntries.some(be => (be.brand || '').toLowerCase().includes(filters.brand.toLowerCase()));
-                    }
-                    return true;
-                });
-                if (!matchesItem) return false;
-            }
-
-            // Search query
-            if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                const pNo = (p.purchaseNo || '').toLowerCase();
-                const comp = (p.companyName || p.supplierName || '').toLowerCase();
-                const lc = (p.lcNo || '').toLowerCase();
-                const entry = (getEntryByFirstName(p) || '').toLowerCase();
-                const wh = (p.warehouse || '').toLowerCase();
-                const itemsStr = (p.items || []).map(i => `${i.productName || ''} ${(i.brandEntries || []).map(b => b.brand).join(' ')}`).join(' ').toLowerCase();
-                return pNo.includes(q) || comp.includes(q) || lc.includes(q) || entry.includes(q) || wh.includes(q) || itemsStr.includes(q);
-            }
-            return true;
-        });
-    }, [purchases, isRequestedOnly, filters, searchQuery, employeesMap]);
-
-    const stats = useMemo(() => {
-        const targetList = isRequestedOnly
-            ? filteredPurchases
-            : filteredPurchases.filter(p => (p.status || '').toLowerCase() !== 'requested');
-        const totalPurchases = targetList.reduce((sum, p) => sum + (parseFloat(p.totalAmount) || 0), 0);
-        const totalDiscount = targetList.reduce((sum, p) => sum + (parseFloat(p.discount) || 0), 0);
-        const totalPaid = targetList.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
-        const totalDue = targetList.reduce((sum, p) => sum + (parseFloat(p.dueAmount) || 0), 0);
-        let totalQty = 0;
-        targetList.forEach(p => {
-            (p.items || []).forEach(it => {
-                const bEntries = it.brandEntries || [{ qty: it.qty || 0 }];
-                bEntries.forEach(be => {
-                    totalQty += parseFloat(be.qty) || 0;
-                });
-            });
-        });
-        return { totalPurchases, totalDiscount, totalPaid, totalDue, totalQty };
-    }, [filteredPurchases, isRequestedOnly]);
-
-    const filteredCustomers = useMemo(() => {
-        if (!customerSearch) return customersList;
-        const q = customerSearch.toLowerCase();
-        return customersList.filter(c => {
-            const comp = (c.companyName || '').toLowerCase();
-            const cust = (c.customerName || c.name || '').toLowerCase();
-            const ph = (c.phone || c.proprietorPhone || c.mobile || '').toLowerCase();
-            return comp.includes(q) || cust.includes(q) || ph.includes(q);
-        });
-    }, [customersList, customerSearch]);
-
     const getPurchaseBrandEntries = (purchase) => {
         const results = [];
         const pNo = (purchase.purchaseNo || purchase.purchaseReceiveNo || '').trim().toLowerCase();
@@ -749,6 +716,153 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         });
         return results.length > 0 ? results : [{ productName: '—', brand: '—', qty: 0, inHouseQty: 0, remainingQty: 0, rate: 0 }];
     };
+
+    const computePurchaseStatus = (purchase) => {
+        const rawStatus = (purchase?.status || '').toLowerCase();
+        if (rawStatus === 'requested') {
+            return {
+                statusText: 'Requested',
+                badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200/60'
+            };
+        }
+        if (rawStatus === 'rejected') {
+            return {
+                statusText: 'Rejected',
+                badgeClass: 'bg-red-50 text-red-700 border border-red-200/60'
+            };
+        }
+
+        const entries = getPurchaseBrandEntries(purchase);
+        const totalQty = entries.reduce((sum, e) => sum + (parseFloat(e.qty) || 0), 0);
+        const totalRemaining = entries.reduce((sum, e) => sum + (parseFloat(e.remainingQty) || 0), 0);
+
+        if (totalQty > 0 && totalRemaining <= 0.001) {
+            return {
+                statusText: 'Completed',
+                badgeClass: 'bg-blue-50 text-blue-700 border border-blue-200/60'
+            };
+        } else if (totalQty > 0 && Math.abs(totalQty - totalRemaining) <= 0.001) {
+            return {
+                statusText: 'Accepted',
+                badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+            };
+        } else {
+            return {
+                statusText: 'Not Completed',
+                badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200/60'
+            };
+        }
+    };
+
+    const filteredPurchases = useMemo(() => {
+        const isSearching = Boolean(searchQuery && searchQuery.trim());
+        const q = isSearching ? searchQuery.toLowerCase().trim() : '';
+
+        return purchases.filter(p => {
+            const statusLower = (p.status || 'Accepted').toLowerCase();
+            if (statusLower === 'rejected') return false;
+
+            // Search query filter (when searching, date range and status filters are bypassed)
+            if (isSearching) {
+                const pNo = (p.purchaseNo || '').toLowerCase();
+                const comp = (p.companyName || p.supplierName || '').toLowerCase();
+                const lc = (p.lcNo || '').toLowerCase();
+                const entry = (getEntryByFirstName(p) || '').toLowerCase();
+                const wh = (p.warehouse || '').toLowerCase();
+                const itemsStr = (p.items || []).map(i => `${i.productName || ''} ${(i.brandEntries || []).map(b => b.brand).join(' ')}`).join(' ').toLowerCase();
+                const computed = computePurchaseStatus(p);
+                const computedStatusLower = computed.statusText.toLowerCase();
+
+                const matchesSearch = pNo.includes(q) || comp.includes(q) || lc.includes(q) || entry.includes(q) || wh.includes(q) || itemsStr.includes(q) || computedStatusLower.includes(q);
+                if (!matchesSearch) return false;
+
+                // When searching, bypass date and status filters
+                return true;
+            }
+
+            // Status Filter (when NOT searching)
+            const currentStatusList = Array.isArray(filters.status)
+                ? filters.status
+                : (filters.status ? [filters.status] : ['all']);
+
+            if (currentStatusList.includes('all')) {
+                if (isRequestedOnly && statusLower !== 'requested') return false;
+                if (!isRequestedOnly && statusLower === 'requested') return false;
+            } else {
+                const computed = computePurchaseStatus(p);
+                const actualStatus = computed.statusText.toLowerCase();
+                const lowerSelected = currentStatusList.map(s => String(s).trim().toLowerCase());
+                if (!lowerSelected.includes(actualStatus)) return false;
+            }
+
+            // Date filtering (when NOT searching)
+            const pDate = p.date ? p.date.split('T')[0] : '';
+            if (filters.startDate && pDate && pDate < filters.startDate) return false;
+            if (filters.endDate && pDate && pDate > filters.endDate) return false;
+
+            // Warehouse filter
+            if (filters.warehouse && filters.warehouse !== 'All' && filters.warehouse !== 'All Warehouses') {
+                const wh = (p.warehouse || 'HILI').toLowerCase();
+                if (wh !== filters.warehouse.toLowerCase()) return false;
+            }
+
+            // Supplier / Company filter
+            if (filters.companyName) {
+                const comp = (p.companyName || p.supplierName || '').toLowerCase();
+                if (!comp.includes(filters.companyName.toLowerCase())) return false;
+            }
+
+            // Product & Brand filter
+            if (filters.productName || filters.brand) {
+                const items = p.items || [];
+                const matchesItem = items.some(item => {
+                    const itemProd = (item.productName || item.product || '').toLowerCase();
+                    const prodMatch = !filters.productName || itemProd.includes(filters.productName.toLowerCase());
+                    if (!prodMatch) return false;
+
+                    if (filters.brand) {
+                        const brandEntries = item.brandEntries || [{ brand: item.brand || '' }];
+                        return brandEntries.some(be => (be.brand || '').toLowerCase().includes(filters.brand.toLowerCase()));
+                    }
+                    return true;
+                });
+                if (!matchesItem) return false;
+            }
+
+            return true;
+        });
+    }, [purchases, isRequestedOnly, filters, searchQuery, employeesMap, purchaseReceivesList]);
+
+    const stats = useMemo(() => {
+        const targetList = isRequestedOnly
+            ? filteredPurchases
+            : filteredPurchases.filter(p => (p.status || '').toLowerCase() !== 'requested');
+        const totalPurchases = targetList.reduce((sum, p) => sum + (parseFloat(p.totalAmount) || 0), 0);
+        const totalDiscount = targetList.reduce((sum, p) => sum + (parseFloat(p.discount) || 0), 0);
+        const totalPaid = targetList.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
+        const totalDue = targetList.reduce((sum, p) => sum + (parseFloat(p.dueAmount) || 0), 0);
+        let totalQty = 0;
+        targetList.forEach(p => {
+            (p.items || []).forEach(it => {
+                const bEntries = it.brandEntries || [{ qty: it.qty || 0 }];
+                bEntries.forEach(be => {
+                    totalQty += parseFloat(be.qty) || 0;
+                });
+            });
+        });
+        return { totalPurchases, totalDiscount, totalPaid, totalDue, totalQty };
+    }, [filteredPurchases, isRequestedOnly]);
+
+    const filteredCustomers = useMemo(() => {
+        if (!customerSearch) return customersList;
+        const q = customerSearch.toLowerCase();
+        return customersList.filter(c => {
+            const comp = (c.companyName || '').toLowerCase();
+            const cust = (c.customerName || c.name || '').toLowerCase();
+            const ph = (c.phone || c.proprietorPhone || c.mobile || '').toLowerCase();
+            return comp.includes(q) || cust.includes(q) || ph.includes(q);
+        });
+    }, [customersList, customerSearch]);
 
     const availableProducts = useMemo(() => {
         const defaultProds = ['MUNG DAL', 'LENTIL', 'SUGAR', 'CHANA DAL', 'SOYABEAN OIL', 'WHEAT', 'RICE', 'YELLOW PEAS', 'MUSTARD SEED'];
@@ -1376,6 +1490,69 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                                 </div>
 
                                 <div className="space-y-4">
+                                    {/* Status Filter */}
+                                    <div>
+                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Status</label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {[
+                                                {
+                                                    label: 'All',
+                                                    value: 'all',
+                                                    activeCls: 'bg-gray-800 text-white shadow-md shadow-gray-700/30 font-bold',
+                                                    inactiveCls: 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                },
+                                                {
+                                                    label: 'Accepted',
+                                                    value: 'Accepted',
+                                                    dot: 'bg-green-500',
+                                                    activeCls: 'bg-green-600 text-white shadow-md shadow-green-500/30 font-bold',
+                                                    inactiveCls: 'bg-green-50 text-green-700 border border-green-200/60 hover:bg-green-100'
+                                                },
+                                                {
+                                                    label: 'Not Completed',
+                                                    value: 'Not Completed',
+                                                    dot: 'bg-amber-500',
+                                                    activeCls: 'bg-amber-500 text-white shadow-md shadow-amber-500/30 font-bold',
+                                                    inactiveCls: 'bg-amber-50 text-amber-700 border border-amber-200/60 hover:bg-amber-100'
+                                                },
+                                                {
+                                                    label: 'Completed',
+                                                    value: 'Completed',
+                                                    dot: 'bg-blue-500',
+                                                    activeCls: 'bg-blue-600 text-white shadow-md shadow-blue-500/30 font-bold',
+                                                    inactiveCls: 'bg-blue-50 text-blue-700 border border-blue-200/60 hover:bg-blue-100'
+                                                },
+                                                {
+                                                    label: 'Requested',
+                                                    value: 'Requested',
+                                                    dot: 'bg-purple-500',
+                                                    activeCls: 'bg-purple-600 text-white shadow-md shadow-purple-500/30 font-bold',
+                                                    inactiveCls: 'bg-purple-50 text-purple-700 border border-purple-200/60 hover:bg-purple-100'
+                                                }
+                                            ].map((opt) => {
+                                                const currentStatusList = Array.isArray(filters.status)
+                                                    ? filters.status
+                                                    : (filters.status ? [filters.status] : ['all']);
+                                                const isSelected = currentStatusList.includes(opt.value);
+                                                return (
+                                                    <button
+                                                        key={opt.value}
+                                                        type="button"
+                                                        onClick={() => handleStatusToggle(opt.value)}
+                                                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                                            isSelected ? opt.activeCls : opt.inactiveCls
+                                                        }`}
+                                                    >
+                                                        {opt.dot && (
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : opt.dot}`} />
+                                                        )}
+                                                        {opt.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
                                     {/* Quick Range */}
                                     <div>
                                         <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Quick Range</label>
@@ -1805,9 +1982,14 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                                         <td className="px-3 py-4 whitespace-nowrap text-center text-sm font-bold text-emerald-600 align-top">৳{Number(p.paidAmount || 0).toLocaleString('en-IN')}</td>
                                         <td className="px-3 py-4 whitespace-nowrap text-center text-sm font-bold text-orange-600 align-top">৳{Number(p.dueAmount || 0).toLocaleString('en-IN')}</td>
                                         <td className="px-3 py-4 whitespace-nowrap text-center align-top">
-                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${p.status === 'Requested' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'}`}>
-                                                {p.status || 'Accepted'}
-                                            </span>
+                                            {(() => {
+                                                const { statusText, badgeClass } = computePurchaseStatus(p);
+                                                return (
+                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${badgeClass}`}>
+                                                        {statusText}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         {canShowEntryBy && (
                                             <td className="px-3 py-4 whitespace-nowrap text-center align-top">

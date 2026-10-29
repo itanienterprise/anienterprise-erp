@@ -8,6 +8,16 @@ import { generatePurchaseReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
+const normalizeReportStatus = (s) => {
+    if (Array.isArray(s) && s.length > 0) {
+        return s;
+    }
+    if (typeof s === 'string' && s) {
+        return [s];
+    }
+    return ['all'];
+};
+
 const PurchaseReport = ({
     isOpen,
     onClose,
@@ -21,7 +31,7 @@ const PurchaseReport = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
 
-    const [filters, setFilters] = useState({
+    const [filters, setFilters] = useState(() => ({
         startDate: initialFilters.startDate || '',
         endDate: initialFilters.endDate || '',
         quickRange: initialFilters.quickRange || 'all',
@@ -29,8 +39,8 @@ const PurchaseReport = ({
         warehouse: initialFilters.warehouse || '',
         productName: initialFilters.productName || '',
         brand: initialFilters.brand || '',
-        status: initialFilters.status || 'All'
-    });
+        status: normalizeReportStatus(initialFilters.status)
+    }));
 
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(null);
     const [filterSearchInputs, setFilterSearchInputs] = useState({
@@ -57,7 +67,7 @@ const PurchaseReport = ({
                 warehouse: initialFilters.warehouse || '',
                 productName: initialFilters.productName || '',
                 brand: initialFilters.brand || '',
-                status: initialFilters.status || 'All'
+                status: normalizeReportStatus(initialFilters.status)
             }));
             setSearchQuery('');
             setShowFilterPanel(false);
@@ -101,6 +111,32 @@ const PurchaseReport = ({
         setFilters(prev => ({ ...prev, [key]: val }));
     };
 
+    const handleStatusToggle = (val) => {
+        let nextStatuses;
+        const current = Array.isArray(filters.status)
+            ? filters.status
+            : (filters.status ? [filters.status] : ['all']);
+
+        if (val === 'all' || val === 'All') {
+            nextStatuses = ['all'];
+        } else {
+            const lowerVal = val.toLowerCase();
+            const cleanCurrent = current.map(s => String(s).toLowerCase());
+            if (cleanCurrent.includes('all')) {
+                nextStatuses = [val];
+            } else {
+                const idx = cleanCurrent.indexOf(lowerVal);
+                if (idx !== -1) {
+                    const filtered = current.filter((_, i) => i !== idx);
+                    nextStatuses = filtered.length > 0 ? filtered : ['all'];
+                } else {
+                    nextStatuses = [...current, val];
+                }
+            }
+        }
+        setFilters(prev => ({ ...prev, status: nextStatuses }));
+    };
+
     const handleQuickRange = (range) => {
         const today = new Date();
         const formatDateIso = (d) => d.toISOString().split('T')[0];
@@ -139,7 +175,7 @@ const PurchaseReport = ({
             warehouse: '',
             productName: '',
             brand: '',
-            status: 'All'
+            status: ['all']
         });
         setFilterSearchInputs({
             companyName: '',
@@ -193,22 +229,67 @@ const PurchaseReport = ({
         return [...list].sort();
     }, [purchases, filters.productName]);
 
+    const cachedPR = queryClient.getQueryData(['purchase-receives']);
+    const effectivePRList = (purchaseReceivesList && purchaseReceivesList.length > 0)
+        ? purchaseReceivesList
+        : (Array.isArray(cachedPR) ? cachedPR : []);
+
+    const computePurchaseStatus = (purchase) => {
+        const rawStatus = (purchase?.status || '').toLowerCase();
+        if (rawStatus === 'requested') return 'Requested';
+        if (rawStatus === 'rejected') return 'Rejected';
+
+        const { purchasedQty, remainingQty } = calculatePurchaseRemainingQty(purchase, effectivePRList);
+
+        if (purchasedQty > 0 && remainingQty <= 0.001) {
+            return 'Completed';
+        } else if (purchasedQty > 0 && Math.abs(purchasedQty - remainingQty) <= 0.001) {
+            return 'Accepted';
+        } else {
+            return 'Not Completed';
+        }
+    };
+
     // Filtered data
     const filteredPurchases = useMemo(() => {
+        const isSearching = Boolean(searchQuery && searchQuery.trim());
+        const q = isSearching ? searchQuery.toLowerCase().trim() : '';
+
         return purchases.filter(p => {
-            // Status
-            if (filters.status && filters.status !== 'All') {
-                const status = (p.status || 'Accepted').toLowerCase();
-                if (status !== filters.status.toLowerCase()) return false;
+            const rawStatusLower = (p.status || 'Accepted').toLowerCase();
+            if (rawStatusLower === 'rejected') return false;
+
+            // Search query filter (when searching, date range and status filters are bypassed)
+            if (isSearching) {
+                const pNo = (p.purchaseNo || '').toLowerCase();
+                const comp = (p.companyName || p.supplierName || '').toLowerCase();
+                const lc = (p.lcNo || '').toLowerCase();
+                const wh = (p.warehouse || '').toLowerCase();
+                const itemsStr = (p.items || []).map(i => `${i.productName || ''} ${(i.brandEntries || []).map(b => b.brand).join(' ')}`).join(' ').toLowerCase();
+                const computedStatus = computePurchaseStatus(p).toLowerCase();
+
+                const matched = pNo.includes(q) || comp.includes(q) || lc.includes(q) || wh.includes(q) || itemsStr.includes(q) || computedStatus.includes(q);
+                if (!matched) return false;
+
+                // When searching, bypass date and status filters
+                return true;
             }
 
-            // Date
+            // Status filter (when NOT searching)
+            const currentStatusList = Array.isArray(filters.status) ? filters.status : ['all'];
+            const lowerCurrent = currentStatusList.map(s => String(s).toLowerCase());
+            if (!lowerCurrent.includes('all')) {
+                const actualStatus = computePurchaseStatus(p).toLowerCase();
+                if (!lowerCurrent.includes(actualStatus)) return false;
+            }
+
+            // Date filtering (when NOT searching)
             const pDate = p.date ? p.date.split('T')[0] : '';
             if (filters.startDate && pDate && pDate < filters.startDate) return false;
             if (filters.endDate && pDate && pDate > filters.endDate) return false;
 
             // Warehouse
-            if (filters.warehouse && filters.warehouse !== 'All') {
+            if (filters.warehouse && filters.warehouse !== 'All' && filters.warehouse !== 'All Warehouses') {
                 const wh = (p.warehouse || 'HILI').toLowerCase();
                 if (wh !== filters.warehouse.toLowerCase()) return false;
             }
@@ -236,27 +317,9 @@ const PurchaseReport = ({
                 if (!matchesItem) return false;
             }
 
-            // Search query
-            if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                const pNo = (p.purchaseNo || '').toLowerCase();
-                const comp = (p.companyName || p.supplierName || '').toLowerCase();
-                const lc = (p.lcNo || '').toLowerCase();
-                const wh = (p.warehouse || '').toLowerCase();
-                const itemsStr = (p.items || []).map(i => `${i.productName || ''} ${(i.brandEntries || []).map(b => b.brand).join(' ')}`).join(' ').toLowerCase();
-
-                const matched = pNo.includes(q) || comp.includes(q) || lc.includes(q) || wh.includes(q) || itemsStr.includes(q);
-                if (!matched) return false;
-            }
-
             return true;
         }).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-    }, [purchases, filters, searchQuery]);
-
-    const cachedPR = queryClient.getQueryData(['purchase-receives']);
-    const effectivePRList = (purchaseReceivesList && purchaseReceivesList.length > 0)
-        ? purchaseReceivesList
-        : (Array.isArray(cachedPR) ? cachedPR : []);
+    }, [purchases, filters, searchQuery, effectivePRList]);
 
     // Statistics
     const stats = useMemo(() => {
@@ -285,7 +348,7 @@ const PurchaseReport = ({
 
     const hasActiveFilters = Boolean(
         filters.startDate || filters.endDate || (filters.quickRange && filters.quickRange !== 'all') ||
-        filters.companyName || filters.warehouse || filters.productName || filters.brand || (filters.status && filters.status !== 'All')
+        filters.companyName || filters.warehouse || filters.productName || filters.brand
     );
 
     const activeFilterCount = useMemo(() => {
@@ -295,7 +358,6 @@ const PurchaseReport = ({
         if (filters.warehouse && filters.warehouse !== 'All' && filters.warehouse !== 'All Warehouses') count++;
         if (filters.productName) count++;
         if (filters.brand) count++;
-        if (filters.status && filters.status !== 'All') count++;
         return count;
     }, [filters]);
 
@@ -504,37 +566,52 @@ const PurchaseReport = ({
                                 className="h-7 sm:h-10 bg-white border border-gray-200 text-gray-700 px-2.5 sm:px-4 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold flex items-center justify-between gap-1.5 sm:gap-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 shadow-sm"
                             >
                                 <span>
-                                    {filters.status === 'Accepted' ? 'Accepted' : filters.status === 'Requested' ? 'Requested' : 'All Purchases'}
+                                    {(() => {
+                                        const current = Array.isArray(filters.status) ? filters.status : ['all'];
+                                        const lower = current.map(s => String(s).toLowerCase());
+                                        if (lower.includes('all') || lower.length === 0) return 'All Purchases';
+                                        if (lower.length === 1) {
+                                            const match = ['Accepted', 'Not Completed', 'Completed', 'Requested'].find(x => x.toLowerCase() === lower[0]);
+                                            return match || current[0];
+                                        }
+                                        return `${current.length} Statuses`;
+                                    })()}
                                 </span>
                                 <ChevronDownIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 transition-transform duration-200 ${statusDropdownOpen ? 'rotate-180' : ''}`} />
                             </button>
 
                             {statusDropdownOpen && (
-                                <div className="absolute right-0 mt-1.5 w-36 sm:w-44 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                                <div className="absolute right-0 mt-1.5 w-44 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
                                     {[
-                                        { value: 'All', label: 'All Purchases' },
+                                        { value: 'all', label: 'All Purchases' },
                                         { value: 'Accepted', label: 'Accepted' },
+                                        { value: 'Not Completed', label: 'Not Completed' },
+                                        { value: 'Completed', label: 'Completed' },
                                         { value: 'Requested', label: 'Requested' }
-                                    ].map((opt) => (
-                                        <button
-                                            key={opt.value}
-                                            type="button"
-                                            onClick={() => {
-                                                handleFilterChange('status', opt.value);
-                                                setStatusDropdownOpen(false);
-                                            }}
-                                            className={`w-full px-3 sm:px-4 py-2 text-left text-xs sm:text-sm flex items-center justify-between transition-colors ${
-                                                filters.status === opt.value
-                                                    ? 'bg-blue-50 text-blue-700 font-bold'
-                                                    : 'text-gray-700 hover:bg-gray-50 font-medium'
-                                            }`}
-                                        >
-                                            <span>{opt.label}</span>
-                                            {filters.status === opt.value && (
-                                                <CheckIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 flex-shrink-0" />
-                                            )}
-                                        </button>
-                                    ))}
+                                    ].map((opt) => {
+                                        const current = Array.isArray(filters.status) ? filters.status : ['all'];
+                                        const lower = current.map(s => String(s).toLowerCase());
+                                        const isSelected = lower.includes(opt.value.toLowerCase());
+                                        return (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => {
+                                                    handleStatusToggle(opt.value);
+                                                }}
+                                                className={`w-full px-3 sm:px-4 py-2 text-left text-xs sm:text-sm flex items-center justify-between transition-colors ${
+                                                    isSelected
+                                                        ? 'bg-blue-50 text-blue-700 font-bold'
+                                                        : 'text-gray-700 hover:bg-gray-50 font-medium'
+                                                }`}
+                                            >
+                                                <span>{opt.label}</span>
+                                                {isSelected && (
+                                                    <CheckIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 flex-shrink-0" />
+                                                )}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -574,6 +651,67 @@ const PurchaseReport = ({
                                         </div>
 
                                         <div className="space-y-3">
+                                            {/* Status Filter */}
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Status</label>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {[
+                                                        {
+                                                            label: 'All',
+                                                            value: 'all',
+                                                            activeCls: 'bg-gray-800 text-white shadow-md shadow-gray-700/30 font-bold',
+                                                            inactiveCls: 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                        },
+                                                        {
+                                                            label: 'Accepted',
+                                                            value: 'Accepted',
+                                                            dot: 'bg-green-500',
+                                                            activeCls: 'bg-green-600 text-white shadow-md shadow-green-500/30 font-bold',
+                                                            inactiveCls: 'bg-green-50 text-green-700 border border-green-200/60 hover:bg-green-100'
+                                                        },
+                                                        {
+                                                            label: 'Not Completed',
+                                                            value: 'Not Completed',
+                                                            dot: 'bg-amber-500',
+                                                            activeCls: 'bg-amber-500 text-white shadow-md shadow-amber-500/30 font-bold',
+                                                            inactiveCls: 'bg-amber-50 text-amber-700 border border-amber-200/60 hover:bg-amber-100'
+                                                        },
+                                                        {
+                                                            label: 'Completed',
+                                                            value: 'Completed',
+                                                            dot: 'bg-blue-500',
+                                                            activeCls: 'bg-blue-600 text-white shadow-md shadow-blue-500/30 font-bold',
+                                                            inactiveCls: 'bg-blue-50 text-blue-700 border border-blue-200/60 hover:bg-blue-100'
+                                                        },
+                                                        {
+                                                            label: 'Requested',
+                                                            value: 'Requested',
+                                                            dot: 'bg-purple-500',
+                                                            activeCls: 'bg-purple-600 text-white shadow-md shadow-purple-500/30 font-bold',
+                                                            inactiveCls: 'bg-purple-50 text-purple-700 border border-purple-200/60 hover:bg-purple-100'
+                                                        }
+                                                    ].map((opt) => {
+                                                        const currentList = Array.isArray(filters.status) ? filters.status : ['all'];
+                                                        const lowerCurrent = currentList.map(s => String(s).toLowerCase());
+                                                        const isSelected = lowerCurrent.includes(opt.value.toLowerCase());
+                                                        return (
+                                                            <button
+                                                                key={opt.value}
+                                                                type="button"
+                                                                onClick={() => handleStatusToggle(opt.value)}
+                                                                className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                                                    isSelected ? opt.activeCls : opt.inactiveCls
+                                                                }`}
+                                                            >
+                                                                {opt.dot && (
+                                                                    <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : opt.dot}`} />
+                                                                )}
+                                                                {opt.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
                                             {/* Quick Range */}
                                             <div>
                                                 <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Quick Range</label>
