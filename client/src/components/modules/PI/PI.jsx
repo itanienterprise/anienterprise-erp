@@ -4005,9 +4005,13 @@ function PI({
 
     const filteredRecords = useMemo(() => {
         return records.filter(record => {
+            const isSearching = Boolean(searchQuery && searchQuery.trim());
+
             // Search Query Filter
-            if (searchQuery) {
-                const query = searchQuery.toLowerCase();
+            if (isSearching) {
+                const query = searchQuery.trim().toLowerCase();
+                const cleanQuery = query.replace(/[\s\-_/]/g, '');
+                const cleanPi = String(record.piNumber || '').toLowerCase().replace(/[\s\-_/]/g, '');
                 const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
                     getStandardProductName(record.productName).toLowerCase().includes(query) ||
                     (record.productsList && record.productsList.some(p =>
@@ -4018,6 +4022,7 @@ function PI({
                 const isLcDone = checkIsLcDone(record);
                 const computedStatus = isLcDone ? 'lc done' : ((!record.ipNumber && (!record.ipNumbers || record.ipNumbers.length === 0)) ? 'ip missing' : (record.status || '').toLowerCase());
                 const matchesSearch = (record.piNumber || '').toLowerCase().includes(query) ||
+                    (cleanQuery && cleanPi && cleanPi.includes(cleanQuery)) ||
                     (record.piNumbers && record.piNumbers.some(p => String(p).toLowerCase().includes(query))) ||
                     (record.ipNumber || '').toLowerCase().includes(query) ||
                     (record.ipNumbers && record.ipNumbers.some(ip => String(ip).toLowerCase().includes(query))) ||
@@ -4030,58 +4035,60 @@ function PI({
                 if (!matchesSearch) return false;
             }
 
-            // Advanced Filters
-            if (piFilters.startDate && record.date && record.date < piFilters.startDate) return false;
-            if (piFilters.endDate && record.date && record.date > piFilters.endDate) return false;
+            // Advanced Filters (Date range is bypassed when searching)
+            if (!isSearching) {
+                if (piFilters.startDate && record.date && record.date < piFilters.startDate) return false;
+                if (piFilters.endDate && record.date && record.date > piFilters.endDate) return false;
 
-            // Quick range filtering
-            if (piFilters.quickRange && piFilters.quickRange !== 'all' && piFilters.quickRange !== 'custom') {
-                const parseLocalDate = (dVal) => {
-                    if (!dVal) return null;
-                    if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
-                    const str = String(dVal).trim();
-                    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-                        const [y, m, d] = str.split('T')[0].split('-').map(Number);
-                        return new Date(y, m - 1, d);
-                    }
-                    const d = new Date(str);
-                    return isNaN(d.getTime()) ? null : d;
-                };
+                // Quick range filtering
+                if (piFilters.quickRange && piFilters.quickRange !== 'all' && piFilters.quickRange !== 'custom') {
+                    const parseLocalDate = (dVal) => {
+                        if (!dVal) return null;
+                        if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
+                        const str = String(dVal).trim();
+                        if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                            const [y, m, d] = str.split('T')[0].split('-').map(Number);
+                            return new Date(y, m - 1, d);
+                        }
+                        const d = new Date(str);
+                        return isNaN(d.getTime()) ? null : d;
+                    };
 
-                const latestRevDate = record.revisions && record.revisions.length > 0
-                    ? record.revisions[record.revisions.length - 1].reviseDate
-                    : null;
+                    const latestRevDate = record.revisions && record.revisions.length > 0
+                        ? record.revisions[record.revisions.length - 1].reviseDate
+                        : null;
 
-                const targetDate = parseLocalDate(latestRevDate) || parseLocalDate(record.date) || parseLocalDate(record.piDate) || parseLocalDate(record.createdAt);
-                if (!targetDate) return false;
+                    const targetDate = parseLocalDate(latestRevDate) || parseLocalDate(record.date) || parseLocalDate(record.piDate) || parseLocalDate(record.createdAt);
+                    if (!targetDate) return false;
 
-                const now = new Date();
-                if (piFilters.quickRange === 'weekly') {
-                    const dayOfWeek = now.getDay();
-                    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
-                    const weekStart = new Date(now);
-                    weekStart.setDate(now.getDate() + diffToMonday);
-                    weekStart.setHours(0, 0, 0, 0);
-                    const weekEnd = new Date(weekStart);
-                    weekEnd.setDate(weekStart.getDate() + 6);
-                    weekEnd.setHours(23, 59, 59, 999);
+                    const now = new Date();
+                    if (piFilters.quickRange === 'weekly') {
+                        const dayOfWeek = now.getDay();
+                        const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                        const weekStart = new Date(now);
+                        weekStart.setDate(now.getDate() + diffToMonday);
+                        weekStart.setHours(0, 0, 0, 0);
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekStart.getDate() + 6);
+                        weekEnd.setHours(23, 59, 59, 999);
 
-                    const rollingWeekStart = new Date(now);
-                    rollingWeekStart.setDate(now.getDate() - 7);
-                    rollingWeekStart.setHours(0, 0, 0, 0);
+                        const rollingWeekStart = new Date(now);
+                        rollingWeekStart.setDate(now.getDate() - 7);
+                        rollingWeekStart.setHours(0, 0, 0, 0);
 
-                    const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
-                    if (!matchesWeekly) return false;
-                } else if (piFilters.quickRange === 'monthly') {
-                    const month = parseInt(piFilters.selectedMonth || (now.getMonth() + 1));
-                    const year = parseInt(piFilters.selectedYear || now.getFullYear());
-                    if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
-                        return false;
-                    }
-                } else if (piFilters.quickRange === 'yearly') {
-                    const year = parseInt(piFilters.selectedYear || now.getFullYear());
-                    if (targetDate.getFullYear() !== year) {
-                        return false;
+                        const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
+                        if (!matchesWeekly) return false;
+                    } else if (piFilters.quickRange === 'monthly') {
+                        const month = parseInt(piFilters.selectedMonth || (now.getMonth() + 1));
+                        const year = parseInt(piFilters.selectedYear || now.getFullYear());
+                        if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
+                            return false;
+                        }
+                    } else if (piFilters.quickRange === 'yearly') {
+                        const year = parseInt(piFilters.selectedYear || now.getFullYear());
+                        if (targetDate.getFullYear() !== year) {
+                            return false;
+                        }
                     }
                 }
             }
