@@ -28,6 +28,23 @@ const getDisplayName = (code, name) => {
     return name || code || '';
 };
 
+const getSavedOrderStatusFilter = () => {
+    try {
+        const saved = localStorage.getItem('order_status_filter_default');
+        if (!saved) return ['all'];
+        try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            if (typeof parsed === 'string' && parsed) return [parsed];
+        } catch (_) {
+            if (typeof saved === 'string' && saved.trim()) return [saved.trim()];
+        }
+        return ['all'];
+    } catch (e) {
+        return ['all'];
+    }
+};
+
 const OrderManagement = ({
     currentUser,
     addNotification,
@@ -250,6 +267,7 @@ const OrderManagement = ({
     const [saleFilters, setSaleFilters] = useState(() => {
         const savedRange = localStorage.getItem('order_quick_range_default') || 'all';
         return {
+            status: getSavedOrderStatusFilter(),
             quickRange: savedRange,
             selectedMonth: new Date().getMonth() + 1,
             selectedYear: new Date().getFullYear(),
@@ -270,6 +288,35 @@ const OrderManagement = ({
             localStorage.setItem('order_quick_range_default', saleFilters.quickRange);
         }
     }, [saleFilters.quickRange]);
+
+    const handleStatusToggle = (val) => {
+        let nextStatuses;
+        const current = Array.isArray(saleFilters.status)
+            ? saleFilters.status
+            : (saleFilters.status ? [saleFilters.status] : ['all']);
+
+        if (val === 'all') {
+            nextStatuses = ['all'];
+        } else {
+            if (current.includes('all')) {
+                nextStatuses = [val];
+            } else {
+                if (current.includes(val)) {
+                    const filtered = current.filter(s => s !== val);
+                    nextStatuses = filtered.length > 0 ? filtered : ['all'];
+                } else {
+                    nextStatuses = [...current, val];
+                }
+            }
+        }
+
+        try {
+            localStorage.setItem('order_status_filter_default', JSON.stringify(nextStatuses));
+        } catch (e) {
+            console.error(e);
+        }
+        setSaleFilters(prev => ({ ...prev, status: nextStatuses }));
+    };
 
     const [saleFilterSearch, setSaleFilterSearch] = useState({
         companySearch: '',
@@ -1939,24 +1986,89 @@ const OrderManagement = ({
 
     // Filter Logic matching Order records only
     const getFilteredData = useMemo(() => {
+        const isSearching = Boolean(searchQuery && searchQuery.trim());
+        const q = isSearching ? searchQuery.toLowerCase().trim() : '';
+
         let result = sales.filter(sale => {
             const sType = (sale.saleType || '').toLowerCase();
-            const inv = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
-            const isOrder = sType === 'order' || inv.startsWith('ORD');
+            const inv = (sale.invoiceNo || '').toLowerCase();
+            const ordNo = (sale.orderNo || '').toLowerCase();
+            const isOrder = sType === 'order' || inv.startsWith('ord') || ordNo.startsWith('ord') || sale.isOrderEntry === true;
             if (!isOrder) return false;
 
             const statusLower = (sale.status || '').toLowerCase();
             if (statusLower === 'rejected') return false;
 
+            // Search Query Filter (when searching, date range and status filters are bypassed)
+            if (isSearching) {
+                const cust = (sale.companyName || '').toLowerCase();
+                const custName = (sale.customerName || '').toLowerCase();
+                const remarks = (sale.remarks || '').toLowerCase();
+
+                const matchesItems = (sale.items || []).some(item => {
+                    const pName = (item.productName || item.product || item.name || '').toLowerCase();
+                    const itemBrand = (item.brand || item.brandName || '').toLowerCase();
+                    const itemWh = (item.warehouseName || item.whName || item.warehouse || '').toLowerCase();
+                    const brandEntriesMatch = (item.brandEntries || []).some(e => {
+                        const bName = (e.brand || e.brandName || '').toLowerCase();
+                        const whName = (e.warehouseName || e.whName || e.warehouse || '').toLowerCase();
+                        const lcNo = (e.lcNo || '').toLowerCase();
+                        return bName.includes(q) || whName.includes(q) || lcNo.includes(q);
+                    });
+                    return pName.includes(q) || itemBrand.includes(q) || itemWh.includes(q) || brandEntriesMatch;
+                });
+
+                const entry = (sale.entryByName || sale.entryBy || sale.requestedBy || sale.createdBy || sale.createdByName || sale.userName || sale.user || '').toLowerCase();
+                const entryFirst = (getEntryByFirstName(sale) || '').toLowerCase();
+                const approved = (sale.approvedByName || sale.approvedBy || sale.acceptedByName || sale.acceptedBy || '').toLowerCase();
+                const smApproved = (sale.smApprovedByName || sale.smApprovedBy || '').toLowerCase();
+                const edited = (sale.editedByName || sale.editedBy || '').toLowerCase();
+                const editedFirst = (getEditedByFirstName(sale) || '').toLowerCase();
+                const fulfillment = computeOrderFulfillment(sale, allSalesRecords, returnsList);
+                const orderStatus = (fulfillment.statusText || '').toLowerCase();
+
+                const matchesSearch = inv.includes(q) || ordNo.includes(q) || cust.includes(q) || custName.includes(q) || remarks.includes(q) || matchesItems || entry.includes(q) || entryFirst.includes(q) || approved.includes(q) || smApproved.includes(q) || edited.includes(q) || editedFirst.includes(q) || orderStatus.includes(q);
+                if (!matchesSearch) return false;
+
+                // When search matches, display it regardless of status or date range
+                return true;
+            }
+
+            // Status Filter (applied when NOT searching)
             const isReq = statusLower === 'requested';
             const isEditReq = sale.isEdited === true && !isReq;
 
-            if (isRequestedOnly) {
-                if (!isReq) return false;
-            } else if (isEditRequestedOnly) {
-                if (!isEditReq) return false;
+            const currentStatusList = Array.isArray(saleFilters.status)
+                ? saleFilters.status
+                : (saleFilters.status ? [saleFilters.status] : ['all']);
+
+            if (currentStatusList.includes('all')) {
+                if (isRequestedOnly) {
+                    if (!isReq) return false;
+                } else if (isEditRequestedOnly) {
+                    if (!isEditReq) return false;
+                } else {
+                    if (isReq || isEditReq) return false;
+                }
             } else {
-                if (isReq || isEditReq) return false;
+                const fulfillment = computeOrderFulfillment(sale, allSalesRecords, returnsList);
+                const actualStatus = (fulfillment.statusText || '').toLowerCase();
+                const lowerSelected = currentStatusList.map(s => String(s).trim().toLowerCase());
+
+                const matchesStatus = lowerSelected.some(sel => {
+                    if (sel === 'return') {
+                        return actualStatus === 'return' || actualStatus === 'partial return';
+                    }
+                    if (sel === 'requested') {
+                        return isReq || actualStatus === 'requested';
+                    }
+                    if (sel === 'edit requested') {
+                        return isEditReq || actualStatus === 'edit requested';
+                    }
+                    return actualStatus === sel;
+                });
+
+                if (!matchesStatus) return false;
             }
 
             // Quick Date Range Filter
@@ -2030,35 +2142,6 @@ const OrderManagement = ({
                     return itemBrand === targetBrand || itemBrand.includes(targetBrand) || entryBrand;
                 });
                 if (!hasBrand) return false;
-            }
-
-            if (searchQuery) {
-                const q = searchQuery.toLowerCase().trim();
-                const inv = (sale.invoiceNo || sale.orderNo || '').toLowerCase();
-                const cust = (sale.companyName || sale.customerName || '').toLowerCase();
-                const remarks = (sale.remarks || '').toLowerCase();
-
-                const matchesItems = (sale.items || []).some(item => {
-                    const pName = (item.productName || item.product || item.name || '').toLowerCase();
-                    const itemBrand = (item.brand || item.brandName || '').toLowerCase();
-                    const brandEntriesMatch = (item.brandEntries || []).some(e => {
-                        const bName = (e.brand || e.brandName || '').toLowerCase();
-                        const whName = (e.warehouseName || e.whName || e.warehouse || '').toLowerCase();
-                        const lcNo = (e.lcNo || '').toLowerCase();
-                        return bName.includes(q) || whName.includes(q) || lcNo.includes(q);
-                    });
-                    return pName.includes(q) || itemBrand.includes(q) || brandEntriesMatch;
-                });
-
-                const entry = (sale.entryByName || sale.entryBy || sale.requestedBy || sale.createdBy || sale.createdByName || sale.userName || sale.user || '').toLowerCase();
-                const entryFirst = (getEntryByFirstName(sale) || '').toLowerCase();
-                const approved = (sale.approvedByName || sale.approvedBy || sale.acceptedByName || sale.acceptedBy || '').toLowerCase();
-                const smApproved = (sale.smApprovedByName || sale.smApprovedBy || '').toLowerCase();
-                const edited = (sale.editedByName || sale.editedBy || '').toLowerCase();
-                const editedFirst = (getEditedByFirstName(sale) || '').toLowerCase();
-                const orderStatus = (computeOrderFulfillment(sale, allSalesRecords, returnsList).statusText || '').toLowerCase();
-
-                return inv.includes(q) || cust.includes(q) || remarks.includes(q) || matchesItems || entry.includes(q) || entryFirst.includes(q) || approved.includes(q) || smApproved.includes(q) || edited.includes(q) || editedFirst.includes(q) || orderStatus.includes(q);
             }
 
             return true;
@@ -2149,6 +2232,10 @@ const OrderManagement = ({
 
     const activeFilterCount = useMemo(() => {
         return Object.entries(saleFilters).filter(([key, val]) => {
+            if (key === 'status') {
+                const currentStatuses = Array.isArray(val) ? val : (val ? [val] : ['all']);
+                return !(currentStatuses.length === 1 && currentStatuses[0] === 'all');
+            }
             if (key === 'quickRange') return val !== 'all' && val !== '';
             if (key === 'selectedMonth' || key === 'selectedYear') return false;
             return val !== '';
@@ -2252,8 +2339,9 @@ const OrderManagement = ({
                                             <button
                                                 onMouseDown={(e) => {
                                                     e.preventDefault();
+                                                    localStorage.setItem('order_status_filter_default', JSON.stringify(['all']));
                                                     localStorage.setItem('order_quick_range_default', 'all');
-                                                    setSaleFilters({ quickRange: 'all', selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
+                                                    setSaleFilters({ status: ['all'], quickRange: 'all', selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
                                                     setSaleFilterSearch({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });
                                                     setActiveFilterDropdown(null);
                                                 }}
@@ -2289,6 +2377,83 @@ const OrderManagement = ({
                                                     >
                                                         BOTH
                                                     </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Status Filter */}
+                                            <div className="space-y-2 text-center pb-3 border-b border-gray-100">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">STATUS</label>
+                                                <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
+                                                    {[
+                                                        {
+                                                            label: 'All',
+                                                            value: 'all',
+                                                            activeCls: 'bg-gray-800 text-white shadow-md shadow-gray-700/30 font-bold',
+                                                            inactiveCls: 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                        },
+                                                        {
+                                                            label: 'Accepted',
+                                                            value: 'Accepted',
+                                                            dot: 'bg-green-500',
+                                                            activeCls: 'bg-green-600 text-white shadow-md shadow-green-500/30 font-bold',
+                                                            inactiveCls: 'bg-green-50 text-green-700 border border-green-200/60 hover:bg-green-100'
+                                                        },
+                                                        {
+                                                            label: 'Not Completed',
+                                                            value: 'Not Completed',
+                                                            dot: 'bg-amber-500',
+                                                            activeCls: 'bg-amber-500 text-white shadow-md shadow-amber-500/30 font-bold',
+                                                            inactiveCls: 'bg-amber-50 text-amber-700 border border-amber-200/60 hover:bg-amber-100'
+                                                        },
+                                                        {
+                                                            label: 'Completed',
+                                                            value: 'Completed',
+                                                            dot: 'bg-blue-500',
+                                                            activeCls: 'bg-blue-600 text-white shadow-md shadow-blue-500/30 font-bold',
+                                                            inactiveCls: 'bg-blue-50 text-blue-700 border border-blue-200/60 hover:bg-blue-100'
+                                                        },
+                                                        {
+                                                            label: 'Return',
+                                                            value: 'Return',
+                                                            dot: 'bg-rose-500',
+                                                            activeCls: 'bg-rose-600 text-white shadow-md shadow-rose-500/30 font-bold',
+                                                            inactiveCls: 'bg-rose-50 text-rose-700 border border-rose-200/60 hover:bg-rose-100'
+                                                        },
+                                                        {
+                                                            label: 'Requested',
+                                                            value: 'Requested',
+                                                            dot: 'bg-purple-500',
+                                                            activeCls: 'bg-purple-600 text-white shadow-md shadow-purple-500/30 font-bold',
+                                                            inactiveCls: 'bg-purple-50 text-purple-700 border border-purple-200/60 hover:bg-purple-100'
+                                                        },
+                                                        {
+                                                            label: 'Edit Requested',
+                                                            value: 'Edit Requested',
+                                                            dot: 'bg-indigo-500',
+                                                            activeCls: 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 font-bold',
+                                                            inactiveCls: 'bg-indigo-50 text-indigo-700 border border-indigo-200/60 hover:bg-indigo-100'
+                                                        }
+                                                    ].map((opt) => {
+                                                        const currentStatusList = Array.isArray(saleFilters.status)
+                                                            ? saleFilters.status
+                                                            : (saleFilters.status ? [saleFilters.status] : ['all']);
+                                                        const isSelected = currentStatusList.includes(opt.value);
+                                                        return (
+                                                            <button
+                                                                key={opt.value}
+                                                                type="button"
+                                                                onClick={() => handleStatusToggle(opt.value)}
+                                                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                                                    isSelected ? opt.activeCls : opt.inactiveCls
+                                                                }`}
+                                                            >
+                                                                {opt.dot && (
+                                                                    <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : opt.dot}`} />
+                                                                )}
+                                                                {opt.label}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
 
