@@ -655,8 +655,62 @@ function LCReceive({
         const lcStock = effectiveStockRecords.filter(item => !isPurchaseReceiveItem(item));
 
         const filtered = lcStock.filter(item => {
-            if (lcFilters?.startDate && item.date < lcFilters.startDate) return false;
-            if (lcFilters?.endDate && item.date > lcFilters.endDate) return false;
+            const isSearching = Boolean(searchLower);
+
+            // Apply Advanced Filters (date range bypassed when searching)
+            if (!isSearching) {
+                if (lcFilters?.startDate && item.date < lcFilters.startDate) return false;
+                if (lcFilters?.endDate && item.date > lcFilters.endDate) return false;
+
+                // Quick range filtering
+                if (lcFilters?.quickRange && lcFilters.quickRange !== 'all' && lcFilters.quickRange !== 'custom') {
+                    const parseLocalDate = (dVal) => {
+                        if (!dVal) return null;
+                        if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
+                        const str = String(dVal).trim();
+                        if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                            const [y, m, d] = str.split('T')[0].split('-').map(Number);
+                            return new Date(y, m - 1, d);
+                        }
+                        const d = new Date(str);
+                        return isNaN(d.getTime()) ? null : d;
+                    };
+
+                    const targetDate = parseLocalDate(item.date) || parseLocalDate(item.createdAt);
+                    if (!targetDate) return false;
+
+                    const now = new Date();
+                    if (lcFilters.quickRange === 'weekly') {
+                        const dayOfWeek = now.getDay();
+                        const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                        const weekStart = new Date(now);
+                        weekStart.setDate(now.getDate() + diffToMonday);
+                        weekStart.setHours(0, 0, 0, 0);
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekStart.getDate() + 6);
+                        weekEnd.setHours(23, 59, 59, 999);
+
+                        const rollingWeekStart = new Date(now);
+                        rollingWeekStart.setDate(now.getDate() - 7);
+                        rollingWeekStart.setHours(0, 0, 0, 0);
+
+                        const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
+                        if (!matchesWeekly) return false;
+                    } else if (lcFilters.quickRange === 'monthly') {
+                        const month = parseInt(lcFilters.selectedMonth || (now.getMonth() + 1));
+                        const year = parseInt(lcFilters.selectedYear || now.getFullYear());
+                        if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
+                            return false;
+                        }
+                    } else if (lcFilters.quickRange === 'yearly') {
+                        const year = parseInt(lcFilters.selectedYear || now.getFullYear());
+                        if (targetDate.getFullYear() !== year) {
+                            return false;
+                        }
+                    }
+                }
+            }
+
             if (lcFilters?.warehouse && (item.warehouse || '').trim().toLowerCase() !== lcFilters.warehouse.toLowerCase()) return false;
             if (lcFilters?.indCnf && (item.indianCnF || '').trim().toLowerCase() !== lcFilters.indCnf.toLowerCase()) return false;
             if (lcFilters?.bdCnf && (item.bdCnF || '').trim().toLowerCase() !== lcFilters.bdCnf.toLowerCase()) return false;
@@ -667,7 +721,7 @@ function LCReceive({
                 if (!brandList.some(b => (b || '').trim().toLowerCase() === lcFilters.brand.toLowerCase())) return false;
             }
 
-            if (!searchLower) return true;
+            if (!isSearching) return true;
 
             const matchesLcNo = (item.lcNo || '').toLowerCase().includes(searchLower);
             const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
@@ -3015,6 +3069,9 @@ function LCReceive({
     const [showLcFilterPanel, setShowLcFilterPanel] = useState(false);
 
     const initialLcFilterState = {
+        quickRange: localStorage.getItem('lcreceive_quick_range_default') || 'all',
+        selectedMonth: new Date().getMonth() + 1,
+        selectedYear: new Date().getFullYear(),
         startDate: '',
         endDate: '',
         warehouse: '',
@@ -3361,9 +3418,9 @@ function LCReceive({
                             <button
                                 ref={lcFilterButtonRef}
                                 onClick={() => setShowLcFilterPanel(!showLcFilterPanel)}
-                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border ${showLcFilterPanel || Object.values(lcFilters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border ${showLcFilterPanel || (lcFilters && ((lcFilters.quickRange && lcFilters.quickRange !== 'all') || lcFilters.startDate || lcFilters.endDate || lcFilters.warehouse || lcFilters.indCnf || lcFilters.bdCnf || lcFilters.billOfEntry || lcFilters.productName || lcFilters.brand)) ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                             >
-                                <FunnelIcon className={`w-4 h-4 ${(showLcFilterPanel || (lcFilters && Object.values(lcFilters).some(v => v !== ''))) ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-4 h-4 ${(showLcFilterPanel || (lcFilters && ((lcFilters.quickRange && lcFilters.quickRange !== 'all') || lcFilters.startDate || lcFilters.endDate || lcFilters.warehouse || lcFilters.indCnf || lcFilters.bdCnf || lcFilters.billOfEntry || lcFilters.productName || lcFilters.brand))) ? 'text-white' : 'text-gray-400'}`} />
                                 <span className="text-sm font-medium">Filter</span>
                             </button>
 
@@ -3374,7 +3431,8 @@ function LCReceive({
                                         <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
                                         <button
                                             onClick={() => {
-                                                if (setLcFilters) setLcFilters(initialLcFilterState);
+                                                localStorage.setItem('lcreceive_quick_range_default', 'all');
+                                                if (setLcFilters) setLcFilters({ ...initialLcFilterState, quickRange: 'all', startDate: '', endDate: '' });
                                                 setFilterSearchInputs({
                                                     warehouseSearch: '',
                                                     brandSearch: '',
@@ -3394,18 +3452,75 @@ function LCReceive({
                                     </div>
 
                                     <div className="space-y-5">
+                                        {/* Quick Range */}
+                                        <div className="space-y-2 text-center">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">FILTER BY RANGE</label>
+                                            <div className="flex flex-wrap justify-center gap-2">
+                                                {['all', 'weekly', 'monthly', 'yearly'].map(range => (
+                                                    <button
+                                                        key={range}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            localStorage.setItem('lcreceive_quick_range_default', range);
+                                                            if (setLcFilters) setLcFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }));
+                                                        }}
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${lcFilters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                                    >
+                                                        {range.charAt(0).toUpperCase() + range.slice(1)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {/* Month dropdown for monthly */}
+                                            {lcFilters.quickRange === 'monthly' && (
+                                                <div className="flex items-center justify-center gap-2 mt-1">
+                                                    <select
+                                                        value={lcFilters.selectedMonth || new Date().getMonth() + 1}
+                                                        onChange={(e) => setLcFilters && setLcFilters(prev => ({ ...prev, selectedMonth: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => (
+                                                            <option key={i + 1} value={i + 1}>{m}</option>
+                                                        ))}
+                                                    </select>
+                                                    <select
+                                                        value={lcFilters.selectedYear || new Date().getFullYear()}
+                                                        onChange={(e) => setLcFilters && setLcFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                            <option key={y} value={y}>{y}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                            {/* Year dropdown for yearly */}
+                                            {lcFilters.quickRange === 'yearly' && (
+                                                <div className="flex items-center justify-center gap-2 mt-1">
+                                                    <select
+                                                        value={lcFilters.selectedYear || new Date().getFullYear()}
+                                                        onChange={(e) => setLcFilters && setLcFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                            <option key={y} value={y}>{y}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
+
                                         {/* Date Range Row */}
                                         <div className="grid grid-cols-2 gap-4">
                                             <CustomDatePicker
                                                 label="From Date"
                                                 value={lcFilters.startDate}
-                                                onChange={(e) => setLcFilters({ ...lcFilters, startDate: e.target.value })}
+                                                onChange={(e) => setLcFilters && setLcFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
                                                 compact={true}
                                             />
                                             <CustomDatePicker
                                                 label="To Date"
                                                 value={lcFilters.endDate}
-                                                onChange={(e) => setLcFilters({ ...lcFilters, endDate: e.target.value })}
+                                                onChange={(e) => setLcFilters && setLcFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
                                                 compact={true}
                                                 rightAlign={true}
                                             />

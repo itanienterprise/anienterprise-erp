@@ -1170,6 +1170,9 @@ function App() {
 
 
   const initialLcFilterState = {
+    quickRange: localStorage.getItem('lcreceive_quick_range_default') || 'all',
+    selectedMonth: new Date().getMonth() + 1,
+    selectedYear: new Date().getFullYear(),
     startDate: '',
     endDate: '',
     warehouse: '',
@@ -1182,6 +1185,12 @@ function App() {
   };
 
   const [lcFilters, setLcFilters] = useState(initialLcFilterState);
+
+  useEffect(() => {
+    if (lcFilters.quickRange && lcFilters.quickRange !== 'custom') {
+      localStorage.setItem('lcreceive_quick_range_default', lcFilters.quickRange);
+    }
+  }, [lcFilters.quickRange]);
   const [lcSearchQuery, setLcSearchQuery] = useState('');
   const deferredLcSearch = useDeferredValue(lcSearchQuery);
 
@@ -1230,9 +1239,62 @@ function App() {
     };
 
     const filtered = lcStockRecords.filter(item => {
-      // Apply Advanced Filters
-      if (lcFilters.startDate && item.date < lcFilters.startDate) return false;
-      if (lcFilters.endDate && item.date > lcFilters.endDate) return false;
+      const isSearching = Boolean(searchLower);
+
+      // Apply Advanced Filters (date range bypassed when searching)
+      if (!isSearching) {
+        if (lcFilters.startDate && item.date && item.date < lcFilters.startDate) return false;
+        if (lcFilters.endDate && item.date && item.date > lcFilters.endDate) return false;
+
+        // Quick range filtering
+        if (lcFilters.quickRange && lcFilters.quickRange !== 'all' && lcFilters.quickRange !== 'custom') {
+          const parseLocalDate = (dVal) => {
+            if (!dVal) return null;
+            if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
+            const str = String(dVal).trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+              const [y, m, d] = str.split('T')[0].split('-').map(Number);
+              return new Date(y, m - 1, d);
+            }
+            const d = new Date(str);
+            return isNaN(d.getTime()) ? null : d;
+          };
+
+          const targetDate = parseLocalDate(item.date) || parseLocalDate(item.createdAt);
+          if (!targetDate) return false;
+
+          const now = new Date();
+          if (lcFilters.quickRange === 'weekly') {
+            const dayOfWeek = now.getDay();
+            const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+            const weekStart = new Date(now);
+            weekStart.setDate(now.getDate() + diffToMonday);
+            weekStart.setHours(0, 0, 0, 0);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            weekEnd.setHours(23, 59, 59, 999);
+
+            const rollingWeekStart = new Date(now);
+            rollingWeekStart.setDate(now.getDate() - 7);
+            rollingWeekStart.setHours(0, 0, 0, 0);
+
+            const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
+            if (!matchesWeekly) return false;
+          } else if (lcFilters.quickRange === 'monthly') {
+            const month = parseInt(lcFilters.selectedMonth || (now.getMonth() + 1));
+            const year = parseInt(lcFilters.selectedYear || now.getFullYear());
+            if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
+              return false;
+            }
+          } else if (lcFilters.quickRange === 'yearly') {
+            const year = parseInt(lcFilters.selectedYear || now.getFullYear());
+            if (targetDate.getFullYear() !== year) {
+              return false;
+            }
+          }
+        }
+      }
+
       if (lcFilters.warehouse && (item.warehouse || '').trim().toLowerCase() !== lcFilters.warehouse.toLowerCase()) return false;
       if (lcFilters.indCnf && (item.indianCnF || '').trim().toLowerCase() !== lcFilters.indCnf.toLowerCase()) return false;
       if (lcFilters.bdCnf && (item.bdCnF || '').trim().toLowerCase() !== lcFilters.bdCnf.toLowerCase()) return false;
@@ -1244,7 +1306,7 @@ function App() {
       }
 
       // Apply Search Query
-      if (!searchLower) return true;
+      if (!isSearching) return true;
 
       const matchesLcNo = (item.lcNo || '').toLowerCase().includes(searchLower);
       const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
