@@ -31,6 +31,23 @@ export const formatFirstName = (nameStr) => {
 
 export { IPDetailsModal, ViewIPLCsModal, PDFViewerModal };
 
+const getSavedStatusFilter = () => {
+    try {
+        const saved = localStorage.getItem('ip_status_filter_default');
+        if (!saved) return ['except_expired'];
+        try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            if (typeof parsed === 'string' && parsed) return [parsed];
+        } catch (_) {
+            if (typeof saved === 'string' && saved.trim()) return [saved.trim()];
+        }
+        return ['except_expired'];
+    } catch (e) {
+        return ['except_expired'];
+    }
+};
+
 
 function IPManagement({
     isSelectionMode,
@@ -346,10 +363,15 @@ function IPManagement({
         port: '',
         importer: '',
         productName: '',
-        status: 'except_expired'
+        status: getSavedStatusFilter()
     });
 
     const hasCustomFilters = useMemo(() => {
+        const currentStatuses = Array.isArray(filters.status)
+            ? filters.status
+            : (filters.status ? [filters.status] : ['except_expired']);
+        const isCustomStatus = !(currentStatuses.length === 1 && currentStatuses[0] === 'except_expired');
+
         return (
             filters.quickRange !== 'all' ||
             Boolean(filters.startDate) ||
@@ -357,9 +379,40 @@ function IPManagement({
             Boolean(filters.port) ||
             Boolean(filters.importer) ||
             Boolean(filters.productName) ||
-            (filters.status && filters.status !== 'except_expired')
+            isCustomStatus
         );
     }, [filters]);
+
+    const handleStatusToggle = (val) => {
+        let nextStatuses;
+        const current = Array.isArray(filters.status)
+            ? filters.status
+            : (filters.status ? [filters.status] : ['except_expired']);
+
+        if (val === 'all') {
+            nextStatuses = ['all'];
+        } else if (val === 'except_expired') {
+            nextStatuses = ['except_expired'];
+        } else {
+            if (current.includes('all') || current.includes('except_expired')) {
+                nextStatuses = [val];
+            } else {
+                if (current.includes(val)) {
+                    const filtered = current.filter(s => s !== val);
+                    nextStatuses = filtered.length > 0 ? filtered : ['except_expired'];
+                } else {
+                    nextStatuses = [...current, val];
+                }
+            }
+        }
+
+        try {
+            localStorage.setItem('ip_status_filter_default', JSON.stringify(nextStatuses));
+        } catch (e) {
+            console.error(e);
+        }
+        setFilters(prev => ({ ...prev, status: nextStatuses }));
+    };
 
     const activePorts = useMemo(() => (ports || []).filter(p => !p.isLoadingPort), [ports]);
 
@@ -1416,6 +1469,9 @@ function IPManagement({
 
 
     const resetFilters = () => {
+        try {
+            localStorage.setItem('ip_status_filter_default', JSON.stringify(['except_expired']));
+        } catch (e) {}
         setFilters({
             quickRange: 'all',
             selectedMonth: new Date().getMonth() + 1,
@@ -1425,15 +1481,17 @@ function IPManagement({
             port: '',
             importer: '',
             productName: '',
-            status: 'except_expired'
+            status: ['except_expired']
         });
     };
 
     const filteredIpRecords = useMemo(() => {
         return enrichedIpRecords.filter(record => {
+            const isSearching = Boolean(searchQuery && searchQuery.trim());
+
             // Apply text search
-            if (searchQuery) {
-                const query = searchQuery.toLowerCase();
+            if (isSearching) {
+                const query = searchQuery.trim().toLowerCase();
                 const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
                 const matchesText =
                     (record.ipNumber || '').toLowerCase().includes(query) ||
@@ -1450,26 +1508,32 @@ function IPManagement({
             if (filters.importer && record.ipParty !== filters.importer) return false;
             if (filters.productName && record.productName !== filters.productName) return false;
 
-            // Status filter: when searching, show all status IP records
-            const isSearching = Boolean(searchQuery && searchQuery.trim());
+            // Status filter: when searching, show whatever the status is
             if (!isSearching) {
                 const recStatus = (record.computedStatus || '').trim().toLowerCase();
-                if (filters.status === 'except_expired') {
+                const statusList = Array.isArray(filters.status)
+                    ? filters.status
+                    : (filters.status ? [filters.status] : ['except_expired']);
+
+                if (statusList.includes('all')) {
+                    // Show all records
+                } else if (statusList.includes('except_expired')) {
                     if (recStatus === 'expired') return false;
-                } else if (filters.status && filters.status !== 'all') {
-                    if (recStatus !== filters.status.trim().toLowerCase()) return false;
+                } else {
+                    const lowerStatuses = statusList.map(s => String(s).trim().toLowerCase());
+                    if (!lowerStatuses.includes(recStatus)) return false;
                 }
             }
 
-            // Date filtering
-            if (filters.startDate || filters.endDate) {
+            // Date filtering: when searching, show whatever the date is
+            if (!isSearching && (filters.startDate || filters.endDate)) {
                 const recordDate = new Date(record.openingDate);
                 if (filters.startDate && recordDate < new Date(filters.startDate)) return false;
                 if (filters.endDate && recordDate > new Date(filters.endDate)) return false;
             }
 
-            // Quick range filtering
-            if (filters.quickRange !== 'all' && filters.quickRange !== 'custom') {
+            // Quick range filtering: when searching, show whatever the date is
+            if (!isSearching && filters.quickRange !== 'all' && filters.quickRange !== 'custom') {
                 const now = new Date();
                 const recordDate = new Date(record.openingDate);
                 if (filters.quickRange === 'weekly') {
@@ -1625,12 +1689,15 @@ function IPManagement({
                                                         inactiveCls: 'bg-red-50 text-red-600 border border-red-200/60 hover:bg-red-100'
                                                     }
                                                 ].map((opt) => {
-                                                    const isSelected = (filters.status || 'except_expired') === opt.value;
+                                                    const currentStatusList = Array.isArray(filters.status)
+                                                        ? filters.status
+                                                        : (filters.status ? [filters.status] : ['except_expired']);
+                                                    const isSelected = currentStatusList.includes(opt.value);
                                                     return (
                                                         <button
                                                             key={opt.value}
                                                             type="button"
-                                                            onClick={() => setFilters(prev => ({ ...prev, status: opt.value }))}
+                                                            onClick={() => handleStatusToggle(opt.value)}
                                                             className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                                                 isSelected ? opt.activeCls : opt.inactiveCls
                                                             }`}

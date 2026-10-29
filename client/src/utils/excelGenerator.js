@@ -1018,8 +1018,13 @@ export const generateIPManagementReportExcel = (reportData = [], totals = {}, se
         if (filters.importer) filterBadges.push(`Importer: ${filters.importer}`);
         if (filters.port) filterBadges.push(`Port: ${filters.port}`);
         if (filters.productName) filterBadges.push(`Product: ${filters.productName}`);
-        if (filters.status && filters.status !== 'all') {
-            const statusLabel = filters.status === 'except_expired' ? 'All (Except Expired)' : filters.status;
+        const statusList = Array.isArray(filters?.status)
+            ? filters.status
+            : (filters?.status ? [filters.status] : []);
+        if (statusList.length > 0 && !statusList.includes('all')) {
+            const statusLabel = (statusList.length === 1 && statusList[0] === 'except_expired')
+                ? 'All (Except Expired)'
+                : statusList.join(', ');
             filterBadges.push(`Status: ${statusLabel}`);
         }
 

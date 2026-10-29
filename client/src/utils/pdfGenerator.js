@@ -9002,12 +9002,17 @@ export const generateIPManagementReportPDF = (reportData, totals, searchQuery = 
             doc.text(filters.productName, margin + 25, yPos);
         }
 
-        if (filters.status && filters.status !== 'all') {
+        const statusList = Array.isArray(filters?.status)
+            ? filters.status
+            : (filters?.status ? [filters.status] : []);
+        if (statusList.length > 0 && !statusList.includes('all')) {
             yPos += 5;
             doc.setFont('helvetica', 'bold');
             doc.text("Status:", margin, yPos);
             doc.setFont('helvetica', 'normal');
-            const statusLabel = filters.status === 'except_expired' ? 'All (Except Expired)' : filters.status;
+            const statusLabel = (statusList.length === 1 && statusList[0] === 'except_expired')
+                ? 'All (Except Expired)'
+                : statusList.join(', ');
             doc.text(statusLabel, margin + 25, yPos);
         }
 
