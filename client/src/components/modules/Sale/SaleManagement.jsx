@@ -4223,6 +4223,7 @@ const SaleManagement = ({
 
     // Apply search + advanced filters (Memoized for high performance)
     const displayedSales = useMemo(() => sales.filter(sale => {
+        const isSearching = Boolean(deferredSearch && deferredSearch.trim());
         const statusLower = (sale.status || '').toLowerCase();
         if (statusLower === 'rejected') return false;
 
@@ -4238,8 +4239,8 @@ const SaleManagement = ({
         }
 
         // Text search
-        if (deferredSearch) {
-            const q = deferredSearch.toLowerCase();
+        if (isSearching) {
+            const q = deferredSearch.toLowerCase().trim();
 
             if (saleType === 'Border') {
                 // Gather searchable flat-text fields
@@ -4274,12 +4275,17 @@ const SaleManagement = ({
 
                 if (!matches) return false;
             } else {
-                const inv = (sale.invoiceNo || '').toLowerCase();
+                const inv = (sale.invoiceNo || sale.orderNo || '').toLowerCase();
                 const lcNo = (sale.lcNo || '').toLowerCase();
                 const challan = (sale.challanNo || '').toLowerCase();
-                const truck = (sale.truckNo || '').toLowerCase();
+                const truck = (sale.truckNo || sale.truck || '').toLowerCase();
                 const cname = (sale.companyName || sale.customerName || '').toLowerCase();
                 const remarks = (sale.remarks || '').toLowerCase();
+                const entry = (sale.entryByName || sale.entryBy || sale.requestedBy || sale.createdBy || sale.createdByName || sale.userName || sale.user || '').toLowerCase();
+                const entryFirst = (getEntryByFirstName(sale) || '').toLowerCase();
+                const approved = (sale.approvedByName || sale.approvedBy || sale.acceptedByName || sale.acceptedBy || '').toLowerCase();
+                const approvedFirst = (getFirstNameFromIdentifier(sale.acceptedBy || sale.approvedByName || sale.approvedBy) || '').toLowerCase();
+
                 const itemsMatch = (sale.items || []).some(item => {
                     const pName = (item.productName || item.product || '').toLowerCase();
                     const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
@@ -4293,60 +4299,63 @@ const SaleManagement = ({
                     );
                     return pName.includes(q) || resolvedPName.includes(q) || itemBrand.includes(q) || itemLc.includes(q) || brandEntriesMatch;
                 });
-                if (!inv.includes(q) && !lcNo.includes(q) && !challan.includes(q) && !truck.includes(q) && !cname.includes(q) && !remarks.includes(q) && !itemsMatch) return false;
+                if (!inv.includes(q) && !lcNo.includes(q) && !challan.includes(q) && !truck.includes(q) && !cname.includes(q) && !remarks.includes(q) && !entry.includes(q) && !entryFirst.includes(q) && !approved.includes(q) && !approvedFirst.includes(q) && !itemsMatch) return false;
             }
         }
-        // Date range
-        if (saleFilters.startDate && sale.date) {
-            if (sale.date < saleFilters.startDate) return false;
-        }
-        if (saleFilters.endDate && sale.date) {
-            if (sale.date > saleFilters.endDate) return false;
-        }
-        // Quick range filtering
-        if (saleFilters.quickRange && saleFilters.quickRange !== 'all' && saleFilters.quickRange !== 'custom') {
-            const parseLocalDate = (dVal) => {
-                if (!dVal) return null;
-                if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
-                const str = String(dVal).trim();
-                if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-                    const [y, m, d] = str.split('T')[0].split('-').map(Number);
-                    return new Date(y, m - 1, d);
-                }
-                const d = new Date(str);
-                return isNaN(d.getTime()) ? null : d;
-            };
 
-            const targetDate = parseLocalDate(sale.date) || parseLocalDate(sale.createdAt);
-            if (!targetDate) return false;
+        // Date range (bypassed when searching)
+        if (!isSearching) {
+            if (saleFilters.startDate && sale.date) {
+                if (sale.date < saleFilters.startDate) return false;
+            }
+            if (saleFilters.endDate && sale.date) {
+                if (sale.date > saleFilters.endDate) return false;
+            }
+            // Quick range filtering
+            if (saleFilters.quickRange && saleFilters.quickRange !== 'all' && saleFilters.quickRange !== 'custom') {
+                const parseLocalDate = (dVal) => {
+                    if (!dVal) return null;
+                    if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
+                    const str = String(dVal).trim();
+                    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                        const [y, m, d] = str.split('T')[0].split('-').map(Number);
+                        return new Date(y, m - 1, d);
+                    }
+                    const d = new Date(str);
+                    return isNaN(d.getTime()) ? null : d;
+                };
 
-            const now = new Date();
-            if (saleFilters.quickRange === 'weekly') {
-                const dayOfWeek = now.getDay();
-                const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
-                const weekStart = new Date(now);
-                weekStart.setDate(now.getDate() + diffToMonday);
-                weekStart.setHours(0, 0, 0, 0);
-                const weekEnd = new Date(weekStart);
-                weekEnd.setDate(weekStart.getDate() + 6);
-                weekEnd.setHours(23, 59, 59, 999);
+                const targetDate = parseLocalDate(sale.date) || parseLocalDate(sale.createdAt);
+                if (!targetDate) return false;
 
-                const rollingWeekStart = new Date(now);
-                rollingWeekStart.setDate(now.getDate() - 7);
-                rollingWeekStart.setHours(0, 0, 0, 0);
+                const now = new Date();
+                if (saleFilters.quickRange === 'weekly') {
+                    const dayOfWeek = now.getDay();
+                    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                    const weekStart = new Date(now);
+                    weekStart.setDate(now.getDate() + diffToMonday);
+                    weekStart.setHours(0, 0, 0, 0);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekStart.getDate() + 6);
+                    weekEnd.setHours(23, 59, 59, 999);
 
-                const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
-                if (!matchesWeekly) return false;
-            } else if (saleFilters.quickRange === 'monthly') {
-                const month = parseInt(saleFilters.selectedMonth || (now.getMonth() + 1));
-                const year = parseInt(saleFilters.selectedYear || now.getFullYear());
-                if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
-                    return false;
-                }
-            } else if (saleFilters.quickRange === 'yearly') {
-                const year = parseInt(saleFilters.selectedYear || now.getFullYear());
-                if (targetDate.getFullYear() !== year) {
-                    return false;
+                    const rollingWeekStart = new Date(now);
+                    rollingWeekStart.setDate(now.getDate() - 7);
+                    rollingWeekStart.setHours(0, 0, 0, 0);
+
+                    const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
+                    if (!matchesWeekly) return false;
+                } else if (saleFilters.quickRange === 'monthly') {
+                    const month = parseInt(saleFilters.selectedMonth || (now.getMonth() + 1));
+                    const year = parseInt(saleFilters.selectedYear || now.getFullYear());
+                    if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
+                        return false;
+                    }
+                } else if (saleFilters.quickRange === 'yearly') {
+                    const year = parseInt(saleFilters.selectedYear || now.getFullYear());
+                    if (targetDate.getFullYear() !== year) {
+                        return false;
+                    }
                 }
             }
         }
