@@ -1198,7 +1198,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 </div>
 
                 {!showAddModal && (
-                    <div className="flex-1 w-full max-w-none md:max-w-xl mx-auto">
+                    <div className="flex-1 w-full max-w-none md:max-w-xl mx-auto flex flex-col items-center gap-2">
                         <div className="w-full relative group">
                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                 <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
@@ -1210,6 +1210,23 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                 onChange={(e) => { setSearchQuery(e.target.value); setExpandedPaymentIdx(null); }}
                                 className="block w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
                             />
+                        </div>
+
+                        {/* Desktop View: Keep under search bar as it was before (matching Sales Request) */}
+                        <div className="hidden md:flex items-center gap-2 overflow-visible">
+                            {canViewPaymentRequest && (
+                                <button
+                                    onClick={() => setIsRequestedOnly(!isRequestedOnly)}
+                                    className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
+                                >
+                                    Requested
+                                    {requestedCount > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                            {requestedCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -1292,7 +1309,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                         {canViewPaymentRequest && (
                             <button
                                 onClick={() => setIsRequestedOnly(!isRequestedOnly)}
-                                className={`relative h-10 px-3.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 active:scale-95 cursor-pointer ${
+                                className={`md:hidden relative h-10 px-3.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 active:scale-95 cursor-pointer ${
                                     isRequestedOnly
                                         ? 'bg-blue-600 border-blue-600 text-white shadow-md'
                                         : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'
