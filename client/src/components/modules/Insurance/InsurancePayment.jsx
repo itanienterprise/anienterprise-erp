@@ -1069,8 +1069,9 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
         lcAmendments.forEach((amnd, idx) => {
             const title = amnd.amendmentNo || `Amendment-${String(idx + 1).padStart(2, '0')}`;
             const addn = amnd.addnNo || amnd.revisedCoverNoteNo || amnd.revisedCoverNote || '';
-            const prem = parseFloat(amnd.grossPremium || 0);
-            const ret = parseFloat(amnd.expectedReturnAmount || 0);
+            const finances = getLcMilestoneFinances(selectedLc, title);
+            const prem = finances.grossPrem;
+            const ret = finances.expReturn;
 
             let sub = '';
             if (addn) sub += `Addn: ${addn}`;

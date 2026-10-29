@@ -96,7 +96,57 @@ export const getLCHistoryTimeline = (lc) => {
         });
     }
 
-    return baseTimeline;
+    // Enrich baseTimeline with calculated premiums
+    return baseTimeline.map((item, idx) => {
+        let netPremium = item.netPremium;
+        let expectedReturnAmount = item.expectedReturnAmount;
+        let grossPremium = item.grossPremium;
+
+        if (lc.insuranceCo) {
+            let baseAmount = 0;
+            if (item.isOriginal) {
+                baseAmount = parseFloat(item.totalAmount) || 0;
+            } else {
+                const prevMilestone = idx > 0 ? baseTimeline[idx - 1] : null;
+                const prevDollarValue = getMilestoneTotalDollar(prevMilestone, lc);
+                const newDollarValue = getMilestoneTotalDollar(item, lc);
+                const diffDollar = newDollarValue - prevDollarValue;
+                const dollarRate = parseFloat(item.dollarRate || lc.dollarRate || 0);
+                const diffAmount = diffDollar * dollarRate;
+                baseAmount = Math.abs(diffAmount);
+            }
+
+            if (baseAmount > 0) {
+                const prem = parseFloat(lc.premium) || 0;
+                const exPct = parseFloat(lc.extraPercent) || 0;
+                const premRet = parseFloat(lc.premiumReturn) || 0;
+                const pVat = parseFloat(lc.premiumVat) || 15;
+                const stamp = item.isOriginal ? (parseFloat(lc.stampCharge) || 0) : 0;
+
+                const baseNetPrem = (baseAmount * (prem / 100)) / 100;
+                const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
+                netPremium = netP > 0 ? netP.toFixed(2) : '0';
+
+                const expRet = netP * (premRet / 100);
+                expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '0';
+
+                const vatAmount = netP * (pVat / 100);
+                const gPrem = netP + vatAmount + stamp;
+                grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '0';
+            }
+        } else {
+            netPremium = '0';
+            expectedReturnAmount = '0';
+            grossPremium = '0';
+        }
+
+        return {
+            ...item,
+            netPremium: netPremium || item.netPremium || '0',
+            expectedReturnAmount: expectedReturnAmount || item.expectedReturnAmount || '0',
+            grossPremium: grossPremium || item.grossPremium || '0'
+        };
+    });
 };
 
 /**
@@ -421,11 +471,8 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
 
 export const getLcMilestoneFinances = (lc, amendmentNo) => {
     if (!lc) return { grossPrem: 0, expReturn: 0, netPayable: 0, netPrem: 0 };
-    const amnds = Array.isArray(lc.amendments) ? lc.amendments : [];
-    const nonOrigAmnds = amnds.filter(a => a.amendmentNo !== 'Original LC');
-    const origSnapshot = amnds.find(a => a.amendmentNo === 'Original LC');
-
-    if (nonOrigAmnds.length === 0) {
+    const timeline = getLCHistoryTimeline(lc);
+    if (!timeline || timeline.length === 0) {
         const grossPrem = parseFloat(lc.grossPremium || 0);
         const expReturn = parseFloat(lc.expectedReturnAmount || 0);
         const netPrem = parseFloat(lc.netPremium || 0);
@@ -438,9 +485,14 @@ export const getLcMilestoneFinances = (lc, amendmentNo) => {
     }
 
     if (amendmentNo === 'All (Entire LC)') {
-        const grossPrem = parseFloat(lc.grossPremium || 0);
-        const expReturn = parseFloat(lc.expectedReturnAmount || 0);
-        const netPrem = parseFloat(lc.netPremium || 0);
+        let grossPrem = 0;
+        let expReturn = 0;
+        let netPrem = 0;
+        timeline.forEach(m => {
+            grossPrem += parseFloat(m.grossPremium || 0);
+            expReturn += parseFloat(m.expectedReturnAmount || 0);
+            netPrem += parseFloat(m.netPremium || 0);
+        });
         return {
             grossPrem,
             expReturn,
@@ -449,26 +501,23 @@ export const getLcMilestoneFinances = (lc, amendmentNo) => {
         };
     }
 
+    let milestone = null;
     if (amendmentNo && amendmentNo !== 'Original LC') {
-        const matched = nonOrigAmnds.find(a => a.amendmentNo === amendmentNo);
-        if (matched) {
-            const grossPrem = parseFloat(matched.grossPremium || 0);
-            const expReturn = parseFloat(matched.expectedReturnAmount || 0);
-            const netPrem = parseFloat(matched.netPremium || 0);
-            return {
-                grossPrem,
-                expReturn,
-                netPayable: Math.max(0, grossPrem - expReturn),
-                netPrem
-            };
-        }
+        const cleanTarget = String(amendmentNo).trim().toLowerCase();
+        milestone = timeline.find(m => !m.isOriginal && (
+            String(m.amendmentNo || '').trim().toLowerCase() === cleanTarget ||
+            String(m.label || '').trim().toLowerCase() === cleanTarget
+        ));
     }
 
-    // Original LC (or when amendmentNo is not provided or is 'Original LC')
-    if (origSnapshot) {
-        const grossPrem = parseFloat(origSnapshot.grossPremium || 0);
-        const expReturn = parseFloat(origSnapshot.expectedReturnAmount || 0);
-        const netPrem = parseFloat(origSnapshot.netPremium || 0);
+    if (!milestone) {
+        milestone = timeline.find(m => m.isOriginal || m.amendmentNo === 'Original LC') || timeline[0];
+    }
+
+    if (milestone) {
+        const grossPrem = parseFloat(milestone.grossPremium || 0);
+        const expReturn = parseFloat(milestone.expectedReturnAmount || 0);
+        const netPrem = parseFloat(milestone.netPremium || 0);
         return {
             grossPrem,
             expReturn,
@@ -477,31 +526,12 @@ export const getLcMilestoneFinances = (lc, amendmentNo) => {
         };
     }
 
-    let sumAmndGross = 0;
-    let sumAmndReturn = 0;
-    let sumAmndNet = 0;
-    nonOrigAmnds.forEach(a => {
-        sumAmndGross += (parseFloat(a.grossPremium) || 0);
-        sumAmndReturn += (parseFloat(a.expectedReturnAmount) || 0);
-        sumAmndNet += (parseFloat(a.netPremium) || 0);
-    });
-
-    const grossPrem = Math.max(0, (parseFloat(lc.grossPremium) || 0) - sumAmndGross);
-    const expReturn = Math.max(0, (parseFloat(lc.expectedReturnAmount) || 0) - sumAmndReturn);
-    const netPrem = Math.max(0, (parseFloat(lc.netPremium) || 0) - sumAmndNet);
-    return {
-        grossPrem,
-        expReturn,
-        netPayable: Math.max(0, grossPrem - expReturn),
-        netPrem
-    };
+    return { grossPrem: 0, expReturn: 0, netPayable: 0, netPrem: 0 };
 };
 
 export const getLcMilestonesBreakdown = (lc, payments = []) => {
     if (!lc) return [];
-    const amnds = Array.isArray(lc.amendments) ? lc.amendments : [];
-    const nonOrigAmnds = amnds.filter(a => a.amendmentNo !== 'Original LC');
-    const origSnapshot = amnds.find(a => a.amendmentNo === 'Original LC');
+    const timeline = getLCHistoryTimeline(lc);
     const lcPayments = payments.filter(p => p.lcNo === lc.lcNo && p.status !== 'Requested');
 
     const evaluateStatus = (milGross, milNet, milReturn, matchedPayments) => {
@@ -528,78 +558,31 @@ export const getLcMilestonesBreakdown = (lc, payments = []) => {
         return 'not paid';
     };
 
-    if (nonOrigAmnds.length === 0) {
-        const gross = parseFloat(lc.grossPremium || 0);
-        const net = parseFloat(lc.netPremium || 0);
-        const expRet = parseFloat(lc.expectedReturnAmount || 0);
-        const status = evaluateStatus(gross, net, expRet, lcPayments);
-        return [{
-            isOriginal: true,
-            label: 'Original LC',
-            date: formatDate(lc.openingDate),
-            coverNote: lc.marineCoverNote || lc.coverNoteNo || lc.coverNote || '-',
+    return timeline.map((m, idx) => {
+        const isOrig = m.isOriginal || m.amendmentNo === 'Original LC' || idx === 0;
+        const matchedPayments = lcPayments.filter(p => {
+            if (isOrig) {
+                return !p.amendmentNo || p.amendmentNo === 'Original LC';
+            }
+            return p.amendmentNo === m.amendmentNo;
+        });
+
+        const gross = parseFloat(m.grossPremium || 0);
+        const net = parseFloat(m.netPremium || 0);
+        const expRet = parseFloat(m.expectedReturnAmount || 0);
+        const status = evaluateStatus(gross, net, expRet, matchedPayments);
+
+        return {
+            isOriginal: isOrig,
+            label: m.amendmentNo || (isOrig ? 'Original LC' : `Amendment-${String(idx).padStart(2, '0')}`),
+            date: formatDate(m.amendmentDate || m.openingDate || m.addnDate || m.date),
+            coverNote: m.addnNo || m.revisedCoverNoteNo || m.revisedCoverNote || m.marineCoverNote || (isOrig ? (lc.marineCoverNote || lc.coverNoteNo || '-') : m.amendmentNo),
             grossPremium: gross,
             netPremium: net,
             expectedReturnAmount: expRet,
             status
-        }];
-    }
-
-    let sumAmndGross = 0;
-    let sumAmndNet = 0;
-    let sumAmndReturn = 0;
-    nonOrigAmnds.forEach(a => {
-        sumAmndGross += parseFloat(a.grossPremium || 0);
-        sumAmndNet += parseFloat(a.netPremium || 0);
-        sumAmndReturn += parseFloat(a.expectedReturnAmount || 0);
+        };
     });
-
-    const origGross = origSnapshot
-        ? parseFloat(origSnapshot.grossPremium || 0)
-        : Math.max(0, parseFloat(lc.grossPremium || 0) - sumAmndGross);
-    const origNet = origSnapshot
-        ? parseFloat(origSnapshot.netPremium || 0)
-        : Math.max(0, parseFloat(lc.netPremium || 0) - sumAmndNet);
-    const origExpRet = origSnapshot
-        ? parseFloat(origSnapshot.expectedReturnAmount || 0)
-        : Math.max(0, parseFloat(lc.expectedReturnAmount || 0) - sumAmndReturn);
-
-    const origPayments = lcPayments.filter(p => !p.amendmentNo || p.amendmentNo === 'Original LC');
-    const origStatus = evaluateStatus(origGross, origNet, origExpRet, origPayments);
-
-    const milestones = [
-        {
-            isOriginal: true,
-            label: 'Original LC',
-            date: formatDate(origSnapshot?.amendmentDate || lc.openingDate),
-            coverNote: origSnapshot?.marineCoverNote || lc.marineCoverNote || lc.coverNoteNo || '-',
-            grossPremium: origGross,
-            netPremium: origNet,
-            expectedReturnAmount: origExpRet,
-            status: origStatus
-        }
-    ];
-
-    nonOrigAmnds.forEach((a, idx) => {
-        const amndGross = parseFloat(a.grossPremium || 0);
-        const amndNet = parseFloat(a.netPremium || 0);
-        const amndExpRet = parseFloat(a.expectedReturnAmount || 0);
-        const amndPayments = lcPayments.filter(p => p.amendmentNo === a.amendmentNo);
-        const amndStatus = evaluateStatus(amndGross, amndNet, amndExpRet, amndPayments);
-
-        milestones.push({
-            isOriginal: false,
-            label: a.amendmentNo || `Amendment-${String(idx + 1).padStart(2, '0')}`,
-            date: formatDate(a.amendmentDate || a.addnDate || a.date),
-            coverNote: a.addnNo || a.revisedCoverNoteNo || a.revisedCoverNote || a.marineCoverNote || a.amendmentNo,
-            grossPremium: amndGross,
-            netPremium: amndNet,
-            expectedReturnAmount: amndExpRet,
-            status: amndStatus
-        });
-    });
-
-    return milestones;
 };
 
 /**
