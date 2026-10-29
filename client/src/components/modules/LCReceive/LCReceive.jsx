@@ -153,6 +153,19 @@ const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }
                         <span className="text-gray-400 font-bold">:</span>
                         <span className="font-bold text-gray-900">{!isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString('en-IN')}` : '-'}</span>
 
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invoice No</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <div className="font-semibold text-gray-700 flex flex-col gap-1">
+                            {(() => {
+                                const invoiceNos = [...new Set((data.entries ? data.entries.map(e => e.invoiceNo) : [data.invoiceNo]).filter(Boolean))];
+                                return invoiceNos.length > 0
+                                    ? invoiceNos.map((inv, idx) => (
+                                        <div key={idx} className="leading-tight break-words">{inv}</div>
+                                    ))
+                                    : <span>—</span>;
+                            })()}
+                        </div>
+
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bill Of Entry</span>
                         <span className="text-gray-400 font-bold">:</span>
                         <span className="font-semibold text-gray-700">{data.billOfEntry || '-'}</span>
@@ -213,6 +226,20 @@ const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }
                             { label: 'IND C&F Value', value: !isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString('en-IN')}` : '-', bold: true, color: 'text-gray-900' },
                             { label: 'BD C&F', value: data.bdCnF || '-', color: 'text-gray-700' },
                             { label: 'BD C&F Value', value: !isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString('en-IN')}` : '-', bold: true, color: 'text-gray-900' },
+                            {
+                                label: 'Invoice No',
+                                value: (() => {
+                                    const invoiceNos = [...new Set((data.entries ? data.entries.map(e => e.invoiceNo) : [data.invoiceNo]).filter(Boolean))];
+                                    return invoiceNos.length > 0 ? (
+                                        <div className="flex flex-col gap-0.5">
+                                            {invoiceNos.map((inv, idx) => (
+                                                <div key={idx} className="leading-tight">{inv}</div>
+                                            ))}
+                                        </div>
+                                    ) : '—';
+                                })(),
+                                color: 'text-gray-700'
+                            },
                             { label: 'Bill Of Entry', value: data.billOfEntry || '-', color: 'text-gray-700' },
                             { label: 'Total Trucks', value: data.totalLcTruck, bold: true, color: 'text-amber-600' },
                             { label: 'Truck Number', value: truckNumbers || '—', bold: true, color: 'text-blue-600' },
@@ -5437,15 +5464,49 @@ function LCReceive({
                                     return acc;
                                 }, {})).map((entry) => {
                                     const isExpanded = expandedCard === entry.groupedKey;
-                                    const uniqueEntriesMap = entry.entries.reduce((acc, item) => {
-                                        const key = `${item.productName}-${item.truckNo}-${item.unit}`;
+                                    const uniqueEntriesMap = (entry.entries || []).reduce((acc, item) => {
+                                        const brandName = (item.brand || '').trim();
+                                        const key = `${item.productName}-${brandName}-${item.truckNo || ''}-${item.unit || ''}`;
                                         if (!acc[key]) {
-                                            acc[key] = { ...item, quantity: 0 };
+                                            acc[key] = {
+                                                ...item,
+                                                brand: brandName,
+                                                quantity: 0,
+                                                sweepedQuantity: 0,
+                                                inHouseQuantity: 0,
+                                                packet: 0
+                                            };
                                         }
-                                        acc[key].quantity += (parseFloat(item.quantity) || 0);
+                                        const itemQty = parseFloat(item.quantity) || 0;
+                                        const swpQty = parseFloat(item.sweepedQuantity) || 0;
+                                        const inHouse = parseFloat(item.inHouseQuantity) || (itemQty - swpQty);
+                                        acc[key].quantity += itemQty;
+                                        acc[key].sweepedQuantity += swpQty;
+                                        acc[key].inHouseQuantity += inHouse;
+                                        acc[key].packet += (parseFloat(item.packet) || 0);
                                         return acc;
                                     }, {});
                                     const uniqueEntries = Object.values(uniqueEntriesMap);
+
+                                    // Group by product name for brand & breakdown display
+                                    const productGroups = [];
+                                    uniqueEntries.forEach(item => {
+                                        let grp = productGroups.find(g => g.productName === item.productName);
+                                        if (!grp) {
+                                            grp = {
+                                                productName: item.productName,
+                                                totalQty: 0,
+                                                totalShort: 0,
+                                                totalInQty: 0,
+                                                items: []
+                                            };
+                                            productGroups.push(grp);
+                                        }
+                                        grp.totalQty += (parseFloat(item.quantity) || 0);
+                                        grp.totalShort += (parseFloat(item.sweepedQuantity) || 0);
+                                        grp.totalInQty += (parseFloat(item.inHouseQuantity) || 0);
+                                        grp.items.push(item);
+                                    });
 
                                     return (
                                         <div
@@ -5474,102 +5535,35 @@ function LCReceive({
                                             style={isHighlighted(entry) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                             onClick={() => toggleCard(entry.groupedKey)}
                                         >
-                                            <div className={`flex justify-between items-center ${isExpanded ? 'mb-2' : ''}`}>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-xs text-gray-400 mb-0.5">{formatDate(entry.date)}</div>
-                                                    <div className="flex items-center justify-between overflow-hidden">
-                                                        <div className="flex flex-col min-w-0">
-                                                            <div className="text-sm font-bold text-gray-900 truncate pr-2">{entry.lcNo || 'N/A'}</div>
-                                                            {(() => {
-                                                                const invoiceNos = [...new Set((entry.entries || []).map(e => e.invoiceNo).filter(Boolean))];
-                                                                return invoiceNos.length > 0 ? (
-                                                                    <div className="text-[11px] text-gray-500 font-medium truncate">Inv: {invoiceNos.join(', ')}</div>
-                                                                ) : null;
-                                                            })()}
-                                                        </div>
-                                                        <div className="flex items-center gap-2 shrink-0">
-                                                            {!isExpanded && (
-                                                                <>
-                                                                    <div className="text-[10px] font-bold text-blue-600 bg-blue-50/50 px-1.5 py-0.5 rounded uppercase tracking-wider">{entry.port || '-'}</div>
-                                                                    <span className="text-gray-200 text-[10px]">|</span>
-                                                                    <div className="text-[10px] font-bold text-amber-600 bg-amber-50/50 px-1.5 py-0.5 rounded uppercase tracking-wider">Truck: {entry.totalLcTruck}</div>
-                                                                </>
-                                                            )}
-                                                        </div>
+                                            <div className="text-left space-y-1">
+                                                {/* Date */}
+                                                <div className="text-xs text-gray-400 font-mono mb-0.5">
+                                                    {formatDate(entry.date)}
+                                                </div>
+
+                                                {/* LC No + Chevron */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="text-sm font-black text-gray-900 font-sans tracking-tight">
+                                                        {entry.lcNo || 'N/A'}
                                                     </div>
+                                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180 text-blue-600' : ''}`} />
                                                 </div>
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    {isExpanded && (
-                                                        <>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); setViewData(entry); }}
-                                                                className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
-                                                                title="View Details"
-                                                            >
-                                                                <EyeIcon className="w-4 h-4" />
-                                                            </button>
 
-                                                            {(entry.entries?.[0]?.status || entry.status || '').toLowerCase() === 'requested' ? (
-                                                                <>
-                                                                    {canEditRequestedStock(entry) && (
-                                                                         <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
-                                                                        className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
-                                                                        title="Edit"
-                                                                    >
-                                                                        <EditIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                     )}
-                                                                    {canApprove && (
-                                                                        <>
-                                                                            <button
-                                                                                onClick={(e) => { e.stopPropagation(); handleStatusUpdate(entry, 'In Stock'); }}
-                                                                                className="p-2 text-emerald-600 bg-emerald-50/50 rounded-lg transition-colors hover:bg-emerald-100"
-                                                                                title="Accept"
-                                                                            >
-                                                                                <CheckIcon className="w-4 h-4" />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={(e) => { e.stopPropagation(); handleStatusUpdate(entry, 'Rejected'); }}
-                                                                                className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
-                                                                                title="Reject"
-                                                                            >
-                                                                                <XIcon className="w-4 h-4" />
-                                                                            </button>
-                                                                        </>
-                                                                    )}
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    {canEdit && (
-                                                                        <button
-                                                                            onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
-                                                                            className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
-                                                                            title="Edit"
-                                                                        >
-                                                                            <EditIcon className="w-4 h-4" />
-                                                                        </button>
-                                                                    )}
-                                                                    {canDelete && (
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                const ids = entry.allIds || entry.entries.map(e => e._id);
-                                                                                setSelectedItems(new Set(ids));
-                                                                                onDelete('stock', null, true, entry);
-                                                                            }}
-                                                                            className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
-                                                                            title="Delete"
-                                                                        >
-                                                                            <TrashIcon className="w-4 h-4" />
-                                                                        </button>
-                                                                    )}
-                                                                </>
-                                                            )}
-                                                        </>
-                                                    )}
-
-                                                </div>
+                                                {/* Product Name(s) with Total Qty Product-Wise */}
+                                                {productGroups.length > 0 && (
+                                                    <div className="space-y-1 pt-1">
+                                                        {productGroups.map((grp, pIdx) => (
+                                                            <div key={pIdx} className="flex items-center justify-between gap-3 text-xs">
+                                                                <span className="font-bold text-gray-700 truncate" title={grp.productName}>
+                                                                    {grp.productName || '—'}
+                                                                </span>
+                                                                <span className="font-black text-gray-900 font-sans shrink-0">
+                                                                    {Math.round(grp.totalQty).toLocaleString('en-US')} {grp.items[0]?.unit || 'kg'}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {isExpanded && (
@@ -5590,6 +5584,19 @@ function LCReceive({
                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BD C&F</span>
                                                         <span className="text-gray-400 font-bold">:</span>
                                                         <span className="font-semibold text-gray-700 truncate">{entry.bdCnF || "-"}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invoice No</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <div className="font-semibold text-gray-700 flex flex-col gap-1">
+                                                            {(() => {
+                                                                const invoiceNos = [...new Set((entry.entries ? entry.entries.map(e => e.invoiceNo) : [entry.invoiceNo]).filter(Boolean))];
+                                                                return invoiceNos.length > 0
+                                                                    ? invoiceNos.map((inv, idx) => (
+                                                                        <div key={idx} className="leading-tight break-words">{inv}</div>
+                                                                    ))
+                                                                    : <span>-</span>;
+                                                            })()}
+                                                        </div>
 
                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BOE</span>
                                                         <span className="text-gray-400 font-bold">:</span>
@@ -5634,15 +5641,174 @@ function LCReceive({
                                                         )}
                                                     </div>
 
-                                                    <div className="space-y-1.5">
-                                                        {uniqueEntries.map((item, idx) => (
-                                                            <div key={idx} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg text-sm hover:bg-gray-100 transition-colors">
-                                                                <span className="font-black text-gray-900 truncate mr-2">{item.productName}</span>
-                                                                <span className="shrink-0 text-gray-600 font-bold uppercase text-[11px]">
-                                                                    QTY: {Math.round(item.quantity).toLocaleString('en-US')} kg | Truck: {item.truckNo}
-                                                                </span>
+                                                    <div className="space-y-2.5">
+                                                        {productGroups.map((group, gIdx) => (
+                                                            <div key={gIdx} className="bg-gray-50/70 rounded-xl border border-gray-200/70 overflow-hidden shadow-xs">
+                                                                {/* Product Header */}
+                                                                <div className="px-3 py-2 bg-gray-100/70 border-b border-gray-200/80 flex items-center justify-between">
+                                                                    <span className="font-black text-xs text-gray-900 uppercase tracking-tight">{group.productName || '—'}</span>
+                                                                    <span className="text-[11px] font-black text-gray-800 font-sans">
+                                                                        {Math.round(group.totalQty).toLocaleString('en-US')} kg
+                                                                    </span>
+                                                                </div>
+
+                                                                {/* Brands & Breakdown */}
+                                                                <div className="divide-y divide-gray-200/60">
+                                                                    {group.items.map((item, idx) => (
+                                                                        <div key={idx} className="p-3 space-y-2">
+                                                                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand:</span>
+                                                                                    <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-md truncate max-w-[160px]">
+                                                                                        {item.brand || '—'}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                                    {item.truckNo && (
+                                                                                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-md">
+                                                                                            Truck: {item.truckNo}
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {parseFloat(item.packet) > 0 && (
+                                                                                        <span className="text-[10px] font-bold text-gray-600 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-md">
+                                                                                            {Math.round(item.packet).toLocaleString('en-US')} bags
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {/* Breakdown 3-column stats */}
+                                                                            <div className="grid grid-cols-3 gap-2 p-2 bg-white rounded-lg border border-gray-100 text-center">
+                                                                                <div className="text-left pl-1">
+                                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Arrival</span>
+                                                                                    <span className="text-xs font-black text-gray-900 font-sans">
+                                                                                        {Math.round(item.quantity).toLocaleString('en-US')} <span className="text-[9px] font-normal text-gray-400">{item.unit || 'kg'}</span>
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div className="text-center">
+                                                                                    <span className="text-[9px] font-bold text-red-400 uppercase tracking-wider block">Short</span>
+                                                                                    <span className="text-xs font-bold text-red-500 font-sans">
+                                                                                        {Math.round(item.sweepedQuantity).toLocaleString('en-US')} <span className="text-[9px] font-normal text-red-300">{item.unit || 'kg'}</span>
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div className="text-right pr-1">
+                                                                                    <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider block">In Qty</span>
+                                                                                    <span className="text-xs font-black text-blue-600 font-sans">
+                                                                                        {Math.round(item.inHouseQuantity).toLocaleString('en-US')} <span className="text-[9px] font-normal text-blue-300">{item.unit || 'kg'}</span>
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             </div>
                                                         ))}
+                                                    </div>
+
+                                                    {/* Card Actions - Bottom Round Shape Buttons */}
+                                                    <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1 mt-3">
+                                                        {/* View Details */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); setViewData(entry); }}
+                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                            title="View Details"
+                                                        >
+                                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-blue-600 shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                <EyeIcon className="w-5 h-5 transition-transform duration-150" />
+                                                            </div>
+                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-blue-700">
+                                                                View
+                                                            </span>
+                                                        </button>
+
+                                                        {(entry.entries?.[0]?.status || entry.status || '').toLowerCase() === 'requested' ? (
+                                                            <>
+                                                                {canEditRequestedStock(entry) && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
+                                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                            <EditIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                        </div>
+                                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                            Edit
+                                                                        </span>
+                                                                    </button>
+                                                                )}
+                                                                {canApprove && (
+                                                                    <>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(entry, 'In Stock'); }}
+                                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                            title="Accept"
+                                                                        >
+                                                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-emerald-50 border border-emerald-200 text-emerald-600 shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                                <CheckIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                            </div>
+                                                                            <span className="text-[11.5px] font-semibold text-emerald-700 text-center leading-[1.2] tracking-[-0.01em]">
+                                                                                Accept
+                                                                            </span>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(entry, 'Rejected'); }}
+                                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                            title="Reject"
+                                                                        >
+                                                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-rose-50 border border-rose-200 text-rose-600 shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-rose-600 group-hover:text-white group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                                <XIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                            </div>
+                                                                            <span className="text-[11.5px] font-semibold text-rose-700 text-center leading-[1.2] tracking-[-0.01em]">
+                                                                                Reject
+                                                                            </span>
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                {canEdit && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
+                                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                            <EditIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                        </div>
+                                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                                                            Edit
+                                                                        </span>
+                                                                    </button>
+                                                                )}
+                                                                {canDelete && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            const ids = entry.allIds || entry.entries.map(e => e._id);
+                                                                            setSelectedItems(new Set(ids));
+                                                                            onDelete('stock', null, true, entry);
+                                                                        }}
+                                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                        title="Delete"
+                                                                    >
+                                                                        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-red-50 group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                            <TrashIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                        </div>
+                                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                                                            Delete
+                                                                        </span>
+                                                                    </button>
+                                                                )}
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
