@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from '../Icons';
 import './CustomDatePicker.css';
 
@@ -135,20 +136,77 @@ const CustomDatePicker = ({
         return new Date();
     });
     const containerRef = useRef(null);
-    const [autoRightAlign, setAutoRightAlign] = useState(false);
+    const dropdownRef = useRef(null);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+
+    const updatePosition = () => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const el = dropdownRef.current;
+        const dropdownWidth = (el && el.offsetWidth) ? el.offsetWidth : (compact ? 260 : 350);
+        const dropdownHeight = (el && el.offsetHeight) ? el.offsetHeight : (compact ? 285 : 390);
+
+        // Auto determine whether to drop up or drop down
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        let top;
+        if (dropUp || (spaceBelow < dropdownHeight && spaceAbove > spaceBelow)) {
+            top = Math.max(8, rect.top - dropdownHeight - 6);
+        } else {
+            top = rect.bottom + 6;
+            if (top + dropdownHeight > window.innerHeight - 8) {
+                if (spaceAbove >= dropdownHeight) {
+                    top = Math.max(8, rect.top - dropdownHeight - 6);
+                } else {
+                    top = Math.max(8, window.innerHeight - dropdownHeight - 8);
+                }
+            }
+        }
+
+        // Horizontal positioning: align right if explicitly set or if extending past right edge
+        let left;
+        if (rightAlign || (rect.left + dropdownWidth > window.innerWidth - 10)) {
+            left = rect.right - dropdownWidth;
+        } else {
+            left = rect.left;
+        }
+
+        // Clamp horizontally so it stays within viewport
+        if (left + dropdownWidth > window.innerWidth - 8) {
+            left = window.innerWidth - dropdownWidth - 8;
+        }
+        if (left < 8) {
+            left = 8;
+        }
+
+        setCoords({ top, left });
+    };
+
+    useLayoutEffect(() => {
+        if (!isOpen) return;
+        updatePosition();
+    }, [isOpen, compact, rightAlign, dropUp, viewDate]);
 
     useEffect(() => {
-        if (!isOpen || !containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        const estimatedWidth = compact ? 270 : 360;
-        if (rect.left + estimatedWidth > window.innerWidth - 12) {
-            setAutoRightAlign(true);
-        } else {
-            setAutoRightAlign(false);
-        }
-    }, [isOpen, compact]);
+        if (!isOpen) return;
 
-    const isRightAligned = rightAlign || autoRightAlign;
+        const handleScrollOrResize = () => {
+            if (!containerRef.current) return;
+            const rect = containerRef.current.getBoundingClientRect();
+            if (rect.bottom < 0 || rect.top > window.innerHeight) {
+                setIsOpen(false);
+                return;
+            }
+            updatePosition();
+        };
+
+        window.addEventListener('scroll', handleScrollOrResize, true);
+        window.addEventListener('resize', handleScrollOrResize);
+        return () => {
+            window.removeEventListener('scroll', handleScrollOrResize, true);
+            window.removeEventListener('resize', handleScrollOrResize);
+        };
+    }, [isOpen, compact, rightAlign, dropUp, viewDate]);
 
     useEffect(() => {
         setInputValue(value ? formatDate(value) : '');
@@ -164,12 +222,19 @@ const CustomDatePicker = ({
         if (!isOpen) return;
 
         const handleClickOutside = (event) => {
-            if (containerRef.current && !containerRef.current.contains(event.target)) {
+            if (
+                containerRef.current && !containerRef.current.contains(event.target) &&
+                dropdownRef.current && !dropdownRef.current.contains(event.target)
+            ) {
                 setIsOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        document.addEventListener('touchstart', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
+        };
     }, [isOpen]);
 
     const months = [
@@ -327,8 +392,19 @@ const CustomDatePicker = ({
                 </div>
             </div>
 
-            {isOpen && (
-                <div className={`date-picker-dropdown ${compact ? 'compact' : ''} ${isRightAligned ? 'right-align' : ''} ${dropUp ? 'drop-up' : ''}`}>
+            {isOpen && typeof document !== 'undefined' && createPortal(
+                <div
+                    ref={dropdownRef}
+                    style={{
+                        position: 'fixed',
+                        top: `${coords.top}px`,
+                        left: `${coords.left}px`,
+                        zIndex: 999999,
+                        margin: 0
+                    }}
+                    className={`date-picker-dropdown ${compact ? 'compact' : ''}`}
+                    onMouseDown={(e) => e.stopPropagation()}
+                >
                     <div className="date-picker-header">
                         <button
                             type="button"
@@ -422,7 +498,8 @@ const CustomDatePicker = ({
                             );
                         })}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
