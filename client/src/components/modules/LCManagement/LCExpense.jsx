@@ -1165,26 +1165,40 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
                                     >
                                         {/* Card Toggle Header */}
                                         <div
-                                            className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                            className="flex justify-between items-center p-3.5 sm:p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
                                             onClick={() => setExpandedExpenseIdx(isExpanded ? null : idx)}
                                         >
-                                            <div className="flex-1 min-w-0 pr-4">
-                                                <div className="flex items-center gap-1.5 text-xs text-left min-w-0 overflow-hidden flex-wrap">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
-                                                        {formatDate(exp.date)}
-                                                    </span>
-                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
-                                                    <span className="font-bold text-gray-800 truncate max-w-[120px] shrink-0" title={exp.lcNo}>
-                                                        {exp.lcNo || '-'}
-                                                    </span>
-                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
-                                                    <span className="text-blue-600 font-medium truncate max-w-[120px] shrink-0">
-                                                        {exp.expenseHead}
-                                                    </span>
+                                            <div className="flex-1 min-w-0 pr-3 text-left space-y-0.5">
+                                                {/* Line 1: Date */}
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono block">
+                                                    {formatDate(exp.date)}
+                                                </span>
+
+                                                {/* Line 2: LC No */}
+                                                {exp.lcNo && (
+                                                    <div className="text-sm font-black text-gray-900 font-sans tracking-tight leading-snug truncate" title={exp.lcNo}>
+                                                        {exp.lcNo}
+                                                    </div>
+                                                )}
+
+                                                {/* Line 3: Expense Head */}
+                                                <div className="text-xs sm:text-sm font-bold text-blue-600 leading-snug break-words" title={exp.expenseHead}>
+                                                    {exp.expenseHead || '-'}
                                                 </div>
+
+                                                {/* Line 4: Name */}
+                                                {(() => {
+                                                    const displayName = getExpenseDisplayName(exp);
+                                                    if (!displayName || displayName === '-') return null;
+                                                    return (
+                                                        <div className="text-[11px] font-medium text-gray-600 leading-snug break-words" title={displayName}>
+                                                            {displayName}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
-                                                <span className="text-xs font-black text-gray-900">
+                                                <span className="text-xs sm:text-sm font-black text-gray-900 font-sans">
                                                     ৳{parseFloat(exp.amount || 0).toLocaleString('en-IN')}
                                                 </span>
                                                 {isExpanded ? (
