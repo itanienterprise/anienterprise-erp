@@ -135,6 +135,20 @@ const CustomDatePicker = ({
         return new Date();
     });
     const containerRef = useRef(null);
+    const [autoRightAlign, setAutoRightAlign] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen || !containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const estimatedWidth = compact ? 270 : 360;
+        if (rect.left + estimatedWidth > window.innerWidth - 12) {
+            setAutoRightAlign(true);
+        } else {
+            setAutoRightAlign(false);
+        }
+    }, [isOpen, compact]);
+
+    const isRightAligned = rightAlign || autoRightAlign;
 
     useEffect(() => {
         setInputValue(value ? formatDate(value) : '');
@@ -314,7 +328,7 @@ const CustomDatePicker = ({
             </div>
 
             {isOpen && (
-                <div className={`date-picker-dropdown ${compact ? 'compact' : ''} ${rightAlign ? 'right-align' : ''} ${dropUp ? 'drop-up' : ''}`}>
+                <div className={`date-picker-dropdown ${compact ? 'compact' : ''} ${isRightAligned ? 'right-align' : ''} ${dropUp ? 'drop-up' : ''}`}>
                     <div className="date-picker-header">
                         <button
                             type="button"

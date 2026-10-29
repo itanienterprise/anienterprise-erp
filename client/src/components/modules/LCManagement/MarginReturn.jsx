@@ -1159,6 +1159,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                                             value={marginReturnFilters.endDate}
                                             onChange={(e) => setMarginReturnFilters({ ...marginReturnFilters, endDate: e.target.value })}
                                             compact={true}
+                                            rightAlign={true}
                                         />
                                     </div>
 
