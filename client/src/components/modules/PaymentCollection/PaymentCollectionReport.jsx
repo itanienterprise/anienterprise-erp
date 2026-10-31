@@ -294,16 +294,21 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [], customers = [
     return (
         <>
             {createPortal(
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
-                    <div className="bg-white w-full max-w-7xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
+                    <div className="bg-white w-full max-w-7xl max-h-[90vh] sm:max-h-[92vh] rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
 
                         {/* Modal Header — hidden on print */}
-                        <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 border-b border-gray-100 print:hidden gap-2">
+                        <div className="flex flex-row items-center justify-between px-3 sm:px-8 py-2.5 sm:py-4 border-b border-gray-100 print:hidden gap-2">
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
+                                <div className="w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
                                     <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                                 </div>
-                                <h3 className="text-base sm:text-lg font-black text-gray-800 truncate leading-none">Payment Collection Report</h3>
+                                <div className="min-w-0">
+                                    <h3 className="text-sm sm:text-lg lg:text-xl font-black text-gray-800 truncate leading-tight">Payment Collection Report</h3>
+                                    <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 mt-0.5 truncate">
+                                        {filters.startDate || filters.endDate ? `${filters.startDate || "Start"} to ${filters.endDate || "Present"}` : "All records"}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Customer Type Quick Filter Tabs */}
@@ -348,29 +353,31 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [], customers = [
                                 <button
                                     ref={filterButtonRef}
                                     onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                    className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border ${showFilterPanel || Object.values(filters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'} h-[40px]`}
+                                    className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterPanel || Object.values(filters).some(v => v !== "") ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30" : "bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30"} flex-shrink-0`}
+                                    title="Advance Filter"
                                 >
-                                    <FunnelIcon className={`w-4 h-4 ${(showFilterPanel || Object.values(filters).some(v => v !== '')) ? 'text-white' : 'text-gray-400'}`} />
-                                    <span className="text-sm font-bold hidden sm:block">Filter</span>
+                                    <FunnelIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${(showFilterPanel || Object.values(filters).some(v => v !== "")) ? "text-white" : "text-gray-500"}`} />
                                 </button>
 
                                 <button
                                     onClick={() => setShowReportFormatModal(true)}
-                                    className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print"
+                                    className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
                                     title="Export Report (PDF / Excel)"
                                 >
                                     <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                                 </button>
                                 <button
                                     onClick={onClose}
-                                    className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"
+                                    className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print flex-shrink-0"
                                 >
-                                    <XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" />
+                                    <XIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
                                 </button>
 
                                 {/* Advanced Filter Panel (Inside Modal) */}
                                 {showFilterPanel && (
-                                    <div ref={filterPanelRef} className="absolute top-[50px] right-0 w-[320px] sm:w-[500px] md:w-[600px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-[10000] p-5 opacity-100 scale-100 transform origin-top-right transition-all animate-in fade-in zoom-in duration-200">
+                                    <>
+                                        <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[9999] md:hidden" onClick={() => setShowFilterPanel(false)} />
+                                        <div ref={filterPanelRef} className="fixed inset-x-3 top-16 sm:top-20 md:absolute md:top-[50px] md:inset-x-auto md:right-0 w-auto md:w-[600px] max-h-[85vh] overflow-y-auto bg-white border border-gray-200 rounded-2xl shadow-2xl z-[10000] p-4 sm:p-5 opacity-100 scale-100 transform origin-top-right transition-all animate-in fade-in zoom-in duration-200">
                                         <div className="flex items-center justify-between mb-5 border-b border-gray-100 pb-3">
                                             <div className="flex items-center gap-2">
                                                 <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
@@ -585,49 +592,49 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [], customers = [
                                             </div>
                                         </div>
                                     </div>
+                                    </>
                                 )}
                             </div>
                         </div>
 
                         {/* Printable Content */}
-                        <div className="flex-1 overflow-y-auto p-4 sm:p-12 print:p-0 print:overflow-visible bg-white">
-                            <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
+                        <div className="flex-1 overflow-y-auto p-3 sm:p-12 print:p-0 print:overflow-visible bg-white">
+                            <div className="max-w-6xl mx-auto space-y-4 sm:space-y-8">
 
                                 {/* Header matching Stock Report layout */}
-                                <div className="flex justify-between items-center pb-1">
+                                <div className="flex flex-col sm:flex-row print:!flex-row justify-between items-center gap-2 sm:gap-4 pb-1">
                                     {/* Left: Logo & Company Name */}
-                                    <div className="flex items-center gap-3">
-                                        <img src="/logo.png" alt="ANI Enterprise Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
-                                        <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
+                                    <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
+                                        <img src="/logo.png" alt="ANI Enterprise Logo" className="w-10 h-10 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
+                                        <h1 className="text-xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: "#f97316", textShadow: "1px 2px 4px rgba(0, 0, 0, 0.15)" }}>
                                             ANI ENTERPRISE
                                         </h1>
                                     </div>
 
                                     {/* Right: Address Info */}
-                                    <div className="text-right text-[11px] sm:text-[12px] text-gray-700 leading-tight">
+                                    <div className="text-center sm:text-right print:!text-right text-[10px] sm:text-[12px] print:!text-[12px] text-gray-700 leading-tight">
                                         <p className="font-semibold text-gray-800">766, H.M Tower, Level-06</p>
                                         <p>Borogola, Bogura, Bangladesh</p>
-                                        <p>Tel: +8802588813057</p>
-                                        <p>Email: anienterprise051@gmail.com</p>
+                                        <p>Tel: +8802588813057 • Email: anienterprise051@gmail.com</p>
                                     </div>
                                 </div>
 
                                 {/* Orange Divider Line */}
-                                <div className="border-t-2 border-[#f97316] w-full mt-3"></div>
+                                <div className="border-t-2 border-[#f97316] w-full mt-2 sm:mt-3"></div>
 
                                 {/* Centered Title Badge */}
-                                <div className="flex justify-center -mt-5">
-                                    <div className="bg-[#f97316] text-white px-8 py-1 rounded shadow-sm">
-                                        <h2 className="text-xs sm:text-sm font-bold tracking-wider uppercase">
-                                            {filters.customerType && filters.customerType !== 'All Customer'
+                                <div className="flex justify-center -mt-4 sm:-mt-5">
+                                    <div className="bg-[#f97316] text-white px-4 sm:px-8 py-1 rounded shadow-sm">
+                                        <h2 className="text-[11px] sm:text-sm font-bold tracking-wider uppercase text-center">
+                                            {filters.customerType && filters.customerType !== "All Customer"
                                                 ? `${filters.customerType.toUpperCase()} COLLECTION REPORT`
-                                                : 'PAYMENT COLLECTION REPORT'}
+                                                : "PAYMENT COLLECTION REPORT"}
                                         </h2>
                                     </div>
                                 </div>
 
                                 {/* Meta row */}
-                                <div className="flex justify-between items-end text-[12px] sm:text-[14px] text-gray-800 pt-4 px-2">
+                                <div className="flex flex-col sm:flex-row print:!flex-row justify-between items-start sm:items-end print:!items-end gap-2 sm:gap-0 text-xs sm:text-[14px] print:!text-[14px] text-gray-800 pt-3 sm:pt-4 px-1 sm:px-2">
                                     <div className="flex flex-col gap-1">
                                         <div className="flex">
                                             <span className="font-bold text-gray-900 w-28 sm:w-32">Total Records:</span>
@@ -656,7 +663,7 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [], customers = [
                                             </div>
                                         )}
                                     </div>
-                                    <div className="font-bold text-right">
+                                    <div className="font-bold text-left sm:text-right print:!text-right shrink-0">
                                         <span className="text-gray-900">Printed on: </span>
                                         <span className="text-gray-900">{formatDate(new Date().toISOString().split('T')[0])}</span>
                                     </div>

@@ -2240,6 +2240,7 @@ const PaymentCollection = ({
                     companyName: payment.companyName,
                     customerName: payment.customerName,
                     customerId: payment.customerId,
+                    readableCustomerId: payment.readableCustomerId || custObj?.customerId || '',
                     customerType: pType,
                     partyType: pType,
                     customerAddress: payment.customerAddress || '',
@@ -2309,7 +2310,7 @@ const PaymentCollection = ({
             {!showAddModal && (
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="w-full md:w-auto">
-                        <h2 className="text-2xl font-black text-gray-900 tracking-tight">Payment Collection</h2>
+                        <h2 className="text-2xl font-black text-gray-900 tracking-tight text-center md:text-left">Payment Collection</h2>
                     </div>
 
                     {/* Center Aligned Search Bar & Requested / Edit Request Toggles */}
@@ -3124,6 +3125,7 @@ const PaymentCollection = ({
                                     const paidAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
                                     const groupDiscount = group.items.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
                                     const totalAmount = paidAmount;
+                                    const displayCustomerId = group.readableCustomerId || rawCustomers.find(c => String(c._id) === String(group.customerId) || (c.companyName && group.companyName && c.companyName.trim().toLowerCase() === group.companyName.trim().toLowerCase()))?.customerId;
 
                                     return (
                                         <div
@@ -3155,74 +3157,98 @@ const PaymentCollection = ({
                                                 setExpandedMobileCards(isExpanded ? null : group.key);
                                             }}
                                         >
-                                            <div className="mobile-card-header">
-                                                {selectedItems.size > 0 && (
-                                                    <div onClick={(e) => e.stopPropagation()} className="pr-2 flex items-center">
-                                                        {canUserActOnGroup(group) ? (
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedItems.has(group.key)}
-                                                                onChange={(e) => {
-                                                                    const newSelected = new Set(selectedItems);
-                                                                    if (e.target.checked) {
-                                                                        newSelected.add(group.key);
-                                                                    } else {
-                                                                        newSelected.delete(group.key);
-                                                                    }
-                                                                    setSelectedItems(newSelected);
-                                                                }}
-                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                            />
-                                                        ) : (
-                                                            <span className="text-gray-300 text-xs select-none">—</span>
+                                            <div className={`mobile-card-header !flex-col !items-stretch gap-1.5 ${isExpanded ? '!mb-3' : '!mb-0'}`}>
+                                                {/* Line 1: ID at top & Customer Type Tag on top of amount */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        {selectedItems.size > 0 && (
+                                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+                                                                {canUserActOnGroup(group) ? (
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={selectedItems.has(group.key)}
+                                                                        onChange={(e) => {
+                                                                            const newSelected = new Set(selectedItems);
+                                                                            if (e.target.checked) {
+                                                                                newSelected.add(group.key);
+                                                                            } else {
+                                                                                newSelected.delete(group.key);
+                                                                            }
+                                                                            setSelectedItems(newSelected);
+                                                                        }}
+                                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                    />
+                                                                ) : (
+                                                                    <span className="text-gray-300 text-xs select-none">—</span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        <span className="text-xs font-semibold text-gray-400">
+                                                            ID: {displayCustomerId || '—'}
+                                                        </span>
+                                                    </div>
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                                                        (group.partyType || group.customerType) === 'Party Customer'
+                                                            ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                                            : 'bg-blue-50 text-blue-700 border border-blue-100'
+                                                    }`}>
+                                                        {group.partyType || group.customerType || 'General Customer'}
+                                                    </span>
+                                                </div>
+
+                                                {/* Line 2: Company / Customer Name on left & Amount on right */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex-1 min-w-0 pr-2">
+                                                        <div className="font-black text-gray-900 text-sm tracking-tight truncate">
+                                                            {group.companyName || group.customerName}
+                                                        </div>
+                                                        {group.customerName && group.companyName && group.customerName !== group.companyName && (
+                                                            <div className="text-[11px] text-gray-500 font-medium truncate mt-0.5">
+                                                                {group.customerName}
+                                                            </div>
                                                         )}
                                                     </div>
-                                                )}
-                                                <div className="flex-1 min-w-0 pr-2">
-                                                    <div className="mobile-card-title truncate">{group.companyName || group.customerName}</div>
-                                                    {group.partyType && (
-                                                        <div className="mt-0.5">
-                                                            <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide ${group.partyType === 'Party Customer'
-                                                                ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
-                                                                : 'bg-blue-50 text-blue-700 border border-blue-200/60'
-                                                                }`}>
-                                                                {group.partyType}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                    <div className="text-[10px] text-gray-500 truncate mt-0.5">
-                                                        {formatDate(group.date)} | {group.receiptNo || '—'}
+                                                    <div className="shrink-0 text-right">
+                                                        <span className="font-black text-blue-600 text-sm">
+                                                            ৳{Number(totalAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                        </span>
                                                     </div>
                                                 </div>
-                                                <div className="flex flex-col items-end gap-1 shrink-0">
-                                                    <span className="font-bold text-blue-600">
-                                                        ৳{Number(totalAmount).toLocaleString('en-IN')}
-                                                    </span>
-                                                    {group.isEdited === true ? (
-                                                        <span className="text-[9px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200/60 rounded font-bold">
-                                                            Edit Requested
-                                                        </span>
-                                                    ) : (
-                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
-                                                            group.status === 'Requested'
-                                                                ? (group.items?.[0]?.smApproved === true || group.smApproved === true
-                                                                    ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
-                                                                    : 'bg-amber-50 text-amber-700 border border-amber-200/60')
-                                                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                                                        }`}>
-                                                            {getStatusBadgeText(group)}
-                                                        </span>
-                                                    )}
-                                                    {groupDiscount > 0 && (
-                                                        <span className="text-[9px] px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200/60 rounded font-bold">
-                                                            Discount ({Number(groupDiscount).toLocaleString('en-IN')})
-                                                        </span>
-                                                    )}
-                                                    {group.items.length > 1 && (
-                                                        <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-bold">
-                                                            {group.items.length} Items
-                                                        </span>
-                                                    )}
+
+                                                {/* Line 3: Date & Receipt No on left & Status Badge on right */}
+                                                <div className="flex items-center justify-between gap-2 pt-0.5">
+                                                    <div className="text-[10px] text-gray-500 truncate">
+                                                        {formatDate(group.date)} | {group.receiptNo || '—'}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        {groupDiscount > 0 && (
+                                                            <span className="text-[9px] px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200/60 rounded font-bold">
+                                                                Discount ({Number(groupDiscount).toLocaleString('en-IN')})
+                                                            </span>
+                                                        )}
+                                                        {group.items.length > 1 && (
+                                                            <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-bold">
+                                                                {group.items.length} Items
+                                                            </span>
+                                                        )}
+                                                        {group.isEdited === true ? (
+                                                            <span className="text-[9px] px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200/60 rounded-full font-bold">
+                                                                Edit Requested
+                                                            </span>
+                                                        ) : (
+                                                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
+                                                                group.status === 'Requested'
+                                                                    ? (group.items?.[0]?.smApproved === true || group.smApproved === true
+                                                                        ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                                        : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                                                                    : (group.status === 'Rejected'
+                                                                        ? 'bg-red-50 text-red-700 border border-red-200/60'
+                                                                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60')
+                                                            }`}>
+                                                                {getStatusBadgeText(group)}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -3386,6 +3412,7 @@ const PaymentCollection = ({
                     </div>
                 </div>
             )}
+
             {/* Add Collection Card (Style Match with Add Customer) */}
             {showAddModal && (
                 <div className="payment-form-container">
