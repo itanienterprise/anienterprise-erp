@@ -447,289 +447,6 @@ export default function ProfitLoss({ salesRecords, products }) {
     return paymentSum || parseFloat(selectedLc.insurance || selectedLc.netPremium || selectedLc.grossPremium || 0);
   }, [selectedLc, insurancePayments]);
 
-  // Helper to check if a sale date matches the selected range
-  const isDateInRange = (saleDateStr) => {
-    if (!saleDateStr) return false;
-    const saleDate = new Date(saleDateStr);
-    if (isNaN(saleDate.getTime())) return false;
-
-    if (filterType === 'monthly') {
-      return saleDate.getMonth() + 1 === selectedMonth && saleDate.getFullYear() === selectedYear;
-    }
-    if (filterType === 'yearly') {
-      return saleDate.getFullYear() === selectedYear;
-    }
-    if (filterType === 'custom') {
-      const sDate = startDate ? new Date(startDate) : null;
-      const eDate = endDate ? new Date(endDate) : null;
-
-      // Normalize times for date comparison
-      if (sDate) sDate.setHours(0, 0, 0, 0);
-      if (eDate) eDate.setHours(23, 59, 59, 999);
-      saleDate.setHours(0, 0, 0, 0);
-
-      if (sDate && saleDate < sDate) return false;
-      if (eDate && saleDate > eDate) return false;
-      return true;
-    }
-    return true; // 'all'
-  };
-
-  // Helper to get product-wise average cost (COG cost if available, otherwise inhouse/purchase cost)
-  const getProductAvgCost = (prodName, prodSummaryItem = null) => {
-    const clean = (val) => String(val || '').trim().toLowerCase();
-    const targetClean = clean(prodName);
-
-    // 1. Check Cost of Goods (COG)
-    if (useActualCog && selectedLcCostOfGoods && selectedLcCostOfGoods.length > 0) {
-      const matchingCog = selectedLcCostOfGoods.filter(rec => clean(rec.product) === targetClean);
-      if (matchingCog.length > 0) {
-        let totalQty = 0;
-        let totalBill = 0;
-        matchingCog.forEach(rec => {
-          const costingKg = getRecCostingKg(rec);
-          const q = parseFloat(rec.quantity) || 0;
-          totalQty += q;
-          totalBill += Math.round(costingKg * q);
-        });
-        if (totalQty > 0 && totalBill > 0) {
-          return totalBill / totalQty;
-        }
-      }
-    }
-
-    // 2. Check product summary / inhouse stock
-    if (prodSummaryItem) {
-      if (prodSummaryItem.inhouseQty > 0 && prodSummaryItem.inhousePrice > 0) {
-        return prodSummaryItem.inhousePrice / prodSummaryItem.inhouseQty;
-      }
-      if (prodSummaryItem.purchaseQty > 0 && prodSummaryItem.purchasePrice > 0) {
-        return prodSummaryItem.purchasePrice / prodSummaryItem.purchaseQty;
-      }
-    }
-
-    // 3. Fallback from selectedLcStocks
-    if (selectedLcStocks && selectedLcStocks.length > 0) {
-      const matchingStocks = selectedLcStocks.filter(item => clean(item.productName || item.product) === targetClean);
-      if (matchingStocks.length > 0) {
-        let stockQty = 0;
-        let stockVal = 0;
-        matchingStocks.forEach(item => {
-          const q = parseFloat(item.inHouseQuantity) || parseFloat(item.quantity) || 0;
-          const p = parseFloat(item.purchasedPrice) || 0;
-          stockQty += q;
-          stockVal += q * p;
-        });
-        if (stockQty > 0 && stockVal > 0) {
-          return stockVal / stockQty;
-        }
-      }
-    }
-
-    // 4. Overall LC average rate
-    return conclusionData?.totalRatePerKgBdt || 0;
-  };
-
-  // Process and Filter Sales & Stock Data
-  const profitLossData = useMemo(() => {
-    const hasLcFilter = selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '';
-
-    if (!hasLcFilter) {
-      return {
-        summary: {
-          salesRevenue: 0,
-          currentStockValue: 0,
-          totalRevenue: 0,
-          totalCost: 0,
-          totalProfit: 0,
-          margin: 0
-        }
-      };
-    }
-
-    let salesRevenue = 0;
-    let totalCost = 0;
-
-    salesRecords.forEach(sale => {
-      // Filter by date (bypass if a specific LC is selected)
-      if (!hasLcFilter && !isDateInRange(sale.date)) return;
-
-      // Filter by Sale Type
-      if (saleTypeFilter !== 'All' && sale.saleType !== saleTypeFilter) return;
-
-      const items = sale.items || [];
-
-      // Create flat list of entries for calculations
-      const entries = items.flatMap(item => {
-        const itemLcNo = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
-        const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
-          ? item.brandEntries
-          : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: item.unitPrice || 0, totalAmount: item.totalAmount || 0 }];
-
-        return brandEntries.map(entry => {
-          const { netQty } = calculateNetSaleQty(sale, item, entry, returnQtyMap);
-          const unitPrice = parseFloat(entry.unitPrice) || 0;
-          return {
-            productName: item.productName || item.product || '-',
-            brandName: entry.brandName || entry.brand || '-',
-            quantity: netQty,
-            unitPrice: unitPrice,
-            totalAmount: netQty * unitPrice,
-            lcNo: (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLcNo
-          };
-        });
-      }).filter(entry => {
-        // Filter by LC Number if specified
-        if (selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '') {
-          const entryLcNo = (entry.lcNo || '').trim().toLowerCase();
-          const searchLcNo = selectedLcNo.trim().toLowerCase();
-          return entryLcNo.includes(searchLcNo);
-        }
-        return true;
-      });
-
-      // Filter by Product Name if specified
-      const matchesProductFilter = selectedProduct === 'All' || entries.some(e => e.productName === selectedProduct);
-      if (!matchesProductFilter) return;
-
-      entries.forEach(entry => {
-        if (selectedProduct !== 'All' && entry.productName !== selectedProduct) return;
-
-        const purchasePrice = getPurchasePrice(entry.productName, entry.brandName);
-        const itemCost = entry.quantity * purchasePrice;
-        const itemRevenue = entry.totalAmount;
-
-        salesRevenue += itemRevenue;
-        totalCost += itemCost;
-      });
-    });
-
-    // Calculate Current Stock Value (unsold stock in hand) matching active filters
-    const cleanLc = (val) => String(val || '').replace(/\D/g, '').toLowerCase();
-    const targetLcClean = hasLcFilter ? cleanLc(selectedLcNo) : '';
-
-    const productStockMap = {};
-
-    // 1. Aggregate stock arrivals
-    stockRecords.forEach(item => {
-      const status = (item.status || '').toLowerCase();
-      if (status.includes('requested') || status.includes('rejected') || status.includes('deleted')) return;
-
-      if (hasLcFilter && cleanLc(item.lcNo) !== targetLcClean) return;
-      if (!hasLcFilter && !isDateInRange(item.date || item.createdAt || item.receiveDate)) return;
-
-      const prodName = item.productName || item.product || 'Unknown Product';
-      if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
-
-      if (!productStockMap[prodName]) {
-        productStockMap[prodName] = { productName: prodName, purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: 0 };
-      }
-
-      const qty = parseFloat(item.quantity) || 0;
-      const price = parseFloat(item.purchasedPrice) || getPurchasePrice(prodName, item.brand);
-      const shortQty = parseFloat(item.sweepedQuantity) || 0;
-      const inhouseQty = (item.inHouseQuantity !== undefined && item.inHouseQuantity !== null)
-        ? (parseFloat(item.inHouseQuantity) || 0)
-        : Math.max(0, qty - shortQty);
-
-      productStockMap[prodName].purchaseQty += qty;
-      productStockMap[prodName].purchasePrice += qty * price;
-      productStockMap[prodName].inhouseQty += inhouseQty;
-      if (price) productStockMap[prodName].fallbackPrice = price;
-    });
-
-    // 2. Aggregate sales quantities for matching stock products
-    salesRecords.forEach(sale => {
-      const sStatus = (sale.status || '').toLowerCase();
-      if (sStatus !== 'accepted' && sStatus !== 'pending') return;
-      if (!hasLcFilter && !isDateInRange(sale.date)) return;
-      if (saleTypeFilter !== 'All' && sale.saleType !== saleTypeFilter) return;
-
-      (sale.items || []).forEach(item => {
-        const itemLc = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
-        const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
-          ? item.brandEntries
-          : [{ brandName: item.brand || '-', quantity: item.quantity, lcNo: itemLc }];
-
-        brandEntries.forEach(entry => {
-          const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLc;
-          if (hasLcFilter && cleanLc(entryLc) !== targetLcClean) return;
-
-          const prodName = item.productName || item.product || 'Unknown Product';
-          if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
-
-          if (!productStockMap[prodName]) {
-            productStockMap[prodName] = { productName: prodName, purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: getPurchasePrice(prodName), salePrice: 0 };
-          }
-          const { netQty } = calculateNetSaleQty(sale, item, entry, returnQtyMap);
-          const unitPrice = parseFloat(entry.unitPrice) || 0;
-          const entryTotal = netQty * unitPrice;
-          productStockMap[prodName].saleQty += netQty;
-          productStockMap[prodName].salePrice = (productStockMap[prodName].salePrice || 0) + entryTotal;
-        });
-      });
-    });
-
-    // 3. Aggregate damage quantities
-    damages.forEach(d => {
-      if (hasLcFilter && cleanLc(d.lcNo) !== targetLcClean) return;
-      if (!hasLcFilter && !isDateInRange(d.date || d.createdAt)) return;
-
-      const prodName = d.productName || 'Unknown Product';
-      if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
-
-      if (!productStockMap[prodName]) {
-        productStockMap[prodName] = { productName: prodName, purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: parseFloat(d.price) || getPurchasePrice(prodName), salePrice: 0 };
-      }
-      productStockMap[prodName].damageQty += parseFloat(d.quantity) || 0;
-    });
-
-    // 4. Calculate Current Stock Value (in hand)
-    let currentStockValue = 0;
-    const totalLcSalesQtyVal = salesRecords.reduce((sum, s) => {
-      const sStatus = (s.status || '').toLowerCase();
-      if (sStatus !== 'accepted' && sStatus !== 'pending') return sum;
-      if (!hasLcFilter && !isDateInRange(s.date)) return sum;
-      return sum + (s.items || []).reduce((iSum, item) => {
-        const itemLc = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (s.lcNo || '');
-        const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
-          ? item.brandEntries
-          : [{ quantity: item.quantity, lcNo: itemLc }];
-        return iSum + brandEntries.reduce((bSum, b) => {
-          const entryLc = (b.lcNo !== undefined && b.lcNo !== null) ? b.lcNo : itemLc;
-          if (hasLcFilter && cleanLc(entryLc) !== targetLcClean) return bSum;
-          const { netQty } = calculateNetSaleQty(s, item, b, returnQtyMap);
-          return bSum + netQty;
-        }, 0);
-      }, 0);
-    }, 0);
-    const overallLcSalesRate = (hasLcFilter && totalLcSalesQtyVal > 0) ? (salesRevenue / totalLcSalesQtyVal) : 0;
-
-    Object.entries(productStockMap).forEach(([pName, prod]) => {
-      const currentStockQty = Math.max(0, prod.inhouseQty - prod.saleQty - prod.damageQty);
-      if (currentStockQty <= 0) return;
-      const effectiveRate = getProductAvgCost(prod.productName || pName, prod);
-      currentStockValue += Math.round(currentStockQty * effectiveRate);
-    });
-
-    const finalRevenue = salesRevenue + currentStockValue;
-    const actualCogWithInsurance = totalLcCostOfGoodsAmount + (selectedLcInsuranceAmount || 0);
-    const finalCost = (useActualCog && selectedLc) ? actualCogWithInsurance : totalCost;
-    const totalProfit = finalRevenue - finalCost;
-    const margin = finalRevenue > 0 ? (totalProfit / finalRevenue) * 100 : 0;
-
-    return {
-      summary: {
-        salesRevenue,
-        currentStockValue,
-        totalRevenue: finalRevenue,
-        totalCost: finalCost,
-        totalProfit,
-        margin
-      }
-    };
-  }, [salesRecords, stockRecords, damages, products, filterType, selectedMonth, selectedYear, startDate, endDate, saleTypeFilter, selectedProduct, selectedLcNo, useActualCog, selectedLc, totalLcCostOfGoodsAmount, selectedLcInsuranceAmount, returnQtyMap, selectedLcCostOfGoods]);
-
   // Unique product names for filter dropdown
   const uniqueProducts = useMemo(() => {
     const names = new Set();
@@ -1216,7 +933,6 @@ export default function ProfitLoss({ salesRecords, products }) {
       totalLcSalesAmount,
       totalLcSalesQty,
       productSummary,
-      profitLossData,
       selectedLcDamages
     });
   }, [
@@ -1232,9 +948,291 @@ export default function ProfitLoss({ salesRecords, products }) {
     totalLcSalesAmount,
     totalLcSalesQty,
     productSummary,
-    profitLossData,
     selectedLcDamages
   ]);
+
+  // Helper to check if a sale date matches the selected range
+  const isDateInRange = (saleDateStr) => {
+    if (!saleDateStr) return false;
+    const saleDate = new Date(saleDateStr);
+    if (isNaN(saleDate.getTime())) return false;
+
+    if (filterType === 'monthly') {
+      return saleDate.getMonth() + 1 === selectedMonth && saleDate.getFullYear() === selectedYear;
+    }
+    if (filterType === 'yearly') {
+      return saleDate.getFullYear() === selectedYear;
+    }
+    if (filterType === 'custom') {
+      const sDate = startDate ? new Date(startDate) : null;
+      const eDate = endDate ? new Date(endDate) : null;
+
+      // Normalize times for date comparison
+      if (sDate) sDate.setHours(0, 0, 0, 0);
+      if (eDate) eDate.setHours(23, 59, 59, 999);
+      saleDate.setHours(0, 0, 0, 0);
+
+      if (sDate && saleDate < sDate) return false;
+      if (eDate && saleDate > eDate) return false;
+      return true;
+    }
+    return true; // 'all'
+  };
+
+  // Helper to get product-wise average cost (COG cost if available, otherwise inhouse/purchase cost)
+  const getProductAvgCost = (prodName, prodSummaryItem = null) => {
+    const clean = (val) => String(val || '').trim().toLowerCase();
+    const targetClean = clean(prodName);
+
+    // 1. Check Cost of Goods (COG)
+    if (useActualCog && selectedLcCostOfGoods && selectedLcCostOfGoods.length > 0) {
+      const matchingCog = selectedLcCostOfGoods.filter(rec => clean(rec.product) === targetClean);
+      if (matchingCog.length > 0) {
+        let totalQty = 0;
+        let totalBill = 0;
+        matchingCog.forEach(rec => {
+          const costingKg = getRecCostingKg(rec);
+          const q = parseFloat(rec.quantity) || 0;
+          totalQty += q;
+          totalBill += Math.round(costingKg * q);
+        });
+        if (totalQty > 0 && totalBill > 0) {
+          return totalBill / totalQty;
+        }
+      }
+    }
+
+    // 2. Check product summary / inhouse stock
+    if (prodSummaryItem) {
+      if (prodSummaryItem.inhouseQty > 0 && prodSummaryItem.inhousePrice > 0) {
+        return prodSummaryItem.inhousePrice / prodSummaryItem.inhouseQty;
+      }
+      if (prodSummaryItem.purchaseQty > 0 && prodSummaryItem.purchasePrice > 0) {
+        return prodSummaryItem.purchasePrice / prodSummaryItem.purchaseQty;
+      }
+    }
+
+    // 3. Fallback from selectedLcStocks
+    if (selectedLcStocks && selectedLcStocks.length > 0) {
+      const matchingStocks = selectedLcStocks.filter(item => clean(item.productName || item.product) === targetClean);
+      if (matchingStocks.length > 0) {
+        let stockQty = 0;
+        let stockVal = 0;
+        matchingStocks.forEach(item => {
+          const q = parseFloat(item.inHouseQuantity) || parseFloat(item.quantity) || 0;
+          const p = parseFloat(item.purchasedPrice) || getPurchasePrice(item.productName || item.product, item.brand || item.brandName) || 0;
+          stockQty += q;
+          stockVal += q * p;
+        });
+        if (stockQty > 0 && stockVal > 0) {
+          return stockVal / stockQty;
+        }
+      }
+    }
+
+    // 4. Overall LC average rate
+    return conclusionData?.totalRatePerKgBdt || 0;
+  };
+
+  // Process and Filter Sales & Stock Data
+  const profitLossData = useMemo(() => {
+    const hasLcFilter = selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '';
+
+    if (!hasLcFilter) {
+      return {
+        summary: {
+          salesRevenue: 0,
+          currentStockValue: 0,
+          totalRevenue: 0,
+          totalCost: 0,
+          totalProfit: 0,
+          margin: 0
+        }
+      };
+    }
+
+    let salesRevenue = 0;
+    let totalCost = 0;
+
+    salesRecords.forEach(sale => {
+      // Filter by date (bypass if a specific LC is selected)
+      if (!hasLcFilter && !isDateInRange(sale.date)) return;
+
+      // Filter by Sale Type
+      if (saleTypeFilter !== 'All' && sale.saleType !== saleTypeFilter) return;
+
+      const items = sale.items || [];
+
+      // Create flat list of entries for calculations
+      const entries = items.flatMap(item => {
+        const itemLcNo = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
+        const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
+          ? item.brandEntries
+          : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: item.unitPrice || 0, totalAmount: item.totalAmount || 0 }];
+
+        return brandEntries.map(entry => {
+          const { netQty } = calculateNetSaleQty(sale, item, entry, returnQtyMap);
+          const unitPrice = parseFloat(entry.unitPrice) || 0;
+          return {
+            productName: item.productName || item.product || '-',
+            brandName: entry.brandName || entry.brand || '-',
+            quantity: netQty,
+            unitPrice: unitPrice,
+            totalAmount: netQty * unitPrice,
+            lcNo: (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLcNo
+          };
+        });
+      }).filter(entry => {
+        // Filter by LC Number if specified
+        if (selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '') {
+          const entryLcNo = (entry.lcNo || '').trim().toLowerCase();
+          const searchLcNo = selectedLcNo.trim().toLowerCase();
+          return entryLcNo.includes(searchLcNo);
+        }
+        return true;
+      });
+
+      // Filter by Product Name if specified
+      const matchesProductFilter = selectedProduct === 'All' || entries.some(e => e.productName === selectedProduct);
+      if (!matchesProductFilter) return;
+
+      entries.forEach(entry => {
+        if (selectedProduct !== 'All' && entry.productName !== selectedProduct) return;
+
+        const purchasePrice = getPurchasePrice(entry.productName, entry.brandName);
+        const itemCost = entry.quantity * purchasePrice;
+        const itemRevenue = entry.totalAmount;
+
+        salesRevenue += itemRevenue;
+        totalCost += itemCost;
+      });
+    });
+
+    // Calculate Current Stock Value (unsold stock in hand) matching active filters
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '').toLowerCase();
+    const targetLcClean = hasLcFilter ? cleanLc(selectedLcNo) : '';
+
+    const productStockMap = {};
+
+    // 1. Aggregate stock arrivals
+    stockRecords.forEach(item => {
+      const status = (item.status || '').toLowerCase();
+      if (status.includes('requested') || status.includes('rejected') || status.includes('deleted')) return;
+
+      if (hasLcFilter && cleanLc(item.lcNo) !== targetLcClean) return;
+      if (!hasLcFilter && !isDateInRange(item.date || item.createdAt || item.receiveDate)) return;
+
+      const prodName = item.productName || item.product || 'Unknown Product';
+      if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
+
+      if (!productStockMap[prodName]) {
+        productStockMap[prodName] = { productName: prodName, purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: 0 };
+      }
+
+      const qty = parseFloat(item.quantity) || 0;
+      const price = parseFloat(item.purchasedPrice) || getPurchasePrice(prodName, item.brand);
+      const shortQty = parseFloat(item.sweepedQuantity) || 0;
+      const inhouseQty = (item.inHouseQuantity !== undefined && item.inHouseQuantity !== null)
+        ? (parseFloat(item.inHouseQuantity) || 0)
+        : Math.max(0, qty - shortQty);
+
+      productStockMap[prodName].purchaseQty += qty;
+      productStockMap[prodName].purchasePrice += qty * price;
+      productStockMap[prodName].inhouseQty += inhouseQty;
+      if (price) productStockMap[prodName].fallbackPrice = price;
+    });
+
+    // 2. Aggregate sales quantities for matching stock products
+    salesRecords.forEach(sale => {
+      const sStatus = (sale.status || '').toLowerCase();
+      if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+      if (!hasLcFilter && !isDateInRange(sale.date)) return;
+      if (saleTypeFilter !== 'All' && sale.saleType !== saleTypeFilter) return;
+
+      (sale.items || []).forEach(item => {
+        const itemLc = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
+        const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
+          ? item.brandEntries
+          : [{ brandName: item.brand || '-', quantity: item.quantity, lcNo: itemLc }];
+
+        brandEntries.forEach(entry => {
+          const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLc;
+          if (hasLcFilter && cleanLc(entryLc) !== targetLcClean) return;
+
+          const prodName = item.productName || item.product || 'Unknown Product';
+          if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
+
+          if (!productStockMap[prodName]) {
+            productStockMap[prodName] = { productName: prodName, purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: getPurchasePrice(prodName), salePrice: 0 };
+          }
+          const { netQty } = calculateNetSaleQty(sale, item, entry, returnQtyMap);
+          const unitPrice = parseFloat(entry.unitPrice) || 0;
+          const entryTotal = netQty * unitPrice;
+          productStockMap[prodName].saleQty += netQty;
+          productStockMap[prodName].salePrice = (productStockMap[prodName].salePrice || 0) + entryTotal;
+        });
+      });
+    });
+
+    // 3. Aggregate damage quantities
+    damages.forEach(d => {
+      if (hasLcFilter && cleanLc(d.lcNo) !== targetLcClean) return;
+      if (!hasLcFilter && !isDateInRange(d.date || d.createdAt)) return;
+
+      const prodName = d.productName || 'Unknown Product';
+      if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
+
+      if (!productStockMap[prodName]) {
+        productStockMap[prodName] = { productName: prodName, purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: parseFloat(d.price) || getPurchasePrice(prodName), salePrice: 0 };
+      }
+      productStockMap[prodName].damageQty += parseFloat(d.quantity) || 0;
+    });
+
+    // 4. Calculate Current Stock Value (in hand)
+    let currentStockValue = 0;
+    const totalLcSalesQtyVal = salesRecords.reduce((sum, s) => {
+      const sStatus = (s.status || '').toLowerCase();
+      if (sStatus !== 'accepted' && sStatus !== 'pending') return sum;
+      if (!hasLcFilter && !isDateInRange(s.date)) return sum;
+      return sum + (s.items || []).reduce((iSum, item) => {
+        const itemLc = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (s.lcNo || '');
+        const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
+          ? item.brandEntries
+          : [{ quantity: item.quantity, lcNo: itemLc }];
+        return iSum + brandEntries.reduce((bSum, b) => {
+          const entryLc = (b.lcNo !== undefined && b.lcNo !== null) ? b.lcNo : itemLc;
+          if (hasLcFilter && cleanLc(entryLc) !== targetLcClean) return bSum;
+          const { netQty } = calculateNetSaleQty(s, item, b, returnQtyMap);
+          return bSum + netQty;
+        }, 0);
+      }, 0);
+    }, 0);
+    const overallLcSalesRate = (hasLcFilter && totalLcSalesQtyVal > 0) ? (salesRevenue / totalLcSalesQtyVal) : 0;
+
+    Object.entries(productStockMap).forEach(([pName, prod]) => {
+      const currentStockQty = Math.max(0, prod.inhouseQty - prod.saleQty - prod.damageQty);
+      if (currentStockQty <= 0) return;
+      const effectiveRate = getProductAvgCost(prod.productName || pName, prod);
+      currentStockValue += Math.round(currentStockQty * effectiveRate);
+    });
+
+    const finalRevenue = salesRevenue + currentStockValue;
+    const actualCogWithInsurance = totalLcCostOfGoodsAmount + (selectedLcInsuranceAmount || 0);
+    const finalCost = (useActualCog && selectedLc) ? actualCogWithInsurance : totalCost;
+    const totalProfit = finalRevenue - finalCost;
+    const margin = finalRevenue > 0 ? (totalProfit / finalRevenue) * 100 : 0;
+
+    return {
+      summary: {
+        salesRevenue,
+        currentStockValue,
+        totalRevenue: finalRevenue,
+        totalCost: finalCost,
+        totalProfit,
+        margin
+      }
+    };
+  }, [salesRecords, stockRecords, damages, products, filterType, selectedMonth, selectedYear, startDate, endDate, saleTypeFilter, selectedProduct, selectedLcNo, useActualCog, selectedLc, totalLcCostOfGoodsAmount, selectedLcInsuranceAmount, returnQtyMap, selectedLcCostOfGoods, selectedLcStocks, conclusionData]);
 
   // Effective summary synchronized with LC Conclusion Statement when an LC is selected
   const effectiveSummary = useMemo(() => {
