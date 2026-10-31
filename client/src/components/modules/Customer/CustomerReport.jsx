@@ -175,18 +175,18 @@ const CustomerReport = ({
     return (
         <>
             {createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
-            <div className="bg-white w-full max-w-5xl max-h-[85vh] sm:max-h-[92vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
+            <div className="bg-white w-full max-w-5xl max-h-[90vh] sm:max-h-[92vh] rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
 
                 {/* Modal Header/Toolbar (Hidden on Print) */}
-                <div className="flex flex-row items-center justify-between px-3 sm:px-8 py-2.5 sm:py-4 border-b border-gray-100 print:hidden gap-1.5 sm:gap-2">
-                    <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-shrink-0">
-                        <div className="w-7 h-7 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
-                            <BarChartIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-blue-600" />
+                <div className="flex flex-row items-center justify-between px-3 sm:px-8 py-2.5 sm:py-4 border-b border-gray-100 print:hidden gap-2">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
+                            <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                         </div>
-                        <div>
-                            <h3 className="text-xs sm:text-lg lg:text-xl font-black text-gray-800 truncate leading-none">Customer Report</h3>
-                            <div className="text-[9px] sm:text-[11px] font-bold text-gray-400 mt-0.5 sm:mt-1">
+                        <div className="min-w-0">
+                            <h3 className="text-sm sm:text-lg lg:text-xl font-black text-gray-800 truncate leading-tight">Customer Report</h3>
+                            <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 mt-0.5">
                                 {reportDate ? `As of ${formatDate(reportDate)}` : 'Live balances'}
                             </div>
                         </div>
@@ -214,8 +214,8 @@ const CustomerReport = ({
                         )}
                     </div>
 
-                    <div className="flex items-center justify-end gap-1 sm:gap-3 flex-shrink-0">
-                        <div className="relative group no-print">
+                    <div className="flex items-center justify-end gap-1.5 sm:gap-3 flex-shrink-0">
+                        <div className="relative group no-print hidden md:block">
                             <select
                                 value={typeFilter}
                                 onChange={(e) => setTypeFilter(e.target.value)}
@@ -236,13 +236,13 @@ const CustomerReport = ({
                             <button
                                 ref={filterButtonRef}
                                 onClick={() => setShowFilterCard(!showFilterCard)}
-                                className={`w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterCard || reportDate
+                                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterCard || reportDate
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
                                     : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
                                     }`}
                                 title="Advance Filter"
                             >
-                                <FunnelIcon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${showFilterCard || reportDate ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${showFilterCard || reportDate ? 'text-white' : 'text-gray-400'}`} />
                             </button>
 
                             {/* Floating Filter Panel */}
@@ -322,31 +322,31 @@ const CustomerReport = ({
 
                         <button
                             onClick={() => setShowReportFormatModal(true)}
-                            className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
+                            className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
                             title="Export Report (PDF / Excel)"
                         >
-                            <PrinterIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
+                            <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </button>
                         <button
                             onClick={onClose}
-                            className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print flex-shrink-0"
+                            className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print flex-shrink-0"
                             title="Close"
                         >
-                            <XIcon className="w-3.5 h-3.5 sm:w-6 sm:h-6 text-gray-500" />
+                            <XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" />
                         </button>
                     </div>
                 </div>
 
-                {/* Mobile Search Bar (Only shown on small screens below md) */}
-                <div className="md:hidden px-3 py-2 border-b border-gray-100 print:hidden bg-gray-50/50">
-                    <div className="relative w-full">
-                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                {/* Mobile Search Bar & Customer Type Filter (Only shown on small screens below md) */}
+                <div className="md:hidden px-3 py-2 border-b border-gray-100 print:hidden bg-gray-50/50 flex items-center gap-2">
+                    <div className="relative flex-1 min-w-0">
+                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                         <input
                             type="text"
                             placeholder="Search customers..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                            className="w-full pl-8 pr-7 py-1.5 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
                         />
                         {searchQuery && (
                             <button
@@ -357,6 +357,23 @@ const CustomerReport = ({
                             </button>
                         )}
                     </div>
+
+                    <div className="relative shrink-0">
+                        <select
+                            value={typeFilter}
+                            onChange={(e) => setTypeFilter(e.target.value)}
+                            className="appearance-none bg-white border border-gray-200 text-gray-700 py-1.5 pl-2.5 pr-6 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                        >
+                            <option value="All Customer">All Customer</option>
+                            <option value="General Customer">General Customer</option>
+                            <option value="Party Customer">Party Customer</option>
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 text-gray-400">
+                            <svg className="fill-current h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                            </svg>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Printable Content */}
@@ -364,21 +381,20 @@ const CustomerReport = ({
                     <div className="max-w-[1000px] mx-auto space-y-6 sm:space-y-8">
 
                         {/* Header matching PDF layout */}
-                        <div className="flex justify-between items-center pb-1">
+                        <div className="flex flex-col sm:flex-row print:!flex-row justify-between items-center sm:items-center print:!items-center gap-2.5 sm:gap-4 pb-1">
                             {/* Left: Logo & Company Name */}
-                            <div className="flex items-center gap-3">
-                                <img src="/logo.png" alt="ANI Enterprise Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
-                                <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
+                            <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
+                                <img src="/logo.png" alt="ANI Enterprise Logo" className="w-10 h-10 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
+                                <h1 className="text-xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
                                     ANI ENTERPRISE
                                 </h1>
                             </div>
 
                             {/* Right: Address Info */}
-                            <div className="text-right text-[11px] sm:text-[12px] text-gray-700 leading-tight">
+                            <div className="text-center sm:text-right print:!text-right text-[10px] sm:text-[12px] print:!text-[12px] text-gray-700 leading-tight">
                                 <p className="font-semibold text-gray-800">766, H.M Tower, Level-06</p>
                                 <p>Borogola, Bogura, Bangladesh</p>
-                                <p>Tel: +8802588813057</p>
-                                <p>Email: anienterprise051@gmail.com</p>
+                                <p>Tel: +8802588813057 • Email: anienterprise051@gmail.com</p>
                             </div>
                         </div>
 
@@ -393,31 +409,31 @@ const CustomerReport = ({
                         </div>
 
                         {/* Meta row */}
-                        <div className="flex justify-between items-end text-[14px] text-gray-800 pt-6 px-2">
-                            <div className="flex flex-col gap-1">
+                        <div className="flex flex-col sm:flex-row print:!flex-row justify-between items-start sm:items-end print:!items-end gap-2 sm:gap-0 text-xs sm:text-[14px] print:!text-[14px] text-gray-800 pt-4 sm:pt-6 px-1 sm:px-2">
+                            <div className="flex flex-col gap-1 w-full sm:w-auto">
                                 {typeFilter !== 'All Customer' && (
                                     <div className="flex">
-                                        <span className="font-bold text-gray-900 w-32">Customer Type:</span>
+                                        <span className="font-bold text-gray-900 w-28 sm:w-32">Customer Type:</span>
                                         <span className="text-blue-700 font-extrabold">{typeFilter}</span>
                                     </div>
                                 )}
                                 {reportDate ? (
                                     <div className="flex">
-                                        <span className="font-bold text-gray-900 w-32">Balance As Of:</span>
+                                        <span className="font-bold text-gray-900 w-28 sm:w-32">Balance As Of:</span>
                                         <span className="text-blue-700 font-extrabold">{formatDate(reportDate)}</span>
                                     </div>
                                 ) : (
                                     <div className="flex">
-                                        <span className="font-bold text-gray-900 w-32">Balance Type:</span>
+                                        <span className="font-bold text-gray-900 w-28 sm:w-32">Balance Type:</span>
                                         <span className="text-emerald-700 font-extrabold">Live Current Balance</span>
                                     </div>
                                 )}
                                 <div className="flex">
-                                    <span className="font-bold text-gray-900 w-32">Total Records:</span>
+                                    <span className="font-bold text-gray-900 w-28 sm:w-32">Total Records:</span>
                                     <span className="text-gray-900">{filtered.length}</span>
                                 </div>
                             </div>
-                            <div className="font-bold">
+                            <div className="font-bold text-left sm:text-right print:!text-right shrink-0">
                                 <span className="text-gray-900">Printed on: </span>
                                 <span className="text-gray-900">{formatDate(getLocalDateString(new Date()))}</span>
                             </div>
