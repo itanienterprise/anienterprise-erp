@@ -2660,8 +2660,8 @@ const StockManagement = ({
                             )}
                         </div>
 
-                        <div className="w-full md:w-1/4 flex items-center justify-between md:justify-end gap-2">
-                            <div className="relative flex-1 md:flex-none">
+                        <div className="w-full md:w-1/4 flex max-md:flex-wrap items-center justify-between md:justify-end gap-2">
+                            <div className="relative flex-1 md:flex-none max-md:min-w-[calc(50%-4px)]">
                                 <button
                                     ref={stockFilterButtonRef}
                                     onClick={() => setShowStockFilterPanel(!showStockFilterPanel)}
@@ -2933,7 +2933,7 @@ const StockManagement = ({
                             </div>
                             <button
                                 onClick={() => setShowStockReport(true)}
-                                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-3 py-2 md:px-4 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 text-sm font-medium"
+                                className="flex-1 md:flex-none max-md:min-w-[calc(50%-4px)] flex items-center justify-center gap-2 px-3 py-2 md:px-4 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 text-sm font-medium"
                             >
                                 <BarChartIcon className="w-4 h-4 text-gray-400" />
                                 <span>Report</span>
@@ -2947,7 +2947,7 @@ const StockManagement = ({
                                         setBaselineCutoffDate(getLocalDatetimeInputValue());
                                         fetchBaselineHistory();
                                     }}
-                                    className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm active:scale-95 border ${
+                                    className={`flex-1 md:flex-none max-md:min-w-[calc(50%-4px)] flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm active:scale-95 border ${
                                         activeBaseline
                                             ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 hover:border-amber-400'
                                             : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400'
@@ -2961,7 +2961,7 @@ const StockManagement = ({
                             {canTransfer && (
                                 <button
                                     onClick={() => setShowAddWarehouseStockForm(true)}
-                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/20 active:scale-95 font-bold text-sm"
+                                    className="flex-1 md:flex-none max-md:min-w-[calc(50%-4px)] flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/20 active:scale-95 font-bold text-sm max-md:whitespace-nowrap"
                                 >
                                     <PlusIcon className="w-5 h-5 text-white/90" />
                                     <span>Transfer</span>
@@ -3633,10 +3633,15 @@ const StockManagement = ({
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="shrink-0">
+                                                <div className="shrink-0 flex items-center gap-2">
                                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${Math.round(group.inHouseQuantity) > 0 ? 'bg-emerald-100 text-emerald-700' : Math.round(group.inHouseQuantity) < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
                                                         {Math.round(group.inHouseQuantity) > 0 ? 'In Stock' : Math.round(group.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                     </span>
+                                                    {isExpanded ? (
+                                                        <ChevronUpIcon className="w-5 h-5 text-gray-400 shrink-0" />
+                                                    ) : (
+                                                        <ChevronDownIcon className="w-5 h-5 text-gray-400 shrink-0" />
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -3685,10 +3690,22 @@ const StockManagement = ({
                                                                                     </div>
                                                                                 )}
                                                                             </div>
-                                                                            <div className="shrink-0">
+                                                                            <div className="shrink-0 flex items-center gap-2">
                                                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${Math.round(brand.inHouseQuantity) > 0 ? 'bg-emerald-100 text-emerald-700' : Math.round(brand.inHouseQuantity) < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
                                                                                     {Math.round(brand.inHouseQuantity) > 0 ? 'In Stock' : Math.round(brand.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                                                 </span>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: (brand.brand || '').trim(), warehouse: '' });
+                                                                                        setViewRecord({ data: group });
+                                                                                    }}
+                                                                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                                                    title={`View ${brand.brand || ''} History`}
+                                                                                >
+                                                                                    <EyeIcon className="w-4 h-4" />
+                                                                                </button>
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -3711,6 +3728,28 @@ const StockManagement = ({
                                                                 </React.Fragment>
                                                             );
                                                         })}
+                                                    </div>
+
+                                                    {/* Card Actions - Bottom Round Shape Buttons */}
+                                                    <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1 mt-2">
+                                                        {/* View */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', warehouse: '' });
+                                                                setViewRecord({ data: group });
+                                                            }}
+                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                            title={`View Stock History (${group.productName || ''})`}
+                                                        >
+                                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-blue-600 shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                <EyeIcon className="w-5 h-5 transition-transform duration-150" />
+                                                            </div>
+                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-blue-700">
+                                                                View
+                                                            </span>
+                                                        </button>
                                                     </div>
                                                 </div>
                                             )}
@@ -4095,13 +4134,25 @@ const StockManagement = ({
 
             {
                 viewRecord && createPortal(
-                    <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
-                        <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
-                        <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+                    <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 max-md:p-2 app-modal-overlay">
+                        <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
+                        <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] max-md:max-w-[96vw] max-md:rounded-2xl max-md:max-h-[94vh] max-md:bg-white max-md:border-gray-100 w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                             {/* Modal Header */}
-                            <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl gap-3 flex-shrink-0 z-50 relative">
-                                <div className="flex-shrink-0 min-w-0">
-                                    <h3 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Stock History - {viewRecord.data.productName}</h3>
+                            <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 max-md:px-3 max-md:py-2.5 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl max-md:rounded-t-2xl gap-3 max-md:gap-1.5 flex-shrink-0 z-50 relative">
+                                <div className="flex-shrink-0 min-w-0 max-md:flex-1 max-md:mr-1">
+                                    {/* Desktop view: 100% identical to origin/main */}
+                                    <h3 className="hidden md:block text-lg sm:text-2xl font-bold text-gray-900 truncate">
+                                        Stock History - {viewRecord.data?.productName || viewRecord.productName || ''}
+                                    </h3>
+                                    {/* Mobile view: Product Name in next line */}
+                                    <div className="md:hidden flex flex-col min-w-0">
+                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider leading-tight">
+                                            Stock History
+                                        </span>
+                                        <h3 className="text-base font-bold text-gray-900 truncate leading-snug" title={viewRecord.data?.productName || viewRecord.productName || ''}>
+                                            {viewRecord.data?.productName || viewRecord.productName || ''}
+                                        </h3>
+                                    </div>
                                 </div>
 
                                 {/* Center Aligned Search Bar & Tabs - Hidden on mobile if needed, or condensed */}
@@ -4138,7 +4189,7 @@ const StockManagement = ({
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 max-md:gap-1.5 shrink-0">
                                     <div className="relative">
                                         <button
                                             ref={filterButtonRef}
@@ -4325,7 +4376,7 @@ const StockManagement = ({
                                             setExpandedHistoryId(null);
                                             setExpandedSaleId(null);
                                         }}
-                                        className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
+                                        className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 shrink-0"
                                     >
                                         <XIcon className="w-6 h-6 text-gray-400" />
                                     </button>
@@ -4347,18 +4398,49 @@ const StockManagement = ({
                                             className="block w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] outline-none shadow-sm focus:ring-1 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder-gray-400"
                                         />
                                     </div>
-                                    <div className="flex items-center gap-2 p-1 bg-gray-200/50 rounded-xl">
+                                    <div className="flex items-center justify-center gap-12 pt-1 pb-0.5">
+                                        {/* Purchase */}
                                         <button
+                                            type="button"
                                             onClick={() => setHistoryTab('purchase')}
-                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${historyTab === 'purchase' ? 'bg-white text-blue-600 shadow-sm scale-[1.02]' : 'text-gray-500 hover:text-gray-700'}`}
+                                            className="group flex flex-col items-center justify-center gap-1.5 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
                                         >
-                                            Purchase
+                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                                historyTab === 'purchase'
+                                                    ? 'bg-gradient-to-br from-blue-700 to-blue-500 text-white shadow-md shadow-blue-500/35'
+                                                    : 'bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:bg-[#f1f5f9]'
+                                            }`}>
+                                                <ShoppingCartIcon className="w-5 h-5 transition-transform duration-150" />
+                                            </div>
+                                            <span className={`text-[12px] tracking-tight transition-colors ${
+                                                historyTab === 'purchase'
+                                                    ? 'font-bold text-[#1e40af]'
+                                                    : 'font-semibold text-[#475569] group-hover:text-[#1e293b]'
+                                            }`}>
+                                                Purchase
+                                            </span>
                                         </button>
+
+                                        {/* Sale */}
                                         <button
+                                            type="button"
                                             onClick={() => setHistoryTab('sale')}
-                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${historyTab === 'sale' ? 'bg-white text-blue-600 shadow-sm scale-[1.02]' : 'text-gray-500 hover:text-gray-700'}`}
+                                            className="group flex flex-col items-center justify-center gap-1.5 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
                                         >
-                                            Sale
+                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                                historyTab === 'sale'
+                                                    ? 'bg-gradient-to-br from-blue-700 to-blue-500 text-white shadow-md shadow-blue-500/35'
+                                                    : 'bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:bg-[#f1f5f9]'
+                                            }`}>
+                                                <TrendingUpIcon className="w-5 h-5 transition-transform duration-150" />
+                                            </div>
+                                            <span className={`text-[12px] tracking-tight transition-colors ${
+                                                historyTab === 'sale'
+                                                    ? 'font-bold text-[#1e40af]'
+                                                    : 'font-semibold text-[#475569] group-hover:text-[#1e293b]'
+                                            }`}>
+                                                Sale
+                                            </span>
                                         </button>
                                     </div>
                                 </div>
@@ -4566,83 +4648,88 @@ const StockManagement = ({
                                                                     className={`bg-white rounded-2xl border border-gray-100 p-4 shadow-sm transition-all duration-200 cursor-pointer hover:border-blue-100 ${isExpanded ? 'ring-1 ring-blue-500/10' : ''}`}
                                                                 >
                                                                     {/* Summary Header */}
-                                                                    <div className="flex items-center justify-between gap-3">
-                                                                        <div className="flex flex-col min-w-0 flex-1">
-                                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
-                                                                            <span className="text-sm font-bold text-gray-900 truncate">{formatDate(item.date)}</span>
+                                                                    <div className="flex items-start justify-between gap-2 select-none">
+                                                                        <div className="grid grid-cols-[85px_8px_1fr] gap-y-1.5 text-xs items-baseline text-left flex-1 min-w-0">
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DATE</span>
+                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                            <span className="font-bold text-gray-900">{formatDate(item.date)}</span>
+
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC NO</span>
+                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                            <span className="font-bold text-blue-600 font-mono tracking-tight break-all">{item.lcNo || '—'}</span>
+
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL QTY</span>
+                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                            <span className="font-bold text-gray-900 break-words">
+                                                                                {item.totalPacket ? `${item.totalPacket} BAG` : ''}
+                                                                                {item.totalPacket && item.totalQuantity ? ' • ' : ''}
+                                                                                {item.totalQuantity ? `${Math.round(item.totalQuantity).toLocaleString('en-US')} ${item.unit || unit}` : ''}
+                                                                            </span>
                                                                         </div>
-                                                                        <div className="flex flex-col items-center flex-1">
-                                                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">LC No</span>
-                                                                            <span className="text-sm font-bold text-blue-600 truncate">{item.lcNo}</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            {!isExpanded && (
-                                                                                <div className="flex flex-col items-end mr-1">
-                                                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Pkt</span>
-                                                                                    <span className="text-sm font-bold text-gray-900">{item.totalPacket || 0} BAG</span>
-                                                                                </div>
+
+                                                                        <div className={`p-1.5 rounded-full transition-colors shrink-0 self-start mt-0.5 ${isExpanded ? 'bg-blue-50 text-blue-500' : 'text-gray-400'}`}>
+                                                                            {isExpanded ? (
+                                                                                <ChevronUpIcon className="w-5 h-5" />
+                                                                            ) : (
+                                                                                <ChevronDownIcon className="w-5 h-5" />
                                                                             )}
-                                                                            <div className={`p-1 rounded-full transition-colors ${isExpanded ? 'bg-blue-50 text-blue-500' : 'text-gray-400'}`}>
-                                                                                {isExpanded ? (
-                                                                                    <ChevronUpIcon className="w-5 h-5" />
-                                                                                ) : (
-                                                                                    <ChevronDownIcon className="w-5 h-5" />
-                                                                                )}
-                                                                            </div>
                                                                         </div>
                                                                     </div>
 
                                                                     {/* Expanded Content */}
                                                                     {isExpanded && (
-                                                                        <div className="mt-4 pt-4 border-t border-gray-50 space-y-4 animate-in slide-in-from-top-2 duration-200">
-                                                                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                                                                <div>
-                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</div>
-                                                                                    <div className="text-gray-700 font-medium truncate">{item.port}</div>
-                                                                                </div>
-                                                                                <div>
-                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Importer</div>
-                                                                                    <div className="text-gray-700 font-medium truncate" title={item.importer}>{item.importer}</div>
-                                                                                </div>
-                                                                                <div>
-                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Exporter</div>
-                                                                                    <div className="text-gray-700 font-medium truncate" title={item.exporter}>{item.exporter || '-'}</div>
-                                                                                </div>
-                                                                                <div>
-                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Truck</div>
-                                                                                    <div className="text-gray-700 font-medium truncate">{item.truckNo || '-'}</div>
-                                                                                </div>
+                                                                        <div className="mt-4 pt-4 border-t border-gray-100 space-y-3 animate-in slide-in-from-top-2 duration-200">
+                                                                            {/* Label & Value Info Grid */}
+                                                                            <div className="grid grid-cols-[85px_8px_1fr] gap-y-2 p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-xs items-baseline text-left">
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PORT</span>
+                                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                                <span className="font-semibold text-blue-600 truncate">{item.port || '-'}</span>
+
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IMPORTER</span>
+                                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                                <span className="font-semibold text-gray-800 break-words">{item.importer || '-'}</span>
+
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">EXPORTER</span>
+                                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                                <span className="font-semibold text-gray-800 break-words">{item.exporter || '-'}</span>
+
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TRUCK</span>
+                                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                                <span className="font-bold text-gray-900">{item.truckNo || '-'}</span>
                                                                             </div>
 
-                                                                            <div className="bg-gray-50/50 rounded-xl p-3 space-y-3">
-                                                                                {item.entries.map((entry, eIdx) => (
-                                                                                    <div key={eIdx} className={`${eIdx !== 0 ? 'border-t border-gray-100 pt-3' : ''}`}>
+                                                                            {/* Brands Breakdown */}
+                                                                            <div className="bg-gray-50/50 rounded-xl p-3 space-y-3 border border-gray-100">
+                                                                                {validEntries(item).map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className={`${eIdx !== 0 ? 'border-t border-gray-200/60 pt-3' : ''}`}>
                                                                                         <div className="flex justify-between items-center mb-2">
-                                                                                            <span className="text-sm font-bold text-gray-900">{entry.brand}</span>
+                                                                                            <span className="text-sm font-black text-gray-900">{entry.brand || '-'}</span>
                                                                                             {canShowRate && showRate && (
-                                                                                                <span className="text-xs font-medium text-gray-500">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString('en-IN')}</span>
+                                                                                                <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-md">
+                                                                                                    ৳{parseFloat(entry.purchasedPrice || 0).toLocaleString('en-IN')}
+                                                                                                </span>
                                                                                             )}
                                                                                         </div>
-                                                                                        <div className="grid grid-cols-2 gap-3">
-                                                                                            <div className="flex flex-col bg-white p-2 rounded-lg border border-gray-100">
+                                                                                        <div className="grid grid-cols-2 gap-2.5">
+                                                                                            <div className="flex flex-col bg-white p-2.5 rounded-lg border border-gray-100 shadow-xs">
                                                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total LC Amount</span>
-                                                                                                <div className="flex flex-col gap-1">
-                                                                                                    <span className="text-xs font-bold text-gray-900">{entry.packet} PKT</span>
-                                                                                                    <span className="text-xs font-bold text-gray-600">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString('en-US')} {entry.unit}</span>
+                                                                                                <div className="flex flex-col gap-0.5 mt-0.5">
+                                                                                                    <span className="text-xs font-bold text-gray-900">{entry.packet || 0} PKT</span>
+                                                                                                    <span className="text-xs font-semibold text-gray-600">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString('en-US')} {entry.unit || unit}</span>
                                                                                                 </div>
                                                                                             </div>
-                                                                                            <div className="flex flex-col bg-white p-2 rounded-lg border border-gray-100">
-                                                                                                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">InHouse</span>
-                                                                                                <div className="flex flex-col gap-1">
-                                                                                                    <span className="text-xs font-bold text-blue-600">{entry.inHousePacket} BAG</span>
-                                                                                                    <span className="text-xs font-bold text-blue-500">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString('en-US')} {entry.unit}</span>
+                                                                                            <div className="flex flex-col bg-white p-2.5 rounded-lg border border-gray-100 shadow-xs">
+                                                                                                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">InHouse</span>
+                                                                                                <div className="flex flex-col gap-0.5 mt-0.5">
+                                                                                                    <span className="text-xs font-bold text-blue-600">{entry.inHousePacket || 0} BAG</span>
+                                                                                                    <span className="text-xs font-semibold text-blue-500">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString('en-US')} {entry.unit || unit}</span>
                                                                                                 </div>
                                                                                             </div>
                                                                                         </div>
                                                                                         {parseFloat(entry.sweepedQuantity || 0) > 0 && (
-                                                                                            <div className="mt-2 flex items-center gap-2 bg-rose-50 px-2 py-1 rounded-md">
-                                                                                                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Shortage:</span>
-                                                                                                <span className="text-xs font-bold text-rose-600">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString('en-US')} {entry.unit}</span>
+                                                                                            <div className="mt-2 flex items-center justify-between bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-md">
+                                                                                                <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">Shortage:</span>
+                                                                                                <span className="text-xs font-bold text-rose-600">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString('en-US')} {entry.unit || unit}</span>
                                                                                             </div>
                                                                                         )}
                                                                                     </div>
@@ -4789,80 +4876,89 @@ const StockManagement = ({
                                                                     className={`bg-white rounded-2xl border border-gray-100 p-4 shadow-sm transition-all duration-200 cursor-pointer hover:border-blue-100 ${isExpanded ? 'ring-1 ring-blue-500/10' : ''}`}
                                                                 >
                                                                     {/* Summary Header */}
-                                                                    <div className={`${isExpanded ? 'space-y-3' : ''}`}>
-                                                                        <div className="flex items-center justify-between gap-2 sm:gap-3">
-                                                                            <div className="flex flex-col min-w-0 flex-[0.8]">
-                                                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
-                                                                                <span className="text-sm font-bold text-gray-900 truncate">{formatDate(sale.date)}</span>
-                                                                            </div>
-                                                                            <div className="flex flex-col items-center flex-1">
-                                                                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Invoice</span>
-                                                                                <span className="text-sm font-bold text-blue-600 truncate">{sale.invoiceNo}</span>
-                                                                            </div>
-                                                                            {!isExpanded && (
-                                                                                <div className="flex flex-col min-w-0 flex-1">
-                                                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Company</span>
-                                                                                    <span className="text-xs font-bold text-gray-800 truncate">{sale.companyName}</span>
-                                                                                </div>
-                                                                            )}
-                                                                            <div className="flex items-center">
-                                                                                <div className={`p-1 rounded-full transition-colors ${isExpanded ? 'bg-blue-50 text-blue-500' : 'text-gray-400'}`}>
-                                                                                    {isExpanded ? (
-                                                                                        <ChevronUpIcon className="w-5 h-5" />
-                                                                                    ) : (
-                                                                                        <ChevronDownIcon className="w-5 h-5" />
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
+                                                                    <div className="flex items-start justify-between gap-2 select-none">
+                                                                        <div className="grid grid-cols-[85px_8px_1fr] gap-y-1.5 text-xs items-baseline text-left flex-1 min-w-0">
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DATE</span>
+                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                            <span className="font-bold text-gray-900">{formatDate(sale.date)}</span>
+
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">INVOICE</span>
+                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                            <span className="font-bold text-blue-600 font-mono tracking-tight break-all">{sale.invoiceNo || '—'}</span>
+
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QUANTITY</span>
+                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                            <span className="font-bold text-gray-900 break-words">{sale.itemQty?.toLocaleString('en-US') || 0} {unit}</span>
                                                                         </div>
 
-                                                                        {isExpanded && (
-                                                                            <div className="flex flex-col animate-in fade-in slide-in-from-top-1 duration-200">
-                                                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Company</span>
-                                                                                <span className="text-sm font-bold text-gray-800 truncate">{sale.companyName}</span>
-                                                                            </div>
-                                                                        )}
+                                                                        <div className={`p-1.5 rounded-full transition-colors shrink-0 self-start mt-0.5 ${isExpanded ? 'bg-blue-50 text-blue-500' : 'text-gray-400'}`}>
+                                                                            {isExpanded ? (
+                                                                                <ChevronUpIcon className="w-5 h-5" />
+                                                                            ) : (
+                                                                                <ChevronDownIcon className="w-5 h-5" />
+                                                                            )}
+                                                                        </div>
                                                                     </div>
 
                                                                     {/* Expanded Content */}
                                                                     {isExpanded && (
-                                                                        <div className="mt-4 pt-4 border-t border-gray-50 space-y-4 animate-in slide-in-from-top-2 duration-200">
-                                                                            <div className="grid grid-cols-2 gap-4 bg-gray-50/50 rounded-xl p-3">
-                                                                                <div>
-                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isFruitHistory ? "Customer" : "Brand"}</div>
-                                                                                    <div className="text-sm font-bold text-blue-600 truncate">{isFruitHistory ? (sale.customerName || '-') : sale.itemBrand}</div>
-                                                                                </div>
-                                                                                <div className="text-right">
-                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isFruitHistory ? "Phone" : "BAG"}</div>
-                                                                                    <div className="text-sm font-bold text-gray-900 truncate">{isFruitHistory ? (sale.contact || '-') : `${sale.itemPacket.toLocaleString('en-US')} BAG`}</div>
-                                                                                </div>
-                                                                                <div className="col-span-2 border-t border-gray-100 pt-2 mt-1">
-                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">LC No</div>
-                                                                                    <div className="text-sm font-bold text-gray-800">{sale.lcNo || '-'}</div>
-                                                                                </div>
+                                                                        <div className="mt-4 pt-4 border-t border-gray-100 space-y-3 animate-in slide-in-from-top-2 duration-200">
+                                                                            <div className="grid grid-cols-[85px_8px_1fr] gap-y-2 p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-xs items-baseline text-left">
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">COMPANY</span>
+                                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                                <span className="font-bold text-gray-900 break-words">{sale.companyName || '-'}</span>
+
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC NO</span>
+                                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                                <span className="font-semibold text-blue-600 truncate">{sale.lcNo || '-'}</span>
+
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{isFruitHistory ? "CUSTOMER" : "BRAND"}</span>
+                                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                                <span className="font-bold text-gray-800 break-words">{isFruitHistory ? (sale.customerName || '-') : (sale.itemBrand || '-')}</span>
+
+                                                                                {isFruitHistory && (
+                                                                                    <>
+                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PHONE</span>
+                                                                                        <span className="text-gray-400 font-bold">:</span>
+                                                                                        <span className="font-semibold text-gray-700">{sale.contact || '-'}</span>
+
+                                                                                        {sale.itemTruck && (
+                                                                                            <>
+                                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TRUCK</span>
+                                                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                                                <span className="font-semibold text-gray-700">{sale.itemTruck}</span>
+                                                                                            </>
+                                                                                        )}
+                                                                                    </>
+                                                                                )}
+
+                                                                                {!isFruitHistory && (
+                                                                                    <>
+                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BAG</span>
+                                                                                        <span className="text-gray-400 font-bold">:</span>
+                                                                                        <span className="font-bold text-gray-900">{sale.itemPacket?.toLocaleString('en-US') || 0} BAG</span>
+                                                                                    </>
+                                                                                )}
                                                                             </div>
 
-                                                                            <div className="flex items-end justify-between pt-1">
+                                                                            <div className="flex items-center justify-between p-3 bg-blue-50/40 border border-blue-100 rounded-xl">
                                                                                 <div className="flex flex-col">
                                                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
                                                                                     <span className="text-sm font-black text-gray-900">{sale.itemQty.toLocaleString('en-US')} {unit}</span>
                                                                                 </div>
-                                                                                <div className="flex flex-col items-center">
-                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</span>
-                                                                                    <span className="text-xs font-bold text-gray-600">৳{sale.itemPrice.toLocaleString('en-IN')}</span>
-                                                                                </div>
-                                                                                <div className="flex flex-col items-end">
-                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
-                                                                                    <span className="text-lg font-black text-blue-600">৳{sale.itemTotal.toLocaleString('en-IN')}</span>
-                                                                                </div>
+                                                                                {canShowRate && showRate && (
+                                                                                    <>
+                                                                                        <div className="flex flex-col items-center">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</span>
+                                                                                            <span className="text-xs font-bold text-gray-600">৳{sale.itemPrice.toLocaleString('en-IN')}</span>
+                                                                                        </div>
+                                                                                        <div className="flex flex-col items-end">
+                                                                                            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Total</span>
+                                                                                            <span className="text-base font-black text-blue-600">৳{sale.itemTotal.toLocaleString('en-IN')}</span>
+                                                                                        </div>
+                                                                                    </>
+                                                                                )}
                                                                             </div>
-
-                                                                            {isFruitHistory && (
-                                                                                <div className="pt-2 border-t border-gray-50 flex justify-between items-center text-sm">
-                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck:</span>
-                                                                                    <span className="font-bold text-gray-700">{sale.itemTruck || '-'}</span>
-                                                                                </div>
-                                                                            )}
                                                                         </div>
                                                                     )}
                                                                 </div>

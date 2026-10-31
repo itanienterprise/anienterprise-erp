@@ -7,7 +7,9 @@ import {
     ChevronUpIcon,
     FunnelIcon,
     FileTextIcon,
-    EyeIcon
+    EyeIcon,
+    ShoppingCartIcon,
+    TrendingUpIcon
 } from '../Icons';
 import CustomDatePicker from './CustomDatePicker';
 import { calculatePktRemainder } from '../../utils/stockHelpers';
@@ -684,13 +686,25 @@ const StockHistoryModal = ({
     if (!viewRecord) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 max-md:p-2 app-modal-overlay">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
-            <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+            <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] max-md:max-w-[96vw] max-md:rounded-2xl max-md:max-h-[94vh] max-md:bg-white max-md:border-gray-100 w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                 {/* Modal Header */}
-                <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl gap-3 flex-shrink-0 z-50 relative">
-                    <div className="flex-shrink-0 min-w-0">
-                        <h3 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Stock History - {viewRecord.productName || viewRecord.name}</h3>
+                <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 max-md:px-3 max-md:py-2.5 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl max-md:rounded-t-2xl gap-3 max-md:gap-1.5 flex-shrink-0 z-50 relative">
+                    <div className="flex-shrink-0 min-w-0 max-md:flex-1 max-md:mr-1">
+                        {/* Desktop view: single line */}
+                        <h3 className="hidden md:block text-lg sm:text-2xl font-bold text-gray-900 truncate">
+                            Stock History - {viewRecord.productName || viewRecord.name}
+                        </h3>
+                        {/* Mobile view: Product Name in next line */}
+                        <div className="md:hidden flex flex-col min-w-0">
+                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider leading-tight">
+                                Stock History
+                            </span>
+                            <h3 className="text-base font-bold text-gray-900 truncate leading-snug" title={viewRecord.productName || viewRecord.name}>
+                                {viewRecord.productName || viewRecord.name}
+                            </h3>
+                        </div>
                     </div>
 
                     <div className="hidden lg:flex flex-1 max-w-xl mx-auto flex-col items-center gap-4">
@@ -722,7 +736,7 @@ const StockHistoryModal = ({
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 max-md:gap-1.5 shrink-0">
                         <div className="relative">
                             <button
                                 ref={filterButtonRef}
@@ -880,9 +894,72 @@ const StockHistoryModal = ({
                             <span className="hidden sm:block text-sm font-medium ml-2">Report</span>
                         </button>
 
-                        <button onClick={() => setViewRecord(null)} className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors">
+                        <button onClick={() => setViewRecord(null)} className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 shrink-0">
                             <XIcon className="w-6 h-6 text-gray-400" />
                         </button>
+                    </div>
+                </div>
+
+                {/* Mobile Tabs & Search Unified - Visible only on mobile */}
+                <div className="lg:hidden px-4 pb-4 border-b border-gray-100 flex-shrink-0 bg-white">
+                    <div className="bg-gray-50 rounded-2xl border border-gray-200/60 p-2 space-y-2.5 shadow-inner-sm">
+                        <div className="w-full relative group">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={historySearchQuery}
+                                onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                className="block w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] outline-none shadow-sm focus:ring-1 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder-gray-400"
+                            />
+                        </div>
+                        <div className="flex items-center justify-center gap-12 pt-1 pb-0.5">
+                            {/* Purchase */}
+                            <button
+                                type="button"
+                                onClick={() => setHistoryTab('purchase')}
+                                className="group flex flex-col items-center justify-center gap-1.5 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                            >
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                    historyTab === 'purchase'
+                                        ? 'bg-gradient-to-br from-blue-700 to-blue-500 text-white shadow-md shadow-blue-500/35'
+                                        : 'bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:bg-[#f1f5f9]'
+                                }`}>
+                                    <ShoppingCartIcon className="w-5 h-5 transition-transform duration-150" />
+                                </div>
+                                <span className={`text-[12px] tracking-tight transition-colors ${
+                                    historyTab === 'purchase'
+                                        ? 'font-bold text-[#1e40af]'
+                                        : 'font-semibold text-[#475569] group-hover:text-[#1e293b]'
+                                }`}>
+                                    Purchase
+                                </span>
+                            </button>
+
+                            {/* Sale */}
+                            <button
+                                type="button"
+                                onClick={() => setHistoryTab('sale')}
+                                className="group flex flex-col items-center justify-center gap-1.5 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                            >
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                    historyTab === 'sale'
+                                        ? 'bg-gradient-to-br from-blue-700 to-blue-500 text-white shadow-md shadow-blue-500/35'
+                                        : 'bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:bg-[#f1f5f9]'
+                                }`}>
+                                    <TrendingUpIcon className="w-5 h-5 transition-transform duration-150" />
+                                </div>
+                                <span className={`text-[12px] tracking-tight transition-colors ${
+                                    historyTab === 'sale'
+                                        ? 'font-bold text-[#1e40af]'
+                                        : 'font-semibold text-[#475569] group-hover:text-[#1e293b]'
+                                }`}>
+                                    Sale
+                                </span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1046,24 +1123,44 @@ const StockHistoryModal = ({
                                                 const isExpanded = expandedHistoryId === historyId;
                                                 return (
                                                     <div key={historyId} onClick={() => toggleHistoryExpansion(historyId)} className={`bg-white rounded-2xl border border-gray-100 p-4 shadow-sm transition-all duration-200 cursor-pointer hover:border-blue-100 ${isExpanded ? 'ring-1 ring-blue-500/10' : ''}`}>
-                                                        <div className="flex items-center justify-between gap-3">
-                                                            <div className="flex flex-col min-w-0 flex-1">
-                                                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{formatDate(item.date)}</span>
-                                                                <span className="text-sm font-black text-gray-900 truncate">{item.lcNo}</span>
+                                                        {/* Summary Header */}
+                                                        <div className="flex items-start justify-between gap-2 select-none">
+                                                            <div className="grid grid-cols-[85px_8px_1fr] gap-y-1.5 text-xs items-baseline text-left flex-1 min-w-0">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DATE</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-bold text-gray-900">{formatDate(item.date)}</span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC NO</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-bold text-blue-600 font-mono tracking-tight break-all">{item.lcNo || '—'}</span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL QTY</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-bold text-gray-900 break-words">{(item.totalInHouseQuantity || 0).toLocaleString()} {unit}</span>
                                                             </div>
-                                                            <div className="text-right">
-                                                                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">{(item.totalInHouseQuantity || 0).toLocaleString()} {unit}</span>
+
+                                                            <div className={`p-1.5 rounded-full transition-colors shrink-0 self-start mt-0.5 ${isExpanded ? 'bg-blue-50 text-blue-500' : 'text-gray-400'}`}>
+                                                                {isExpanded ? (
+                                                                    <ChevronUpIcon className="w-5 h-5" />
+                                                                ) : (
+                                                                    <ChevronDownIcon className="w-5 h-5" />
+                                                                )}
                                                             </div>
                                                         </div>
                                                         {isExpanded && (
                                                             <div className="mt-4 pt-4 border-t border-gray-50 space-y-3">
-                                                                <div className="grid grid-cols-2 gap-4">
-                                                                    <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Port</span><span className="text-xs font-medium text-gray-700">{item.port}</span></div>
-                                                                    <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Truck</span><span className="text-xs font-medium text-gray-700">{item.truckNo || '-'}</span></div>
+                                                                <div className="grid grid-cols-[85px_8px_1fr] gap-y-2 p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-xs items-baseline text-left">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PORT</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                    <span className="font-semibold text-blue-600 truncate">{item.port || '-'}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TRUCK</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                    <span className="font-bold text-gray-900">{item.truckNo || '-'}</span>
                                                                 </div>
                                                                 <div className="space-y-2">
                                                                     {item.entries.map((entry, eIdx) => (
-                                                                        <div key={eIdx} className="bg-gray-50 p-2 rounded-xl text-xs space-y-1">
+                                                                        <div key={eIdx} className="bg-gray-50 p-2.5 rounded-xl text-xs space-y-1 border border-gray-100">
                                                                             <div className="flex justify-between font-bold"><span>{entry.brand}</span><span>৳{parseFloat(entry.purchasedPrice).toLocaleString()}</span></div>
                                                                             <div className="flex justify-between text-gray-500"><span>Bag: {entry.packet}</span><span>Qty: {entry.quantity} {entry.unit}</span></div>
                                                                         </div>
@@ -1172,25 +1269,51 @@ const StockHistoryModal = ({
                                                 const isExpanded = expandedSaleId === saleId;
                                                 return (
                                                     <div key={saleId} onClick={() => toggleSaleExpansion(saleId)} className={`bg-white rounded-2xl border border-gray-100 p-4 shadow-sm transition-all duration-200 cursor-pointer hover:border-blue-100 ${isExpanded ? 'ring-1 ring-blue-500/10' : ''}`}>
-                                                        <div className="flex items-center justify-between gap-3">
-                                                            <div className="flex flex-col min-w-0 flex-1">
-                                                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{formatDate(item.date)}</span>
-                                                                <span className="text-sm font-black text-gray-900 truncate">{item.invoiceNo}</span>
-                                                                <span className="text-xs text-gray-500 truncate">{item.companyName}</span>
+                                                        {/* Summary Header */}
+                                                        <div className="flex items-start justify-between gap-2 select-none">
+                                                            <div className="grid grid-cols-[85px_8px_1fr] gap-y-1.5 text-xs items-baseline text-left flex-1 min-w-0">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DATE</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-bold text-gray-900">{formatDate(item.date)}</span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">INVOICE</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-bold text-blue-600 font-mono tracking-tight break-all">{item.invoiceNo || '—'}</span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-bold text-blue-600 break-words">৳{(item.itemTotal || 0).toLocaleString()}</span>
                                                             </div>
-                                                            <div className="text-right">
-                                                                <span className="text-sm font-black text-blue-600">৳{item.itemTotal.toLocaleString()}</span>
+
+                                                            <div className={`p-1.5 rounded-full transition-colors shrink-0 self-start mt-0.5 ${isExpanded ? 'bg-blue-50 text-blue-500' : 'text-gray-400'}`}>
+                                                                {isExpanded ? (
+                                                                    <ChevronUpIcon className="w-5 h-5" />
+                                                                ) : (
+                                                                    <ChevronDownIcon className="w-5 h-5" />
+                                                                )}
                                                             </div>
                                                         </div>
                                                         {isExpanded && (
                                                             <div className="mt-4 pt-4 border-t border-gray-50 space-y-3">
-                                                                <div className="grid grid-cols-2 gap-4">
-                                                                    <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Customer</span><span className="text-xs font-medium text-gray-700">{item.customerName}</span></div>
-                                                                    <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Brand</span><span className="text-xs font-medium text-gray-700">{item.itemBrand}</span></div>
-                                                                    <div><span className="text-[10px] font-bold text-gray-400 uppercase block">LC No</span><span className="text-xs font-medium text-gray-700">{item.lcNo || '-'}</span></div>
+                                                                <div className="grid grid-cols-[85px_8px_1fr] gap-y-2 p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-xs items-baseline text-left">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">COMPANY</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                    <span className="font-bold text-gray-900 break-words">{item.companyName || '-'}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">CUSTOMER</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                    <span className="font-semibold text-gray-800 break-words">{item.customerName || '-'}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                    <span className="font-semibold text-gray-800 break-words">{item.itemBrand || '-'}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC NO</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                    <span className="font-semibold text-blue-600 truncate">{item.lcNo || '-'}</span>
                                                                 </div>
-                                                                <div className="flex justify-between items-center bg-gray-50 p-2 rounded-xl">
-                                                                    <div className="text-xs text-gray-500">Qty: {Math.round(item.itemQty)} {item.unit}</div>
+                                                                <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                                                                    <div className="text-xs text-gray-500 font-medium">Qty: {Math.round(item.itemQty)} {item.unit}</div>
                                                                     <div className="text-xs text-gray-900 font-bold">৳{item.itemPrice.toLocaleString()} / {item.unit}</div>
                                                                 </div>
                                                             </div>

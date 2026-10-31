@@ -898,74 +898,75 @@ const StockReport = ({
                                         return (
                                             <div key={bIndex} className="space-y-3 pb-4 last:pb-0 border-b last:border-0 border-gray-50">
                                                 {showBrandHeader && (
-                                                    <div className="flex justify-center items-center w-full pt-1">
-                                                        <span className="text-lg sm:text-xl font-black text-blue-600 text-center">{ent.brand}</span>
+                                                    <div className="flex justify-start items-center w-full pt-1">
+                                                        <span className="text-base sm:text-lg font-black text-blue-600 text-left tracking-tight">{ent.brand}</span>
                                                     </div>
                                                 )}
-                                                <div className="space-y-2 pt-2">
+                                                <div className="pt-2">
                                                     {(reportType === 'price' || reportType === 'lc_price' || reportType === 'group') ? (
-                                                        <>
-                                                            <div className="flex items-center justify-between text-xs">
-                                                                <span className="font-bold text-gray-400 uppercase tracking-wider">LC No :</span>
-                                                                <span className="font-black text-gray-900 uppercase">{ent.lcNo || '—'}</span>
-                                                            </div>
+                                                        <div className="grid grid-cols-[130px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC NO</span>
+                                                            <span className="text-gray-400 font-bold">:</span>
+                                                            <span className="font-bold text-gray-900 font-mono uppercase break-all">{ent.lcNo || '—'}</span>
+
                                                             {(reportType === 'price' || reportType === 'lc_price') && (
-                                                                <div className="flex items-center justify-between text-xs">
-                                                                    <span className="font-bold text-gray-400 uppercase tracking-wider">{reportType === 'lc_price' ? 'Lc Rate $ :' : 'Costing :'}</span>
-                                                                    <span className="font-black text-emerald-600">
+                                                                <>
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{reportType === 'lc_price' ? 'LC RATE $' : 'COSTING'}</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                    <span className="font-bold text-emerald-600 break-words">
                                                                         {getCostingDisplay(ent, item.productName)}
                                                                     </span>
-                                                                </div>
+                                                                </>
                                                             )}
-                                                            <div className="flex items-center justify-between text-xs">
-                                                                <span className="font-bold text-gray-400 uppercase tracking-wider">Quantity :</span>
-                                                                <span className="font-black text-gray-900 text-right">
-                                                                    {(() => {
-                                                                        const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
-                                                                        const bagStr = `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''} BAG`;
-                                                                        if (reportType === 'lc_price') {
-                                                                            const tonStr = (parseFloat(ent.inHouseQuantity || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-                                                                            return `${bagStr} (${tonStr} Ton)`;
-                                                                        }
-                                                                        return `${bagStr} (${Math.round(ent.inHouseQuantity).toLocaleString('en-US')} kg)`;
-                                                                    })()}
-                                                                </span>
-                                                            </div>
-                                                        </>
+
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QUANTITY</span>
+                                                            <span className="text-gray-400 font-bold">:</span>
+                                                            <span className="font-bold text-gray-900 break-words">
+                                                                {(() => {
+                                                                    const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
+                                                                    const bagStr = `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''} BAG`;
+                                                                    if (reportType === 'lc_price') {
+                                                                        const tonStr = (parseFloat(ent.inHouseQuantity || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+                                                                        return `${bagStr} (${tonStr} Ton)`;
+                                                                    }
+                                                                    return `${bagStr} (${Math.round(ent.inHouseQuantity).toLocaleString('en-US')} kg)`;
+                                                                })()}
+                                                            </span>
+                                                        </div>
                                                     ) : (
-                                                        <>
-                                                            <div className="flex items-center justify-between text-xs">
-                                                                <span className="font-bold text-gray-400 uppercase tracking-wider">Total Inhouse :</span>
-                                                                <span className="font-black text-gray-900 text-right">
-                                                                    {(() => {
-                                                                        const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                                        return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                    })()} BAG ({Math.round(ent.totalInHouseQuantity).toLocaleString('en-US')} kg)
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center justify-between text-xs">
-                                                                <span className="font-bold text-gray-400 uppercase tracking-wider">Sale :</span>
-                                                                <span className="font-black text-gray-900 text-right">
-                                                                    {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : (parseFloat(ent.salePacket) || 0).toFixed(2)} BAG ({Math.round(ent.saleQuantity).toLocaleString('en-US')} kg)
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center justify-between text-xs pt-1.5 border-t border-gray-100">
-                                                                <span className="font-bold text-blue-500 uppercase tracking-wider">Remaining Inhouse :</span>
-                                                                <span className="font-black text-blue-600 text-right">
-                                                                    {(() => {
-                                                                        const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
-                                                                        return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                    })()} BAG ({Math.round(ent.inHouseQuantity).toLocaleString('en-US')} kg)
-                                                                </span>
-                                                            </div>
-                                                        </>
+                                                        <div className="grid grid-cols-[130px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL INHOUSE</span>
+                                                            <span className="text-gray-400 font-bold">:</span>
+                                                            <span className="font-bold text-gray-900 break-words">
+                                                                {(() => {
+                                                                    const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
+                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                })()} BAG ({Math.round(ent.totalInHouseQuantity).toLocaleString('en-US')} kg)
+                                                            </span>
+
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SALE</span>
+                                                            <span className="text-gray-400 font-bold">:</span>
+                                                            <span className="font-bold text-gray-900 break-words">
+                                                                {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : (parseFloat(ent.salePacket) || 0).toFixed(2)} BAG ({Math.round(ent.saleQuantity).toLocaleString('en-US')} kg)
+                                                            </span>
+
+                                                            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">REMAINING INHOUSE</span>
+                                                            <span className="text-blue-400 font-bold">:</span>
+                                                            <span className="font-bold text-blue-600 break-words">
+                                                                {(() => {
+                                                                    const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
+                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                })()} BAG ({Math.round(ent.inHouseQuantity).toLocaleString('en-US')} kg)
+                                                            </span>
+                                                        </div>
                                                     )}
                                                 </div>
                                                 {isLastOfBrandGroup && hasMultipleLcs && (
-                                                    <div className="mt-2 pt-2 border-t-2 border-blue-200 bg-blue-50/60 rounded-xl p-2.5 space-y-1">
-                                                        <div className="flex items-center justify-between text-xs font-black text-blue-900">
-                                                            <span className="uppercase">{(ent.brand || 'No Brand').trim()} Total :</span>
-                                                            <span className="text-right text-blue-700">
+                                                    <div className="mt-2 pt-2 border-t-2 border-blue-200 bg-blue-50/60 rounded-xl p-2.5">
+                                                        <div className="grid grid-cols-[130px_8px_1fr] gap-y-1 text-xs items-baseline text-left">
+                                                            <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider">{(ent.brand || 'No Brand').trim()} TOTAL</span>
+                                                            <span className="text-blue-400 font-bold">:</span>
+                                                            <span className="font-black text-blue-700 break-words">
                                                                 {brandTotalPktRemainder.whole}{brandTotalPktRemainder.remainder !== 0 ? ` - ${Math.abs(brandTotalPktRemainder.remainder)} kg` : ''} BAG ({Math.round(brandTotalQty).toLocaleString('en-US')} kg)
                                                             </span>
                                                         </div>
@@ -976,15 +977,14 @@ const StockReport = ({
                                     })}
                                     <div className="mt-2 pt-3 border-t-2 border-dashed border-gray-100 bg-blue-50/30 -mx-4 -mb-4 p-4">
                                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Product Summary</p>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <p className="text-[10px] font-bold text-gray-400">Total Inhouse</p>
-                                                <p className="text-sm font-black text-gray-900">{Math.round(item.totalInHouseQuantity).toLocaleString('en-US')} kg</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-[10px] font-bold text-blue-500">Net Stock</p>
-                                                <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString('en-US')} kg</p>
-                                            </div>
+                                        <div className="grid grid-cols-[130px_8px_1fr] gap-y-1.5 text-xs items-baseline text-left">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL INHOUSE</span>
+                                            <span className="text-gray-400 font-bold">:</span>
+                                            <span className="font-bold text-gray-900 break-words">{Math.round(item.totalInHouseQuantity).toLocaleString('en-US')} kg</span>
+
+                                            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">NET STOCK</span>
+                                            <span className="text-blue-400 font-bold">:</span>
+                                            <span className="font-bold text-blue-600 break-words">{Math.round(item.inHouseQuantity).toLocaleString('en-US')} kg</span>
                                         </div>
                                     </div>
                                 </div>
@@ -999,19 +999,28 @@ const StockReport = ({
                     {/* Mobile Grand Total */}
                     {records.length > 0 && (
                         <div className="mt-8 p-5 bg-gray-900 rounded-2xl shadow-xl shadow-gray-200">
-                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 text-center">Grand Total Summary</h4>
+                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 text-left">Grand Total Summary</h4>
                             <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Inhouse</p>
-                                    <p className="text-xl font-black text-white text-center">{Math.round(totals.totalTotalInHouseQty).toLocaleString('en-US')}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
+                                <div className="space-y-1 text-left">
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Inhouse</p>
+                                    <p className="text-xl font-black text-white flex items-baseline gap-1">
+                                        <span>{Math.round(totals.totalTotalInHouseQty).toLocaleString('en-US')}</span>
+                                        <span className="text-[10px] text-gray-400 uppercase font-bold">kg</span>
+                                    </p>
                                 </div>
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Total Sale</p>
-                                    <p className="text-xl font-black text-white text-center">{Math.round(totals.totalSaleQty).toLocaleString('en-US')}<span className="text-[10px] ml-1 text-gray-400 uppercase">kg</span></p>
+                                <div className="space-y-1 text-left">
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Sale</p>
+                                    <p className="text-xl font-black text-white flex items-baseline gap-1">
+                                        <span>{Math.round(totals.totalSaleQty).toLocaleString('en-US')}</span>
+                                        <span className="text-[10px] text-gray-400 uppercase font-bold">kg</span>
+                                    </p>
                                 </div>
-                                <div className="col-span-full pt-4 border-t border-gray-800 flex flex-col items-center">
-                                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-1 text-center">Net Inhouse Stock</p>
-                                    <p className="text-4xl font-black text-blue-500 tracking-tighter text-center">{Math.round(totals.totalInHouseQty).toLocaleString('en-US')}<span className="text-sm ml-2 text-blue-400 uppercase">kg</span></p>
+                                <div className="col-span-full pt-4 border-t border-gray-800 flex flex-col items-start text-left">
+                                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-1">Net Inhouse Stock</p>
+                                    <p className="text-3xl sm:text-4xl font-black text-blue-500 tracking-tight flex items-baseline gap-2">
+                                        <span>{Math.round(totals.totalInHouseQty).toLocaleString('en-US')}</span>
+                                        <span className="text-sm text-blue-400 uppercase font-bold">kg</span>
+                                    </p>
                                 </div>
                             </div>
                         </div>
