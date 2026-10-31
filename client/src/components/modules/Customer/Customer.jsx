@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, UsersIcon, BriefcaseIcon, ShoppingCartIcon, TruckIcon, TrendingUpIcon, WalletIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, computeAllCustomerBalances, buildCustomerBalanceIndex, compareTransactions, getItemTimestamp, getLocalDateString, getCustomerReturns } from '../../../utils/helpers';
 
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF, generateMoneyReceiptPDF, generatePayToCustomerVoucherPDF } from '../../../utils/pdfGenerator';
@@ -155,8 +155,8 @@ const Customer = ({
                 showHistoryFilterPanel &&
                 historyFilterPanelRef.current &&
                 !historyFilterPanelRef.current.contains(event.target) &&
-                historyFilterButtonRef.current &&
-                !historyFilterButtonRef.current.contains(event.target)
+                (!historyFilterButtonRef.current || !historyFilterButtonRef.current.contains(event.target)) &&
+                !event.target.closest('[data-history-filter-btn]')
             ) {
                 setShowHistoryFilterPanel(false);
             }
@@ -1951,7 +1951,8 @@ const Customer = ({
 
                 {!showForm && (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
-                        <div className="flex items-center gap-1 bg-gray-100/50 p-1 rounded-xl w-full sm:w-fit justify-between sm:justify-start">
+                        {/* Desktop Customer Type Filter (Original) */}
+                        <div className="hidden sm:flex items-center gap-1 bg-gray-100/50 p-1 rounded-xl w-full sm:w-fit justify-between sm:justify-start">
                             {['All Customer', 'General Customer', 'Party Customer'].map((type) => (
                                 <button
                                     key={type}
@@ -1964,6 +1965,35 @@ const Customer = ({
                                     {type}
                                 </button>
                             ))}
+                        </div>
+
+                        {/* Mobile Customer Type Filter (Circular Buttons) */}
+                        <div className="sm:hidden bg-white rounded-2xl p-3 border border-slate-100 shadow-sm w-full">
+                            <div className="grid grid-cols-3 gap-2 items-center">
+                                {[
+                                    { type: 'All Customer', icon: <UsersIcon className="w-5 h-5" /> },
+                                    { type: 'General Customer', icon: <UserIcon className="w-5 h-5" /> },
+                                    { type: 'Party Customer', icon: <BriefcaseIcon className="w-5 h-5" /> },
+                                ].map((t) => {
+                                    const isActive = filters.type === t.type;
+                                    return (
+                                        <button
+                                            key={t.type}
+                                            onClick={() => setFilters(prev => ({ ...prev, type: t.type }))}
+                                            className="flex flex-col items-center justify-center gap-1.5 focus:outline-none group active:scale-95 transition-transform"
+                                        >
+                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                                                isActive
+                                                    ? 'bg-gradient-to-br from-blue-700 to-blue-500 text-white shadow-md shadow-blue-500/35'
+                                                    : 'bg-slate-50 border border-slate-200 text-slate-600 group-hover:bg-slate-100 group-hover:text-slate-800 shadow-sm'
+                                            }`}>{t.icon}</div>
+                                            <span className={`text-[11px] text-center leading-tight transition-colors ${
+                                                isActive ? 'font-bold text-blue-700' : 'font-semibold text-slate-600 group-hover:text-slate-900'
+                                            }`}>{t.type}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
 
                         {/* Active Filter Indicators */}
@@ -2262,39 +2292,61 @@ const Customer = ({
                                                         setExpandedMobileCards(isExpanded ? null : c._id);
                                                     }}
                                                 >
-                                                    <div className="mobile-card-header">
-                                                        <div className="flex-1 min-w-0 pr-2">
-                                                            <div className="mobile-card-title truncate">{c.companyName}</div>
-                                                            <div className="text-[10px] text-gray-500 truncate">
-                                                                ID: {c.customerId} | {c.customerType}
-                                                            </div>
+                                                    <div className={`mobile-card-header !flex-col !items-stretch gap-1.5 ${isExpanded ? '!mb-3' : '!mb-0'}`}>
+                                                        {/* Line 1: ID at top & Customer Type Tag on top of amount */}
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="text-xs font-semibold text-gray-400">
+                                                                ID: {c.customerId}
+                                                            </span>
+                                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                                                                c.customerType === 'Party Customer'
+                                                                    ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                                                    : 'bg-blue-50 text-blue-700 border border-blue-100'
+                                                            }`}>
+                                                                {c.customerType}
+                                                            </span>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={`customer-status-badge ${isExpanded
-                                                                ? (c.status === 'Active' ? 'active' : 'inactive')
-                                                                : (custTotalDue > 0 ? 'inactive' : 'active')
-                                                                } flex items-center justify-center`}>
-                                                                {isExpanded ? (
-                                                                    <span className="shrink-0">{c.status}</span>
-                                                                ) : (
+
+                                                        {/* Line 2: Company Name on left & Amount Badge on right */}
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="flex-1 min-w-0 pr-2">
+                                                                <div className="font-black text-gray-900 text-sm tracking-tight truncate">
+                                                                    {c.companyName}
+                                                                </div>
+                                                                {c.customerName && c.customerName !== c.companyName && (
+                                                                    <div className="text-[11px] text-gray-500 font-medium truncate mt-0.5">
+                                                                        {c.customerName}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="shrink-0">
+                                                                <span className={`customer-status-badge ${custTotalDue > 0 ? 'inactive' : 'active'} flex items-center justify-center`}>
                                                                     <span className="font-bold">
                                                                         ৳{Math.round(custTotalDue).toLocaleString('en-IN')}
                                                                     </span>
-                                                                )}
-                                                            </span>
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
 
                                                     {isExpanded && (
-                                                        <div className="animate-in slide-in-from-top-2 duration-300">
-                                                            <div className="space-y-2 mt-4">
+                                                        <div className="animate-in slide-in-from-top-2 duration-300 pt-3 border-t border-gray-100">
+                                                            <div className="space-y-2">
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Status:</span>
+                                                                    <span className={`font-semibold text-xs ${c.status === 'Active' ? 'text-green-600' : 'text-gray-500'}`}>{c.status || 'Active'}</span>
+                                                                </div>
                                                                 <div className="mobile-card-row">
                                                                     <span className="mobile-card-label">Customer:</span>
                                                                     <span className="mobile-card-value">{c.customerName}</span>
                                                                 </div>
                                                                 <div className="mobile-card-row">
                                                                     <span className="mobile-card-label">Location:</span>
-                                                                    <span className="mobile-card-value">{c.location}</span>
+                                                                    <span className="mobile-card-value">{c.location || '-'}</span>
+                                                                </div>
+                                                                <div className="mobile-card-row items-start">
+                                                                    <span className="mobile-card-label shrink-0">Address:</span>
+                                                                    <span className="mobile-card-value text-right ml-4">{c.address || '-'}</span>
                                                                 </div>
                                                                 <div className="mobile-card-row">
                                                                     <span className="mobile-card-label">Phone:</span>
@@ -2353,13 +2405,45 @@ const Customer = ({
                             <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[1400px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                                 {/* Modal Header */}
                                 <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
-                                    <div className="flex-1 text-left">
-                                        <h2 className="text-xl font-bold text-gray-900">{viewData.companyName}</h2>
+                                    <div className="flex-1 text-left w-full md:w-auto pr-28 md:pr-0">
+                                        <h2 className="text-lg md:text-xl font-bold text-gray-900 truncate">{viewData.companyName}</h2>
                                         {viewData.customerName && viewData.customerName !== viewData.companyName && (
-                                            <p className="text-sm font-medium text-gray-600 mt-1">{viewData.customerName}</p>
+                                            <p className="text-xs sm:text-sm font-medium text-gray-600 mt-0.5 md:mt-1 truncate">{viewData.customerName}</p>
                                         )}
-                                        <p className="text-xs text-gray-500 mt-1">ID: {viewData.customerId}</p>
-                                        <p className="text-xs text-gray-400 mt-0.5">{viewData.customerType}</p>
+                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 md:mt-1">
+                                            <p className="text-[11px] md:text-xs text-gray-500">ID: {viewData.customerId}</p>
+                                            <p className="text-[11px] md:text-xs text-gray-400">• {viewData.customerType}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Mobile Top-Right Actions: Filter first, Print second, Close third - icon only */}
+                                    <div className="flex md:hidden items-center gap-1.5 absolute right-3.5 top-3.5 z-20">
+                                        <button
+                                            data-history-filter-btn="true"
+                                            onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
+                                            className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all shadow-sm active:scale-95 ${
+                                                showHistoryFilterPanel ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                            }`}
+                                            title="Filter"
+                                        >
+                                            <FunnelIcon className="w-4 h-4" />
+                                        </button>
+
+                                        <button
+                                            onClick={() => setShowHistoryReportFormatModal(true)}
+                                            className="w-8 h-8 rounded-full border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center active:scale-95"
+                                            title="Print"
+                                        >
+                                            <PrinterIcon className="w-4 h-4 text-gray-500" />
+                                        </button>
+
+                                        <button
+                                            onClick={() => setViewData(null)}
+                                            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
+                                            title="Close"
+                                        >
+                                            <XIcon className="w-4 h-4" />
+                                        </button>
                                     </div>
 
                                     {/* Center Search bar */}
@@ -2387,8 +2471,8 @@ const Customer = ({
                                             />
                                         </div>
 
-                                        {/* Tab Navigation */}
-                                        <div className="flex gap-1.5 justify-center">
+                                        {/* Desktop Tab Navigation (Original) */}
+                                        <div className="hidden md:flex gap-1.5 justify-center">
                                             {viewData?.customerType === 'General Customer' ? (
                                                 <button
                                                     onClick={() => setActiveHistoryTab('purchase')}
@@ -2438,11 +2522,62 @@ const Customer = ({
                                                 All History
                                             </button>
                                         </div>
+
+                                        {/* Mobile Tab Navigation - Circular Buttons */}
+                                        <div className="md:hidden bg-white rounded-2xl p-2.5 sm:p-3 border border-slate-100 shadow-sm w-full my-2">
+                                            <div className="grid grid-cols-4 gap-1 sm:gap-3 items-start">
+                                                {[
+                                                    {
+                                                        id: viewData?.customerType === 'General Customer' ? 'purchase' : 'gp',
+                                                        label: viewData?.customerType === 'General Customer' ? 'Purchase History' : 'G.P List',
+                                                        icon: viewData?.customerType === 'General Customer' ? <ShoppingCartIcon className="w-5 h-5" /> : <TruckIcon className="w-5 h-5" />
+                                                    },
+                                                    {
+                                                        id: 'sales',
+                                                        label: 'Sales History',
+                                                        icon: <TrendingUpIcon className="w-5 h-5" />
+                                                    },
+                                                    {
+                                                        id: 'payment',
+                                                        label: 'Payment History',
+                                                        icon: <WalletIcon className="w-5 h-5" />
+                                                    },
+                                                    {
+                                                        id: 'all',
+                                                        label: 'All History',
+                                                        icon: <FileTextIcon className="w-5 h-5" />
+                                                    }
+                                                ].map((tab) => {
+                                                    const isActive = activeHistoryTab === tab.id;
+                                                    return (
+                                                        <button
+                                                            key={tab.id}
+                                                            onClick={() => setActiveHistoryTab(tab.id)}
+                                                            className="flex flex-col items-center justify-start gap-1.5 focus:outline-none group active:scale-95 transition-transform"
+                                                        >
+                                                            <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${
+                                                                isActive
+                                                                    ? 'bg-gradient-to-br from-blue-700 to-blue-500 text-white shadow-md shadow-blue-500/35'
+                                                                    : 'bg-slate-50 border border-slate-200 text-slate-600 group-hover:bg-slate-100 group-hover:text-slate-800 shadow-sm'
+                                                            }`}>
+                                                                {tab.icon}
+                                                            </div>
+                                                            <span className={`text-[10px] sm:text-xs text-center leading-tight transition-colors line-clamp-2 ${
+                                                                isActive ? 'font-bold text-blue-700' : 'font-semibold text-slate-600 group-hover:text-slate-900'
+                                                            }`}>
+                                                                {tab.label}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="w-full md:flex-1 flex md:self-start justify-center md:justify-end gap-2 md:relative">
+                                    {/* Desktop Actions (Original) */}
+                                    <div className="hidden md:flex flex-1 md:self-start justify-end gap-2 relative">
                                         <button
                                             onClick={() => setShowHistoryReportFormatModal(true)}
-                                            className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm group"
+                                            className="flex items-center gap-2 px-4 py-2 rounded-full border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm group"
                                         >
                                             <PrinterIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
                                             <span className="text-sm font-medium">Print</span>
@@ -2450,12 +2585,18 @@ const Customer = ({
 
                                         <button
                                             ref={historyFilterButtonRef}
+                                            data-history-filter-btn="true"
                                             onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
-                                            className={`flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full border transition-all shadow-sm ${showHistoryFilterPanel ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'}`}
+                                            className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all shadow-sm ${showHistoryFilterPanel ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'}`}
                                         >
                                             <FunnelIcon className="w-4 h-4" />
                                             <span className="text-sm font-medium">Filter</span>
                                         </button>
+
+                                        <button onClick={() => setViewData(null)} className="p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
+                                            <XIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
 
                                         {showHistoryFilterPanel && (
                                             <>
@@ -2466,7 +2607,7 @@ const Customer = ({
                                                 ></div>
                                                 <div
                                                     ref={historyFilterPanelRef}
-                                                    className="absolute right-0 top-12 w-[320px] sm:w-[320px] max-sm:fixed max-sm:inset-x-0 max-sm:top-1/2 max-sm:-translate-y-1/2 max-sm:mx-4 max-sm:w-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 md:p-6 z-50 animate-in fade-in zoom-in-95 duration-200"
+                                                    className="absolute right-4 md:right-8 top-16 md:top-20 w-[320px] sm:w-[320px] max-sm:fixed max-sm:inset-x-0 max-sm:top-1/2 max-sm:-translate-y-1/2 max-sm:mx-4 max-sm:w-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 md:p-6 z-50 animate-in fade-in zoom-in-95 duration-200"
                                                 >
                                                     <div className="flex items-center justify-between mb-6">
                                                         <h4 className="text-lg font-bold text-gray-800">Filter History</h4>
@@ -2794,10 +2935,7 @@ const Customer = ({
                                             </>
                                         )}
 
-                                        <button onClick={() => setViewData(null)} className="absolute right-4 top-4 md:static p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
-                                            <XIcon className="w-5 h-5" />
-                                        </button>
-                                    </div>
+
                                 </div>
 
                                 <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 min-h-0">
