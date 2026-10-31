@@ -83,6 +83,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     const deferredSearch = useDeferredValue(searchQuery);
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [viewingTransfer, setViewingTransfer] = useState(null);
+    const [expandedRowId, setExpandedRowId] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 50;
 
@@ -1159,12 +1160,13 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                             </div>
                         </div>
 
-                        <div className="flex justify-end gap-2.5">
+                        <div className="w-full max-w-md mx-auto px-2 md:px-0 md:max-w-none md:w-auto flex justify-center md:justify-end">
                             <button
                                 onClick={() => { resetForm(); setShowForm(true); }}
-                                className="h-10 border border-transparent px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm gap-1.5"
+                                data-action="Record Stock Transfer"
+                                className="h-10 w-full md:w-auto border border-transparent px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm gap-2"
                             >
-                                <span className="text-lg font-bold">+</span>
+                                <span className="text-lg font-bold leading-none">+</span>
                                 <span>Record Transfer</span>
                             </button>
                         </div>
@@ -1486,7 +1488,8 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             {/* Transfer History Records Table */}
             {!showForm && (
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="overflow-x-auto">
+                    {/* Desktop Table */}
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] font-black text-gray-500 uppercase tracking-wider">
@@ -1648,8 +1651,200 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Mobile Cards */}
+                    <div className="md:hidden divide-y divide-gray-100">
+                        {isLoading ? (
+                            Array(3).fill(0).map((_, i) => (
+                                <div key={i} className="p-4 animate-pulse">
+                                    <div className="h-4 bg-gray-100 rounded w-1/2 mb-2"></div>
+                                    <div className="h-3 bg-gray-100 rounded w-3/4"></div>
+                                </div>
+                            ))
+                        ) : displayLogs.length === 0 ? (
+                            <div className="p-8 text-center text-gray-400 font-medium italic">
+                                No Transfer Records Found
+                            </div>
+                        ) : (
+                            paginatedLogs.map((item, idx) => {
+                                const rowKey = item._id || `${item.truckNo}-${idx}`;
+                                const isExpanded = expandedRowId === rowKey;
+                                const bagVal = parseFloat(item.transferPkt ?? item.whPkt ?? item.inHousePacket ?? 0);
+                                const qtyVal = parseFloat(item.transferQty ?? item.whQty ?? item.inHouseQuantity ?? 0);
+
+                                const isHighlighted = highlightId && (
+                                    String(item._id) === String(highlightId) ||
+                                    (item.truckNo && String(item.truckNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                    (item.gatePassNo && String(item.gatePassNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                    (item.lcNo && String(item.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+                                );
+
+                                return (
+                                    <div
+                                        key={rowKey}
+                                        ref={el => {
+                                            if (item._id) rowRefs.current[item._id] = el;
+                                            if (item.truckNo) rowRefs.current[item.truckNo] = el;
+                                            if (item.gatePassNo) rowRefs.current[item.gatePassNo] = el;
+                                            if (item.lcNo) rowRefs.current[item.lcNo] = el;
+                                        }}
+                                        className={`transition-all duration-200 ${isExpanded ? 'bg-blue-50/20' : 'bg-white'} ${isHighlighted ? 'notif-row-highlight' : ''}`}
+                                        style={isHighlighted ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                    >
+                                        {/* Clickable Card Header */}
+                                        <div
+                                            className="p-4 cursor-pointer select-none active:bg-gray-50 transition-colors space-y-1.5"
+                                            onClick={() => setExpandedRowId(isExpanded ? null : rowKey)}
+                                        >
+                                            {/* Line 1: Date on Left, Status Badge on Right */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                                    {formatDate(item.date || item.createdAt)}
+                                                </span>
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+                                                    item.status === 'Requested'
+                                                        ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                                        : item.status === 'Rejected'
+                                                        ? 'bg-red-50 text-red-700 border border-red-200/60'
+                                                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                                                }`}>
+                                                    {item.status || 'Approved'}
+                                                </span>
+                                            </div>
+
+                                            {/* Line 2: Product Name on Left, From → To Route on Right (next line under approval tag) */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="text-sm font-black text-gray-900 truncate uppercase flex-1 min-w-0 pr-2">
+                                                    {item.productName || item.product || '-'}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60">
+                                                        {item.fromWh || 'Stock'}
+                                                    </span>
+                                                    <span className="text-gray-400 font-black text-[10px]">→</span>
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200/60">
+                                                        {item.toWh || item.whName || item.warehouse || '-'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Line 3: Brand on Left, Quantity Aligned on Right */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="text-xs font-bold text-gray-500 uppercase tracking-wider truncate flex-1 min-w-0 pr-2">
+                                                    {item.brand && item.brand !== '-' ? item.brand : '—'}
+                                                </div>
+                                                <span className="text-sm font-black text-blue-700 shrink-0 whitespace-nowrap">
+                                                    {Math.round(bagVal) > 0 ? `${Math.round(bagVal).toLocaleString('en-US')} BAG • ` : ''}
+                                                    {Math.round(qtyVal).toLocaleString('en-US')} kg
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Expandable Details */}
+                                        {isExpanded && (
+                                            <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
+                                                {/* Details Grid */}
+                                                <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 text-xs items-baseline text-left pt-2 pb-3 border-t border-gray-100/80">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck / Ref</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-mono font-bold text-gray-800">{item.truckNo || item.gatePassNo || 'TR-LOG'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">From Location</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-bold text-amber-800">{item.fromWh || 'Stock'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">To Warehouse</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-bold text-blue-800">{item.toWh || item.whName || item.warehouse || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-bold text-gray-900">{item.productName || item.product || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-semibold text-gray-700">{item.brand || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-bold text-blue-600 font-mono">{item.lcNo || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bags</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-black text-gray-900">{Math.round(bagVal).toLocaleString('en-US')}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Weight (KG)</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-black text-blue-700">{Math.round(qtyVal).toLocaleString('en-US')} kg</span>
+
+                                                    {item.remarks && (
+                                                        <>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
+                                                            <span className="text-gray-400 font-bold">:</span>
+                                                            <span className="font-medium text-gray-600">{item.remarks}</span>
+                                                        </>
+                                                    )}
+
+                                                    {canShowEntryBy && (
+                                                        <>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entry By</span>
+                                                            <span className="text-gray-400 font-bold">:</span>
+                                                            <span className="font-semibold text-gray-700">{getEntryByFirstName(item)}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                {/* Action Buttons */}
+                                                <div className="flex gap-2 pt-1 flex-wrap">
+                                                    {canApprove && item.status === 'Requested' && (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleApprove(item); }}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                            >
+                                                                <CheckIcon className="w-3.5 h-3.5" /> Approve
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleReject(item); }}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                            >
+                                                                <XIcon className="w-3.5 h-3.5" /> Reject
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setViewingTransfer(item); }}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-gray-50 text-gray-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                    >
+                                                        <EyeIcon className="w-3.5 h-3.5" /> View
+                                                    </button>
+                                                    {canTransfer && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
+                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                        >
+                                                            <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                        </button>
+                                                    )}
+                                                    {canDelete && item._id && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(item); }}
+                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                        >
+                                                            <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
                     {totalPages > 1 && (
-                        <div className="px-4 py-3 bg-white border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                        <div className="px-4 py-3 bg-white border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
                             <div>
                                 Showing <span className="font-bold text-gray-700">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-bold text-gray-700">{Math.min(currentPage * itemsPerPage, displayLogs.length)}</span> of <span className="font-bold text-gray-700">{displayLogs.length}</span> transfers
                             </div>
@@ -1674,7 +1869,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                             </div>
                         </div>
                     )}
-                    <TableScrollNav count={displayLogs.length} />
+                    <TableScrollNav className="hidden md:flex" count={displayLogs.length} />
                 </div>
             )}
 
