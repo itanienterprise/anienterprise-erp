@@ -3676,7 +3676,7 @@ const Customer = ({
                                                                         </div>
                                                                     </div>
 
-                                                                    <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[800px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
+                                                                    <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[3000px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
                                                                         <div className="space-y-1">
                                                                             <div className="flex justify-between text-xs">
                                                                                 <span className="text-gray-500">Invoice No:</span>
@@ -3688,27 +3688,74 @@ const Customer = ({
                                                                                     <span className="font-bold text-gray-900">{group.lcNo}</span>
                                                                                 </div>
                                                                             )}
-                                                                            <div className="flex justify-between text-xs">
-                                                                                <span className="text-gray-500">Products:</span>
-                                                                                <span className="font-bold text-gray-900">
-                                                                                    {group.items.length > 1 ? `${group.items.length} Items` : group.items[0]?.product}
-                                                                                </span>
+
+                                                                            {/* Product Breakdown List */}
+                                                                            <div className="my-2.5 pt-2 border-t border-gray-100">
+                                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                                                                                    Product Breakdown ({group.items.length} {group.items.length === 1 ? 'Item' : 'Items'})
+                                                                                </div>
+                                                                                <div className="space-y-2">
+                                                                                    {group.items.map((item, idx) => (
+                                                                                        <div key={idx} className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100 text-xs">
+                                                                                            <div className="flex justify-between items-start gap-2">
+                                                                                                <div className="min-w-0 flex-1">
+                                                                                                    <span className="font-bold text-gray-900 leading-tight">
+                                                                                                        {item.product || '-'}
+                                                                                                    </span>
+                                                                                                    {item.brand && item.brand !== '-' && (
+                                                                                                        <span className="text-[11px] text-gray-500 font-medium ml-1.5">
+                                                                                                            ({item.brand})
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                    {isParty && item.lcNo && (
+                                                                                                        <span className="text-[10px] text-blue-600 font-semibold block mt-0.5">
+                                                                                                            LC: {item.lcNo}
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                                <span className="font-black text-violet-700 shrink-0">
+                                                                                                    ৳{Number(item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                            <div className="flex justify-between items-center text-[11px] text-gray-500 mt-1.5 pt-1.5 border-t border-gray-200/60">
+                                                                                                <span>
+                                                                                                    Qty: <strong className="text-gray-800 font-bold">{Number(item.quantity || 0).toLocaleString('en-US')} {item.uom || ''}</strong>
+                                                                                                    {item.bag > 0 && <span className="ml-1 text-gray-400">({item.bag} Bag)</span>}
+                                                                                                    {item.truck > 0 && <span className="ml-1 text-gray-400">({item.truck} Truck)</span>}
+                                                                                                </span>
+                                                                                                <span>
+                                                                                                    Rate: <strong className="text-gray-800 font-bold">৳{Number(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</strong>
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
                                                                             </div>
-                                                                            <div className="flex justify-between text-xs">
-                                                                                <span className="text-gray-500">Total Qty:</span>
-                                                                                <span className="font-bold text-gray-900">{Number(group.totalQty || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
-                                                                            </div>
-                                                                            <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
-                                                                                <span className="text-gray-500">Amount:</span>
-                                                                                <span className="font-black text-violet-700">৳{Number(group.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
-                                                                            </div>
-                                                                            <div className="flex justify-between text-xs">
-                                                                                <span className="text-gray-500">{viewData?.customerType === 'General Customer' ? 'Truck Fare:' : 'Paid:'}</span>
-                                                                                <span className="font-bold text-teal-700">৳{Number(group.totalPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
-                                                                            </div>
-                                                                            <div className="flex justify-between text-xs">
-                                                                                <span className="text-gray-500">Balance:</span>
-                                                                                <span className="font-bold text-orange-700">৳{Number(Math.max(0, group.totalAmount - group.totalDiscount - group.totalPaid) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+
+                                                                            {/* Totals Summary */}
+                                                                            <div className="space-y-1 pt-1 border-t border-gray-100">
+                                                                                <div className="flex justify-between text-xs">
+                                                                                    <span className="text-gray-500">Total Qty:</span>
+                                                                                    <span className="font-bold text-gray-900">{Number(group.totalQty || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+                                                                                </div>
+                                                                                <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
+                                                                                    <span className="text-gray-500">Amount:</span>
+                                                                                    <span className="font-black text-violet-700">৳{Number(group.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                                                                                </div>
+                                                                                {group.totalDiscount > 0 && (
+                                                                                    <div className="flex justify-between text-xs">
+                                                                                        <span className="text-gray-500">Discount:</span>
+                                                                                        <span className="font-bold text-pink-600">৳{Number(group.totalDiscount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                                                                                    </div>
+                                                                                )}
+                                                                                <div className="flex justify-between text-xs">
+                                                                                    <span className="text-gray-500">{viewData?.customerType === 'General Customer' ? 'Truck Fare:' : 'Paid:'}</span>
+                                                                                    <span className="font-bold text-teal-700">৳{Number(group.totalPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                                                                                </div>
+                                                                                <div className="flex justify-between text-xs">
+                                                                                    <span className="text-gray-500">Balance:</span>
+                                                                                    <span className="font-bold text-orange-700">৳{Number(Math.max(0, group.totalAmount - group.totalDiscount - group.totalPaid) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
 
@@ -4394,17 +4441,26 @@ const Customer = ({
 
                                                                     // Initialize sub-items for merging logic if not present
                                                                     if (!existing.items) {
+                                                                        const initQty = parseFloat(existing.quantity_original || existing.quantity) || 0;
+                                                                        const initRate = parseFloat(existing.rate_original || existing.rate) || 0;
                                                                         existing.items = [{
                                                                             product: existing.product_original || existing.product,
                                                                             brand: existing.brand_original || existing.brand,
-                                                                            quantity: parseFloat(existing.quantity_original || existing.quantity) || 0,
-                                                                            rate: parseFloat(existing.rate_original || existing.rate) || 0
+                                                                            quantity: initQty,
+                                                                            rate: initRate,
+                                                                            amount: parseFloat(existing.amount_original || existing.amount) || (initQty * initRate),
+                                                                            uom: existing.uom,
+                                                                            bag: existing.bag,
+                                                                            truck: existing.truck,
+                                                                            lcNo: existing.lcNo
                                                                         }];
                                                                     }
 
                                                                     const itemRate = parseFloat(item.rate || 0);
                                                                     const itemBrand = (item.brand || '').trim();
                                                                     const itemProduct = (item.product || '').trim();
+                                                                    const itemQty = parseFloat(item.quantity || 0);
+                                                                    const itemAmt = parseFloat(item.amount) || (itemQty * itemRate);
 
                                                                     const matchingItem = existing.items.find(si =>
                                                                         (si.product?.trim() === itemProduct) &&
@@ -4412,13 +4468,19 @@ const Customer = ({
                                                                         (parseFloat(si.rate || 0) === itemRate)
                                                                     );
                                                                     if (matchingItem) {
-                                                                        matchingItem.quantity += parseFloat(item.quantity || 0);
+                                                                        matchingItem.quantity += itemQty;
+                                                                        matchingItem.amount = (parseFloat(matchingItem.amount) || 0) + itemAmt;
                                                                     } else {
                                                                         existing.items.push({
                                                                             product: item.product,
                                                                             brand: item.brand,
-                                                                            quantity: parseFloat(item.quantity || 0),
-                                                                            rate: itemRate
+                                                                            quantity: itemQty,
+                                                                            rate: itemRate,
+                                                                            amount: itemAmt,
+                                                                            uom: item.uom,
+                                                                            bag: item.bag,
+                                                                            truck: item.truck,
+                                                                            lcNo: item.lcNo
                                                                         });
                                                                     }
 
@@ -4438,11 +4500,26 @@ const Customer = ({
                                                                     product_original: item.product,
                                                                     brand_original: item.brand,
                                                                     quantity_original: item.quantity,
-                                                                    rate_original: item.rate
+                                                                    rate_original: item.rate,
+                                                                    amount_original: item.amount
                                                                 });
                                                                 return acc;
                                                             }, []).map((item, index) => {
                                                                 const isExpanded = expandedAllHistoryCards === index;
+                                                                const isParty = viewData?.customerType?.toLowerCase().includes('party');
+                                                                const saleItems = (item.items && item.items.length > 0)
+                                                                    ? item.items
+                                                                    : [{
+                                                                        product: item.product_original || item.product,
+                                                                        brand: item.brand_original || item.brand,
+                                                                        quantity: parseFloat(item.quantity_original || item.quantity) || 0,
+                                                                        rate: parseFloat(item.rate_original || item.rate) || 0,
+                                                                        amount: parseFloat(item.amount_original || item.amount) || ((parseFloat(item.quantity_original || item.quantity) || 0) * (parseFloat(item.rate_original || item.rate) || 0)),
+                                                                        uom: item.uom,
+                                                                        bag: item.bag,
+                                                                        truck: item.truck,
+                                                                        lcNo: item.lcNo
+                                                                    }];
                                                                 return (
                                                                     <div
                                                                         key={index}
@@ -4464,23 +4541,75 @@ const Customer = ({
                                                                             </div>
                                                                         </div>
 
-                                                                        <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[500px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
+                                                                        <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[3000px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
                                                                             <div className="space-y-1 text-xs">
                                                                                 {item.type === 'sale' ? (
                                                                                     <>
-                                                                                        <div className="flex justify-between items-start">
-                                                                                            <span className="text-gray-500">Product:</span>
-                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.product_display || item.product}</span>
+                                                                                        {/* Product Breakdown List */}
+                                                                                        <div className="my-2.5 pt-2 border-t border-gray-100">
+                                                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                                                                                                Product Breakdown ({saleItems.length} {saleItems.length === 1 ? 'Item' : 'Items'})
+                                                                                            </div>
+                                                                                            <div className="space-y-2">
+                                                                                                {saleItems.map((sItem, idx) => (
+                                                                                                    <div key={idx} className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100 text-xs">
+                                                                                                        <div className="flex justify-between items-start gap-2">
+                                                                                                            <div className="min-w-0 flex-1">
+                                                                                                                <span className="font-bold text-gray-900 leading-tight">
+                                                                                                                    {sItem.product || '-'}
+                                                                                                                </span>
+                                                                                                                {sItem.brand && sItem.brand !== '-' && (
+                                                                                                                    <span className="text-[11px] text-gray-500 font-medium ml-1.5">
+                                                                                                                        ({sItem.brand})
+                                                                                                                    </span>
+                                                                                                                )}
+                                                                                                                {isParty && sItem.lcNo && (
+                                                                                                                    <span className="text-[10px] text-blue-600 font-semibold block mt-0.5">
+                                                                                                                        LC: {sItem.lcNo}
+                                                                                                                    </span>
+                                                                                                                )}
+                                                                                                            </div>
+                                                                                                            <span className="font-black text-violet-700 shrink-0">
+                                                                                                                ৳{Number(sItem.amount || (parseFloat(sItem.quantity || 0) * parseFloat(sItem.rate || 0)) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                        <div className="flex justify-between items-center text-[11px] text-gray-500 mt-1.5 pt-1.5 border-t border-gray-200/60">
+                                                                                                            <span>
+                                                                                                                Qty: <strong className="text-gray-800 font-bold">{Number(sItem.quantity || 0).toLocaleString('en-US')} {sItem.uom || ''}</strong>
+                                                                                                                {sItem.bag > 0 && <span className="ml-1 text-gray-400">({sItem.bag} Bag)</span>}
+                                                                                                                {sItem.truck > 0 && <span className="ml-1 text-gray-400">({sItem.truck} Truck)</span>}
+                                                                                                            </span>
+                                                                                                            <span>
+                                                                                                                Rate: <strong className="text-gray-800 font-bold">৳{Number(sItem.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</strong>
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </div>
                                                                                         </div>
-                                                                                        <div className="flex justify-between items-start">
-                                                                                            <span className="text-gray-500">Qty:</span>
-                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString('en-US') : '—')}</span>
+
+                                                                                        {/* Totals Summary */}
+                                                                                        <div className="space-y-1 pt-1 border-t border-gray-100">
+                                                                                            <div className="flex justify-between text-xs">
+                                                                                                <span className="text-gray-500">Total Qty:</span>
+                                                                                                <span className="font-bold text-gray-900">{Number(item.quantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+                                                                                            </div>
+                                                                                            <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
+                                                                                                <span className="text-gray-500">Amount:</span>
+                                                                                                <span className="font-black text-violet-700">৳{Number(item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                                                                                            </div>
+                                                                                            {parseFloat(item.discount || 0) > 0 && (
+                                                                                                <div className="flex justify-between text-xs">
+                                                                                                    <span className="text-gray-500">Discount:</span>
+                                                                                                    <span className="font-bold text-pink-600">৳{Number(item.discount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                                                                                                </div>
+                                                                                            )}
+                                                                                            <div className="flex justify-between text-xs">
+                                                                                                <span className="text-gray-500">{viewData?.customerType === 'General Customer' ? 'Truck Fare:' : 'Paid:'}</span>
+                                                                                                <span className="font-bold text-teal-700">৳{Number(item.paid || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                                                                                            </div>
                                                                                         </div>
-                                                                                        <div className="flex justify-between items-start">
-                                                                                            <span className="text-gray-500">Rate:</span>
-                                                                                            <span className="font-bold text-left whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString('en-IN')}` : '—')}</span>
-                                                                                        </div>
-                                                                                        <div className="flex justify-between"><span className="text-gray-500">Paid:</span><span className="font-bold text-emerald-600">৳{parseFloat(item.paid || 0).toLocaleString('en-IN')}</span></div>
+
                                                                                         <div className="pt-2 border-t border-gray-100 flex gap-2">
                                                                                             <button
                                                                                                 type="button"
