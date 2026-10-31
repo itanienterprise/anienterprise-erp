@@ -1242,22 +1242,32 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                     >
                                         {/* Clickable Card Header */}
                                         <div
-                                            className="flex items-center justify-between p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                            className="p-4 cursor-pointer select-none active:bg-gray-50 transition-colors space-y-1.5"
                                             onClick={() => setExpandedRowId(isExpanded ? null : item._id)}
                                         >
-                                            <div className="flex-1 min-w-0 pr-3">
-                                                <div className="text-sm font-black text-gray-900 truncate">{item.productName}</div>
-                                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(item.date)}</span>
-                                                    <span className="text-gray-300">•</span>
-                                                    <span className="text-[10px] font-black text-red-600">{item.quantity} kg</span>
-                                                </div>
+                                            {/* Line 1: Date on Left, Reason Badge on Right (no > icon) */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                                    {formatDate(item.date)}
+                                                </span>
+                                                <span className="px-2.5 py-0.5 bg-red-50 text-red-600 border border-red-100/50 rounded-lg text-[10px] font-bold uppercase tracking-wider shrink-0">
+                                                    {item.reason}
+                                                </span>
                                             </div>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                <span className="px-2.5 py-0.5 bg-red-50 text-red-600 border border-red-100/50 rounded-lg text-[10px] font-bold uppercase tracking-wider">{item.reason}</span>
-                                                <div className={`p-1.5 rounded-lg transition-all ${isExpanded ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
-                                                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+
+                                            {/* Line 2: Product Name */}
+                                            <div className="text-sm font-black text-gray-900 truncate uppercase">
+                                                {item.productName}
+                                            </div>
+
+                                            {/* Line 3: Brand on Left, Quantity Aligned on Right */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="text-xs font-bold text-gray-500 uppercase tracking-wider truncate flex-1 min-w-0 pr-2">
+                                                    {item.brand && item.brand !== '-' ? item.brand : '—'}
                                                 </div>
+                                                <span className="text-sm font-black text-red-600 shrink-0 whitespace-nowrap">
+                                                    {!isNaN(parseFloat(item.quantity)) ? `${parseFloat(item.quantity).toLocaleString('en-US')} kg` : `${item.quantity || 0} kg`}
+                                                </span>
                                             </div>
                                         </div>
 
