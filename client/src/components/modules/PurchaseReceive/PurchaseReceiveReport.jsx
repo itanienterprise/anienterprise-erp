@@ -20,6 +20,11 @@ const PurchaseReceiveReport = ({
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
+    const [expandedReportCardId, setExpandedReportCardId] = useState(null);
+
+    const toggleReportCard = (id) => {
+        setExpandedReportCardId(prev => (prev === id ? null : id));
+    };
 
     const [filters, setFilters] = useState({
         startDate: initialFilters.startDate || '',
@@ -370,127 +375,232 @@ const PurchaseReceiveReport = ({
 
     const renderPurchaseReceiveTable = (records) => {
         return (
-            <div className="overflow-x-auto border border-gray-900">
-                <table className="w-full border-collapse">
-                    <thead>
-                        <tr className="bg-gray-50 border-b border-gray-900 text-gray-900">
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-center text-xs font-bold uppercase tracking-wider whitespace-nowrap w-10">SL</th>
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-center text-xs font-bold uppercase tracking-wider whitespace-nowrap">Date</th>
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-center text-xs font-bold uppercase tracking-wider whitespace-nowrap">Receipt No</th>
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Supplier / Company</th>
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-center text-xs font-bold uppercase tracking-wider whitespace-nowrap">Warehouse</th>
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Product</th>
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Brand</th>
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">Arrival Qty</th>
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">SWP Qty</th>
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">InHouse Qty</th>
-                            <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">Price</th>
-                            <th className="px-2 sm:px-2.5 py-2 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">Total Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-900">
-                        {records.length > 0 ? (
-                            records.map((p, idx) => {
-                                const entries = getPurchaseBrandEntries(p);
-                                const t = getPRTotals(p);
+            <>
+                {/* Desktop / Print Table */}
+                <div className="hidden md:block print:block overflow-x-auto border border-gray-900">
+                    <table className="w-full border-collapse">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-900 text-gray-900">
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-center text-xs font-bold uppercase tracking-wider whitespace-nowrap w-10">SL</th>
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-center text-xs font-bold uppercase tracking-wider whitespace-nowrap">Date</th>
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-center text-xs font-bold uppercase tracking-wider whitespace-nowrap">Receipt No</th>
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Supplier / Company</th>
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-center text-xs font-bold uppercase tracking-wider whitespace-nowrap">Warehouse</th>
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Product</th>
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Brand</th>
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">Arrival Qty</th>
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">SWP Qty</th>
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">InHouse Qty</th>
+                                <th className="border-r border-gray-900 px-2 sm:px-2.5 py-2 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">Price</th>
+                                <th className="px-2 sm:px-2.5 py-2 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">Total Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-900">
+                            {records.length > 0 ? (
+                                records.map((p, idx) => {
+                                    const entries = getPurchaseBrandEntries(p);
+                                    const t = getPRTotals(p);
 
-                                return (
-                                    <tr key={p._id || idx} className="hover:bg-blue-50/20 text-gray-900 text-xs sm:text-[13px] transition-colors">
-                                        <td className="border-r border-gray-900 px-2 py-2 text-center font-medium">{idx + 1}</td>
-                                        <td className="border-r border-gray-900 px-2 py-2 text-center whitespace-nowrap font-medium text-gray-600">
-                                            {formatDate(p.date)}
-                                        </td>
-                                        <td className="border-r border-gray-900 px-2 py-2 text-center font-bold text-blue-600 whitespace-nowrap">
-                                            {p.purchaseReceiveNo || p.purchaseNo || '—'}
-                                        </td>
-                                        <td className="border-r border-gray-900 px-2.5 py-2 font-bold text-gray-900">
-                                            {p.companyName || p.supplierName || '—'}
-                                        </td>
-                                        <td className="border-r border-gray-900 px-2 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">
-                                            {p.warehouse || 'HILI'}
-                                        </td>
-                                        <td className="border-r border-gray-900 px-2.5 py-2 font-semibold text-gray-900">
-                                            <div className="space-y-0.5">
-                                                {entries.map((e, eIdx) => (
-                                                    <div key={eIdx}>{e.productName}</div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="border-r border-gray-900 px-2.5 py-2 text-gray-700 font-medium">
-                                            <div className="space-y-0.5">
-                                                {entries.map((e, eIdx) => (
-                                                    <div key={eIdx}>{e.brand}</div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="border-r border-gray-900 px-2 py-2 text-right font-bold text-blue-600 whitespace-nowrap">
-                                            <div className="space-y-0.5">
-                                                {entries.map((e, eIdx) => (
-                                                    <div key={eIdx}>{e.qty ? Math.round(e.qty).toLocaleString('en-US') + ' kg' : '—'}</div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="border-r border-gray-900 px-2 py-2 text-right font-bold text-rose-600 whitespace-nowrap">
-                                            <div className="space-y-0.5">
-                                                {entries.map((e, eIdx) => (
-                                                    <div key={eIdx}>{e.swpQty ? Math.round(e.swpQty).toLocaleString('en-US') + ' kg' : '0 kg'}</div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="border-r border-gray-900 px-2 py-2 text-right font-bold text-emerald-600 whitespace-nowrap">
-                                            <div className="space-y-0.5">
-                                                {entries.map((e, eIdx) => (
-                                                    <div key={eIdx}>{e.inHouseQty ? Math.round(e.inHouseQty).toLocaleString('en-US') + ' kg' : '0 kg'}</div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="border-r border-gray-900 px-2 py-2 text-right font-medium text-gray-700 whitespace-nowrap">
-                                            <div className="space-y-0.5">
-                                                {entries.map((e, eIdx) => (
-                                                    <div key={eIdx}>৳ {e.rate ? e.rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="px-2 py-2 text-right font-black text-gray-900 whitespace-nowrap">
-                                            ৳ {Math.round(t.totalAmount).toLocaleString('en-IN')}
-                                        </td>
-                                    </tr>
-                                );
-                            })
-                        ) : (
-                            <tr>
-                                <td colSpan={12} className="px-4 py-8 text-center text-gray-500 italic text-[14px]">
-                                    No purchase receive records found matching your filter criteria.
-                                </td>
-                            </tr>
+                                    return (
+                                        <tr key={p._id || idx} className="hover:bg-blue-50/20 text-gray-900 text-xs sm:text-[13px] transition-colors">
+                                            <td className="border-r border-gray-900 px-2 py-2 text-center font-medium">{idx + 1}</td>
+                                            <td className="border-r border-gray-900 px-2 py-2 text-center whitespace-nowrap font-medium text-gray-600">
+                                                {formatDate(p.date)}
+                                            </td>
+                                            <td className="border-r border-gray-900 px-2 py-2 text-center font-bold text-blue-600 whitespace-nowrap">
+                                                {p.purchaseReceiveNo || p.purchaseNo || '—'}
+                                            </td>
+                                            <td className="border-r border-gray-900 px-2.5 py-2 font-bold text-gray-900">
+                                                {p.companyName || p.supplierName || '—'}
+                                            </td>
+                                            <td className="border-r border-gray-900 px-2 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">
+                                                {p.warehouse || 'HILI'}
+                                            </td>
+                                            <td className="border-r border-gray-900 px-2.5 py-2 font-semibold text-gray-900">
+                                                <div className="space-y-0.5">
+                                                    {entries.map((e, eIdx) => (
+                                                        <div key={eIdx}>{e.productName}</div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="border-r border-gray-900 px-2.5 py-2 text-gray-700 font-medium">
+                                                <div className="space-y-0.5">
+                                                    {entries.map((e, eIdx) => (
+                                                        <div key={eIdx}>{e.brand}</div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="border-r border-gray-900 px-2 py-2 text-right font-bold text-blue-600 whitespace-nowrap">
+                                                <div className="space-y-0.5">
+                                                    {entries.map((e, eIdx) => (
+                                                        <div key={eIdx}>{e.qty ? Math.round(e.qty).toLocaleString('en-US') + ' kg' : '—'}</div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="border-r border-gray-900 px-2 py-2 text-right font-bold text-rose-600 whitespace-nowrap">
+                                                <div className="space-y-0.5">
+                                                    {entries.map((e, eIdx) => (
+                                                        <div key={eIdx}>{e.swpQty ? Math.round(e.swpQty).toLocaleString('en-US') + ' kg' : '0 kg'}</div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="border-r border-gray-900 px-2 py-2 text-right font-bold text-emerald-600 whitespace-nowrap">
+                                                <div className="space-y-0.5">
+                                                    {entries.map((e, eIdx) => (
+                                                        <div key={eIdx}>{e.inHouseQty ? Math.round(e.inHouseQty).toLocaleString('en-US') + ' kg' : '0 kg'}</div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="border-r border-gray-900 px-2 py-2 text-right font-medium text-gray-700 whitespace-nowrap">
+                                                <div className="space-y-0.5">
+                                                    {entries.map((e, eIdx) => (
+                                                        <div key={eIdx}>৳ {e.rate ? e.rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="px-2 py-2 text-right font-black text-gray-900 whitespace-nowrap">
+                                                ৳ {Math.round(t.totalAmount).toLocaleString('en-IN')}
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            ) : (
+                                <tr>
+                                    <td colSpan={12} className="px-4 py-8 text-center text-gray-500 italic text-[14px]">
+                                        No purchase receive records found matching your filter criteria.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                        {records.length > 0 && (
+                            <tfoot>
+                                <tr className="bg-gray-100/80 font-black text-gray-900 border-t-2 border-gray-900 text-xs sm:text-[13px]">
+                                    <td colSpan={7} className="border-r border-gray-900 px-3 py-2 text-center uppercase tracking-wider">
+                                        Grand Total
+                                    </td>
+                                    <td className="border-r border-gray-900 px-2 py-2 text-right text-blue-700 font-black whitespace-nowrap">
+                                        {Math.round(stats.totalArrivalQty).toLocaleString('en-US')} kg
+                                    </td>
+                                    <td className="border-r border-gray-900 px-2 py-2 text-right text-rose-700 font-black whitespace-nowrap">
+                                        {Math.round(stats.totalSwpQty).toLocaleString('en-US')} kg
+                                    </td>
+                                    <td className="border-r border-gray-900 px-2 py-2 text-right text-emerald-700 font-black whitespace-nowrap">
+                                        {Math.round(stats.totalInHouseQty).toLocaleString('en-US')} kg
+                                    </td>
+                                    <td className="border-r border-gray-900 px-2 py-2 text-right text-gray-400">
+                                        —
+                                    </td>
+                                    <td className="px-2 py-2 text-right text-gray-900 font-black whitespace-nowrap">
+                                        ৳ {Math.round(stats.totalAmount).toLocaleString('en-IN')}
+                                    </td>
+                                </tr>
+                            </tfoot>
                         )}
-                    </tbody>
-                    {records.length > 0 && (
-                        <tfoot>
-                            <tr className="bg-gray-100/80 font-black text-gray-900 border-t-2 border-gray-900 text-xs sm:text-[13px]">
-                                <td colSpan={7} className="border-r border-gray-900 px-3 py-2 text-center uppercase tracking-wider">
-                                    Grand Total
-                                </td>
-                                <td className="border-r border-gray-900 px-2 py-2 text-right text-blue-700 font-black whitespace-nowrap">
-                                    {Math.round(stats.totalArrivalQty).toLocaleString('en-US')} kg
-                                </td>
-                                <td className="border-r border-gray-900 px-2 py-2 text-right text-rose-700 font-black whitespace-nowrap">
-                                    {Math.round(stats.totalSwpQty).toLocaleString('en-US')} kg
-                                </td>
-                                <td className="border-r border-gray-900 px-2 py-2 text-right text-emerald-700 font-black whitespace-nowrap">
-                                    {Math.round(stats.totalInHouseQty).toLocaleString('en-US')} kg
-                                </td>
-                                <td className="border-r border-gray-900 px-2 py-2 text-right text-gray-400">
-                                    —
-                                </td>
-                                <td className="px-2 py-2 text-right text-gray-900 font-black whitespace-nowrap">
-                                    ৳ {Math.round(stats.totalAmount).toLocaleString('en-IN')}
-                                </td>
-                            </tr>
-                        </tfoot>
+                    </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden print:hidden space-y-3">
+                    {records.length > 0 ? (
+                        records.map((p, idx) => {
+                            const cardKey = p._id || idx;
+                            const isExpanded = expandedReportCardId === cardKey;
+                            const entries = getPurchaseBrandEntries(p);
+                            const t = getPRTotals(p);
+
+                            return (
+                                <div
+                                    key={cardKey}
+                                    onClick={() => toggleReportCard(cardKey)}
+                                    className={`bg-white border rounded-2xl overflow-hidden shadow-sm transition-all duration-200 cursor-pointer ${
+                                        isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-200 hover:border-gray-300'
+                                    }`}
+                                >
+                                    <div className={`bg-gray-50/70 px-3.5 py-2.5 flex justify-between items-center gap-2 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-blue-50/20' : ''}`}>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                                #{idx + 1}
+                                            </span>
+                                            <span className="text-xs font-black text-blue-600 truncate">
+                                                {p.purchaseReceiveNo || p.purchaseNo || '—'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <span className="text-[11px] font-bold text-gray-500">
+                                                {formatDate(p.date)}
+                                            </span>
+                                            <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-blue-600' : ''}`} />
+                                        </div>
+                                    </div>
+                                    <div className="p-3.5 space-y-2">
+                                        <div className="flex justify-between items-start gap-2">
+                                            <div className="min-w-0 flex-1">
+                                                <h4 className="font-black text-gray-900 text-sm leading-tight truncate">
+                                                    {p.companyName || p.supplierName || '—'}
+                                                </h4>
+                                                <div className="text-[11px] text-gray-500 mt-0.5">
+                                                    Warehouse: <strong className="text-gray-700">{p.warehouse || 'HILI'}</strong>
+                                                </div>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <div className="text-base font-black text-blue-600">
+                                                    ৳{Math.round(t.totalAmount).toLocaleString('en-IN')}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {isExpanded && (
+                                            <div className="bg-gray-50/70 rounded-xl p-2.5 border border-gray-100 space-y-2 text-xs animate-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+                                                {entries.map((e, eIdx) => (
+                                                    <div key={eIdx} className={`${eIdx > 0 ? 'pt-2 border-t border-gray-200/60' : ''} space-y-1`}>
+                                                        <div className="flex justify-between">
+                                                            <span className="text-gray-500 font-medium">Product:</span>
+                                                            <span className="font-bold text-gray-800 text-right">{e.productName}</span>
+                                                        </div>
+                                                        {e.brand && e.brand !== '—' && (
+                                                            <div className="flex justify-between">
+                                                                <span className="text-gray-500 font-medium">Brand:</span>
+                                                                <span className="font-semibold text-gray-700">{e.brand}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex justify-between">
+                                                            <span className="text-gray-500">Arrival: <strong className="text-blue-600">{e.qty ? `${Math.round(e.qty).toLocaleString('en-US')} kg` : '—'}</strong></span>
+                                                            {e.swpQty > 0 && <span className="text-gray-500">SWP: <strong className="text-rose-600">{`${Math.round(e.swpQty).toLocaleString('en-US')} kg`}</strong></span>}
+                                                            <span className="text-gray-500">InHouse: <strong className="text-emerald-600">{`${Math.round(e.inHouseQty || 0).toLocaleString('en-US')} kg`}</strong></span>
+                                                        </div>
+                                                        {e.rate > 0 && (
+                                                            <div className="flex justify-between pt-0.5 text-[11px] text-gray-500">
+                                                                <span>Rate: ৳{e.rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div className="py-8 text-center text-gray-500 italic text-sm bg-gray-50 rounded-2xl border border-gray-200">
+                            No purchase receive records found matching your filter criteria.
+                        </div>
                     )}
-                </table>
-            </div>
+
+                    {records.length > 0 && (
+                        <div className="bg-gray-900 text-white rounded-2xl p-4 shadow-xl flex justify-between items-center">
+                            <div>
+                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Grand Total</div>
+                                <div className="text-xs text-gray-400">{records.length} Receives • {Math.round(stats.totalArrivalQty).toLocaleString('en-US')} kg Arrived</div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-xs text-gray-400">Total Amount</div>
+                                <div className="text-lg font-black text-white">৳ {Math.round(stats.totalAmount).toLocaleString('en-IN')}</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </>
         );
     };
 
@@ -500,35 +610,35 @@ const PurchaseReceiveReport = ({
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-[96vw] 2xl:max-w-[1680px] h-[94vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
                 {/* Header Controls */}
-                <div className="p-3 sm:p-4 border-b border-gray-100 flex flex-wrap gap-2 items-center justify-between flex-shrink-0 bg-white no-print">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-                            <BarChartIcon className="w-4 h-4" />
+                <div className="p-2.5 sm:p-4 border-b border-gray-100 flex flex-col gap-2 flex-shrink-0 bg-white no-print">
+                    {/* Top Row: Title on Left, The Three Buttons (Filter, Print, Close) ALWAYS UP on Right */}
+                    <div className="flex items-center justify-between gap-2 w-full">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                                <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </div>
+                            <div className="min-w-0">
+                                <h2 className="text-xs sm:text-base lg:text-lg font-bold text-gray-900 truncate">Purchase Receive Report</h2>
+                                <p className="text-[10px] sm:text-[11px] text-gray-400 font-medium truncate">
+                                    {filters.startDate || filters.endDate ? (
+                                        <span>
+                                            {formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} — {formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}
+                                        </span>
+                                    ) : (
+                                        'All Dates'
+                                    )}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-base sm:text-lg font-bold text-gray-900">Purchase Receive Report</h2>
-                            <p className="text-[11px] text-gray-400 font-medium">
-                                {filters.startDate || filters.endDate ? (
-                                    <span>
-                                        {formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} — {formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}
-                                    </span>
-                                ) : (
-                                    'All Dates'
-                                )}
-                            </p>
-                        </div>
-                    </div>
 
-                    {/* Toolbar: Search, Status, Filter, Print, Close */}
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                        {/* Search Input */}
-                        <div className="relative">
+                        {/* Search on Desktop */}
+                        <div className="hidden md:flex relative flex-1 max-w-sm mx-4">
                             <input
                                 type="text"
                                 placeholder="Search receipt, company, product..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-40 sm:w-60 pl-8 pr-3 py-1.5 sm:py-2 bg-gray-50/70 border border-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-400"
+                                className="w-full pl-8 pr-3 py-1.5 sm:py-2 bg-gray-50/70 border border-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-400"
                             />
                             <SearchIcon className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                             {searchQuery && (
@@ -541,8 +651,10 @@ const PurchaseReceiveReport = ({
                             )}
                         </div>
 
-                        {/* Status Custom Dropdown */}
-                        <div className="relative no-print" ref={statusDropdownRef}>
+                        {/* Right Buttons: Desktop Status Dropdown + The Three Buttons ALWAYS UP */}
+                        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                            {/* Status Custom Dropdown (Desktop) */}
+                            <div className="hidden md:block relative no-print" ref={statusDropdownRef}>
                             <button
                                 type="button"
                                 onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
@@ -920,22 +1032,88 @@ const PurchaseReceiveReport = ({
                             )}
                         </div>
 
-                        {/* Print / Export Report Modal Button */}
-                        <button
-                            onClick={() => setShowReportFormatModal(true)}
-                            className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print"
-                            title="Print / Export Report"
-                        >
-                            <PrinterIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
-                        </button>
+                            {/* Print / Export Report Modal Button */}
+                            <button
+                                onClick={() => setShowReportFormatModal(true)}
+                                className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print"
+                                title="Print / Export Report"
+                            >
+                                <PrinterIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
+                            </button>
 
-                        {/* Close Modal Button */}
-                        <button
-                            onClick={onClose}
-                            className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"
-                        >
-                            <XIcon className="w-3.5 h-3.5 sm:w-6 sm:h-6 text-gray-500" />
-                        </button>
+                            {/* Close Modal Button */}
+                            <button
+                                onClick={onClose}
+                                className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"
+                            >
+                                <XIcon className="w-3.5 h-3.5 sm:w-6 sm:h-6 text-gray-500" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Bottom Row on Mobile Only: Search & Status Dropdown */}
+                    <div className="flex md:hidden items-center gap-2 pt-1.5 border-t border-gray-100 w-full">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                placeholder="Search receipt, company..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-7 pr-7 py-1.5 bg-gray-50/70 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-400"
+                            />
+                            <SearchIcon className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-600"
+                                >
+                                    <XIcon className="h-3 w-3" />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Mobile Status Selector */}
+                        <div className="relative no-print shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                                className="h-7 bg-white border border-gray-200 text-gray-700 px-2 rounded-lg text-xs font-bold flex items-center justify-between gap-1 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 shadow-sm"
+                            >
+                                <span>
+                                    {filters.status === 'Accepted' ? 'Accepted' : filters.status === 'Requested' ? 'Requested' : 'All'}
+                                </span>
+                                <ChevronDownIcon className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${statusDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {statusDropdownOpen && (
+                                <div className="absolute right-0 mt-1.5 w-32 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                                    {[
+                                        { value: 'All', label: 'All' },
+                                        { value: 'Accepted', label: 'Accepted' },
+                                        { value: 'Requested', label: 'Requested' }
+                                    ].map((opt) => (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            onClick={() => {
+                                                handleFilterChange('status', opt.value);
+                                                setStatusDropdownOpen(false);
+                                            }}
+                                            className={`w-full px-2.5 py-1.5 text-left text-xs flex items-center justify-between transition-colors ${
+                                                filters.status === opt.value
+                                                    ? 'bg-blue-50 text-blue-700 font-bold'
+                                                    : 'text-gray-700 hover:bg-gray-50 font-medium'
+                                            }`}
+                                        >
+                                            <span>{opt.label}</span>
+                                            {filters.status === opt.value && (
+                                                <CheckIcon className="w-3 h-3 text-blue-600 flex-shrink-0" />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -944,37 +1122,36 @@ const PurchaseReceiveReport = ({
                     <div className="w-full max-w-[1620px] mx-auto space-y-6 sm:space-y-8 print:max-w-none">
 
                         {/* Header */}
-                        <div className="flex justify-between items-center pb-1">
+                        <div className="flex flex-col sm:flex-row print:!flex-row justify-between items-center gap-2 sm:gap-4 pb-1">
                             {/* Left: Logo & Company Name */}
-                            <div className="flex items-center gap-3">
-                                <img src="/logo.png" alt="ANI Enterprise Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
-                                <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
+                            <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
+                                <img src="/logo.png" alt="ANI Enterprise Logo" className="w-10 h-10 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
+                                <h1 className="text-xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
                                     ANI ENTERPRISE
                                 </h1>
                             </div>
 
                             {/* Right: Address Info */}
-                            <div className="text-right text-[11px] sm:text-[12px] text-gray-700 leading-tight">
+                            <div className="text-center sm:text-right print:!text-right text-[10px] sm:text-[12px] print:!text-[12px] text-gray-700 leading-tight">
                                 <p className="font-semibold text-gray-800">766, H.M Tower, Level-06</p>
                                 <p>Borogola, Bogura, Bangladesh</p>
-                                <p>Tel: +8802588813057</p>
-                                <p>Email: anienterprise051@gmail.com</p>
+                                <p>Tel: +8802588813057 • Email: anienterprise051@gmail.com</p>
                             </div>
                         </div>
 
                         {/* Orange Divider Line */}
-                        <div className="border-t-2 border-[#f97316] w-full mt-3"></div>
+                        <div className="border-t-2 border-[#f97316] w-full mt-2 sm:mt-3"></div>
 
                         {/* Centered Title Badge */}
-                        <div className="flex justify-center -mt-5">
-                            <div className="bg-[#f97316] text-white px-8 py-1 rounded shadow-sm">
-                                <h2 className="text-xs sm:text-sm font-bold tracking-wider uppercase">PURCHASE RECEIVE REPORT</h2>
+                        <div className="flex justify-center -mt-4 sm:-mt-5">
+                            <div className="bg-[#f97316] text-white px-4 sm:px-8 py-1 rounded shadow-sm">
+                                <h2 className="text-[11px] sm:text-sm font-bold tracking-wider uppercase text-center">PURCHASE RECEIVE REPORT</h2>
                             </div>
                         </div>
 
                         {/* Filter Info Row */}
-                        <div className="flex justify-between items-end text-[14px] text-gray-800 pt-6 px-2">
-                            <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col sm:flex-row print:!flex-row justify-between items-start sm:items-end print:!items-end gap-2 sm:gap-0 text-xs sm:text-[14px] print:!text-[14px] text-gray-800 pt-3 sm:pt-4 px-1 sm:px-2">
+                            <div className="flex flex-col gap-1.5 w-full sm:w-auto">
                                 <div className="flex">
                                     <span className="font-bold text-gray-900 w-28">Date Range:</span>
                                     <span className="text-gray-900">{formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to {formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}</span>
@@ -1004,7 +1181,7 @@ const PurchaseReceiveReport = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="font-bold">
+                            <div className="font-bold text-left sm:text-right print:!text-right shrink-0">
                                 <span className="text-gray-900">Printed on:</span> <span className="text-gray-900">{formatDate(new Date().toISOString().split('T')[0])}</span>
                             </div>
                         </div>

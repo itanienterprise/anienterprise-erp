@@ -87,6 +87,13 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
 
+    // Mobile Card Expansion (one at a time)
+    const [expandedMobileCardId, setExpandedMobileCardId] = useState(null);
+
+    const toggleCardExpansion = (id) => {
+        setExpandedMobileCardId(prev => (prev === id ? null : id));
+    };
+
     // Filter & Report States
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
@@ -1659,8 +1666,8 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         <div className="space-y-6">
             {/* Header & Controls */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-black text-gray-900 tracking-tight">Purchase Receive Management</h2>
+                <div className="w-full md:w-auto">
+                    <h2 className="text-2xl font-black text-gray-900 tracking-tight text-center md:text-left">Purchase Receive Management</h2>
                 </div>
 
                 {/* Center Search & Requested Toggle */}
@@ -2032,7 +2039,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                             onClick={() => handleOpenModal()}
                             className="flex-1 md:flex-none w-full md:w-auto justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 flex items-center gap-2 text-sm h-[42px]"
                         >
-                            <PlusIcon className="w-4 h-4" /> <span>Add Purchase Receive</span>
+                            <PlusIcon className="w-4 h-4 shrink-0" /> <span className="whitespace-nowrap">Add <span className="hidden sm:inline">Purchase </span>Receive</span>
                         </button>
                     )}
                 </div>
@@ -2242,91 +2249,235 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                 <TableScrollNav className="hidden md:flex" count={filteredPurchaseReceives.length} />
 
                 {/* Mobile View Cards */}
-                <div className="block md:hidden divide-y divide-gray-100">
-                        {filteredPurchaseReceives.map(p => (
-                            <div key={p._id} className="p-4 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-blue-600">{p.purchaseReceiveNo || p.purchaseNo || '—'}</span>
-                                    <span className="text-xs text-gray-500">{formatDate(p.date)}</span>
-                                </div>
-                                <div>
-                                    <div className="text-sm font-bold text-gray-900">{p.companyName || p.supplierName || '—'}</div>
-                                    <div className="text-xs text-gray-500">Warehouse: {p.warehouse || 'HILI'}</div>
-                                </div>
-                                <div className="bg-gray-50 p-2.5 rounded-xl space-y-1.5 text-xs">
-                                    {getPurchaseBrandEntries(p).map((e, idx) => (
-                                        <div key={idx} className="flex justify-between items-center text-gray-700">
-                                            <span>{e.productName} ({e.brand})</span>
-                                            <div className="text-right">
-                                                <span className="font-bold text-blue-600">Arr: {e.qty}</span>
-                                                {e.swpQty > 0 && <span className="font-bold text-rose-600 ml-1">SWP: {e.swpQty}</span>}
-                                                <span className="font-bold text-emerald-600 ml-1">IH: {e.inHouseQty}</span>
-                                                <span className="font-semibold text-gray-600 ml-1">@ ৳{e.rate}</span>
+                <div className="block md:hidden px-3 py-3 space-y-3">
+                    {isLoading ? (
+                        Array(3).fill(0).map((_, i) => (
+                            <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
+                                <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                                <div className="h-6 bg-gray-200 rounded w-full"></div>
+                                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                            </div>
+                        ))
+                    ) : filteredPurchaseReceives.length > 0 ? (
+                        filteredPurchaseReceives.map((p, idx) => {
+                            const statusLower = (p.status || 'Accepted').toLowerCase();
+                            const badgeClass = statusLower === 'accepted' || statusLower === 'approved'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : statusLower === 'requested'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200';
+                            const statusText = p.status || 'Accepted';
+                            const brandEntries = getPurchaseBrandEntries(p);
+                            const { totalAmount, paidAmount, dueAmount } = getPRTotals(p);
+                            const cardKey = p._id || idx;
+                            const isExpanded = expandedMobileCardId === cardKey;
+
+                            return (
+                                <div
+                                    key={cardKey}
+                                    onClick={() => toggleCardExpansion(cardKey)}
+                                    className={`bg-white border rounded-2xl overflow-hidden shadow-sm select-none transition-all duration-200 cursor-pointer ${
+                                        isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-200 hover:border-gray-300'
+                                    }`}
+                                >
+                                    {/* Card Header (Always Visible) */}
+                                    <div className={`bg-gray-50/70 px-3.5 py-2.5 flex flex-col gap-1.5 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-blue-50/20' : ''}`}>
+                                        {/* Line 1: Purchase Receive No & Status Badge */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                                    #{idx + 1}
+                                                </span>
+                                                <span className="text-xs font-black text-blue-600 truncate">
+                                                    {p.purchaseReceiveNo || p.purchaseNo || '—'}
+                                                </span>
+                                            </div>
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}`}>
+                                                {statusText}
+                                            </span>
+                                        </div>
+
+                                        {/* Line 2: Date on top of Supplier / Company on left & Total Amount on right */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex-1 min-w-0 pr-2">
+                                                <div className="text-[10px] font-bold text-gray-400 tracking-wider">
+                                                    {formatDate(p.date)}
+                                                </div>
+                                                <div className="font-black text-gray-900 text-sm tracking-tight truncate">
+                                                    {p.companyName || p.supplierName || '—'}
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <span className="font-black text-blue-600 text-sm">
+                                                    ৳{Number(totalAmount || 0).toLocaleString('en-IN')}
+                                                </span>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
-                                <div className="flex items-center justify-between text-xs pt-1 border-t border-gray-100">
-                                    <div>Total: <span className="font-bold text-gray-900">৳{getPRTotals(p).totalAmount.toLocaleString('en-IN')}</span></div>
-                                    <div>Paid: <span className="font-bold text-emerald-600">৳{getPRTotals(p).paidAmount.toLocaleString('en-IN')}</span></div>
-                                    <div>Due: <span className="font-bold text-orange-600">৳{getPRTotals(p).dueAmount.toLocaleString('en-IN')}</span></div>
-                                </div>
-                                 <div className="flex items-center justify-between pt-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                                            (p.status || 'Accepted').toLowerCase() === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                                        }`}>{p.status || 'Requested'}</span>
-                                        {canShowEntryBy && (
-                                            <span className="text-[11px] font-semibold text-gray-600">
-                                                By: {getEntryByFirstName(p)}
-                                                {p.approvedByName && <span className="text-emerald-600 ml-1">✓✓ {getFirstNameFromIdentifier(p.approvedByName || p.approvedBy)}</span>}
-                                            </span>
-                                        )}
                                     </div>
-                                    <div className="flex items-center gap-1.5">
-                                        {canApprove && ((p.status || '').toLowerCase() === 'requested') && (
-                                            <>
-                                                <button
-                                                    onClick={() => handleStatusUpdate(p, 'Accepted')}
-                                                    disabled={statusUpdatingId === p._id}
-                                                    className={`p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors ${statusUpdatingId === p._id ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                                    title="Accept"
-                                                >
-                                                    <CheckIcon className="w-5 h-5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleStatusUpdate(p, 'Rejected')}
-                                                    disabled={statusUpdatingId === p._id}
-                                                    className={`p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors ${statusUpdatingId === p._id ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                                    title="Reject"
-                                                >
-                                                    <XIcon className="w-5 h-5" />
-                                                </button>
-                                            </>
-                                        )}
-                                        {canEdit && (
-                                            <button
-                                                onClick={() => handleOpenModal(p)}
-                                                className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                                                title="Edit"
-                                            >
-                                                <EditIcon className="w-5 h-5" />
-                                            </button>
-                                        )}
-                                        {canDelete && (
-                                            <button
-                                                onClick={() => handleDelete(p._id)}
-                                                className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                                title="Delete"
-                                            >
-                                                <TrashIcon className="w-5 h-5" />
-                                            </button>
-                                        )}
-                                    </div>
+
+                                    {/* Card Body: Products Breakdown & Details (Expanded View) */}
+                                    {isExpanded && (
+                                        <div className="p-3.5 space-y-2.5 animate-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+                                            {/* Product Items Breakdown */}
+                                            <div className="space-y-2">
+                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                    Products ({brandEntries.length})
+                                                </div>
+                                                {brandEntries.map((e, eIdx) => (
+                                                    <div key={eIdx} className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">Product:</span>
+                                                            <span className="font-bold text-gray-900 text-right">{e.productName}</span>
+                                                        </div>
+                                                        {e.brand && e.brand !== '—' && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">Brand:</span>
+                                                                <span className="font-bold text-gray-800 text-right">{e.brand}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">Warehouse:</span>
+                                                            <span className="font-bold text-gray-800 text-right">{p.warehouse || 'HILI'}</span>
+                                                        </div>
+                                                        {p.lcNo && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">LC No:</span>
+                                                                <span className="font-bold text-gray-900 text-right">{p.lcNo}</span>
+                                                            </div>
+                                                        )}
+                                                        {p.challanNo && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">Challan No:</span>
+                                                                <span className="font-bold text-gray-900 text-right">{p.challanNo}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">Arrival Qty:</span>
+                                                            <span className="font-bold text-blue-600 text-right">{e.qty > 0 ? `${Number(e.qty).toLocaleString('en-US')} kg` : '—'}</span>
+                                                        </div>
+                                                        {e.swpQty > 0 && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">Sweeped Qty:</span>
+                                                                <span className="font-bold text-rose-600 text-right">{`${Number(e.swpQty).toLocaleString('en-US')} kg`}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">InHouse:</span>
+                                                            <span className="font-bold text-emerald-600 text-right">{`${Number(e.inHouseQty || 0).toLocaleString('en-US')} kg`}</span>
+                                                        </div>
+                                                        {e.rate > 0 && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">Rate:</span>
+                                                                <span className="font-bold text-gray-900 text-right">৳{Number(e.rate).toLocaleString('en-IN')}/kg</span>
+                                                            </div>
+                                                        )}
+                                                        {brandEntries.length === 1 && (
+                                                            <>
+                                                                <div className="flex justify-between items-center pt-1.5 border-t border-gray-200/60">
+                                                                    <span className="text-gray-500 font-medium">Paid:</span>
+                                                                    <span className="font-bold text-emerald-600 text-right">৳{Number(paidAmount || 0).toLocaleString('en-IN')}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Due:</span>
+                                                                    <span className={`font-bold text-right ${(dueAmount || 0) > 0 ? 'text-rose-600' : 'text-gray-700'}`}>৳{Number(dueAmount || 0).toLocaleString('en-IN')}</span>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                ))}
+
+                                                {brandEntries.length > 1 && (
+                                                    <div className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">Paid:</span>
+                                                            <span className="font-bold text-emerald-600 text-right">৳{Number(paidAmount || 0).toLocaleString('en-IN')}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">Due:</span>
+                                                            <span className={`font-bold text-right ${(dueAmount || 0) > 0 ? 'text-rose-600' : 'text-gray-700'}`}>৳{Number(dueAmount || 0).toLocaleString('en-IN')}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Footer: Entry By & Action Buttons */}
+                                            <div className="flex items-center justify-between pt-2 border-t border-gray-100 gap-2">
+                                                <div className="text-[10px] text-gray-500 truncate">
+                                                    {canShowEntryBy && (
+                                                        <span>
+                                                            By: <strong className="text-gray-700">{getEntryByFirstName(p)}</strong>
+                                                            {(p.editedBy || p.editedByName) &&
+                                                             (p.editedBy || '').toLowerCase() !== 'admin' &&
+                                                             (p.editedByName || '').toLowerCase() !== 'admin' && (
+                                                                <span className="text-[10px] text-amber-600 font-medium ml-1">
+                                                                    ✎ {getEditedByFirstName(p)}
+                                                                </span>
+                                                            )}
+                                                            {p.smApprovedByName && (
+                                                                <span className="text-[10px] text-blue-600 font-medium ml-1" title="1st Approval">
+                                                                    ✓ {getFirstNameFromIdentifier(p.smApprovedByName || p.smApprovedBy)}
+                                                                </span>
+                                                            )}
+                                                            {p.approvedByName && (
+                                                                <span className="text-[10px] text-emerald-600 font-semibold ml-1" title="Approval">
+                                                                    ✓✓ {getFirstNameFromIdentifier(p.approvedByName || p.approvedBy)}
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                    {canApprove && ((p.status || '').toLowerCase() === 'requested') && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleStatusUpdate(p, 'Accepted')}
+                                                                disabled={statusUpdatingId === p._id}
+                                                                className={`px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 ${statusUpdatingId === p._id ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                                                title="Accept"
+                                                            >
+                                                                <CheckIcon className="w-3.5 h-3.5" /> Accept
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleStatusUpdate(p, 'Rejected')}
+                                                                disabled={statusUpdatingId === p._id}
+                                                                className={`px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 ${statusUpdatingId === p._id ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                                                title="Reject"
+                                                            >
+                                                                <XIcon className="w-3.5 h-3.5" /> Reject
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    {canEdit && (
+                                                        <button
+                                                            onClick={() => handleOpenModal(p)}
+                                                            className="p-1.5 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-lg transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <EditIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    {canDelete && (
+                                                        <button
+                                                            onClick={() => handleDelete(p._id)}
+                                                            className="p-1.5 text-rose-600 bg-rose-50/80 hover:bg-rose-100 rounded-lg transition-colors"
+                                                            title="Delete"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        ))}
-                    </div>
+                            );
+                        })
+                    ) : (
+                        <div className="py-12 px-4 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
+                            No purchase receive records found.
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Modal for Create/Edit */}
