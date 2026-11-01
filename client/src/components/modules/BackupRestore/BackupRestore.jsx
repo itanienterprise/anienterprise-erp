@@ -634,15 +634,15 @@ const BackupRestore = ({ addNotification }) => {
     }, [availableModules, selectedModuleKeys]);
 
     return (
-        <div className="w-full space-y-8 animate-in fade-in duration-300">
+        <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-gray-200">
+            <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 sm:pb-6 border-b border-gray-200">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center">
-                        <DatabaseIcon className="w-7 h-7 text-blue-600 mr-2.5" />
-                        Backup & Restore Database
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight flex items-center">
+                        <DatabaseIcon className="w-6 h-6 sm:w-7 sm:h-7 text-blue-600 mr-2 shrink-0" />
+                        <span>Backup & Restore Database</span>
                     </h1>
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-1 text-xs sm:text-sm text-gray-500">
                         Admin utility to take full or module-based backups, restore specific modules, or configure automated schedules.
                     </p>
                 </div>
@@ -650,67 +650,67 @@ const BackupRestore = ({ addNotification }) => {
 
             {/* Error and Success Banners */}
             {errorMessage && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 animate-in slide-in-from-top duration-200">
+                <div className="p-3.5 sm:p-4 bg-red-50 border border-red-200 rounded-xl text-xs sm:text-sm text-red-600 animate-in slide-in-from-top duration-200">
                     <p className="font-semibold">Error</p>
                     <p className="mt-1">{errorMessage}</p>
                 </div>
             )}
             {successMessage && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-600 animate-in slide-in-from-top duration-200">
+                <div className="p-3.5 sm:p-4 bg-green-50 border border-green-200 rounded-xl text-xs sm:text-sm text-green-600 animate-in slide-in-from-top duration-200">
                     <p className="font-semibold">Success</p>
                     <p className="mt-1">{successMessage}</p>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
                 {/* Take Backup Card (Full & Module Based) */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition-all duration-300">
-                    <div className="space-y-4">
-                        <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
-                            <DownloadIcon className="w-6 h-6" />
+                <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition-all duration-300">
+                    <div className="space-y-3 sm:space-y-4">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
+                            <DownloadIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
-                        <h2 className="text-lg font-bold text-gray-900">Take System Backup</h2>
-                        <p className="text-sm text-gray-500 leading-relaxed">
+                        <h2 className="text-base sm:text-lg font-bold text-gray-900">Take System Backup</h2>
+                        <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
                             Export your ERP data as a structured JSON file. You can download the complete database or selectively export specific modules (PI, LC, Sales, Inventory, etc.).
                         </p>
                     </div>
 
-                    <div className="mt-6 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                        <div className="flex items-center justify-between">
-                            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-800 select-none">
+                    <div className="mt-4 sm:mt-6 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-800 select-none min-w-0">
                                 <input
                                     type="checkbox"
                                     checked={excludeEmployeePhotos}
                                     onChange={(e) => setExcludeEmployeePhotos(e.target.checked)}
-                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer shrink-0"
                                 />
-                                <span>Exclude Employee & User Photos</span>
+                                <span className="truncate">Exclude Employee & User Photos</span>
                             </label>
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
                                 Saves ~10 MB
                             </span>
                         </div>
-                        <div className="flex items-center justify-between">
-                            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-800 select-none">
+                        <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-800 select-none min-w-0">
                                 <input
                                     type="checkbox"
                                     checked={excludeAttachments}
                                     onChange={(e) => setExcludeAttachments(e.target.checked)}
-                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer shrink-0"
                                 />
-                                <span>Exclude IP Document Attachments</span>
+                                <span className="truncate">Exclude IP Document Attachments</span>
                             </label>
-                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 shrink-0">
                                 Saves ~15 MB
                             </span>
                         </div>
                     </div>
 
-                    <div className="mt-4 space-y-3">
+                    <div className="mt-4 space-y-2.5 sm:space-y-3">
                         <button
                             onClick={handleTakeBackup}
                             disabled={isBackingUp || isRestoring}
-                            className={`w-full flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-sm active:scale-[0.98] ${
+                            className={`w-full flex items-center justify-center px-4 py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all shadow-sm active:scale-[0.98] ${
                                 (isBackingUp || isRestoring) ? 'opacity-50 cursor-not-allowed' : ''
                             }`}
                         >
@@ -724,7 +724,7 @@ const BackupRestore = ({ addNotification }) => {
                                 </>
                             ) : (
                                 <>
-                                    <DownloadIcon className="w-5 h-5 mr-2" />
+                                    <DownloadIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                                     Download Full Backup
                                 </>
                             )}
@@ -736,7 +736,7 @@ const BackupRestore = ({ addNotification }) => {
                                 fetchModules();
                             }}
                             disabled={isBackingUp || isRestoring}
-                            className="w-full flex items-center justify-center px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-medium text-sm transition-all shadow-xs active:scale-[0.98] cursor-pointer"
+                            className="w-full flex items-center justify-center px-4 py-2 sm:py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-medium text-xs sm:text-sm transition-all shadow-xs active:scale-[0.98] cursor-pointer"
                         >
                             <BoxIcon className="w-4 h-4 mr-2" />
                             Module-Based Backup...
@@ -745,26 +745,26 @@ const BackupRestore = ({ addNotification }) => {
                 </div>
 
                 {/* Upload & Restore Card */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition-all duration-300">
-                    <div className="space-y-4">
-                        <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+                <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition-all duration-300">
+                    <div className="space-y-3 sm:space-y-4">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
                             <UploadIcon className="w-6 h-6" />
                         </div>
-                        <h2 className="text-lg font-bold text-gray-900">Upload & Restore</h2>
-                        <p className="text-sm text-gray-500 leading-relaxed">
+                        <h2 className="text-base sm:text-lg font-bold text-gray-900">Upload & Restore</h2>
+                        <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
                             Upload a previously exported database or module JSON file. You can choose to restore all or only selected collections.
                         </p>
                     </div>
 
-                    <div className="mt-6 flex-1 flex flex-col justify-end">
+                    <div className="mt-4 sm:mt-6 flex-1 flex flex-col justify-end">
                         {!backupFile ? (
                             <div
                                 onDrop={handleDrop}
                                 onDragOver={handleDragOver}
                                 onClick={() => fileInputRef.current?.click()}
-                                className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/20 transition-all duration-200"
+                                className="border-2 border-dashed border-gray-300 rounded-xl p-4 sm:p-6 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/20 transition-all duration-200"
                             >
-                                <UploadIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                <UploadIcon className="w-7 h-7 sm:w-8 sm:h-8 text-gray-400 mx-auto mb-2" />
                                 <p className="text-xs font-semibold text-gray-700">Click to upload or drag & drop</p>
                                 <p className="text-[11px] text-gray-500 mt-1">JSON Backup Files Only</p>
                                 <input
@@ -776,7 +776,7 @@ const BackupRestore = ({ addNotification }) => {
                                 />
                             </div>
                         ) : (
-                            <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
+                            <div className="p-3.5 sm:p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
                                 <div className="flex items-start justify-between">
                                     <div className="min-w-0">
                                         <p className="text-xs font-bold text-gray-900 truncate">{backupFile.name}</p>
@@ -798,7 +798,7 @@ const BackupRestore = ({ addNotification }) => {
                                                 {Object.keys(fileData.data).length} total
                                             </span>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 max-h-24 overflow-y-auto pr-1">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 max-h-24 overflow-y-auto pr-1">
                                             {Object.keys(fileData.data).map((col) => (
                                                 <div key={col} className="flex justify-between items-center text-xs py-0.5 border-b border-gray-100">
                                                     <span className="text-gray-600 truncate">{col}</span>
@@ -812,7 +812,7 @@ const BackupRestore = ({ addNotification }) => {
                                 <button
                                     onClick={() => handleRestoreClick('uploaded')}
                                     disabled={isBackingUp || isRestoring}
-                                    className="w-full mt-2 flex items-center justify-center px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-all shadow-sm cursor-pointer"
+                                    className="w-full mt-2 flex items-center justify-center px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium text-sm transition-all shadow-sm active:scale-[0.98] cursor-pointer"
                                 >
                                     <RotateCcwIcon className="w-4 h-4 mr-2" />
                                     Restore Database...
@@ -823,11 +823,11 @@ const BackupRestore = ({ addNotification }) => {
                 </div>
 
                 {/* Auto-Backup Settings Card */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-300">
                     <form onSubmit={handleSaveSettings} className="space-y-4 flex flex-col h-full justify-between">
                         <div>
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-lg font-bold text-gray-900">Auto-Backup Schedule</h2>
+                            <div className="flex items-center justify-between mb-3 sm:mb-4">
+                                <h2 className="text-base sm:text-lg font-bold text-gray-900">Auto-Backup Schedule</h2>
                                 <label className="relative inline-flex items-center cursor-pointer">
                                     <input
                                         type="checkbox"
@@ -838,7 +838,7 @@ const BackupRestore = ({ addNotification }) => {
                                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                                 </label>
                             </div>
-                            <p className="text-sm text-gray-500 leading-relaxed mb-4">
+                            <p className="text-xs sm:text-sm text-gray-500 leading-relaxed mb-4">
                                 Automatically save a backup of the system database to the server at a scheduled interval.
                             </p>
 
@@ -864,10 +864,10 @@ const BackupRestore = ({ addNotification }) => {
                                                 onClick={handleSelectFolder}
                                                 className="w-full px-3 py-2 border border-dashed border-blue-300 bg-blue-50/20 hover:bg-blue-50 text-blue-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                             >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9l-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                                 </svg>
-                                                {selectedFolderName ? `Change (Target: ${selectedFolderName})` : 'Select Target Local Folder...'}
+                                                <span className="truncate">{selectedFolderName ? `Target: ${selectedFolderName}` : 'Select Target Local Folder...'}</span>
                                             </button>
                                             <p className="text-[10px] text-gray-400">Backups will save directly to this folder silently.</p>
                                             {!window.showDirectoryPicker && (
@@ -976,11 +976,11 @@ const BackupRestore = ({ addNotification }) => {
                             )}
                         </div>
 
-                        <div className="mt-8">
+                        <div className="mt-6 sm:mt-8">
                             <button
                                 type="submit"
                                 disabled={isSavingSettings}
-                                className="w-full flex items-center justify-center px-4 py-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+                                className="w-full flex items-center justify-center px-4 py-2.5 sm:py-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm active:scale-[0.98] cursor-pointer"
                             >
                                 {isSavingSettings ? 'Saving Settings...' : 'Save Schedule Settings'}
                             </button>
@@ -990,52 +990,111 @@ const BackupRestore = ({ addNotification }) => {
             </div>
 
             {/* Saved Backups on Server */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900">Saved Auto Backups on Server</h2>
+                        <h2 className="text-base sm:text-lg font-bold text-gray-900">Saved Auto Backups on Server</h2>
                         <p className="text-xs text-gray-500 mt-0.5">List of automatically or locally scheduled backup files saved on the server container. The system keeps the 10 most recent backups.</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                         <button
                             type="button"
                             onClick={handleRunSelfHealing}
                             disabled={isRunningMigrations}
                             title="Universal system self-healing: audits and normalizes all product catalogs, recalculates stock baselines, verifies item pricing, reconciles all customer ledgers, and flushes cache across the entire database."
-                            className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            className="px-3 py-2 sm:py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl sm:rounded-lg text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
                         >
                             <svg className={`w-3.5 h-3.5 ${isRunningMigrations ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
                             </svg>
-                            {isRunningMigrations ? 'Auditing & Repairing...' : 'Universal Self-Heal & Repair'}
+                            <span className="truncate">{isRunningMigrations ? 'Repairing...' : 'Self-Heal'}</span>
                         </button>
                         <button
                             type="button"
                             onClick={handleOptimizeBackups}
                             disabled={isOptimizingBackups || isLoadingFiles}
                             title="Strip heavy employee photos and minify all existing backup files on server to reclaim storage"
-                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            className="px-3 py-2 sm:py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl sm:rounded-lg text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
                         >
                             <svg className={`w-3.5 h-3.5 ${isOptimizingBackups ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
-                            {isOptimizingBackups ? 'Optimizing...' : 'Optimize Saved Backups'}
+                            <span className="truncate">{isOptimizingBackups ? 'Optimizing...' : 'Optimize'}</span>
                         </button>
                         <button
                             type="button"
                             onClick={handleRunBackupNow}
                             disabled={isBackingUp || isLoadingFiles}
-                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            className="col-span-2 sm:col-span-1 px-3 py-2 sm:py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl sm:rounded-lg text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
                         >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
-                            Run Backup Now
+                            <span>Run Backup Now</span>
                         </button>
                     </div>
                 </div>
 
-                <div className="mt-4 overflow-x-auto">
+                {/* Mobile View: Clean Saved Backup Cards */}
+                <div className="block md:hidden space-y-3 mt-4">
+                    {isLoadingFiles ? (
+                        <div className="py-8 text-center text-gray-500 text-sm">Loading saved backup files...</div>
+                    ) : savedFiles.length === 0 ? (
+                        <div className="py-8 text-center text-gray-400 text-sm">No backup files found on the server.</div>
+                    ) : (
+                        savedFiles.map((file) => (
+                            <div
+                                key={file.filename}
+                                className="bg-slate-50/80 rounded-2xl border border-gray-200/80 p-3.5 space-y-2.5 transition-all"
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-bold text-gray-900 text-xs break-all" title={file.filename}>
+                                            {file.filename}
+                                        </p>
+                                        <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                                            {new Date(file.createdAt).toLocaleString()}
+                                        </p>
+                                    </div>
+                                    <span className="text-[11px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full shrink-0">
+                                        {(file.size / 1024).toFixed(2)} KB
+                                    </span>
+                                </div>
+
+                                {/* Action Buttons Row */}
+                                <div className="flex items-center gap-2 pt-2 border-t border-gray-200/60">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDownloadSavedFile(file.filename)}
+                                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/70 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                                    >
+                                        <DownloadIcon className="w-3.5 h-3.5" />
+                                        <span>Download</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRestoreClick('local', file.filename)}
+                                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                                    >
+                                        <RotateCcwIcon className="w-3.5 h-3.5" />
+                                        <span>Restore</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeleteFile(file.filename)}
+                                        className="p-1.5 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/70 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0 flex items-center justify-center cursor-pointer"
+                                        title="Delete Backup"
+                                    >
+                                        <TrashIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Desktop View: Original Table */}
+                <div className="hidden md:block mt-4 overflow-x-auto">
                     {isLoadingFiles ? (
                         <div className="py-8 text-center text-gray-500 text-sm">Loading saved backup files...</div>
                     ) : savedFiles.length === 0 ? (
@@ -1082,7 +1141,7 @@ const BackupRestore = ({ addNotification }) => {
                         </table>
                     )}
                 </div>
-                <TableScrollNav count={savedFiles.length} />
+                <TableScrollNav className="hidden md:flex" count={savedFiles.length} />
             </div>
 
             {/* Warn Alert Box */}
@@ -1098,18 +1157,18 @@ const BackupRestore = ({ addNotification }) => {
 
             {/* Module-Based Backup Selection Modal */}
             {showModuleModal && typeof document !== 'undefined' && document.body && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
                     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowModuleModal(false)}></div>
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl p-6 max-w-2xl w-full relative z-10 animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl p-4 sm:p-6 max-w-2xl w-full relative z-10 animate-in zoom-in duration-200 flex flex-col max-h-[92vh]">
                         {/* Modal Header */}
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-gray-100">
                             <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-                                    <BoxIcon className="w-5 h-5" />
+                                <div className="w-8 h-8 sm:w-9 sm:h-9 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                                    <BoxIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-bold text-gray-900">Module-Based Backup</h3>
-                                    <p className="text-xs text-gray-500">Select which business modules to include in your backup file.</p>
+                                    <h3 className="text-base sm:text-lg font-bold text-gray-900">Module-Based Backup</h3>
+                                    <p className="text-[11px] sm:text-xs text-gray-500">Select which business modules to include in your backup file.</p>
                                 </div>
                             </div>
                             <button
@@ -1121,7 +1180,7 @@ const BackupRestore = ({ addNotification }) => {
                         </div>
 
                         {/* Search & Quick Toggles */}
-                        <div className="py-3.5 space-y-2.5 border-b border-gray-100">
+                        <div className="py-3 sm:py-3.5 space-y-2.5 border-b border-gray-100">
                             <div className="relative">
                                 <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                                 <input
@@ -1133,11 +1192,11 @@ const BackupRestore = ({ addNotification }) => {
                                 />
                             </div>
 
-                            <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-500 font-medium">
+                            <div className="flex items-center justify-between text-xs gap-2 flex-wrap sm:flex-nowrap">
+                                <span className="text-gray-500 font-medium text-[11px] sm:text-xs">
                                     <strong className="text-blue-600 font-bold">{selectedModuleKeys.size}</strong> of {availableModules.length} modules selected ({totalSelectedRecords.toLocaleString()} records)
                                 </span>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 shrink-0">
                                     <button
                                         type="button"
                                         onClick={toggleSelectAllModules}
@@ -1162,32 +1221,32 @@ const BackupRestore = ({ addNotification }) => {
                                         <div
                                             key={mod.key}
                                             onClick={() => toggleModuleSelection(mod.key)}
-                                            className={`p-3 rounded-xl border transition-all cursor-pointer select-none flex items-center justify-between gap-3 ${
+                                            className={`p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer select-none flex items-center justify-between gap-2.5 sm:gap-3 ${
                                                 isSelected
                                                     ? 'bg-blue-50/50 border-blue-300 ring-1 ring-blue-100'
                                                     : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
                                             }`}
                                         >
-                                            <div className="flex items-start gap-3 min-w-0">
+                                            <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
                                                 <input
                                                     type="checkbox"
                                                     checked={isSelected}
                                                     onChange={() => {}} // Handled by outer container click
-                                                    className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer pointer-events-none"
+                                                    className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer pointer-events-none shrink-0"
                                                 />
                                                 <div className="min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm font-bold text-gray-900 truncate">{mod.label}</span>
-                                                        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                                                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                                        <span className="text-xs sm:text-sm font-bold text-gray-900 truncate">{mod.label}</span>
+                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded truncate max-w-[120px] sm:max-w-none">
                                                             {mod.models?.join(', ')}
                                                         </span>
                                                     </div>
-                                                    <p className="text-xs text-gray-500 mt-0.5 truncate">{mod.description}</p>
+                                                    <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 truncate">{mod.description}</p>
                                                 </div>
                                             </div>
 
                                             <div className="shrink-0 text-right">
-                                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                                <span className={`text-[10px] sm:text-xs font-bold px-2 py-0.5 sm:py-1 rounded-full ${
                                                     isSelected ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
                                                 }`}>
                                                     {(mod.totalRecords || 0).toLocaleString()} records
@@ -1200,11 +1259,11 @@ const BackupRestore = ({ addNotification }) => {
                         </div>
 
                         {/* Modal Footer */}
-                        <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-3">
+                        <div className="pt-3 sm:pt-4 border-t border-gray-100 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
                             <button
                                 type="button"
                                 onClick={() => setShowModuleModal(false)}
-                                className="px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl font-medium text-sm transition-all cursor-pointer"
+                                className="px-4 py-2 sm:py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl font-medium text-xs sm:text-sm transition-all cursor-pointer text-center"
                             >
                                 Cancel
                             </button>
@@ -1212,7 +1271,7 @@ const BackupRestore = ({ addNotification }) => {
                                 type="button"
                                 onClick={handleTakeModuleBackup}
                                 disabled={selectedModuleKeys.size === 0 || isBackingUp}
-                                className="flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed"
+                                className="flex items-center justify-center px-4 sm:px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl font-medium text-xs sm:text-sm transition-all shadow-sm active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed"
                             >
                                 {isBackingUp ? (
                                     <>
@@ -1237,18 +1296,18 @@ const BackupRestore = ({ addNotification }) => {
 
             {/* Confirm Restoring Modal with Selective Module Choice */}
             {showConfirmModal && typeof document !== 'undefined' && document.body && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
                     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowConfirmModal(false)}></div>
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl p-6 max-w-lg w-full relative z-10 animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl p-4 sm:p-6 max-w-lg w-full relative z-10 animate-in zoom-in duration-200 flex flex-col max-h-[92vh]">
                         <div className="space-y-4 flex-1 overflow-y-auto pr-1">
                             <div className="flex items-start justify-between">
-                                <h3 className="text-lg font-bold text-gray-900">Confirm System Restoration</h3>
+                                <h3 className="text-base sm:text-lg font-bold text-gray-900">Confirm System Restoration</h3>
                                 <button onClick={() => setShowConfirmModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                                     <XIcon className="w-5 h-5" />
                                 </button>
                             </div>
 
-                            <p className="text-sm text-gray-500 leading-relaxed">
+                            <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
                                 {restoreTarget?.type === 'local' ? (
                                     <>
                                         Restoring from server file <strong className="text-gray-900">{restoreTarget.filename}</strong>.
@@ -1263,8 +1322,8 @@ const BackupRestore = ({ addNotification }) => {
                             {/* Selective Collections to Restore */}
                             <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/50 space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                        Select Collections to Restore ({selectedRestoreModels.size} of {Object.keys(restoreDetectedCollections).length})
+                                    <span className="text-[11px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                        Select Collections ({selectedRestoreModels.size} of {Object.keys(restoreDetectedCollections).length})
                                     </span>
                                     {Object.keys(restoreDetectedCollections).length > 0 && (
                                         <button
@@ -1314,7 +1373,7 @@ const BackupRestore = ({ addNotification }) => {
                                 <p>Only the <strong>{selectedRestoreModels.size} selected collection(s)</strong> will be overwritten in the database. Any collections left unchecked will remain intact.</p>
                             </div>
 
-                            <p className="text-sm text-gray-500 leading-relaxed">
+                            <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
                                 To confirm, please type <strong className="text-red-600 select-all">RESTORE</strong> in the input field below.
                             </p>
                             <input
@@ -1322,19 +1381,19 @@ const BackupRestore = ({ addNotification }) => {
                                 placeholder="Type RESTORE to confirm"
                                 value={confirmText}
                                 onChange={(e) => setConfirmText(e.target.value)}
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                                className="w-full px-4 py-2 sm:py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                             />
-                            <div className="flex space-x-3 pt-2">
+                            <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-2">
                                 <button
                                     onClick={() => setShowConfirmModal(false)}
-                                    className="flex-1 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl font-medium text-sm transition-all cursor-pointer"
+                                    className="flex-1 px-4 py-2 sm:py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl font-medium text-xs sm:text-sm transition-all cursor-pointer text-center"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={executeRestore}
                                     disabled={confirmText !== 'RESTORE' || selectedRestoreModels.size === 0}
-                                    className={`flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white rounded-xl font-medium text-sm transition-all cursor-pointer ${
+                                    className={`flex-1 px-4 py-2 sm:py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white rounded-xl font-medium text-xs sm:text-sm transition-all cursor-pointer text-center ${
                                         confirmText !== 'RESTORE' || selectedRestoreModels.size === 0 ? 'cursor-not-allowed' : ''
                                     }`}
                                 >
