@@ -34,10 +34,13 @@ const getSavedOrderStatusFilter = () => {
         if (!saved) return ['all'];
         try {
             const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-            if (typeof parsed === 'string' && parsed) return [parsed];
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const cleaned = parsed.filter(s => s !== 'Requested' && s !== 'Edit Requested');
+                return cleaned.length > 0 ? cleaned : ['all'];
+            }
+            if (typeof parsed === 'string' && parsed && parsed !== 'Requested' && parsed !== 'Edit Requested') return [parsed];
         } catch (_) {
-            if (typeof saved === 'string' && saved.trim()) return [saved.trim()];
+            if (typeof saved === 'string' && saved.trim() && saved.trim() !== 'Requested' && saved.trim() !== 'Edit Requested') return [saved.trim()];
         }
         return ['all'];
     } catch (e) {
@@ -2054,37 +2057,35 @@ const OrderManagement = ({
             const isReq = statusLower === 'requested';
             const isEditReq = sale.isEdited === true && !isReq;
 
-            const currentStatusList = Array.isArray(saleFilters.status)
-                ? saleFilters.status
-                : (saleFilters.status ? [saleFilters.status] : ['all']);
-
-            if (currentStatusList.includes('all')) {
-                if (isRequestedOnly) {
-                    if (!isReq) return false;
-                } else if (isEditRequestedOnly) {
-                    if (!isEditReq) return false;
-                } else {
-                    if (isReq || isEditReq) return false;
-                }
+            // Requested & Edit Request queues ALWAYS take priority
+            if (isRequestedOnly) {
+                if (!isReq) return false;
+            } else if (isEditRequestedOnly) {
+                if (!isEditReq) return false;
             } else {
-                const fulfillment = computeOrderFulfillment(sale, allSalesRecords, returnsList);
-                const actualStatus = (fulfillment.statusText || '').toLowerCase();
-                const lowerSelected = currentStatusList.map(s => String(s).trim().toLowerCase());
+                if (isReq || isEditReq) return false;
+            }
 
-                const matchesStatus = lowerSelected.some(sel => {
-                    if (sel === 'return') {
-                        return actualStatus === 'return' || actualStatus === 'partial return';
-                    }
-                    if (sel === 'requested') {
-                        return isReq || actualStatus === 'requested';
-                    }
-                    if (sel === 'edit requested') {
-                        return isEditReq || actualStatus === 'edit requested';
-                    }
-                    return actualStatus === sel;
-                });
+            // Normal order status filter (Accepted, Not Completed, Completed, Return) only applies in normal view
+            if (!isRequestedOnly && !isEditRequestedOnly) {
+                const currentStatusList = Array.isArray(saleFilters.status)
+                    ? saleFilters.status
+                    : (saleFilters.status ? [saleFilters.status] : ['all']);
 
-                if (!matchesStatus) return false;
+                if (!currentStatusList.includes('all')) {
+                    const fulfillment = computeOrderFulfillment(sale, allSalesRecords, returnsList);
+                    const actualStatus = (fulfillment.statusText || '').toLowerCase();
+                    const lowerSelected = currentStatusList.map(s => String(s).trim().toLowerCase());
+
+                    const matchesStatus = lowerSelected.some(sel => {
+                        if (sel === 'return') {
+                            return actualStatus === 'return' || actualStatus === 'partial return';
+                        }
+                        return actualStatus === sel;
+                    });
+
+                    if (!matchesStatus) return false;
+                }
             }
 
             // Quick Date Range Filter
@@ -2434,20 +2435,6 @@ const OrderManagement = ({
                                                             dot: 'bg-rose-500',
                                                             activeCls: 'bg-rose-600 text-white shadow-md shadow-rose-500/30 font-bold',
                                                             inactiveCls: 'bg-rose-50 text-rose-700 border border-rose-200/60 hover:bg-rose-100'
-                                                        },
-                                                        {
-                                                            label: 'Requested',
-                                                            value: 'Requested',
-                                                            dot: 'bg-purple-500',
-                                                            activeCls: 'bg-purple-600 text-white shadow-md shadow-purple-500/30 font-bold',
-                                                            inactiveCls: 'bg-purple-50 text-purple-700 border border-purple-200/60 hover:bg-purple-100'
-                                                        },
-                                                        {
-                                                            label: 'Edit Requested',
-                                                            value: 'Edit Requested',
-                                                            dot: 'bg-indigo-500',
-                                                            activeCls: 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 font-bold',
-                                                            inactiveCls: 'bg-indigo-50 text-indigo-700 border border-indigo-200/60 hover:bg-indigo-100'
                                                         }
                                                     ].map((opt) => {
                                                         const currentStatusList = Array.isArray(saleFilters.status)
