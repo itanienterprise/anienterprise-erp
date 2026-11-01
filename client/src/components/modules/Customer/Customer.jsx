@@ -4377,7 +4377,7 @@ const Customer = ({
                                                                         <td className="px-4 py-3 text-left text-xs font-bold text-pink-600">
                                                                             {parseFloat(item.discount || 0) > 0 ? `৳${parseFloat(item.discount).toLocaleString('en-IN')}` : '—'}
                                                                         </td>
-                                                                        <td className="px-4 py-3 text-left font-black text-orange-600 text-xs">৳{item.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                        <td className="px-4 py-3 text-left font-black text-orange-600 text-xs">৳{Math.round(item.runningBalance).toLocaleString('en-IN')}</td>
                                                                         <td className="px-4 py-3 text-center">
                                                                             {item.type === 'sale' && (
                                                                                 <button
@@ -4535,7 +4535,7 @@ const Customer = ({
                                                                                 <div className={`text-sm font-black ${item.type === 'sale' || item.type === 'payToCustomer' ? 'text-violet-700' : (item.type === 'return' ? 'text-rose-600' : 'text-emerald-600')}`}>
                                                                                     {item.type === 'sale' || item.type === 'payToCustomer' ? `+৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}` : `-৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`}
                                                                                 </div>
-                                                                                <div className="text-[10px] font-bold text-orange-600">Balance: ৳{item.runningBalance.toLocaleString('en-IN')}</div>
+                                                                                <div className="text-[10px] font-bold text-orange-600">Balance: ৳{Math.round(item.runningBalance).toLocaleString('en-IN')}</div>
                                                                             </div>
                                                                         </div>
 
