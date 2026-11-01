@@ -1439,6 +1439,8 @@ const Token = ({ currentUser, addNotification }) => {
                             );
                         })
                         )}
+                        {/* Mobile bottom buffer to ensure all cards scroll completely clear of mobile browser address bar */}
+                        <div className="h-10 sm:hidden pointer-events-none" aria-hidden="true" />
                     </div>
                 </>
             )}

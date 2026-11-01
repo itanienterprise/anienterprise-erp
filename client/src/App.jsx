@@ -3305,7 +3305,7 @@ function App() {
   }
 
   return (
-    <div className={`flex h-screen bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'is-printing-report' : ''}`}>
+    <div className={`flex h-screen h-[100dvh] bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'is-printing-report' : ''}`}>
 
       {/* Sidebar Backdrop for mobile only */}
       {sidebarOpen && windowWidth < 768 && (
@@ -3327,8 +3327,11 @@ function App() {
               }
             }}
             onMouseLeave={() => { if (windowWidth >= 768) setSidebarHovered(false); }}
-            className={`${windowWidth >= 768 ? `relative ${isExpanded ? 'w-60 shadow-xl z-30' : 'w-16 z-10'}` : `fixed inset-y-0 left-0 z-[1100] w-60 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} bg-white text-gray-900 border-r border-gray-200 transition-[width,box-shadow,transform] duration-300 ease-in-out flex-shrink-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}
-            style={isTouchOnlyDevice ? { transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' } : {}}
+            className={`${windowWidth >= 768 ? `relative ${isExpanded ? 'w-60 shadow-xl z-30' : 'w-16 z-10'}` : `fixed inset-y-0 left-0 z-[1100] w-60 h-full max-h-[100dvh] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} bg-white text-gray-900 border-r border-gray-200 transition-[width,box-shadow,transform] duration-300 ease-in-out flex-shrink-0 flex flex-col overscroll-contain ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}
+            style={{
+              ...(isTouchOnlyDevice ? { transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' } : {}),
+              ...(windowWidth < 768 ? { height: '100dvh', maxHeight: '100dvh' } : {})
+            }}
           >
             {/* Sidebar top — must match header height (64px) exactly */}
             <div className="flex items-center px-3.5 border-b border-gray-200 bg-gray-50/50 flex-shrink-0 overflow-hidden" style={{ height: '64px' }}>
@@ -3371,7 +3374,14 @@ function App() {
               </div>
             </div>
 
-            <nav className="flex-1 px-2.5 py-3 space-y-1 overflow-y-auto overflow-x-hidden hide-scrollbar">
+            <nav
+              className="flex-1 min-h-0 px-2.5 pt-3 pb-32 md:pb-4 space-y-1 overflow-y-auto overflow-x-hidden overscroll-y-contain hide-scrollbar"
+              style={{
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehaviorY: 'contain',
+                ...(windowWidth < 768 ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' } : {})
+              }}
+            >
               {/* Dashboard */}
               <button
                 onClick={() => { handleViewChange('dashboard'); }}
@@ -4275,6 +4285,9 @@ function App() {
                   </span>
                 </button>
               )}
+
+              {/* Mobile bottom buffer to ensure items like Log are never clipped by browser URL bar or home indicator */}
+              <div className="h-8 md:hidden flex-shrink-0 pointer-events-none" aria-hidden="true" />
             </nav>
           </aside>
         );
@@ -4349,8 +4362,14 @@ function App() {
         </header>
 
         {/* Dashboard Content */}
-        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-3 sm:p-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
-          <div key={currentView} data-current-view={currentView} className="page-transition-enter h-full">
+        <main
+          className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-3 pb-28 sm:p-6 sm:pb-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehaviorY: 'contain'
+          }}
+        >
+          <div key={currentView} data-current-view={currentView} className="page-transition-enter min-h-full">
             <ErrorBoundary key={currentView}>
               {renderContent()}
             </ErrorBoundary>

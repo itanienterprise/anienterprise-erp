@@ -497,3 +497,12 @@ aside {
 main {
     isolation: isolate;
 }
+
+/* Ensure mobile browser dynamic address bar adapts screen height */
+@supports (height: 100dvh) {
+    @media (max-width: 767px) {
+        .flex.h-screen {
+            height: 100dvh;
+        }
+    }
+}
