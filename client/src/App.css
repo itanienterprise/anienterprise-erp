@@ -7,6 +7,20 @@
     --color-brand-600: #2563eb;
     --color-brand-900: #1e3a8a;
     --color-sidebar-bg: #0f172a;
+    --text-2xs: 0.6875rem;
+    --text-2xs--line-height: 0.95rem;
+    --text-3xs: 0.625rem;
+    --text-3xs--line-height: 0.85rem;
+}
+
+@utility text-2xs {
+    font-size: 0.6875rem;
+    line-height: 0.95rem;
+}
+
+@utility text-3xs {
+    font-size: 0.625rem;
+    line-height: 0.85rem;
 }
 
 body {

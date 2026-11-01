@@ -1881,65 +1881,67 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     };
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden">
+        <div className="w-full flex flex-col md:flex-1 md:h-full bg-slate-50 md:overflow-hidden">
             {/* Top Header Bar */}
-            <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-shrink-0 shadow-xs">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+            <div className="bg-white border-b border-slate-200 px-3.5 sm:px-6 py-3 sm:py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4 flex-shrink-0 shadow-xs">
+                <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-2.5 sm:gap-3 w-full md:w-auto">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
                         <ActivityLogIcon className="w-5 h-5" />
                     </div>
-                    <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <h1 className="text-xl font-bold text-slate-800 tracking-tight">System Operation & Audit Logs</h1>
-                            {syncError ? (
-                                <span 
-                                    title={syncError}
-                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200"
-                                >
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                    Sync Warning: {syncError}
+                    <div className="w-full sm:w-auto min-w-0 flex flex-col items-center sm:items-start text-center sm:text-left">
+                        <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-2 flex-wrap justify-center sm:justify-start">
+                            <h1 className="text-base sm:text-xl font-bold text-slate-800 tracking-tight text-center sm:text-left">System Operation & Audit Logs</h1>
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center sm:justify-start">
+                                {syncError ? (
+                                    <span 
+                                        title={syncError}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200"
+                                    >
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                        Sync Warning: {syncError}
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        Live Tracking
+                                    </span>
+                                )}
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                    Storage: {stats.storageSize || '0 B'}
                                 </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    Live Tracking
-                                </span>
-                            )}
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                                Storage: {stats.storageSize || '0 B'}
-                            </span>
-                            {lastRefreshedAt && (
-                                <span 
-                                    title={`Last synced: ${lastRefreshedAt.toLocaleTimeString()}`}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200"
-                                >
-                                    Updated: {lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                </span>
-                            )}
+                                {lastRefreshedAt && (
+                                    <span 
+                                        title={`Last synced: ${lastRefreshedAt.toLocaleTimeString()}`}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200"
+                                    >
+                                        Updated: {lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-xs text-slate-500 mt-0.5">
+                        <p className="text-[11px] sm:text-xs text-slate-500 mt-1 leading-snug text-center sm:text-left max-w-md mx-auto sm:mx-0">
                             Comprehensive record of all user operations, mutations, approvals, and interface interactions
                         </p>
                     </div>
                 </div>
 
                 {/* Header Actions */}
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full md:w-auto">
                     {/* Auto refresh dropdown button */}
-                    <div className="relative" ref={autoRefreshRef}>
+                    <div className="relative w-full sm:w-auto" ref={autoRefreshRef}>
                         <button
                             type="button"
                             onClick={() => setOpenDropdown(prev => prev === 'refresh' ? null : 'refresh')}
-                            className={`inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl border transition-all shadow-xs ${
+                            className={`w-full sm:w-auto inline-flex items-center justify-between sm:justify-start gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold rounded-lg sm:rounded-xl border transition-all shadow-2xs ${
                                 openDropdown === 'refresh'
                                     ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/40 text-blue-700'
                                     : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300'
                             }`}
                         >
-                            <span>
-                                {autoRefreshInterval === 0 ? 'Auto-Refresh: Paused' : `Auto-Refresh: Every ${autoRefreshInterval}s`}
+                            <span className="truncate">
+                                {autoRefreshInterval === 0 ? 'Auto: Paused' : `Auto: ${autoRefreshInterval}s`}
                             </span>
-                            <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${openDropdown === 'refresh' ? 'rotate-180 text-blue-600' : ''}`} />
+                            <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform duration-200 ${openDropdown === 'refresh' ? 'rotate-180 text-blue-600' : ''}`} />
                         </button>
                         {openDropdown === 'refresh' && (
                             <div className="absolute right-0 mt-1.5 w-48 bg-white border border-gray-100 rounded-xl shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-150">
@@ -1957,7 +1959,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                             setAutoRefreshInterval(opt.val);
                                             setOpenDropdown(null);
                                         }}
-                                        className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
+                                        className={`w-full px-3 py-1.5 sm:px-3.5 sm:py-2 text-left text-xs transition-colors flex items-center justify-between ${
                                             autoRefreshInterval === opt.val
                                                 ? 'bg-blue-50 text-blue-700 font-bold'
                                                 : 'text-gray-700 hover:bg-gray-50'
@@ -1980,7 +1982,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                         onClick={() => fetchLogs(false, true)}
                         disabled={isRefreshing || isLoading}
                         title="Refresh activity logs and metrics now"
-                        className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border transition-all duration-150 shadow-2xs ${
+                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold rounded-lg sm:rounded-xl border transition-all duration-150 shadow-2xs ${
                             isRefreshing
                                 ? 'bg-blue-50 text-blue-700 border-blue-300 ring-2 ring-blue-500/20 cursor-wait'
                                 : 'text-slate-700 bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98]'
@@ -1993,7 +1995,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     {/* Export CSV Button */}
                     <button
                         onClick={handleExportCSV}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-2xs"
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg sm:rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-2xs"
                     >
                         <DownloadIcon className="w-3.5 h-3.5 text-slate-600" />
                         Export CSV
@@ -2002,7 +2004,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     {/* Clear Logs Button (Admin only) */}
                     <button
                         onClick={() => setShowClearModal(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 hover:border-rose-300 transition-colors shadow-2xs"
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg sm:rounded-xl hover:bg-rose-100 hover:border-rose-300 transition-colors shadow-2xs"
                     >
                         <TrashIcon className="w-3.5 h-3.5 text-rose-600" />
                         Clear Logs
@@ -2010,52 +2012,52 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                 </div>
             </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+            {/* Content Container: natural page flow on mobile (no scroll traps), internal scroll on desktop */}
+            <div className="w-full p-3 sm:p-6 pb-32 md:pb-6 space-y-4 sm:space-y-5 md:flex-1 md:overflow-y-auto">
                 {/* KPI Metrics Summary Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
                     {/* Total Operations */}
-                    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Operations</span>
-                            <span className="p-2 rounded-lg bg-blue-50 text-blue-600">
-                                <ActivityLogIcon className="w-4 h-4" />
+                            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider truncate">Total Operations</span>
+                            <span className="p-1.5 sm:p-2 rounded-lg bg-blue-50 text-blue-600 shrink-0">
+                                <ActivityLogIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </span>
                         </div>
-                        <div className="mt-2 text-2xl font-black text-slate-800 tracking-tight">
+                        <div className="mt-1.5 sm:mt-2 text-lg sm:text-2xl font-black text-slate-800 tracking-tight">
                             {stats.totalLogs.toLocaleString()}
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">
-                            All recorded actions • {stats.storageSize || '0 B'}
+                        <p className="text-[11px] sm:text-xs text-slate-500 mt-1 truncate">
+                            All actions • {stats.storageSize || '0 B'}
                         </p>
                     </div>
 
                     {/* Operations Today */}
-                    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today's Operations</span>
-                            <span className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
-                                <CalendarIcon className="w-4 h-4" />
+                            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider truncate">Today's Operations</span>
+                            <span className="p-1.5 sm:p-2 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+                                <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </span>
                         </div>
-                        <div className="mt-2 text-2xl font-black text-emerald-600 tracking-tight">
+                        <div className="mt-1.5 sm:mt-2 text-lg sm:text-2xl font-black text-emerald-600 tracking-tight">
                             {stats.todayLogs.toLocaleString()}
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">Activity since midnight</p>
+                        <p className="text-[11px] sm:text-xs text-slate-500 mt-1 truncate">Activity since midnight</p>
                     </div>
 
                     {/* Active Users Today - Clickable Card */}
                     <div
                         onClick={() => setShowActiveUsersModal(true)}
                         title="Click to view list of active users and their activity times today"
-                        className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs hover:shadow-md hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 transition-all cursor-pointer group"
+                        className="bg-white rounded-xl p-3 sm:p-4 border border-slate-200 shadow-2xs hover:shadow-md hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 transition-all cursor-pointer group"
                     >
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider group-hover:text-indigo-600 transition-colors">
-                                Active Users Today
+                            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider group-hover:text-indigo-600 transition-colors truncate">
+                                Active Users
                             </span>
-                            <span className="p-2 rounded-lg bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-2xs">
-                                <UserIcon className="w-4 h-4" />
+                            <span className="p-1.5 sm:p-2 rounded-lg bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-2xs shrink-0">
+                                <UserIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </span>
                         </div>
                         {(() => {
@@ -2071,29 +2073,30 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                             return (
                                 <>
-                                    <div className="mt-2 flex items-baseline justify-between">
-                                        <div className="flex items-baseline gap-2">
-                                            <span className="text-2xl font-black text-indigo-600 tracking-tight">
+                                    <div className="mt-1.5 sm:mt-2 flex items-baseline justify-between">
+                                        <div className="flex items-baseline gap-1 sm:gap-2">
+                                            <span className="text-lg sm:text-2xl font-black text-indigo-600 tracking-tight">
                                                 {totalUsersCount}
                                             </span>
                                             {liveCount > 0 && (
-                                                <span className="text-3xs font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                                                <span className="text-3xs font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
                                                     <span className="relative flex h-1.5 w-1.5">
                                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                                         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                                                     </span>
-                                                    <span>{liveCount} live</span>
+                                                    <span className="hidden sm:inline">{liveCount} live</span>
+                                                    <span className="sm:hidden">{liveCount}</span>
                                                 </span>
                                             )}
                                         </div>
-                                        <span className="text-3xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full group-hover:bg-indigo-100 transition-colors flex items-center gap-0.5">
-                                            <span>View list</span>
+                                        <span className="text-3xs font-semibold text-indigo-600 bg-indigo-50 px-1.5 sm:px-2 py-0.5 rounded-full group-hover:bg-indigo-100 transition-colors flex items-center gap-0.5">
+                                            <span>List</span>
                                             <ChevronRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                                         </span>
                                     </div>
-                                    <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
-                                        <span className={`w-1.5 h-1.5 rounded-full ${liveCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
-                                        {liveCount > 0 ? `${liveCount} currently online • ${totalUsersCount} active today` : `${totalUsersCount} active today`}
+                                    <p className="text-[11px] sm:text-xs text-slate-500 mt-1 flex items-center gap-1.5 truncate">
+                                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${liveCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                                        <span className="truncate">{liveCount > 0 ? `${liveCount} online` : `${totalUsersCount} active`}</span>
                                     </p>
                                 </>
                             );
@@ -2101,25 +2104,25 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     </div>
 
                     {/* Action Breakdown */}
-                    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Key Breakdown</span>
-                            <span className="p-2 rounded-lg bg-amber-50 text-amber-600">
-                                <ShieldIcon className="w-4 h-4" />
+                            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider truncate">Key Breakdown</span>
+                            <span className="p-1.5 sm:p-2 rounded-lg bg-amber-50 text-amber-600 shrink-0">
+                                <ShieldIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </span>
                         </div>
-                        <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
-                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-100">
+                        <div className="mt-1.5 sm:mt-2 flex items-center gap-1 sm:gap-2 flex-wrap text-[10px] sm:text-xs">
+                            <span className="px-1.5 sm:px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-100">
                                 {stats.actions?.CREATE || 0} Creates
                             </span>
-                            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-100">
+                            <span className="px-1.5 sm:px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-100">
                                 {stats.actions?.UPDATE || 0} Updates
                             </span>
-                            <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-semibold border border-rose-100">
+                            <span className="px-1.5 sm:px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-semibold border border-rose-100">
                                 {stats.actions?.DELETE || 0} Deletes
                             </span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">Data modifications distribution</p>
+                        <p className="text-[11px] sm:text-xs text-slate-500 mt-1 truncate">Data modifications</p>
                     </div>
                 </div>
 
@@ -2144,7 +2147,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                 }
                                 setPage(1);
                             }}
-                            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap ${
+                            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap ${
                                 activeCategory === tab.key
                                     ? 'border-blue-600 text-blue-600 bg-white shadow-2xs font-bold'
                                     : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -2165,31 +2168,33 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                 </div>
 
                 {/* Filter Toolbar */}
-                <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs space-y-3">
+                <div className="bg-white rounded-xl p-3 sm:p-4 border border-slate-200 shadow-2xs space-y-2.5 sm:space-y-3">
                     <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-2.5">
-                        <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap sm:flex-nowrap">
+                        <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap sm:flex-nowrap w-full lg:w-auto">
                             {/* Search Input */}
-                            <div className="relative flex-1 min-w-[180px] max-w-sm group">
-                            <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-blue-500 transition-colors" />
-                            <input
-                                type="text"
-                                placeholder="Search keyword, user, module..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-gray-200 hover:border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-800 shadow-xs transition-all"
-                            />
-                            {searchTerm && (
-                                <button
-                                    onClick={() => setSearchTerm('')}
-                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                >
-                                    <XIcon className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                        </div>
+                            <div className="relative w-full sm:flex-1 sm:min-w-[180px] sm:max-w-sm group">
+                                <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-blue-500 transition-colors" />
+                                <input
+                                    type="text"
+                                    placeholder="Search keyword, user, module..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-gray-200 hover:border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-800 shadow-xs transition-all"
+                                />
+                                {searchTerm && (
+                                    <button
+                                        onClick={() => setSearchTerm('')}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                    >
+                                        <XIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
 
-                            {/* Filter by User Dropdown Button */}
-                            <div className="relative min-w-[125px] flex-1 sm:flex-none" ref={userDropdownRef}>
+                            {/* User & Module Filters Grid for mobile, inline for desktop */}
+                            <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:gap-2">
+                                {/* Filter by User Dropdown Button */}
+                                <div className="relative w-full sm:w-auto sm:min-w-[125px]" ref={userDropdownRef}>
                             <button
                                 type="button"
                                 onClick={() => {
@@ -2283,79 +2288,80 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             )}
                         </div>
 
-                            {/* Filter by Module Dropdown Button */}
-                            <div className="relative min-w-[115px] flex-1 sm:flex-none" ref={moduleDropdownRef}>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setOpenDropdown(prev => prev === 'module' ? null : 'module');
-                                    setModuleSearchText('');
-                                }}
-                                className={`w-full px-3.5 py-2 bg-white border rounded-xl text-xs font-semibold text-left flex items-center justify-between transition-all shadow-xs ${
-                                    openDropdown === 'module'
-                                        ? 'border-blue-500 ring-2 ring-blue-500/20 text-blue-700 bg-blue-50/20'
-                                        : selectedModule !== 'ALL'
-                                        ? 'border-blue-300 bg-blue-50/40 text-blue-700 font-bold'
-                                        : 'border-gray-200 text-gray-700 hover:border-gray-300'
-                                }`}
-                            >
-                                <span className="truncate">
-                                    {selectedModule === 'ALL' ? 'All Modules' : selectedModule}
-                                </span>
-                                <ChevronDownIcon className={`w-3.5 h-3.5 ml-1 text-gray-400 flex-shrink-0 transition-transform duration-200 ${openDropdown === 'module' ? 'rotate-180 text-blue-500' : ''}`} />
-                            </button>
+                                {/* Filter by Module Dropdown Button */}
+                                <div className="relative w-full sm:w-auto sm:min-w-[115px]" ref={moduleDropdownRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setOpenDropdown(prev => prev === 'module' ? null : 'module');
+                                        setModuleSearchText('');
+                                    }}
+                                    className={`w-full px-3.5 py-2 bg-white border rounded-xl text-xs font-semibold text-left flex items-center justify-between transition-all shadow-xs ${
+                                        openDropdown === 'module'
+                                            ? 'border-blue-500 ring-2 ring-blue-500/20 text-blue-700 bg-blue-50/20'
+                                            : selectedModule !== 'ALL'
+                                            ? 'border-blue-300 bg-blue-50/40 text-blue-700 font-bold'
+                                            : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                                    }`}
+                                >
+                                    <span className="truncate">
+                                        {selectedModule === 'ALL' ? 'All Modules' : selectedModule}
+                                    </span>
+                                    <ChevronDownIcon className={`w-3.5 h-3.5 ml-1 text-gray-400 flex-shrink-0 transition-transform duration-200 ${openDropdown === 'module' ? 'rotate-180 text-blue-500' : ''}`} />
+                                </button>
 
-                            {openDropdown === 'module' && (
-                                <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-64 flex flex-col py-1 animate-in fade-in zoom-in-95 duration-150">
-                                    {moduleOptions.length > 6 && (
-                                        <div className="p-2 border-b border-gray-100">
-                                            <input
-                                                type="text"
-                                                placeholder="Search module..."
-                                                value={moduleSearchText}
-                                                onChange={(e) => setModuleSearchText(e.target.value)}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="w-full px-2.5 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                            />
+                                {openDropdown === 'module' && (
+                                    <div className="absolute z-50 left-0 right-0 sm:right-auto sm:w-76 md:w-80 mt-1.5 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-64 flex flex-col py-1 animate-in fade-in zoom-in-95 duration-150">
+                                        {moduleOptions.length > 6 && (
+                                            <div className="p-2 border-b border-gray-100">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search module..."
+                                                    value={moduleSearchText}
+                                                    onChange={(e) => setModuleSearchText(e.target.value)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="w-full px-2.5 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="overflow-y-auto max-h-48 py-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedModule('ALL');
+                                                    setPage(1);
+                                                    setOpenDropdown(null);
+                                                }}
+                                                className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
+                                                    selectedModule === 'ALL' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <span>All Modules</span>
+                                                {selectedModule === 'ALL' && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
+                                            </button>
+                                            {moduleOptions
+                                                .filter(m => !moduleSearchText || m.toLowerCase().includes(moduleSearchText.toLowerCase()))
+                                                .map(m => (
+                                                    <button
+                                                        key={m}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedModule(m);
+                                                            setPage(1);
+                                                            setOpenDropdown(null);
+                                                        }}
+                                                        className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
+                                                            selectedModule === m ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                                        }`}
+                                                    >
+                                                        <span className="truncate">{m}</span>
+                                                        {selectedModule === m && <CheckIcon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
+                                                    </button>
+                                                ))}
                                         </div>
-                                    )}
-                                    <div className="overflow-y-auto max-h-48 py-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedModule('ALL');
-                                                setPage(1);
-                                                setOpenDropdown(null);
-                                            }}
-                                            className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
-                                                selectedModule === 'ALL' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
-                                            }`}
-                                        >
-                                            <span>All Modules</span>
-                                            {selectedModule === 'ALL' && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
-                                        </button>
-                                        {moduleOptions
-                                            .filter(m => !moduleSearchText || m.toLowerCase().includes(moduleSearchText.toLowerCase()))
-                                            .map(m => (
-                                                <button
-                                                    key={m}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setSelectedModule(m);
-                                                        setPage(1);
-                                                        setOpenDropdown(null);
-                                                    }}
-                                                    className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
-                                                        selectedModule === m ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
-                                                    }`}
-                                                >
-                                                    <span className="truncate">{m}</span>
-                                                    {selectedModule === m && <CheckIcon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
-                                                </button>
-                                            ))}
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
 
                         {/* Filter by Action Dropdown Button (Multi-Selectable) */}
@@ -2368,7 +2374,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             const isAllSelected = selectedActions.length > 0 && !selectedActions.includes('NO_CLICKS') && actionOptions.every(a => selectedActions.includes(a));
 
                             return (
-                                <div className="relative min-w-[135px] flex-1 sm:flex-none" ref={actionDropdownRef}>
+                                <div className="relative w-full sm:w-auto sm:min-w-[135px] flex-1 sm:flex-none" ref={actionDropdownRef}>
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -2554,7 +2560,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                         </div>
 
                         {/* Date Preset Buttons in a Single Line */}
-                        <div className="flex items-center justify-end gap-1 flex-nowrap shrink-0 overflow-x-auto py-0.5">
+                        <div className="flex items-center justify-start sm:justify-end gap-1 flex-nowrap shrink-0 overflow-x-auto py-0.5 w-full sm:w-auto hide-scrollbar">
                             {[
                                 { key: 'ALL', label: 'All Time' },
                                 { key: 'TODAY', label: 'Today' },
@@ -2666,7 +2672,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                 {/* Logs Table Card */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden flex flex-col">
-                    <div className="overflow-x-auto">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left border-collapse text-xs">
                             <thead>
                                 <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-2xs">
@@ -2845,10 +2852,152 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             </tbody>
                         </table>
                     </div>
-                    <TableScrollNav count={logs.length} />
+                    <div className="hidden md:block">
+                        <TableScrollNav count={logs.length} />
+                    </div>
+
+                    {/* Mobile Card List View */}
+                    <div className="block md:hidden space-y-3 p-3 bg-slate-50/50">
+                        {isLoading ? (
+                            <div className="py-12 text-center text-slate-400">
+                                <RefreshIcon className="w-6 h-6 animate-spin text-blue-600 mx-auto mb-2" />
+                                <span className="font-medium text-xs">Loading activity logs...</span>
+                            </div>
+                        ) : logs.length === 0 ? (
+                            <div className="py-12 px-4 text-center text-slate-400">
+                                <ActivityLogIcon className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                                <p className="font-bold text-slate-700 text-xs">No logs found</p>
+                                <p className="text-[11px] text-slate-400 mt-1">Try adjusting search or filter settings</p>
+                            </div>
+                        ) : (
+                            logs.map((log) => {
+                                const dateObj = new Date(log.timestamp);
+                                const fullDate = dateObj.toLocaleString();
+                                const action = getLogAction(log);
+                                const module = getLogModule(log);
+                                const filledFields = getLogFilledFields(log);
+
+                                return (
+                                    <div
+                                        key={log._id}
+                                        onClick={() => setSelectedLog(log)}
+                                        className="bg-white rounded-xl p-3.5 border border-slate-200/90 shadow-2xs space-y-2.5 hover:border-blue-300 hover:shadow-xs active:scale-[0.99] transition-all cursor-pointer"
+                                    >
+                                        {/* Card Header: User Avatar & Name + Relative Time */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                                                    {(log.displayName || log.username || 'U')[0].toUpperCase()}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="font-bold text-slate-800 text-xs sm:text-sm leading-snug truncate">
+                                                        {log.displayName || log.username}
+                                                    </div>
+                                                    <div className="text-[11px] text-slate-400 truncate">
+                                                        @{log.username} {log.userRole ? `• ${log.userRole}` : ''}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <span className="text-xs font-semibold text-slate-700 block">
+                                                    {formatTimeAgo(log.timestamp)}
+                                                </span>
+                                                <span className="text-[10px] text-slate-400 font-mono">
+                                                    {dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Module, Action & Status Badges */}
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                                {module}
+                                            </span>
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold ${
+                                                action === 'CREATE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                                action === 'UPDATE' || action === 'UPDATE_ORIGINAL' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                                                action === 'DELETE' || action === 'DELETE_REVISION' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                                                action === 'REVISE' || action === 'REVISED' ? 'bg-violet-50 text-violet-700 border border-violet-200' :
+                                                action === 'CLICK' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                                'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                            }`}>
+                                                {action}
+                                            </span>
+                                            {log.status === 'FAILED' ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                                    <XIcon className="w-3 h-3" /> Failed
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                    <CheckIcon className="w-3 h-3" /> Success
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Operation Description */}
+                                        <div className="p-2.5 bg-slate-50/90 rounded-lg text-slate-800 font-semibold text-xs border border-slate-100 leading-relaxed">
+                                            {formatLogDescription(log.description, log)}
+                                        </div>
+
+                                        {/* Changed / Filled Fields */}
+                                        {filledFields.length > 0 && (
+                                            <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">
+                                                    {['APPROVE', 'ACCEPT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE', 'CARD CLOSE (NO SAVE)', 'CLICK'].includes(action) ? 'Details:' : action === 'REJECT' ? 'Reason:' : (action === 'REVISED' || action === 'REVISE') ? 'Revision:' : (action === 'UPDATE' || action === 'UPDATE_ORIGINAL') ? 'Changes:' : (action === 'DELETE' || action === 'DELETE_REVISION') ? 'Deleted:' : 'Fields:'}
+                                                </span>
+                                                {filledFields.slice(0, 3).map((f, i) => (
+                                                    <span
+                                                        key={i}
+                                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-medium bg-slate-100/90 border border-slate-200/80 text-slate-700 max-w-full truncate"
+                                                    >
+                                                        <span className="text-slate-400 font-normal">{f.label}:</span>
+                                                        {f.oldValue ? (
+                                                            <span className="flex items-center gap-1 truncate font-semibold">
+                                                                <span className="line-through text-slate-400 font-normal">{f.oldValue}</span>
+                                                                <span className="text-slate-400">➔</span>
+                                                                <span className="text-slate-900">{f.value}</span>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="font-semibold text-slate-800 truncate">{f.value}</span>
+                                                        )}
+                                                    </span>
+                                                ))}
+                                                {filledFields.length > 3 && (
+                                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                                        +{filledFields.length - 3} more
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Card Footer: IP Address & Inspect Action */}
+                                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                                            <span className="font-mono text-[11px] text-slate-400">
+                                                IP: {log.ip || '127.0.0.1'}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedLog(log);
+                                                }}
+                                                className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200/60 transition-colors"
+                                            >
+                                                <EyeIcon className="w-3.5 h-3.5" />
+                                                <span>Inspect</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                    <div className="hidden md:block">
+                        <TableScrollNav count={logs.length} />
+                    </div>
 
                     {/* Pagination Footer */}
-                    <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+                    <div className="bg-slate-50 px-4 sm:px-6 py-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
                         <div className="flex items-center gap-2">
                             <span>Showing {logs.length > 0 ? (page - 1) * limit + 1 : 0} to {Math.min(page * limit, totalLogs)} of {totalLogs.toLocaleString()} entries</span>
                             <span className="text-slate-300">|</span>
@@ -2911,6 +3060,9 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                         </div>
                     </div>
                 </div>
+
+                {/* Mobile bottom buffer to ensure all cards scroll completely clear of mobile browser address bar */}
+                <div className="h-10 md:hidden pointer-events-none" aria-hidden="true" />
             </div>
 
             {/* Inspection Modal */}
@@ -2923,19 +3075,19 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                     return (
                         <div
-                            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
+                            className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
                             onClick={(e) => { if (e.target === e.currentTarget) setSelectedLog(null); }}
                         >
-                            <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden ring-1 ring-black/5 animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
+                            <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] sm:max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden ring-1 ring-black/5 animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
                                 {/* Modal Header */}
-                                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                                <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
+                                    <div className="p-2 rounded-lg bg-blue-100 text-blue-700 shrink-0">
                                         <ActivityLogIcon className="w-5 h-5" />
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold text-slate-800 text-base">Operation Detail & Insertion Inspector</h3>
-                                        <p className="text-xs text-slate-500 font-mono">Log ID: {selectedLog._id}</p>
+                                    <div className="min-w-0">
+                                        <h3 className="font-bold text-slate-800 text-sm sm:text-base truncate">Operation Detail & Insertion Inspector</h3>
+                                        <p className="text-3xs sm:text-xs text-slate-500 font-mono truncate">Log ID: {selectedLog._id}</p>
                                     </div>
                                 </div>
                                 <button
@@ -2947,9 +3099,9 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             </div>
 
                             {/* Modal Body */}
-                            <div className="p-6 overflow-y-auto space-y-4 text-xs">
+                            <div className="p-4 sm:p-6 overflow-y-auto space-y-3.5 sm:space-y-4 text-xs">
                                 {/* Basic Meta Grid */}
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200">
                                     <div>
                                         <span className="text-slate-400 font-semibold block text-3xs uppercase">Timestamp</span>
                                         <span className="text-slate-800 font-mono font-medium">{new Date(selectedLog.timestamp).toLocaleString()}</span>
@@ -3075,10 +3227,10 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
             {/* Clear Logs Confirmation Modal */}
             {showClearModal && typeof document !== 'undefined' && document.body && createPortal(
                 <div
-                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
                     onClick={(e) => { if (e.target === e.currentTarget) setShowClearModal(false); }}
                 >
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 ring-1 ring-black/5 animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 ring-1 ring-black/5 animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-3 text-rose-600">
                             <div className="p-2.5 rounded-full bg-rose-100">
                                 <TrashIcon className="w-6 h-6" />
