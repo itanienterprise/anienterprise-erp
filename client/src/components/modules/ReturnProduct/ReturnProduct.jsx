@@ -1503,98 +1503,142 @@ const ReturnProduct = ({ currentUser, refreshPendingIndicators, onReturnsUpdated
                     </div>
 
                     {/* Mobile Card List */}
-                    <div className="block md:hidden px-2 py-3 space-y-3">
-                        {filteredReturns.map((ret) => {
+                    <div className="block md:hidden px-3 py-3 space-y-3">
+                        {filteredReturns.map((ret, idx) => {
                             const isExpanded = expandedReturnId === ret._id;
+                            const returnAmountOrQty = (() => {
+                                let rate = parseFloat(ret.returnPrice || ret.unitPrice || ret.rate) || 0;
+                                if (!rate && sales) {
+                                    const originalSale = sales.find(s => s.invoiceNo === ret.invoiceNo);
+                                    if (originalSale && originalSale.items) {
+                                        const item = originalSale.items.find(i => i.productName === ret.productName);
+                                        if (item) {
+                                            if (item.brandEntries && item.brandEntries.length > 0) {
+                                                const be = item.brandEntries.find(b => (b.brandName || b.brand) === ret.brand);
+                                                if (be) rate = parseFloat(be.unitPrice || be.rate) || 0;
+                                            } else {
+                                                rate = parseFloat(item.unitPrice || item.rate) || 0;
+                                            }
+                                        }
+                                    } else if (originalSale) {
+                                        rate = parseFloat(originalSale.rate || originalSale.unitPrice) || 0;
+                                    }
+                                }
+                                const qty = parseFloat(ret.quantity) || 0;
+                                return rate > 0 ? `৳ ${(rate * qty).toLocaleString()}` : `${ret.quantity} kg`;
+                            })();
+
                             return (
                                 <div
                                     key={ret._id}
-                                    className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'ring-1 ring-blue-50 shadow-md border-blue-200' : 'border-gray-100 shadow-sm'}`}
                                     onClick={() => setExpandedReturnId(isExpanded ? null : ret._id)}
+                                    className={`bg-white border rounded-2xl overflow-hidden shadow-sm select-none transition-all duration-200 cursor-pointer ${
+                                        isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-200 hover:border-gray-300'
+                                    }`}
                                 >
-                                    <div className="flex justify-between items-center p-4">
-                                        <div className="min-w-0">
-                                            <p className="font-bold text-gray-900 text-sm truncate uppercase tracking-tight">{ret.companyName || ret.customerName}</p>
-                                            <p className="text-[10px] font-bold text-blue-600 mt-0.5 tracking-wider uppercase opacity-80">{ret.invoiceNo}</p>
+                                    {/* Card Header (Always Visible) */}
+                                    <div className={`bg-gray-50/70 px-3.5 py-2.5 flex flex-col gap-1.5 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-blue-50/20' : ''}`}>
+                                        {/* Line 1: #{idx + 1} & Invoice No on left, Date on right */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                                    #{idx + 1}
+                                                </span>
+                                                <span className="text-xs font-black text-blue-600 truncate">
+                                                    {ret.invoiceNo || 'No ID'}
+                                                </span>
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <span className="text-xs font-semibold text-gray-400 tracking-wider">
+                                                    {formatDate(ret.date) || ret.date}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className={`return-product-status-badge ${ret.status.toLowerCase()} text-[10px] py-0.5 px-2`}>
-                                                {ret.status}
-                                            </span>
-                                            <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}>
-                                                {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+
+                                        {/* Line 2: Company Name on left, Amount / Qty on right */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex-1 min-w-0 pr-2">
+                                                <div className="font-black text-gray-900 text-sm tracking-tight truncate">
+                                                    {ret.companyName || ret.customerName || '—'}
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <span className="font-black text-blue-600 text-sm">
+                                                    {returnAmountOrQty}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
 
+                                    {/* Card Body: Details & Action Buttons (Expanded View) */}
                                     {isExpanded && (
-                                        <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
-                                            <div className="space-y-2.5 pt-3 border-t border-gray-50">
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Date</span>
-                                                    <span className="text-gray-900 font-black">{ret.date}</span>
+                                        <div className="p-3.5 space-y-3 animate-in slide-in-from-top-1 duration-150" onClick={(e) => e.stopPropagation()}>
+                                            <div className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-gray-500 font-medium">Product:</span>
+                                                    <span className="font-bold text-gray-900 text-right">{ret.productName || '—'}</span>
                                                 </div>
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Invoice Info</span>
-                                                    <span className="text-gray-900 font-black text-right">{ret.invoiceNo} ({ret.invoiceDate})</span>
-                                                </div>
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Company / Phone</span>
-                                                    <span className="text-gray-900 font-black text-right">{ret.companyName} <br /> <span className="text-[10px] opacity-60">{ret.phone}</span></span>
-                                                </div>
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Customer</span>
-                                                    <span className="text-gray-900 font-black">{ret.customerName}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Product</span>
-                                                    <span className="text-gray-900 font-black">{ret.productName}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">LC No</span>
-                                                    <span className="text-gray-900 font-black">{getReturnLcNo(ret)}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Quantity</span>
-                                                    <span className="text-gray-900 font-black font-mono">{ret.quantity}</span>
+                                                {ret.brand && ret.brand !== '-' && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-gray-500 font-medium">Brand:</span>
+                                                        <span className="font-bold text-gray-800 text-right">{ret.brand}</span>
+                                                    </div>
+                                                )}
+                                                {getReturnLcNo(ret) && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-gray-500 font-medium">LC No:</span>
+                                                        <span className="font-bold text-gray-800 text-right">{getReturnLcNo(ret)}</span>
+                                                    </div>
+                                                )}
+                                                {ret.bags && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-gray-500 font-medium">Bags:</span>
+                                                        <span className="font-bold text-gray-800 text-right">{ret.bags}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-gray-500 font-medium">Quantity:</span>
+                                                    <span className="font-bold text-gray-800 text-right">{ret.quantity} kg</span>
                                                 </div>
                                                 {parseFloat(ret.returnExpense || 0) > 0 && (
-                                                    <div className="flex justify-between items-center text-xs">
-                                                        <span className="text-rose-500 font-bold uppercase tracking-widest text-[9px]">Return Expense</span>
-                                                        <span className="text-rose-600 font-black">৳ {parseFloat(ret.returnExpense).toLocaleString()}</span>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-rose-500 font-medium">Return Expense:</span>
+                                                        <span className="font-black text-rose-600 text-right">৳ {parseFloat(ret.returnExpense).toLocaleString()}</span>
                                                     </div>
                                                 )}
                                                 {ret.reason && (
-                                                    <div className="flex justify-between items-start text-xs pt-1">
-                                                        <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px] shrink-0">Reason</span>
-                                                        <span className="text-gray-900 font-black text-right max-w-[65%] line-clamp-2">{ret.reason}</span>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-gray-500 font-medium">Reason:</span>
+                                                        <span className="font-bold text-gray-800 text-right max-w-[65%] truncate">{ret.reason}</span>
                                                     </div>
                                                 )}
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Entry By</span>
-                                                    <span className="text-gray-900 font-black">{getEntryByFirstName(ret)}</span>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-indigo-600 font-medium">Entry By:</span>
+                                                    <span className="font-bold text-indigo-700 text-right">{getEntryByFirstName(ret)}</span>
                                                 </div>
                                             </div>
 
                                             {canManage && (
-                                            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
-                                                {canEdit && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleEdit(ret); }}
-                                                        className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
-                                                    >
-                                                        <EditIcon className="w-4 h-4" /> Edit
-                                                    </button>
-                                                )}
-                                                {canDelete && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleDelete(ret); }}
-                                                        className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                            </div>
+                                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                                                    {canEdit && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleEdit(ret); }}
+                                                            className="p-2 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <EditIcon className="w-5 h-5" />
+                                                        </button>
+                                                    )}
+                                                    {canDelete && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(ret); }}
+                                                            className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl transition-colors"
+                                                            title="Delete"
+                                                        >
+                                                            <TrashIcon className="w-5 h-5" />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     )}
