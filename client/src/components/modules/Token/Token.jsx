@@ -200,6 +200,16 @@ const Token = ({ currentUser, addNotification }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
+    const [expandedTokenIds, setExpandedTokenIds] = useState(new Set());
+
+    const toggleExpandToken = (id) => {
+        setExpandedTokenIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     const isAdmin = useMemo(() => currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase().trim() === 'admin', [currentUser]);
     const isIncharge = useMemo(() => (currentUser?.role || '').toLowerCase().trim() === 'incharge', [currentUser]);
@@ -608,31 +618,22 @@ const Token = ({ currentUser, addNotification }) => {
         <div className="token-container">
             {/* Header (Visible when list is showing) */}
             {!showForm && !viewingToken && (
-                <div className="token-header flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+                <div className="token-header flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-3 w-full sm:w-auto">
+                        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
                             <TicketIcon className="w-6 h-6" />
                         </div>
-                        <div>
-                            <h2 className="token-title" style={{ margin: 0 }}>Token Management</h2>
-                            <p className="text-xs text-gray-500 mt-0.5">
+                        <div className="text-center sm:text-left">
+                            <h2 className="token-title text-xl sm:text-2xl font-bold text-gray-900" style={{ margin: 0 }}>Token Management</h2>
+                            <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto sm:mx-0">
                                 Open and track service requests for entry edits, data changes, and technical assistance
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <button 
-                            onClick={fetchTokens} 
-                            disabled={isLoading}
-                            className="token-refresh-btn"
-                            title="Refresh tokens"
-                        >
-                            <RefreshCwIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                            <span className="hidden sm:inline">Refresh</span>
-                        </button>
+                    <div className="hidden sm:flex sm:items-center justify-end">
                         <button
                             onClick={handleOpenNew}
-                            className="token-add-btn whitespace-nowrap"
+                            className="token-add-btn whitespace-nowrap shadow-md"
                         >
                             <PlusIcon className="w-4 h-4 mr-1.5" />
                             Open New Token
@@ -834,38 +835,65 @@ const Token = ({ currentUser, addNotification }) => {
             {viewingToken && !showForm && (
                 <div className="token-form-container animate-in">
                     <div className="token-form-header">
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={() => setViewingToken(null)}
-                                className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
-                                title="Back to Token List"
-                            >
-                                <ArrowLeftIcon className="w-4 h-4" />
-                            </button>
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <span className="font-black text-blue-600 text-sm tracking-wider font-mono">
-                                        {viewingToken.tokenNo}
-                                    </span>
-                                    {getStatusBadge(viewingToken.status)}
-                                    {getPriorityBadge(viewingToken.priority)}
-                                </div>
-                                <h3 className="token-form-title mt-1">
-                                    {viewingToken.subject}
-                                </h3>
+                        <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-black text-blue-600 text-sm tracking-wider font-mono">
+                                    {viewingToken.tokenNo}
+                                </span>
+                                {getStatusBadge(viewingToken.status)}
+                                {getPriorityBadge(viewingToken.priority)}
                             </div>
+                            <h3 className="token-form-title mt-1">
+                                {viewingToken.subject}
+                            </h3>
                         </div>
                         <button
                             onClick={() => setViewingToken(null)}
                             className="token-form-close"
+                            title="Close"
                         >
                             <XIcon className="w-5 h-5" />
                         </button>
                     </div>
 
-                    <div className="p-6 space-y-5">
-                        {/* Metadata Pills */}
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100 text-xs">
+                    <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+                        {/* Mobile View: Clean Label and Value Rows */}
+                        <div className="block sm:hidden bg-gray-50/70 rounded-2xl border border-gray-100 p-3.5 space-y-2 text-xs">
+                            {[
+                                ['Token No', viewingToken.tokenNo || '—'],
+                                ['Date & Time', `${viewingToken.date || ''} ${viewingToken.time || ''}`.trim() || '—'],
+                                ['Requested By', viewingToken.employeeName || '—'],
+                                ['Need Approve From', viewingToken.needApproveFrom || '—'],
+                                ['ERP Module', viewingToken.module || '—'],
+                                ['Category', viewingToken.category || '—'],
+                                ['Reference #', viewingToken.referenceNo || 'None'],
+                                ['Priority', viewingToken.priority || '—'],
+                                ['Status', viewingToken.status || '—']
+                            ].map(([label, val], idx) => (
+                                <div
+                                    key={idx}
+                                    className="flex items-start justify-between gap-3 pt-2 border-t border-gray-200/60 first:pt-0 first:border-t-0"
+                                >
+                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0 mt-0.5">{label} :</span>
+                                    <div className="font-bold text-gray-800 text-right text-xs break-words">
+                                        {label === 'Priority' ? (
+                                            getPriorityBadge(val)
+                                        ) : label === 'Status' ? (
+                                            getStatusBadge(val)
+                                        ) : label === 'Token No' || label === 'Reference #' ? (
+                                            <span className="font-mono text-blue-600">{val}</span>
+                                        ) : label === 'Need Approve From' ? (
+                                            <span className="text-amber-700">{val}</span>
+                                        ) : (
+                                            val
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Desktop View: Metadata Pills */}
+                        <div className="hidden sm:grid sm:grid-cols-5 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100 text-xs">
                             <div>
                                 <span className="text-gray-400 block text-[10px] uppercase font-bold">Requested By</span>
                                 <span className="font-bold text-gray-900">{viewingToken.employeeName}</span>
@@ -893,19 +921,19 @@ const Token = ({ currentUser, addNotification }) => {
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">
                                 Description of Request
                             </label>
-                            <div className="p-5 bg-white rounded-xl border border-gray-200 text-gray-800 text-sm whitespace-pre-wrap leading-relaxed shadow-sm">
+                            <div className="p-4 sm:p-5 bg-white rounded-xl border border-gray-200 text-gray-800 text-xs sm:text-sm whitespace-pre-wrap leading-relaxed shadow-sm">
                                 {viewingToken.description}
                             </div>
                         </div>
 
                         {/* Admin Remarks / Resolution */}
                         {viewingToken.adminRemarks && (
-                            <div className="p-5 bg-emerald-50/70 rounded-xl border border-emerald-200 text-xs space-y-1.5 shadow-sm">
-                                <div className="font-bold text-emerald-900 flex items-center gap-1.5 text-sm">
+                            <div className="p-4 sm:p-5 bg-emerald-50/70 rounded-xl border border-emerald-200 text-xs space-y-1.5 shadow-sm">
+                                <div className="font-bold text-emerald-900 flex items-center gap-1.5 text-xs sm:text-sm">
                                     <CheckCircle2Icon className="w-4 h-4 text-emerald-600" />
                                     Resolution / Admin Response
                                 </div>
-                                <p className="text-emerald-800 whitespace-pre-wrap leading-relaxed text-sm">
+                                <p className="text-emerald-800 whitespace-pre-wrap leading-relaxed text-xs sm:text-sm">
                                     {viewingToken.adminRemarks}
                                 </p>
                                 {viewingToken.resolvedBy && (
@@ -917,21 +945,21 @@ const Token = ({ currentUser, addNotification }) => {
                         )}
 
                         {/* Admin Quick Action Buttons */}
-                        <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                        <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
                             <button
                                 onClick={() => setViewingToken(null)}
-                                className="token-btn-secondary"
+                                className="token-btn-secondary text-center order-last sm:order-first"
                             >
                                 Back to List
                             </button>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 {canApproveToken(viewingToken) && (
                                     <>
                                         {viewingToken.status !== 'In Progress' && (
                                             <button
                                                 onClick={() => handleQuickStatusChange(viewingToken, 'In Progress')}
-                                                className="px-3.5 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-bold transition-colors"
+                                                className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-bold transition-colors text-center"
                                             >
                                                 Mark In Progress
                                             </button>
@@ -939,7 +967,7 @@ const Token = ({ currentUser, addNotification }) => {
                                         {viewingToken.status !== 'Resolved' && (
                                             <button
                                                 onClick={() => handleQuickStatusChange(viewingToken, 'Resolved')}
-                                                className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-bold transition-colors shadow-sm"
+                                                className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-bold transition-colors shadow-sm text-center"
                                             >
                                                 Mark Resolved
                                             </button>
@@ -947,7 +975,7 @@ const Token = ({ currentUser, addNotification }) => {
                                         {viewingToken.status !== 'Rejected' && (
                                             <button
                                                 onClick={() => handleQuickStatusChange(viewingToken, 'Rejected')}
-                                                className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-bold transition-colors"
+                                                className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-bold transition-colors text-center"
                                             >
                                                 Reject
                                             </button>
@@ -957,7 +985,7 @@ const Token = ({ currentUser, addNotification }) => {
                                 {canEditToken(viewingToken) && (
                                     <button
                                         onClick={() => handleEditToken(viewingToken)}
-                                        className="token-btn-primary"
+                                        className="token-btn-primary flex-1 sm:flex-initial text-center"
                                     >
                                         Edit Token
                                     </button>
@@ -971,7 +999,99 @@ const Token = ({ currentUser, addNotification }) => {
             {/* LIST VIEW (Visible when form or details are closed) */}
             {!showForm && !viewingToken && (
                 <>
-                    {/* Stats Grid */}
+                    {/* Controls Bar: Search, Module Selector & Status Tabs */}
+                    <div className="token-controls-bar">
+                        <div className="token-search-wrapper">
+                            <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                                type="text"
+                                placeholder="Search tokens, employee, subject..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="token-search-input"
+                            />
+                            {searchQuery && (
+                                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <XIcon className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Mobile 2-Column Filters (Module & Status) */}
+                        <div className="grid grid-cols-2 gap-2 sm:hidden w-full">
+                            <div className="relative">
+                                <select
+                                    value={selectedModuleFilter}
+                                    onChange={(e) => setSelectedModuleFilter(e.target.value)}
+                                    className="w-full appearance-none pl-3 pr-7 py-2 bg-gray-50/90 hover:bg-gray-100/80 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer truncate"
+                                >
+                                    <option value="All">All Modules</option>
+                                    {MODULE_OPTIONS.map(m => (
+                                        <option key={m} value={m}>{m}</option>
+                                    ))}
+                                </select>
+                                <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
+
+                            <div className="relative">
+                                <select
+                                    value={selectedStatusTab}
+                                    onChange={(e) => setSelectedStatusTab(e.target.value)}
+                                    className="w-full appearance-none pl-3 pr-7 py-2 bg-gray-50/90 hover:bg-gray-100/80 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer truncate"
+                                >
+                                    <option value="All">All Statuses</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Resolved">Resolved</option>
+                                    <option value="Rejected">Rejected</option>
+                                </select>
+                                <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
+                        </div>
+
+                        {/* Desktop Controls (Inline Module dropdown + Status tabs) */}
+                        <div className="hidden sm:flex items-center gap-3 shrink-0">
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-gray-500 whitespace-nowrap">Module:</label>
+                                <select
+                                    value={selectedModuleFilter}
+                                    onChange={(e) => setSelectedModuleFilter(e.target.value)}
+                                    className="token-filter-select"
+                                >
+                                    <option value="All">All Modules</option>
+                                    {MODULE_OPTIONS.map(m => (
+                                        <option key={m} value={m}>{m}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="token-status-tabs">
+                                {['All', 'Pending', 'In Progress', 'Resolved', 'Rejected'].map(st => (
+                                    <button
+                                        key={st}
+                                        onClick={() => setSelectedStatusTab(st)}
+                                        className={`token-tab-btn ${selectedStatusTab === st ? 'active' : ''}`}
+                                    >
+                                        {st}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Mobile: Open New Token button directly AFTER Search & Filters */}
+                    <div className="block sm:hidden w-full">
+                        <button
+                            type="button"
+                            onClick={handleOpenNew}
+                            className="token-add-btn w-full justify-center whitespace-nowrap shadow-md py-2.5 text-xs font-bold"
+                        >
+                            <PlusIcon className="w-4 h-4 mr-1.5" />
+                            Open New Token
+                        </button>
+                    </div>
+
+                    {/* Stats Grid (Cards under Open New Button) */}
                     <div className="token-stats-grid">
                         <div 
                             className={`token-stat-card ${selectedStatusTab === 'All' ? 'active' : ''}`}
@@ -1000,51 +1120,6 @@ const Token = ({ currentUser, addNotification }) => {
                         >
                             <div className="token-stat-label text-emerald-700">Resolved</div>
                             <div className="token-stat-val text-emerald-600">{stats.resolved}</div>
-                        </div>
-                    </div>
-
-                    {/* Controls Bar: Search, Module Selector & Status Tabs */}
-                    <div className="token-controls-bar">
-                        <div className="token-search-wrapper">
-                            <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                            <input
-                                type="text"
-                                placeholder="Search by token #, subject, employee, module, reference..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="token-search-input"
-                            />
-                            {searchQuery && (
-                                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                                    <XIcon className="w-4 h-4" />
-                                </button>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-semibold text-gray-500 whitespace-nowrap">Module:</label>
-                            <select
-                                value={selectedModuleFilter}
-                                onChange={(e) => setSelectedModuleFilter(e.target.value)}
-                                className="token-filter-select"
-                            >
-                                <option value="All">All Modules</option>
-                                {MODULE_OPTIONS.map(m => (
-                                    <option key={m} value={m}>{m}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="token-status-tabs">
-                            {['All', 'Pending', 'In Progress', 'Resolved', 'Rejected'].map(st => (
-                                <button
-                                    key={st}
-                                    onClick={() => setSelectedStatusTab(st)}
-                                    className={`token-tab-btn ${selectedStatusTab === st ? 'active' : ''}`}
-                                >
-                                    {st}
-                                </button>
-                            ))}
                         </div>
                     </div>
 
@@ -1215,66 +1290,155 @@ const Token = ({ currentUser, addNotification }) => {
 
                     {/* Mobile Card List */}
                     <div className="token-mobile-card-list">
-                        {filteredTokens.map(t => (
-                            <div key={t._id} className="token-mobile-card">
-                                <div className="flex items-start justify-between gap-2 mb-2">
-                                    <div>
-                                        <span className="font-black text-blue-600 text-xs tracking-wider">{t.tokenNo}</span>
-                                        <div className="text-[10px] text-gray-400">{t.date} {t.time}</div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        {getPriorityBadge(t.priority)}
-                                        {getStatusBadge(t.status)}
-                                    </div>
-                                </div>
+                        {isLoading ? (
+                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+                                <RefreshCwIcon className="w-7 h-7 mx-auto mb-2 animate-spin text-blue-500 opacity-60" />
+                                <p className="text-xs text-gray-500 font-medium">Loading service tokens...</p>
+                            </div>
+                        ) : filteredTokens.length === 0 ? (
+                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center text-gray-400">
+                                <TicketIcon className="w-10 h-10 mx-auto mb-2 opacity-25" />
+                                <p className="font-semibold text-gray-700 text-sm">No service tokens found</p>
+                                <p className="text-xs text-gray-400 mt-1">Need help or a data change? Click "Open New Token" above.</p>
+                            </div>
+                        ) : (
+                            filteredTokens.map(t => {
+                            const isExpanded = expandedTokenIds.has(t._id);
+                            return (
+                                <div key={t._id} className="token-mobile-card space-y-2.5 transition-all duration-200">
+                                    {/* Header (Clickable to Toggle Expand/Collapse) */}
+                                    <div 
+                                        onClick={() => toggleExpandToken(t._id)}
+                                        className="cursor-pointer select-none"
+                                    >
+                                        {/* Top Row: Token No, Date & Time, Badges, and Expand Chevron */}
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div>
+                                                <span className="font-black text-blue-600 font-mono text-sm tracking-wide">
+                                                    {t.tokenNo}
+                                                </span>
+                                                <div className="text-[11px] text-gray-400 mt-0.5 font-medium">
+                                                    {t.date} {t.time}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                {getPriorityBadge(t.priority)}
+                                                {getStatusBadge(t.status)}
+                                                <div className={`p-1 text-gray-400 hover:text-gray-600 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-blue-600' : ''}`}>
+                                                    <ChevronDownIcon className="w-4 h-4" />
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                <div 
-                                    onClick={() => setViewingToken(t)}
-                                    className="font-bold text-gray-900 text-sm mb-1 cursor-pointer"
-                                >
-                                    {t.subject}
-                                </div>
+                                        {/* Subject */}
+                                        <div className="font-bold text-gray-900 text-sm leading-snug mt-1.5">
+                                            {t.subject}
+                                        </div>
 
-                                <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                                    <span className="font-semibold text-gray-700">{t.module}</span>
-                                    <span>•</span>
-                                    <span>{t.category}</span>
-                                    {t.referenceNo && (
-                                        <>
-                                            <span>•</span>
-                                            <span className="font-mono text-blue-600 font-bold">Ref: {t.referenceNo}</span>
-                                        </>
+                                        {/* Compact preview when collapsed */}
+                                        {!isExpanded && (
+                                            <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100 mt-2">
+                                                <div className="flex items-center gap-1.5 text-[11px]">
+                                                    <span className="font-semibold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
+                                                        {t.module || 'General'}
+                                                    </span>
+                                                    <span className="text-gray-300">•</span>
+                                                    <span className="text-gray-600 truncate max-w-[140px]">
+                                                        By: {t.employeeName}
+                                                    </span>
+                                                </div>
+                                                <span className="text-[11px] font-bold text-blue-600">
+                                                    Details ▾
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Expandable Section */}
+                                    {isExpanded && (
+                                        <div className="pt-2 border-t border-gray-100 space-y-2.5 animate-in fade-in duration-200">
+                                            {/* Description Snippet / Full */}
+                                            {t.description && (
+                                                <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Description</p>
+                                                    {t.description}
+                                                </div>
+                                            )}
+
+                                            {/* Metadata Badges & Details */}
+                                            <div className="space-y-1.5 text-xs">
+                                                <div className="flex items-center justify-between gap-3 pt-1 border-t border-gray-100 first:border-t-0 first:pt-0">
+                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Module :</span>
+                                                    <span className="font-bold text-gray-800 text-right">{t.module || 'General'}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-gray-100">
+                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Category :</span>
+                                                    <span className="font-bold text-gray-800 text-right">{t.category || '—'}</span>
+                                                </div>
+                                                {t.referenceNo && (
+                                                    <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-gray-100">
+                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Reference # :</span>
+                                                        <span className="font-mono text-blue-600 font-bold text-right">{t.referenceNo}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-gray-100">
+                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Requested By :</span>
+                                                    <span className="font-bold text-gray-800 text-right">{t.employeeName || '—'}</span>
+                                                </div>
+                                                {t.needApproveFrom && (
+                                                    <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-gray-100">
+                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Need Approve From :</span>
+                                                        <span className="font-bold text-amber-700 text-right">{t.needApproveFrom}</span>
+                                                    </div>
+                                                )}
+                                                {t.adminRemarks && (
+                                                    <div className="p-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl text-xs space-y-1 mt-1">
+                                                        <div className="font-bold text-emerald-800 text-[11px]">Resolution / Admin Remarks :</div>
+                                                        <p className="text-emerald-700 leading-relaxed">{t.adminRemarks}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Mobile Action Toolbar */}
+                                            <div className="flex items-center gap-2 pt-2.5 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setViewingToken(t)}
+                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/70 rounded-xl text-xs font-bold transition-all active:scale-95"
+                                                    title="View Full Details"
+                                                >
+                                                    <EyeIcon className="w-3.5 h-3.5" />
+                                                    <span>View</span>
+                                                </button>
+                                                {canEditToken(t) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleEditToken(t)}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 rounded-xl text-xs font-bold transition-all active:scale-95"
+                                                        title="Edit Token"
+                                                    >
+                                                        <EditIcon className="w-3.5 h-3.5" />
+                                                        <span>Edit</span>
+                                                    </button>
+                                                )}
+                                                {canDelete && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDeleteConfirmId(t._id)}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/70 rounded-xl text-xs font-bold transition-all active:scale-95"
+                                                        title="Delete Token"
+                                                    >
+                                                        <TrashIcon className="w-3.5 h-3.5" />
+                                                        <span>Delete</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
-
-                                <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
-                                    <div className="text-gray-600">
-                                        By: <span className="font-bold text-gray-800">{t.employeeName}</span>
-                                        {t.needApproveFrom && (
-                                            <span className="text-[10px] text-amber-700 font-medium ml-1.5">
-                                                (Appr: {t.needApproveFrom})
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => setViewingToken(t)}
-                                            className="px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-600 rounded-lg"
-                                        >
-                                            Details
-                                        </button>
-                                        {canEditToken(t) && (
-                                            <button
-                                                onClick={() => handleEditToken(t)}
-                                                className="p-1 text-gray-500 hover:text-emerald-600"
-                                            >
-                                                <EditIcon className="w-4 h-4" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })
+                        )}
                     </div>
                 </>
             )}
