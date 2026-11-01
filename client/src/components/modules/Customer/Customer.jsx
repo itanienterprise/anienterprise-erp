@@ -70,6 +70,7 @@ const Customer = ({
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewData, setViewData] = useState(null);
+    const isParty = Boolean(viewData?.customerType?.toLowerCase().includes('party'));
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [activeHistoryTab, setActiveHistoryTab] = useState('sales'); // 'purchase', 'sales', 'payment', or 'gp'
     const [paymentSubTab, setPaymentSubTab] = useState('collection'); // 'collection' or 'paid'
@@ -2940,10 +2941,10 @@ const Customer = ({
 
                                 <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 min-h-0">
                                     {/* Global Summary Cards */}
-                                    <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5' : (activeHistoryTab === 'sales' ? (viewData.customerType?.includes('Party') ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-6') : (activeHistoryTab === 'gp' ? 'grid-cols-2 md:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5'))} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
+                                    <div className={`grid ${activeHistoryTab === 'all' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5' : (activeHistoryTab === 'sales' ? (isParty ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-6') : (activeHistoryTab === 'gp' ? 'grid-cols-2 md:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5'))} gap-2 md:gap-3 mb-4 md:mb-8 summary-grid-mobile`}>
                                         {activeHistoryTab === 'sales' && (
                                             <>
-                                                {viewData.customerType?.includes('Party') && (
+                                                {isParty && (
                                                     <div className="bg-blue-50/50 p-3 md:p-4 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
                                                         <p className="text-[9px] md:text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1 truncate">Total Truck</p>
                                                         <p className="text-base md:text-lg font-black text-blue-700 truncate" title={String(totalTruck)}>{Number(totalTruck || 0).toLocaleString('en-US')}</p>
@@ -3296,7 +3297,7 @@ const Customer = ({
                                                 {/* Desktop Sales History Table */}
                                                 <table className="w-full text-left text-sm hidden md:table">
                                                     <thead className="bg-white border-b border-gray-200">
-                                                        {viewData.customerType === 'Party Customer' ? (
+                                                        {isParty ? (
                                                             <tr>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('date')}>
                                                                     <div className="flex items-center gap-2">
@@ -3471,8 +3472,6 @@ const Customer = ({
                                                                         setExpandedRows([...expandedRows, invoiceNo]);
                                                                     }
                                                                 };
-                                                                const isParty = viewData?.customerType?.toLowerCase().includes('party');
-                                                                const colSpan = isParty ? "12" : "11";
 
                                                                 return (
                                                                     <React.Fragment key={index}>
@@ -3588,9 +3587,7 @@ const Customer = ({
                                                                                     <td className="px-4 py-3 text-xs text-gray-600">{item.brand || '-'}</td>
                                                                                 )}
                                                                                 {isParty ? (
-                                                                                    viewData.customerType?.includes('Party') ? (
-                                                                                        <td className="px-4 py-3 text-left text-xs text-gray-900 font-medium">{item.truck || '-'}</td>
-                                                                                    ) : null
+                                                                                    <td className="px-4 py-3 text-left text-xs text-gray-900 font-medium">{item.truck || '-'}</td>
                                                                                 ) : (
                                                                                     <td className="px-4 py-3 text-left text-xs font-bold text-gray-900">{Number(item.quantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
                                                                                 )}
@@ -3643,7 +3640,6 @@ const Customer = ({
                                                                 return groups;
                                                             }, {})
                                                         ).map(([invoiceNo, group], index) => {
-                                                            const isParty = viewData?.customerType?.toLowerCase().includes('party');
                                                             const isExpanded = expandedSalesHistoryCards === invoiceNo;
                                                             return (
                                                                 <div
@@ -4506,7 +4502,6 @@ const Customer = ({
                                                                 return acc;
                                                             }, []).map((item, index) => {
                                                                 const isExpanded = expandedAllHistoryCards === index;
-                                                                const isParty = viewData?.customerType?.toLowerCase().includes('party');
                                                                 const saleItems = (item.items && item.items.length > 0)
                                                                     ? item.items
                                                                     : [{
