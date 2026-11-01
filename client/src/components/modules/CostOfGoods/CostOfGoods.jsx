@@ -34,6 +34,16 @@ const CostOfGoods = ({
     const [submitStatus, setSubmitStatus] = useState(null);
     const [records, setRecords] = useState([]);
     const [expandedLc, setExpandedLc] = useState(null);
+    const [expandedRecordIds, setExpandedRecordIds] = useState(new Set());
+
+    const toggleExpandRecord = (id) => {
+        setExpandedRecordIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
     const [isLoading, setIsLoading] = useState(false);
     const [viewData, setViewData] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -1240,7 +1250,282 @@ const CostOfGoods = ({
                         <p className="text-gray-400 text-sm">Loading...</p>
                     </div>
                 ) : sortedRecords.length > 0 ? (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <>
+                        {/* Mobile Responsive Cards View */}
+                        <div className="block md:hidden space-y-3.5">
+                            {groupedRecords.map(group => {
+                                const isExpanded = expandedLc === group.lcNo;
+                                const isChinaGroup = group.records.some(r => r.country === 'CHINA');
+                                const currencySymbol = isChinaGroup ? '$' : '₹';
+                                const totalQty = group.records.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+                                const totalBill = group.records.reduce((sum, r) => {
+                                    const isChina = r.country === 'CHINA';
+                                    const amountVal = parseFloat(r.amount) || 0;
+                                    const billSum = isChina ? amountVal : (r.totalBill !== undefined ? r.totalBill : ((parseFloat(r.amount) || 0) + (parseFloat(r.indTruckFare) || 0) + (parseFloat(r.truckChangeFare) || 0) + (parseFloat(r.slofCf) || 0)));
+                                    return sum + (parseFloat(billSum) || 0);
+                                }, 0);
+
+                                return (
+                                    <div
+                                        key={`cog-mob-group-${group.lcNo}`}
+                                        className="bg-white rounded-2xl border border-gray-200/90 shadow-sm overflow-hidden transition-all duration-200"
+                                    >
+                                        {/* Group Header Card */}
+                                        <div
+                                            onClick={() => setExpandedLc(prev => prev === group.lcNo ? null : group.lcNo)}
+                                            className={`p-3.5 cursor-pointer select-none transition-colors ${
+                                                isExpanded ? 'bg-blue-50/60 border-b border-blue-100' : 'hover:bg-gray-50/80 active:bg-gray-100'
+                                            }`}
+                                        >
+                                            {/* Top Row: LC No, Record count, and Action / Chevron */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleOpenLcConsumption(group.lcNo);
+                                                        }}
+                                                        className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-700 bg-white hover:bg-blue-600 hover:text-white border border-blue-200 rounded-lg shadow-2xs font-mono shrink-0 transition-colors"
+                                                        title={`View LC Consumption History (${group.lcNo})`}
+                                                    >
+                                                        LC No: {group.lcNo}
+                                                    </button>
+                                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-100/70 px-2 py-0.5 rounded-full shrink-0">
+                                                        {group.records.length} {group.records.length === 1 ? 'record' : 'records'}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    {group.lcNo && onNavigate && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onNavigate('lc-management-section', group.lcNo);
+                                                            }}
+                                                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100 transition-colors"
+                                                            title="Go to LC"
+                                                        >
+                                                            <ArrowUpRightIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <ChevronDownIcon
+                                                        className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+                                                            isExpanded ? 'rotate-180 text-blue-600' : ''
+                                                        }`}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Middle Row: Supplier & Total Qty */}
+                                            <div className="flex items-center justify-between gap-2 mt-2.5">
+                                                <div className="font-bold text-gray-900 text-sm truncate flex-1">
+                                                    {group.exporter || 'No Supplier'}
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <span className="font-black text-gray-800 text-xs">
+                                                        {Math.round(totalQty).toLocaleString()} KG
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Bottom Row: Product & Total Bill */}
+                                            <div className="flex items-center justify-between gap-2 mt-1">
+                                                <div className="text-xs text-gray-500 truncate flex-1">
+                                                    {group.product || '—'} {group.port ? `• ${group.port}` : ''}
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <span className="font-black text-blue-600 text-sm">
+                                                        {currencySymbol}{totalBill.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Group Child Records (when expanded) */}
+                                        {isExpanded && (
+                                            <div className="p-3 bg-slate-50/50 space-y-2.5 border-t border-gray-100 animate-in fade-in duration-150">
+                                                {group.records.map((record, index) => {
+                                                    const cardId = record._id || `${group.lcNo}-${index}`;
+                                                    const isRecordExpanded = expandedRecordIds.has(cardId);
+                                                    const isChina = record.country === 'CHINA';
+                                                    const amountVal = parseFloat(record.amount) || 0;
+                                                    const billSum = isChina ? amountVal : (record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.truckChangeFare) || 0) + (parseFloat(record.slofCf) || 0)));
+                                                    const rebatePct = isChina ? 0 : (record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9'));
+                                                    const rebateVal = isChina ? 0 : (record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100)));
+                                                    const netBillVal = isChina ? amountVal : (record.netBill !== undefined ? record.netBill : (billSum - rebateVal));
+                                                    const qtyVal = parseFloat(record.quantity) || 0;
+                                                    const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                                    const dollarRateVal = parseFloat(record.rsToDollar) || 0;
+                                                    const rateKgUsdVal = isChina ? (qtyVal ? (amountVal / qtyVal) : 0) : (dollarRateVal ? (rateKgVal / dollarRateVal) : 0);
+                                                    const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
+                                                    const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                                    const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
+                                                    const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+
+                                                    return (
+                                                        <div
+                                                            key={`cog-mob-rec-${cardId}`}
+                                                            className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden transition-all"
+                                                        >
+                                                            {/* Record Header (Clickable to toggle details) */}
+                                                            <div
+                                                                onClick={() => toggleExpandRecord(cardId)}
+                                                                className="p-3 cursor-pointer select-none hover:bg-slate-50 active:bg-slate-100 transition-colors"
+                                                            >
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                                                {record.date ? formatDate(record.date) : '—'}
+                                                                            </span>
+                                                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                                                                                #{index + 1}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="font-black text-gray-900 text-sm tracking-tight truncate mt-0.5">
+                                                                            {record.invoiceNo || 'No Invoice'}
+                                                                        </div>
+                                                                        <div className="text-xs font-semibold text-gray-600 truncate mt-0.5">
+                                                                            {record.brand || record.product || '—'}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="text-right shrink-0">
+                                                                        <div className="text-[11px] font-bold text-gray-500 truncate max-w-[130px]">
+                                                                            {record.truckNo ? `Truck: ${record.truckNo}` : '—'}
+                                                                        </div>
+                                                                        <div className="text-xs font-black text-gray-800 mt-0.5">
+                                                                            {qtyVal ? `${qtyVal.toLocaleString()} KG` : '—'}
+                                                                        </div>
+                                                                        <div className="text-sm font-black text-blue-600 mt-0.5">
+                                                                            {costingKgVal ? `৳${Number(costingKgVal).toFixed(2)}/KG` : '—'}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Expanded Details Body */}
+                                                            {isRecordExpanded && (
+                                                                <div className="px-3 pb-3 pt-2 border-t border-gray-100 space-y-2 text-xs bg-slate-50/40 animate-in fade-in duration-150">
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Supplier :</span>
+                                                                        <span className="font-bold text-gray-800 text-right truncate">{record.supplier || '—'}</span>
+                                                                    </div>
+
+                                                                    <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-gray-100">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Product & Brand :</span>
+                                                                        <span className="font-bold text-gray-800 text-right">
+                                                                            {record.product || '—'} {record.brand ? `(${record.brand})` : ''}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-gray-100">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Invoice Value :</span>
+                                                                        <span className="font-bold text-gray-800 text-right">
+                                                                            {record.amount ? `${isChina ? '$' : '₹'}${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-gray-100">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Total Bill :</span>
+                                                                        <span className="font-black text-gray-900 text-right">
+                                                                            {billSum ? `${isChina ? '$' : '₹'}${Number(billSum).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-gray-100">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Rate/KG (BDT) :</span>
+                                                                        <span className="font-bold text-gray-800 text-right">
+                                                                            {rateKgBdtVal ? `${Number(rateKgBdtVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-gray-100">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">C&F & Other :</span>
+                                                                        <span className="font-bold text-gray-800 text-right">
+                                                                            {cfExpVal ? `${Number(cfExpVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-gray-100">
+                                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Costing/KG :</span>
+                                                                        <span className="font-black text-blue-600 text-right text-sm">
+                                                                            {costingKgVal ? `${Number(costingKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* Action Buttons Row */}
+                                                                    <div className="flex items-center gap-2 pt-3 border-t border-gray-200/80" onClick={e => e.stopPropagation()}>
+                                                                        {record.lcNo && onNavigate && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    onNavigate('lc-management-section', record.lcNo);
+                                                                                }}
+                                                                                className="flex items-center justify-center gap-1 py-2 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/70 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0"
+                                                                                title={`Open LC ${record.lcNo} in LC Management`}
+                                                                            >
+                                                                                <ArrowUpRightIcon className="w-3.5 h-3.5" />
+                                                                                <span>LC</span>
+                                                                            </button>
+                                                                        )}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setViewData(record);
+                                                                            }}
+                                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200/80 rounded-xl text-xs font-bold transition-all active:scale-95"
+                                                                            title="View Details"
+                                                                        >
+                                                                            <EyeIcon className="w-3.5 h-3.5" />
+                                                                            <span>View</span>
+                                                                        </button>
+                                                                        {canEdit && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleEdit(record);
+                                                                                }}
+                                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 rounded-xl text-xs font-bold transition-all active:scale-95"
+                                                                                title="Edit Record"
+                                                                            >
+                                                                                <EditIcon className="w-3.5 h-3.5" />
+                                                                                <span>Edit</span>
+                                                                            </button>
+                                                                        )}
+                                                                        {canDelete && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleDelete(record._id);
+                                                                                }}
+                                                                                className="p-2 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/70 rounded-xl transition-all active:scale-95 shrink-0 flex items-center justify-center"
+                                                                                title="Delete Record"
+                                                                            >
+                                                                                <TrashIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Desktop View & Print: Full 15-column Table */}
+                        <div className="hidden md:block print:!block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                         <div className="overflow-x-auto pb-1 cog-table-scroll-container" ref={tableContainerRef}>
                             <table className="w-full border-collapse">
                                 <thead>
@@ -1539,6 +1824,7 @@ const CostOfGoods = ({
                         {/* Table Bottom Navigation Bar */}
                         <TableScrollNav className="hidden md:flex" containerRef={tableContainerRef} count={sortedRecords.length} />
                     </div>
+                    </>
                 ) : (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
                         <BoxIcon className="w-14 h-14 text-gray-200 mx-auto mb-4" />
@@ -2146,22 +2432,22 @@ const CostOfGoods = ({
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
                     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto z-10 animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-                        <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50/50 to-white">
+                        <div className="px-5 py-4 sm:px-8 sm:py-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50/50 to-white">
                             <div>
-                                <h3 className="text-lg font-black text-gray-900 tracking-tight">Cost of Goods Entry</h3>
+                                <h3 className="text-base sm:text-lg font-black text-gray-900 tracking-tight">Cost of Goods Entry</h3>
                                 <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Detail View</p>
                             </div>
                             <button onClick={() => setViewData(null)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
                                 <XIcon className="w-5 h-5" />
                             </button>
                         </div>
-                        <div className="p-8 grid grid-cols-2 gap-5">
+                        <div>
                             {(() => {
                                 const isChinaView = viewData.country === 'CHINA';
-                                return [
+                                const fields = [
                                     ['Date', viewData.date ? formatDate(viewData.date) : '—'],
                                     ['LC No', (
-                                        <div className="flex items-center justify-between gap-1">
+                                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                             <span>{viewData.lcNo || '—'}</span>
                                             {viewData.lcNo && onNavigate && (
                                                 <button
@@ -2171,7 +2457,7 @@ const CostOfGoods = ({
                                                         setViewData(null);
                                                         onNavigate('lc-management-section', targetLc);
                                                     }}
-                                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-lg transition-colors cursor-pointer"
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white border border-blue-200/60 rounded-lg transition-colors cursor-pointer shrink-0"
                                                     title={`Open LC ${viewData.lcNo} in LC Management`}
                                                 >
                                                     <LCManagerIcon className="w-3 h-3" />
@@ -2288,12 +2574,38 @@ const CostOfGoods = ({
                                         const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
                                         return `${Number(costingKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT`;
                                     })()]
-                                ].filter(Boolean).map(([label, val], idx) => (
-                                    <div key={idx} className="bg-gray-50/70 p-3.5 rounded-xl border border-gray-100/80">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
-                                        <p className="text-sm font-bold text-gray-800 mt-0.5">{val || '—'}</p>
-                                    </div>
-                                ));
+                                ].filter(Boolean);
+
+                                return (
+                                    <>
+                                        {/* Mobile View: Clean Label and Value Rows */}
+                                        <div className="block sm:hidden p-4 space-y-1">
+                                            <div className="bg-gray-50/70 rounded-2xl border border-gray-100 p-3.5 space-y-2 text-xs">
+                                                {fields.map(([label, val], idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        className="flex items-start justify-between gap-3 pt-2 border-t border-gray-200/60 first:pt-0 first:border-t-0"
+                                                    >
+                                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0 mt-0.5">{label} :</span>
+                                                        <div className="font-bold text-gray-800 text-right text-xs break-words">
+                                                            {val || '—'}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Desktop View: Original 2-column Grid of Cards */}
+                                        <div className="hidden sm:grid sm:grid-cols-2 gap-4 sm:gap-5 p-6 sm:p-8">
+                                            {fields.map(([label, val], idx) => (
+                                                <div key={idx} className="bg-gray-50/70 p-3.5 rounded-xl border border-gray-100/80">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+                                                    <div className="text-sm font-bold text-gray-800 mt-0.5">{val || '—'}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                );
                             })()}
                         </div>
                     </div>
