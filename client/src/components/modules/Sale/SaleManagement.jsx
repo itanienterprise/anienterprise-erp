@@ -362,7 +362,7 @@ const SaleManagement = ({
         const nextState = !isCurrentlyExpanded;
 
         setExpandedMobileRows(prev =>
-            prev.includes(saleId) ? prev.filter(id => id !== saleId) : [...prev, saleId]
+            prev.includes(saleId) ? [] : [saleId]
         );
 
         const inv = sale?.invoiceNo ? `Invoice #${sale.invoiceNo}` : '';
@@ -7989,12 +7989,17 @@ const SaleManagement = ({
                     <TableScrollNav className="hidden md:flex" containerRef={tableContainerRef} count={getFilteredData().length} />
 
                     {/* Mobile Card View */}
-                    <div className="md:hidden space-y-4 px-1">
+                    <div className="block md:hidden px-3 py-3 space-y-3">
                         {isLoading ? (
-                            <div className="bg-white p-8 rounded-2xl border border-gray-100 text-center text-gray-400 font-medium shadow-sm">
-                                No sales records found
-                            </div>
-                        ) : getFilteredData().map((sale) => {
+                            Array(3).fill(0).map((_, i) => (
+                                <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
+                                    <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                                    <div className="h-6 bg-gray-200 rounded w-full"></div>
+                                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                                </div>
+                            ))
+                        ) : getFilteredData().length > 0 ? (
+                            getFilteredData().map((sale, idx) => {
                             const isExpanded = expandedMobileRows.includes(sale._id);
                             const isMultiple = (sale.items && sale.items.length > 0)
                                 ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
@@ -8048,369 +8053,194 @@ const SaleManagement = ({
                             return (
                                 <div
                                     key={sale._id}
-                                    onMouseDown={() => startLongPress(sale._id)}
+                                    onMouseDown={() => startLongPress && startLongPress(sale._id)}
                                     onMouseUp={endLongPress}
                                     onMouseLeave={endLongPress}
-                                    onTouchStart={() => startLongPress(sale._id)}
+                                    onTouchStart={() => startLongPress && startLongPress(sale._id)}
                                     onTouchEnd={endLongPress}
-                                    className={`sale-mgmt-mobile-card group cursor-pointer transition-all ${isExpanded ? 'shadow-md ring-1 ring-blue-500/10 p-4' : 'hover:bg-gray-50/30 p-2.5'} ${selectedItems.has(sale._id) ? 'bg-blue-50 ring-1 ring-blue-500/30' : ''}`}
                                     onClick={() => {
                                         if (isLongPressTriggered && isLongPressTriggered.current) return;
                                         (isSelectionMode || selectedItems.size > 0) ? toggleSelection(sale._id) : toggleMobileRowExpansion(sale._id);
                                     }}
+                                    className={`bg-white border rounded-2xl overflow-hidden shadow-sm select-none transition-all duration-200 cursor-pointer ${
+                                        selectedItems.has(sale._id) ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''
+                                    } ${
+                                        isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-200 hover:border-gray-300'
+                                    }`}
                                 >
-                                    {/* Collapsed Single Line View / Expanded Header Row */}
-                                    <div className={`flex items-center justify-between min-w-0 ${isExpanded ? 'border-b border-gray-50 pb-3 mb-4' : ''}`}>
-                                        <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
-                                            {(isSelectionMode || selectedItems.size > 0) && (
-                                                <div className="flex-shrink-0 pr-1" onClick={(e) => e.stopPropagation()}>
-                                                    <input autoComplete="off"
+                                    {/* Card Header (Always Visible) */}
+                                    <div className={`bg-gray-50/70 px-3.5 py-2.5 flex flex-col gap-1.5 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-blue-50/20' : ''}`}>
+                                        {/* Line 1: #{idx + 1} & Invoice No on left, Status / Edited Badge on right */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                {(isSelectionMode || selectedItems.size > 0) ? (
+                                                    <input
                                                         type="checkbox"
                                                         checked={selectedItems.has(sale._id)}
                                                         onChange={() => toggleSelection(sale._id)}
+                                                        onClick={(e) => e.stopPropagation()}
                                                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                     />
-                                                </div>
-                                            )}
-                                            {/* Date & Inv */}
-                                            <div className="flex-shrink-0">
-                                                <div className="sale-mgmt-mobile-label">{formatDate(sale.date)}</div>
-                                                <div className={`${!isExpanded ? 'text-[11px]' : 'text-sm'} font-black text-gray-900 truncate`}>{sale.invoiceNo || (saleType === 'Border' ? (sale.lcNo || sale.importer) : (sale.companyName || sale.customerName)) || 'No ID'}</div>
+                                                ) : (
+                                                    <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                                        #{idx + 1}
+                                                    </span>
+                                                )}
+                                                <span className="text-xs font-black text-blue-600 truncate">
+                                                    {sale.invoiceNo || (saleType === 'Border' ? (sale.lcNo || sale.importer) : (sale.companyName || sale.customerName)) || '—'}
+                                                </span>
+                                                {sale.isEdited && (
+                                                    <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded text-[9px] font-medium border border-amber-100 shrink-0">
+                                                        Edited
+                                                    </span>
+                                                )}
                                             </div>
-
-                                            {!isExpanded && (
-                                                <>
-                                                    <div className="flex-1 min-w-0 border-l border-gray-100 pl-3">
-                                                        <div className="sale-mgmt-mobile-label">Company</div>
-                                                        <div className="text-[11px] font-bold text-gray-800 truncate">{getSafeString(sale.companyName) || sale.port || '-'}</div>
-                                                    </div>
-                                                    <div className="flex-shrink-0 border-l border-gray-100 pl-3 text-right">
-                                                        <div className="sale-mgmt-mobile-label text-blue-600">Total</div>
-                                                        <div className="text-[11px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
-                                                    </div>
-                                                </>
-                                            )}
+                                            <div className="shrink-0 text-right">
+                                                <span className="text-xs font-semibold text-gray-400 tracking-wider">
+                                                    {formatDate(sale.date)}
+                                                </span>
+                                            </div>
                                         </div>
 
-                                        <div className="flex items-center gap-2 ml-2">
-                                            {sale.isEdited && (
-                                                <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full text-[9px] font-medium border border-amber-100">
-                                                    Edited
-                                                </span>
-                                            )}
-                                            {isExpanded ? (
-                                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                    {(sale.status === 'Requested' || sale.status === 'Edit_Requested') ? (
-                                                        <>
-                                                            <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
-                                                            {(canEditRequestedSale(sale) || canUserEditSale(sale)) && (
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
-                                                                    data-action={`Edit ${saleType === 'Border' ? 'Border Sale' : 'General Sale'} (${sale.orderNo && sale.invoiceNo ? `${sale.orderNo} - ${sale.invoiceNo}` : (sale.invoiceNo || sale.orderNo || 'Sale')})`}
-                                                                    data-order-no={sale.orderNo || ''}
-                                                                    data-invoice-no={sale.invoiceNo || ''}
-                                                                    data-customer-name={sale.customerName || sale.companyName || ''}
-                                                                    data-total-amount={sale.grandTotal || sale.totalAmount || ''}
-                                                                    data-sale-type={saleType || ''}
-                                                                    data-status={sale.status || ''}
-                                                                    className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
-                                                                    title="Edit"
-                                                                >
-                                                                    <EditIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                            {canApprove && (
-                                                                <>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }}
-                                                                        data-action={`Accept ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
-                                                                        className="p-2 text-emerald-600 bg-emerald-50/50 rounded-lg transition-colors hover:bg-emerald-100"
-                                                                        title="Accept"
-                                                                    >
-                                                                        <CheckIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }}
-                                                                        data-action={`Reject ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
-                                                                        className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
-                                                                        title="Reject"
-                                                                    >
-                                                                        <XIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            {canViewSale(sale) && (
-                                                                <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
-                                                            )}
-                                                            {canUserEditSale(sale) && (
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
-                                                                    data-action={`Edit ${saleType === 'Border' ? 'Border Sale' : 'General Sale'} (${sale.orderNo && sale.invoiceNo ? `${sale.orderNo} - ${sale.invoiceNo}` : (sale.invoiceNo || sale.orderNo || 'Sale')})`}
-                                                                    data-order-no={sale.orderNo || ''}
-                                                                    data-invoice-no={sale.invoiceNo || ''}
-                                                                    data-customer-name={sale.customerName || sale.companyName || ''}
-                                                                    data-total-amount={sale.grandTotal || sale.totalAmount || ''}
-                                                                    data-sale-type={saleType || ''}
-                                                                    data-status={sale.status || ''}
-                                                                    className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
-                                                                    title="Edit"
-                                                                >
-                                                                    <EditIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                            {saleType === 'General' ? (
-                                                                <div className="relative inline-block sale-pdf-dropdown-container">
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setActivePdfDropdown(activePdfDropdown === sale._id ? null : sale._id);
-                                                                        }}
-                                                                        className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"
-                                                                        title="Download PDF"
-                                                                    >
-                                                                        <FileTextIcon className="w-4 h-4" />
-                                                                    </button>
-                                                                    {activePdfDropdown === sale._id && (
-                                                                        <div
-                                                                            className="absolute right-0 top-full mt-1.5 w-32 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-[100] animate-in fade-in zoom-in-95 duration-100"
-                                                                            onClick={(e) => e.stopPropagation()}
-                                                                        >
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    setActivePdfDropdown(null);
-                                                                                    generateSaleInvoicePDF(sale, customers);
-                                                                                }}
-                                                                                className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors"
-                                                                            >
-                                                                                <FileTextIcon className="w-3.5 h-3.5 text-emerald-600" />
-                                                                                <span>Invoice</span>
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    setActivePdfDropdown(null);
-                                                                                    generateSaleChallanPDF(sale, customers);
-                                                                                }}
-                                                                                className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors border-t border-gray-50"
-                                                                            >
-                                                                                <ReceiptIcon className="w-3.5 h-3.5 text-blue-600" />
-                                                                                <span>Challan</span>
-                                                                            </button>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            ) : (
-                                                                <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
-                                                            )}
-                                                            {canUserDeleteSale(sale) && (
-                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); toggleMobileRowExpansion(sale._id); }}
-                                                        className="p-1.5 text-gray-400 bg-gray-100 rounded-lg transition-all ml-1"
-                                                        title="Card Close"
-                                                        data-action="Card Close"
-                                                    >
-                                                        <ChevronDownIcon className="w-4 h-4 rotate-180" />
-                                                    </button>
+                                        {/* Line 2: Company Name on left, Total Amount on right */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex-1 min-w-0 pr-2">
+                                                <div className="font-black text-gray-900 text-sm tracking-tight truncate">
+                                                    {getSafeString(sale.companyName) || sale.customerName || sale.port || '—'}
                                                 </div>
-                                            ) : (
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => { e.stopPropagation(); toggleMobileRowExpansion(sale._id); }}
-                                                    className="p-1.5 bg-gray-100 text-gray-400 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors"
-                                                    title="Card Open"
-                                                    data-action="Card Open"
-                                                >
-                                                    <ChevronDownIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                            )}
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <span className="font-black text-blue-600 text-sm">
+                                                    ৳{parseFloat(sale.totalAmount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Expanded Only Content */}
+                                    {/* Card Body: Action Buttons Only (Expanded View) */}
                                     {isExpanded && (
-                                        <>
-                                            {/* Customer/Company Info */}
-                                            <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 text-xs items-baseline text-left px-1 pb-3 mb-3 border-b border-gray-100">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Inv No</span>
-                                                <span className="text-gray-400 font-bold">:</span>
-                                                <span className="font-bold text-gray-900">{sale.invoiceNo || '-'}</span>
-
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Customer</span>
-                                                <span className="text-gray-400 font-bold">:</span>
-                                                <span className="font-bold text-gray-900">{getSafeString(sale.customerName) || '-'}</span>
-
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Company</span>
-                                                <span className="text-gray-400 font-bold">:</span>
-                                                <span className="font-semibold text-gray-700">{getSafeString(sale.companyName) || sale.port || '-'}</span>
-
-                                                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Entry By</span>
-                                                <span className="text-indigo-400 font-bold">:</span>
-                                                <span className="font-bold text-indigo-700">{getEntryByFirstName(sale)}</span>
-
-                                                {(sale.acceptedBy || sale.approvedByName || sale.approvedBy) && (sale.status || '').toLowerCase() !== 'requested' && (
-                                                    <>
-                                                        <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Approved By</span>
-                                                        <span className="text-emerald-400 font-bold">:</span>
-                                                        <span className="font-bold text-emerald-700">✓ {getFirstNameFromIdentifier(sale.acceptedByUsername || sale.approvedByUsername || sale.acceptedBy || sale.approvedByName || sale.approvedBy)}</span>
-                                                    </>
-                                                )}
-
-                                                {(sale.editedByName || sale.editedBy || sale.editRequestedBy) && (
-                                                    <>
-                                                        <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Edited By</span>
-                                                        <span className="text-amber-400 font-bold">:</span>
-                                                        <span className="font-bold text-amber-700">✎ {getEditedByFirstName(sale)}</span>
-                                                    </>
-                                                )}
-
-                                                {(sale.editApprovedByName || sale.editApprovedBy) && !sale.isEdited && (
-                                                    <>
-                                                        <span className="text-[10px] font-bold text-purple-500 uppercase tracking-wider">Edit Approved</span>
-                                                        <span className="text-purple-400 font-bold">:</span>
-                                                        <span className="font-bold text-purple-700">✓✎ {getFirstNameFromIdentifier(sale.editApprovedByUsername || sale.editApprovedByName || sale.editApprovedBy)}</span>
-                                                    </>
-                                                )}
-                                            </div>
-
-                                            {/* Items Section */}
-                                            <div className="sale-mgmt-mobile-section mt-1">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="text-[10px] font-bold text-gray-600 uppercase">Products & Quantities</div>
-                                                    {isMultiple && (
+                                        <div className="px-3.5 py-2.5 flex items-center justify-end gap-2 animate-in slide-in-from-top-1 duration-150" onClick={(e) => e.stopPropagation()}>
+                                            {(sale.status === 'Requested' || sale.status === 'Edit_Requested') ? (
+                                                <>
+                                                    <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
+                                                    {(canEditRequestedSale(sale) || canUserEditSale(sale)) && (
                                                         <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                toggleMobileRowExpansion(sale._id);
-                                                            }}
-                                                            className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors"
+                                                            onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
+                                                            data-action={`Edit ${saleType === 'Border' ? 'Border Sale' : 'General Sale'} (${sale.orderNo && sale.invoiceNo ? `${sale.orderNo} - ${sale.invoiceNo}` : (sale.invoiceNo || sale.orderNo || 'Sale')})`}
+                                                            data-order-no={sale.orderNo || ''}
+                                                            data-invoice-no={sale.invoiceNo || ''}
+                                                            data-customer-name={sale.customerName || sale.companyName || ''}
+                                                            data-total-amount={sale.grandTotal || sale.totalAmount || ''}
+                                                            data-sale-type={saleType || ''}
+                                                            data-status={sale.status || ''}
+                                                            className="p-2 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-colors"
+                                                            title="Edit"
                                                         >
-                                                            Show Less
+                                                            <EditIcon className="w-5 h-5" />
                                                         </button>
                                                     )}
-                                                </div>
-                                                <div className="space-y-3">
-                                                    {items.map((it, idx) => (
-                                                        <div key={idx} className="border border-gray-100 rounded-xl p-3 bg-gray-50/30">
-                                                            <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product</span>
-                                                                <span className="text-gray-400 font-bold">:</span>
-                                                                <span className="font-bold text-gray-900">{it.productName || '-'}</span>
-
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand</span>
-                                                                <span className="text-gray-400 font-bold">:</span>
-                                                                <span className="font-semibold text-gray-700">{it.brand || '-'}</span>
-
-                                                                {(it.bag !== undefined && it.bag !== null && it.bag !== '') && (
-                                                                    <>
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag</span>
-                                                                        <span className="text-gray-400 font-bold">:</span>
-                                                                        <span className="font-semibold text-gray-800">{parseFloat(it.bag || 0).toLocaleString('en-US')}</span>
-                                                                    </>
-                                                                )}
-
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</span>
-                                                                <span className="text-gray-400 font-bold">:</span>
-                                                                <span className="font-bold text-gray-800">
-                                                                    {parseFloat(it.quantity || 0).toLocaleString('en-US')} kg
-                                                                </span>
-
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</span>
-                                                                <span className="text-gray-400 font-bold">:</span>
-                                                                <span className="font-medium text-blue-600">৳{parseFloat(it.unitPrice || 0).toLocaleString('en-IN')}</span>
-
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total</span>
-                                                                <span className="text-gray-400 font-bold">:</span>
-                                                                <span className="font-black text-gray-900">
-                                                                    ৳ {(() => {
-                                                                        const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
-                                                                        return (qty * parseFloat(it.unitPrice || 0)).toLocaleString('en-US');
-                                                                    })()}
-                                                                </span>
-                                                            </div>
+                                                    {canApprove && (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }}
+                                                                data-action={`Accept ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
+                                                                className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1"
+                                                                title="Accept"
+                                                            >
+                                                                <CheckIcon className="w-4 h-4" /> Accept
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }}
+                                                                data-action={`Reject ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
+                                                                className="px-2.5 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1"
+                                                                title="Reject"
+                                                            >
+                                                                <XIcon className="w-4 h-4" /> Reject
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {canViewSale(sale) && (
+                                                        <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
+                                                    )}
+                                                    {canUserEditSale(sale) && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
+                                                            data-action={`Edit ${saleType === 'Border' ? 'Border Sale' : 'General Sale'} (${sale.orderNo && sale.invoiceNo ? `${sale.orderNo} - ${sale.invoiceNo}` : (sale.invoiceNo || sale.orderNo || 'Sale')})`}
+                                                            data-order-no={sale.orderNo || ''}
+                                                            data-invoice-no={sale.invoiceNo || ''}
+                                                            data-customer-name={sale.customerName || sale.companyName || ''}
+                                                            data-total-amount={sale.grandTotal || sale.totalAmount || ''}
+                                                            data-sale-type={saleType || ''}
+                                                            data-status={sale.status || ''}
+                                                            className="p-2 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <EditIcon className="w-5 h-5" />
+                                                        </button>
+                                                    )}
+                                                    {saleType === 'General' ? (
+                                                        <div className="relative inline-block sale-pdf-dropdown-container">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setActivePdfDropdown(activePdfDropdown === sale._id ? null : sale._id);
+                                                                }}
+                                                                className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors"
+                                                                title="Download PDF"
+                                                            >
+                                                                <FileTextIcon className="w-5 h-5" />
+                                                            </button>
+                                                            {activePdfDropdown === sale._id && (
+                                                                <div
+                                                                    className="absolute right-0 bottom-full mb-1.5 w-32 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-[100] animate-in fade-in zoom-in-95 duration-100"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setActivePdfDropdown(null);
+                                                                            generateSaleInvoicePDF(sale, customers);
+                                                                        }}
+                                                                        className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors"
+                                                                    >
+                                                                        <FileTextIcon className="w-3.5 h-3.5 text-emerald-600" />
+                                                                        <span>Invoice</span>
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setActivePdfDropdown(null);
+                                                                            generateSaleChallanPDF(sale, customers);
+                                                                        }}
+                                                                        className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors border-t border-gray-50"
+                                                                    >
+                                                                        <ReceiptIcon className="w-3.5 h-3.5 text-blue-600" />
+                                                                        <span>Challan</span>
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Money Summary Details List */}
-                                            <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 text-xs items-baseline text-left pt-3 border-t border-gray-100 mt-4">
-                                                <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Discount</span>
-                                                <span className="text-red-400 font-bold">:</span>
-                                                <span className="font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</span>
-
-                                                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Total</span>
-                                                <span className="text-blue-400 font-bold">:</span>
-                                                <span className="font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</span>
-
-                                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Truck Fare</span>
-                                                <span className="text-emerald-400 font-bold">:</span>
-                                                <span className="font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</span>
-
-                                                <span className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Balance</span>
-                                                <span className="text-orange-400 font-bold">:</span>
-                                                <span className="font-black text-orange-700">৳{parseFloat(sale.dueAmount || 0).toLocaleString('en-IN')}</span>
-
-                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</span>
-                                                <span className="text-gray-400 font-bold">:</span>
-                                                <span>
-                                                    {(() => {
-                                                        const storedDue = parseFloat(sale.dueAmount);
-                                                        const storedTotal = parseFloat(sale.totalAmount) || 0;
-                                                        let dueVal = 0;
-                                                        if (!isNaN(storedDue) && (storedDue > 0 || storedTotal > 0)) {
-                                                            dueVal = storedDue;
-                                                        } else {
-                                                            const calculatedTotal = items.reduce((sum, it) => {
-                                                                const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
-                                                                return sum + (qty * parseFloat(it.unitPrice || 0));
-                                                            }, 0);
-                                                            dueVal = Math.max(0, calculatedTotal - parseFloat(sale.discount || 0) - parseFloat(sale.paidAmount || 0));
-                                                        }
-                                                        const st = (sale.status || '').toLowerCase();
-                                                        if (st === 'requested') {
-                                                            return (
-                                                                <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                                                    Requested
-                                                                </span>
-                                                            );
-                                                        }
-                                                        if (st === 'rejected') {
-                                                            return (
-                                                                <span className="px-2.5 py-1 bg-red-50 text-red-700 rounded-full text-xs font-bold border border-red-200/60 inline-flex items-center gap-1 shadow-sm">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                                                                    Rejected
-                                                                </span>
-                                                            );
-                                                        }
-                                                        const isComplete = st === 'complete' || st === 'accepted' || (st !== 'pending' && dueVal <= 0);
-                                                        return isComplete ? (
-                                                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200/60 inline-flex items-center gap-1 shadow-sm">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                                                Complete
-                                                            </span>
-                                                        ) : (
-                                                            <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                                                Pending
-                                                            </span>
-                                                        );
-                                                    })()}
-                                                </span>
-                                            </div>
-                                        </>
+                                                    ) : (
+                                                        <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors"><FileTextIcon className="w-5 h-5" /></button>
+                                                    )}
+                                                    {canUserDeleteSale(sale) && (
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             );
-                        })}
+                        })
+                    ) : (
+                        <div className="py-12 px-4 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
+                            No sales records found.
+                        </div>
+                    )}
                     </div>
                 </div>
                 </div>

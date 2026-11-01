@@ -61,7 +61,7 @@ const SalesReport = ({
     const [reportTab, setReportTab] = useState('general');
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
-    const [expandedRows, setExpandedRows] = useState([]);
+    const [expandedRowId, setExpandedRowId] = useState(null);
     const [filterSearchInputs, setFilterSearchInputs] = useState({ companySearch: '', invoiceSearch: '', lcSearch: '', productSearch: '', brandSearch: '', portSearch: '', indCnfSearch: '', bdCnfSearch: '' });
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ company: false, invoice: false, lc: false, product: false, brand: false, port: false, indCnf: false, bdCnf: false, from: false, to: false });
     const initialFilterDropdownState = { company: false, invoice: false, lc: false, product: false, brand: false, port: false, indCnf: false, bdCnf: false, from: false, to: false };
@@ -516,7 +516,7 @@ const SalesReport = ({
     };
 
     const toggleRowExpansion = (id) => {
-        setExpandedRows(prev => prev.includes(id) ? prev.filter(rowId => rowId !== id) : [...prev, id]);
+        setExpandedRowId(prev => (prev === id ? null : id));
     };
 
     const productWiseList = (() => {
@@ -641,10 +641,12 @@ const SalesReport = ({
             const lcKey = row.lcNo.toUpperCase();
             if (!groupedByLc[lcKey]) groupedByLc[lcKey] = [];
             const saleable = getSaleableStock(row.lcNo, row.product, row.brand);
+            const rBag = (saleable.saleablePkt !== undefined && saleable.saleablePkt > 0) ? saleable.saleablePkt : Math.max(0, row.pBag - row.sBag);
+            const rQty = (saleable.saleableQty !== undefined && saleable.saleableQty > 0) ? saleable.saleableQty : Math.max(0, row.pQty - row.sQty);
             groupedByLc[lcKey].push({
                 ...row,
-                rBag: saleable.saleablePkt,
-                rQty: saleable.saleableQty
+                rBag,
+                rQty
             });
         });
 
@@ -725,75 +727,39 @@ const SalesReport = ({
         <>
             {createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
-            <div className="bg-white w-full max-w-[96vw] xl:max-w-[94vw] 2xl:max-w-[1700px] max-h-[92vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
+            <div className="bg-white w-full max-w-[96vw] xl:max-w-[94vw] 2xl:max-w-[1700px] h-[92vh] max-h-[92vh] sm:h-auto sm:max-h-[92vh] overflow-hidden rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar */}
-                <div className="flex flex-wrap sm:flex-nowrap items-center justify-between px-4 sm:px-8 py-3 sm:py-4 border-b border-gray-100 print:hidden gap-2.5 sm:gap-2">
-                    {/* Left: Title */}
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 order-1 sm:order-1 sm:flex-1 sm:justify-start">
-                        <div className="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
-                            <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                <div className="p-2.5 sm:px-8 sm:py-3.5 border-b border-gray-100 flex flex-col gap-2 flex-shrink-0 bg-white no-print">
+                    {/* Top Row: Title on Left, Action Buttons (Filter, Print, Close) ALWAYS UP on Right */}
+                    <div className="flex items-center justify-between gap-2 w-full">
+                        {/* Left: Title */}
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
+                                <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                            </div>
+                            <h3 className="text-xs sm:text-lg lg:text-xl font-black text-gray-800 truncate leading-none">
+                                {reportTab === 'lc_wise'
+                                    ? (saleType === 'Order' ? 'LC Wise Order Report' : 'LC Wise Sales Report')
+                                    : reportTab === 'product_wise'
+                                    ? (saleType === 'Order' ? 'Product Wise Order Report' : 'Product Wise Sales Report')
+                                    : saleType === 'Order' ? 'Order Report' : `${saleType} Sales Report`}
+                            </h3>
                         </div>
-                        <h3 className="text-base sm:text-xl font-black text-gray-800 truncate leading-none">
-                            {reportTab === 'lc_wise'
-                                ? 'LC Wise Sales Report'
-                                : reportTab === 'product_wise'
-                                ? 'Product Wise Sales Report'
-                                : saleType === 'Order' ? 'Order Report' : `${saleType} Sales Report`}
-                        </h3>
-                    </div>
 
-                    {/* Center: Buttons (General, Product Wise, LC Wise) */}
-                    <div className="w-full sm:w-auto order-3 sm:order-2 sm:flex-shrink-0 flex items-center justify-center">
-                        <div className="flex items-center p-0.5 sm:p-1 bg-gray-100/80 rounded-xl border border-gray-200/80 shadow-inner">
-                            <button
-                                type="button"
-                                onClick={() => setReportTab('general')}
-                                className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                                    reportTab === 'general'
-                                        ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
-                                        : 'text-gray-500 hover:text-gray-800'
-                                }`}
-                            >
-                                General
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setReportTab('product_wise')}
-                                className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                                    reportTab === 'product_wise'
-                                        ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
-                                        : 'text-gray-500 hover:text-gray-800'
-                                }`}
-                            >
-                                Product Wise
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setReportTab('lc_wise')}
-                                className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                                    reportTab === 'lc_wise'
-                                        ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
-                                        : 'text-gray-500 hover:text-gray-800'
-                                }`}
-                            >
-                                LC Wise
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Right: Action Buttons */}
-                    <div className="flex items-center justify-end gap-1.5 sm:gap-3 order-2 sm:order-3 sm:flex-1">
-                        <div className="relative flex items-center">
-                            <button
-                                ref={filterButtonRef}
-                                onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterPanel || hasActiveFilters
-                                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
-                                    }`}
-                            >
-                                <FunnelIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${showFilterPanel || hasActiveFilters ? 'text-white' : 'text-gray-400'}`} />
-                            </button>
+                        {/* Right: Action Buttons (Always UP on row 1 on mobile) */}
+                        <div className="flex items-center justify-end gap-1.5 sm:gap-2 flex-shrink-0">
+                            <div className="relative flex items-center">
+                                <button
+                                    ref={filterButtonRef}
+                                    onClick={() => setShowFilterPanel(!showFilterPanel)}
+                                    className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterPanel || hasActiveFilters
+                                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                        : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
+                                        }`}
+                                    title="Filter"
+                                >
+                                    <FunnelIcon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${showFilterPanel || hasActiveFilters ? 'text-white' : 'text-gray-400'}`} />
+                                </button>
 
                             {/* Floating Filter Panel */}
                             {showFilterPanel && (
@@ -1509,48 +1475,94 @@ const SalesReport = ({
                         <button
                             type="button"
                             onClick={() => setShowReportFormatModal(true)}
-                            className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print"
+                            className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20 transition-all no-print"
                             title="Export Report (PDF / Excel)"
                         >
-                            <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                            <PrinterIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                         </button>
-                        <button onClick={onClose} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" /></button>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"
+                            title="Close"
+                        >
+                            <XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" />
+                        </button>
                     </div>
                 </div>
+
+                {/* Row 2: Tabs (General, Product Wise, LC Wise) */}
+                <div className="w-full flex items-center justify-center">
+                    <div className="flex items-center p-0.5 sm:p-1 bg-gray-100/80 rounded-xl border border-gray-200/80 shadow-inner">
+                        <button
+                            type="button"
+                            onClick={() => setReportTab('general')}
+                            className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                                reportTab === 'general'
+                                    ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
+                                    : 'text-gray-500 hover:text-gray-800'
+                            }`}
+                        >
+                            General
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setReportTab('product_wise')}
+                            className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                                reportTab === 'product_wise'
+                                    ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
+                                    : 'text-gray-500 hover:text-gray-800'
+                            }`}
+                        >
+                            Product Wise
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setReportTab('lc_wise')}
+                            className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                                reportTab === 'lc_wise'
+                                    ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
+                                    : 'text-gray-500 hover:text-gray-800'
+                            }`}
+                        >
+                            LC Wise
+                        </button>
+                    </div>
+                </div>
+            </div>
 
                 {/* Printable Content */}
                 <div className="flex-1 overflow-y-auto p-4 sm:p-8 print:p-4 print:overflow-visible bg-white">
                     <div className="w-full mx-auto space-y-3 sm:space-y-4">
                         {/* Header matching Stock Report layout */}
-                        <div className="flex justify-between items-center pb-1">
+                        <div className="flex flex-col sm:flex-row print:!flex-row justify-between items-center gap-2 sm:gap-4 pb-1">
                             {/* Left: Logo & Company Name */}
-                            <div className="flex items-center gap-3">
-                                <img src="/logo.png" alt="ANI Enterprise Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
-                                <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
+                            <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
+                                <img src="/logo.png" alt="ANI Enterprise Logo" className="w-10 h-10 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
+                                <h1 className="text-xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
                                     ANI ENTERPRISE
                                 </h1>
                             </div>
 
                             {/* Right: Address Info */}
-                            <div className="text-right text-[11px] sm:text-[12px] text-gray-700 leading-tight">
+                            <div className="text-center sm:text-right print:!text-right text-[10px] sm:text-[12px] print:!text-[12px] text-gray-700 leading-tight">
                                 <p className="font-semibold text-gray-800">766, H.M Tower, Level-06</p>
                                 <p>Borogola, Bogura, Bangladesh</p>
-                                <p>Tel: +8802588813057</p>
-                                <p>Email: anienterprise051@gmail.com</p>
+                                <p>Tel: +8802588813057 • Email: anienterprise051@gmail.com</p>
                             </div>
                         </div>
 
                         {/* Orange Divider Line */}
-                        <div className="border-t-2 border-[#f97316] w-full mt-3"></div>
+                        <div className="border-t-2 border-[#f97316] w-full mt-2 sm:mt-3"></div>
 
                         {/* Centered Title Badge */}
-                        <div className="flex justify-center -mt-5">
-                            <div className="bg-[#f97316] text-white px-8 py-1 rounded shadow-sm">
-                                <h2 className="text-xs sm:text-sm font-bold tracking-wider uppercase">
+                        <div className="flex justify-center -mt-4 sm:-mt-5">
+                            <div className="bg-[#f97316] text-white px-4 sm:px-8 py-1 rounded shadow-sm">
+                                <h2 className="text-[11px] sm:text-sm font-bold tracking-wider uppercase text-center">
                                     {reportTab === 'lc_wise'
-                                        ? 'LC WISE SALES REPORT'
+                                        ? (saleType === 'Order' ? 'LC WISE ORDER REPORT' : saleType === 'Border' ? 'LC WISE BORDER SALES REPORT' : 'LC WISE SALES REPORT')
                                         : reportTab === 'product_wise'
-                                        ? 'PRODUCT WISE SALES REPORT'
+                                        ? (saleType === 'Order' ? 'PRODUCT WISE ORDER REPORT' : saleType === 'Border' ? 'PRODUCT WISE BORDER SALES REPORT' : 'PRODUCT WISE SALES REPORT')
                                         : saleType === 'Order' ? 'ORDER REPORT' : `${saleType.toUpperCase()} SALES REPORT`}
                                 </h2>
                             </div>
@@ -1637,7 +1649,7 @@ const SalesReport = ({
                                                 <th rowSpan={2} className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase w-[14%] align-middle whitespace-nowrap">Product</th>
                                                 <th rowSpan={2} className="border-r border-gray-900 px-2 py-1 text-left text-[11px] font-bold text-gray-900 uppercase w-[14%] align-middle whitespace-nowrap">Brand</th>
                                                 <th colSpan={2} className="border-r border-gray-900 px-2 py-1 text-center text-[11px] font-bold text-gray-900 uppercase w-[19%] border-b border-gray-900">Purchase</th>
-                                                <th colSpan={2} className="border-r border-gray-900 px-2 py-1 text-center text-[11px] font-bold text-gray-900 uppercase w-[19%] border-b border-gray-900">Sales</th>
+                                                <th colSpan={2} className="border-r border-gray-900 px-2 py-1 text-center text-[11px] font-bold text-gray-900 uppercase w-[19%] border-b border-gray-900">{saleType === 'Order' ? 'Order' : 'Sales'}</th>
                                                 <th colSpan={2} className="px-2 py-1 text-center text-[11px] font-bold text-gray-900 uppercase w-[18%] border-b border-gray-900">Remain</th>
                                             </tr>
                                             <tr className="bg-gray-50 border-b border-gray-900">
@@ -2013,30 +2025,48 @@ const SalesReport = ({
                             <div className="md:hidden print:hidden space-y-3 px-1">
                                 {lcWiseList.length > 0 ? (
                                     lcWiseList.map((item, idx) => (
-                                        <div key={idx} className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">Sl: {idx + 1}</span>
-                                                <span className="text-xs font-black text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">LC: {item.lcNo}</span>
+                                        <div key={idx} className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden hover:border-gray-300 transition-all">
+                                            {/* Card Header */}
+                                            <div className="bg-gray-50/70 px-3.5 py-2.5 flex items-center justify-between gap-2 border-b border-gray-100">
+                                                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
+                                                    #{idx + 1}
+                                                </span>
+                                                <span className="text-xs font-black text-gray-800 bg-white px-2.5 py-0.5 rounded-full border border-gray-200/80 shadow-xs">
+                                                    LC: {item.lcNo}
+                                                </span>
                                             </div>
-                                            <div>
-                                                <div className="text-sm font-black text-gray-900">{item.product}</div>
-                                                <div className="text-xs text-gray-500 font-semibold">{item.brand || '-'}</div>
-                                            </div>
-                                            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100 text-center">
-                                                <div className="bg-gray-50 p-2 rounded-xl">
-                                                    <div className="text-[10px] font-bold text-gray-500 uppercase">Purchase</div>
-                                                    <div className="text-[11px] font-bold text-gray-800">{item.pBag > 0 ? Number(item.pBag.toFixed(2)).toLocaleString('en-US') : '0'} Bags</div>
-                                                    <div className="text-xs font-black text-gray-900">{Number(item.pQty.toFixed(2)).toLocaleString('en-US')} KG</div>
+
+                                            {/* Card Body with Label: Value Rows */}
+                                            <div className="p-3.5 text-xs space-y-1.5 bg-white">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-gray-500 font-medium">Product:</span>
+                                                    <span className="font-bold text-gray-900 text-right">{item.product}</span>
                                                 </div>
-                                                <div className="bg-blue-50/50 p-2 rounded-xl">
-                                                    <div className="text-[10px] font-bold text-blue-600 uppercase">Sales</div>
-                                                    <div className="text-[11px] font-bold text-blue-800">{item.sBag > 0 ? Number(item.sBag.toFixed(2)).toLocaleString('en-US') : '0'} Bags</div>
-                                                    <div className="text-xs font-black text-blue-900">{Number(item.sQty.toFixed(2)).toLocaleString('en-US')} KG</div>
+                                                {item.brand && item.brand !== '-' && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-gray-500 font-medium">Brand:</span>
+                                                        <span className="font-semibold text-gray-800 text-right">{item.brand}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-gray-500 font-medium">Purchase:</span>
+                                                    <span className="font-bold text-gray-800 text-right">
+                                                        {item.pBag > 0 ? `${Number(item.pBag.toFixed(2)).toLocaleString('en-US')} Bags | ` : ''}
+                                                        {Number(item.pQty.toFixed(2)).toLocaleString('en-US')} KG
+                                                    </span>
                                                 </div>
-                                                <div className="bg-emerald-50/50 p-2 rounded-xl">
-                                                    <div className="text-[10px] font-bold text-emerald-600 uppercase">Remain</div>
-                                                    <div className={`text-[11px] font-bold ${item.rBag < 0 ? 'text-red-600' : 'text-emerald-800'}`}>{Number(item.rBag.toFixed(2)).toLocaleString('en-US')} Bags</div>
-                                                    <div className={`text-xs font-black ${item.rQty < 0 ? 'text-red-600' : 'text-emerald-900'}`}>{Number(item.rQty.toFixed(2)).toLocaleString('en-US')} KG</div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-gray-500 font-medium">{saleType === 'Order' ? 'Orders:' : 'Sales:'}</span>
+                                                    <span className="font-bold text-blue-700 text-right">
+                                                        {item.sBag > 0 ? `${Number(item.sBag.toFixed(2)).toLocaleString('en-US')} Bags | ` : ''}
+                                                        {Number(item.sQty.toFixed(2)).toLocaleString('en-US')} KG
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center pt-1.5 border-t border-gray-100">
+                                                    <span className="text-gray-500 font-medium">Remain:</span>
+                                                    <span className={`font-black text-right ${item.rQty < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                                                        {Number(item.rBag.toFixed(2)).toLocaleString('en-US')} Bags | {Number(item.rQty.toFixed(2)).toLocaleString('en-US')} KG
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
@@ -2051,24 +2081,44 @@ const SalesReport = ({
                             <div className="md:hidden print:hidden space-y-3 px-1">
                                 {productWiseList.length > 0 ? (
                                     productWiseList.map((item, idx) => (
-                                        <div key={idx} className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">SL: {idx + 1}</span>
-                                                <span className="text-xs font-bold text-gray-500">{item.brand || '-'}</span>
+                                        <div key={idx} className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden hover:border-gray-300 transition-all">
+                                            {/* Card Header */}
+                                            <div className="bg-gray-50/70 px-3.5 py-2.5 flex items-center justify-between gap-2 border-b border-gray-100">
+                                                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
+                                                    #{idx + 1}
+                                                </span>
+                                                {item.brand && item.brand !== '-' && (
+                                                    <span className="text-[11px] font-bold text-gray-700 bg-white px-2.5 py-0.5 rounded-full border border-gray-200/80 shadow-xs">
+                                                        {item.brand}
+                                                    </span>
+                                                )}
                                             </div>
-                                            <div className="text-sm font-black text-gray-900">{item.productName}</div>
-                                            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100 text-center">
-                                                <div className="bg-gray-50 p-2 rounded-xl">
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase">Bag</div>
-                                                    <div className="text-xs font-black text-gray-800">{item.bag > 0 ? item.bag.toLocaleString('en-US') : '-'}</div>
+
+                                            {/* Card Body with Label: Value Rows */}
+                                            <div className="p-3.5 text-xs space-y-1.5 bg-white">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-gray-500 font-medium">Product:</span>
+                                                    <span className="font-bold text-gray-900 text-right">{item.productName}</span>
                                                 </div>
-                                                <div className="bg-gray-50 p-2 rounded-xl">
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase">Qty</div>
-                                                    <div className="text-xs font-black text-gray-800">{parseFloat(item.quantity || 0).toLocaleString('en-US')}</div>
+                                                {item.brand && item.brand !== '-' && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-gray-500 font-medium">Brand:</span>
+                                                        <span className="font-semibold text-gray-800 text-right">{item.brand}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-gray-500 font-medium">Bag:</span>
+                                                    <span className="font-bold text-gray-800 text-right">{item.bag > 0 ? item.bag.toLocaleString('en-US') : '-'}</span>
                                                 </div>
-                                                <div className="bg-gray-50 p-2 rounded-xl">
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase">Amount</div>
-                                                    <div className="text-xs font-black text-blue-600">৳{parseFloat(item.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-gray-500 font-medium">Quantity:</span>
+                                                    <span className="font-bold text-gray-900 text-right">{parseFloat(item.quantity || 0).toLocaleString('en-US')} KG</span>
+                                                </div>
+                                                <div className="flex justify-between items-center pt-1.5 border-t border-gray-100">
+                                                    <span className="text-gray-500 font-medium">Amount:</span>
+                                                    <span className="font-black text-blue-600 text-right">
+                                                        ৳{parseFloat(item.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
@@ -2080,104 +2130,163 @@ const SalesReport = ({
                                 )}
                             </div>
                         ) : (
-                            <div className="md:hidden space-y-4 px-1">
+                            <div className="md:hidden space-y-3 px-1">
                             {salesWithItems.length > 0 ? (
-                                salesWithItems.map((sale) => {
-                                    const isExpanded = expandedRows.includes(sale._id);
+                                salesWithItems.map((sale, idx) => {
+                                    const isExpanded = expandedRowId === sale._id;
                                     const flatItems = sale.flatItems;
+
+                                    const paid = parseFloat(sale.paidAmount) || 0;
+                                    const due = sale.dueAmount !== undefined ? parseFloat(sale.dueAmount) : Math.max(0, (parseFloat(sale.totalAmount) || 0) - paid);
 
                                     return (
                                         <div
-                                            key={sale._id}
-                                            className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-4 space-y-3 relative transition-all ${isExpanded ? 'ring-1 ring-blue-500/10 shadow-md' : 'hover:bg-gray-50/30'}`}
+                                            key={sale._id || idx}
                                             onClick={() => toggleRowExpansion(sale._id)}
+                                            className={`bg-white border rounded-2xl overflow-hidden shadow-sm select-none transition-all duration-200 cursor-pointer ${
+                                                isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-200 hover:border-gray-300'
+                                            }`}
                                         >
-                                            {/* Header Section */}
-                                            <div className="flex items-center justify-between min-w-0">
-                                                <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
-                                                    <div className="flex-shrink-0">
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">{formatDate(sale.date)}</div>
-                                                        <div className={`text-sm font-black text-gray-900 truncate`}>{sale.invoiceNo || 'No ID'}</div>
+                                            {/* Card Header (Always Visible) */}
+                                            <div className={`bg-gray-50/70 px-3.5 py-2.5 flex flex-col gap-1.5 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-blue-50/20' : ''}`}>
+                                                {/* Line 1: #{idx + 1} & Order/Invoice No on left, Status Badge on right */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                                            #{idx + 1}
+                                                        </span>
+                                                        <span className="text-xs font-black text-blue-600 truncate">
+                                                            {sale.invoiceNo || sale.orderNo || '—'}
+                                                        </span>
                                                     </div>
-
-                                                    {!isExpanded && (
-                                                        <>
-                                                            <div className="flex-1 min-w-0 border-l border-gray-100 pl-3">
-                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Company</div>
-                                                                <div className="text-[11px] font-bold text-gray-800 truncate">{sale.companyName || '-'}</div>
-                                                            </div>
-                                                            <div className="flex-shrink-0 border-l border-gray-100 pl-3 text-right">
-                                                                <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest leading-none mb-1">Total</div>
-                                                                <div className="text-[11px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
-                                                            </div>
-                                                        </>
+                                                    {sale.status && (
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                                            (sale.status || '').toLowerCase() === 'requested' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' :
+                                                            (sale.status || '').toLowerCase() === 'completed' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' :
+                                                            (sale.status || '').toLowerCase() === 'rejected' ? 'bg-rose-50 text-rose-700 border border-rose-200/60' :
+                                                            'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                                                        }`}>
+                                                            {sale.status}
+                                                        </span>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center gap-2 ml-2">
-                                                    <ChevronDownIcon className={`w-5 h-5 text-gray-300 transition-transform duration-200 ${isExpanded ? 'rotate-180' : 'opacity-60'}`} />
+
+                                                {/* Line 2: Date placed DIRECTLY ABOVE Customer / Company name on left, Total Amount on right */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex-1 min-w-0 pr-2">
+                                                        <div className="text-[10px] font-bold text-gray-400 tracking-wider">
+                                                            {formatDate(sale.date)}
+                                                        </div>
+                                                        <div className="font-black text-gray-900 text-sm tracking-tight truncate">
+                                                            {sale.companyName || sale.customerName || '—'}
+                                                        </div>
+                                                    </div>
+                                                    <div className="shrink-0 text-right">
+                                                        <span className="font-black text-blue-600 text-sm">
+                                                            ৳{(parseFloat(sale.totalAmount) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            {/* Expanded Content */}
+                                            {/* Card Body: Products Breakdown & Details (Expanded View) */}
                                             {isExpanded && (
-                                                <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                                                    <div className="border-t border-gray-50 pt-3 mt-1 space-y-4">
-                                                        <div>
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Company Name</div>
-                                                            <div className="text-sm font-bold text-gray-800">{sale.companyName || '-'}</div>
+                                                <div className="p-3.5 space-y-2.5 animate-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+                                                    {/* Products Breakdown */}
+                                                    <div className="space-y-2">
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                            Products ({flatItems.length})
                                                         </div>
-
-                                                        <div className="bg-gray-50/50 rounded-xl p-3 space-y-2">
-                                                            <div className="text-[10px] font-bold text-gray-600 uppercase">Products & Quantities</div>
-                                                            <div className="grid grid-cols-12 gap-1 px-1 pb-1 border-b border-gray-100 mb-1 mt-2">
-                                                                <div className="col-span-4 text-[9px] font-bold text-gray-400 uppercase">Brand</div>
-                                                                <div className="col-span-2 text-[9px] font-bold text-gray-400 uppercase text-right">Qty</div>
-                                                                <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Price</div>
-                                                                <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Total</div>
-                                                            </div>
-                                                            <div className="space-y-3 mt-2">
-                                                                {flatItems.map((item, idx) => (
-                                                                    <div key={idx} className="border-b border-gray-100 last:border-0 pb-2 last:pb-0">
-                                                                        <div className="text-[12px] font-black text-gray-800 mb-0.5">{item.productName}</div>
-                                                                        <div className="grid grid-cols-12 gap-1 items-center">
-                                                                            <div className="col-span-4 min-w-0">
-                                                                                <span className="text-[11px] font-medium text-gray-500 italic truncate block">{item.brand}</span>
-                                                                            </div>
-                                                                            <div className="col-span-2 text-right">
-                                                                                <div className="text-[10px] font-bold text-gray-900">{parseFloat(item.quantity).toLocaleString('en-US')}</div>
-                                                                            </div>
-                                                                            <div className="col-span-3 text-right">
-                                                                                <div className="text-[11px] font-medium text-blue-600">৳{parseFloat(item.price).toLocaleString('en-IN')}</div>
-                                                                            </div>
-                                                                            <div className="col-span-3 text-right">
-                                                                                <div className="text-[11px] font-black text-gray-900 text-truncate">৳{parseFloat(item.total).toLocaleString('en-IN')}</div>
-                                                                            </div>
-                                                                        </div>
+                                                        {flatItems.map((item, iIdx) => (
+                                                            <div key={iIdx} className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Product:</span>
+                                                                    <span className="font-bold text-gray-900 text-right">{item.productName}</span>
+                                                                </div>
+                                                                {item.brand && item.brand !== '-' && (
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Brand:</span>
+                                                                        <span className="font-bold text-gray-800 text-right">{item.brand}</span>
                                                                     </div>
-                                                                ))}
+                                                                )}
+                                                                {item.warehouseName && item.warehouseName !== '-' && (
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Warehouse:</span>
+                                                                        <span className="font-bold text-gray-800 text-right">{item.warehouseName}</span>
+                                                                    </div>
+                                                                )}
+                                                                {item.bag > 0 && (
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Bag:</span>
+                                                                        <span className="font-bold text-purple-700 text-right">{Math.round(item.bag).toLocaleString('en-US')} Bag</span>
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Quantity:</span>
+                                                                    <span className="font-bold text-orange-800 text-right">{Number(item.quantity || 0).toLocaleString('en-US')} kg</span>
+                                                                </div>
+                                                                {item.price > 0 && (
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Rate:</span>
+                                                                        <span className="font-bold text-gray-900 text-right">৳{Number(item.price).toLocaleString('en-IN')}/kg</span>
+                                                                    </div>
+                                                                )}
+                                                                {item.total > 0 && (
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Subtotal:</span>
+                                                                        <span className="font-bold text-gray-900 text-right">৳{Number(item.total).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                                                                    </div>
+                                                                )}
+                                                                {flatItems.length === 1 && (
+                                                                    <>
+                                                                        <div className="flex justify-between items-center pt-1.5 border-t border-gray-200/60">
+                                                                            <span className="text-gray-500 font-medium">Paid:</span>
+                                                                            <span className="font-bold text-emerald-600 text-right">৳{Number(paid).toLocaleString('en-IN')}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center">
+                                                                            <span className="text-gray-500 font-medium">Due:</span>
+                                                                            <span className={`font-bold text-right ${due > 0 ? 'text-rose-600' : 'text-gray-700'}`}>
+                                                                                ৳{Number(due).toLocaleString('en-IN')}
+                                                                            </span>
+                                                                        </div>
+                                                                    </>
+                                                                )}
                                                             </div>
-                                                        </div>
+                                                        ))}
 
-                                                        {/* Money Summary */}
-                                                        <div className="grid grid-cols-2 gap-2 mt-4">
-                                                            <div className="text-center p-2 rounded-lg border bg-blue-50/40 border-blue-100/50">
-                                                                <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Total Amount</div>
-                                                                <div className="text-[13px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
+                                                        {flatItems.length > 1 && (
+                                                            <div className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Paid:</span>
+                                                                    <span className="font-bold text-emerald-600 text-right">৳{Number(paid).toLocaleString('en-IN')}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Due:</span>
+                                                                    <span className={`font-bold text-right ${due > 0 ? 'text-rose-600' : 'text-gray-700'}`}>
+                                                                        ৳{Number(due).toLocaleString('en-IN')}
+                                                                    </span>
+                                                                </div>
                                                             </div>
-                                                            <div className="text-center p-2 rounded-lg border bg-red-50/40 border-red-100/50">
-                                                                <div className="text-[10px] font-bold text-red-600 uppercase tracking-widest mb-1">Discount</div>
-                                                                <div className="text-[13px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Footer with By */}
+                                                    {(sale.entryBy || sale.createdByName || sale.createdBy || sale.approvedByName || sale.acceptedByName) && (
+                                                        <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-[10px] text-gray-500">
+                                                            <div>
+                                                                {(sale.entryBy || sale.createdByName || sale.createdBy) && (
+                                                                    <span>By: <strong className="text-gray-700">{sale.entryBy || sale.createdByName || sale.createdBy}</strong></span>
+                                                                )}
                                                             </div>
-                                                            <div className="text-center p-2 rounded-lg border bg-emerald-50/40 border-emerald-100/50">
-                                                                <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Truck Fare</div>
-                                                                <div className="text-[13px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</div>
-                                                            </div>
-                                                            <div className="text-center p-2 rounded-lg border bg-orange-50/40 border-orange-100/50">
-                                                                <div className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1">Balance</div>
-                                                                <div className="text-[13px] font-black text-orange-700">৳{(parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0)).toLocaleString('en-IN')}</div>
+                                                            <div>
+                                                                {(sale.approvedByName || sale.acceptedByName) && (
+                                                                    <span className="text-emerald-600 font-semibold">
+                                                                        ✓✓ {sale.approvedByName || sale.acceptedByName}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -2244,7 +2353,9 @@ const SalesReport = ({
                             </div>
                             {reportTab === 'lc_wise' ? (
                                 <div className="border border-gray-200 p-5 rounded-2xl bg-white shadow-sm transition-all hover:shadow-md ring-2 ring-blue-500/10">
-                                    <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">Total Sales</div>
+                                    <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">
+                                        {saleType === 'Order' ? 'Total Orders' : 'Total Sales'}
+                                    </div>
                                     <div className="text-2xl font-black text-gray-900">
                                         {Number(lcWiseTotals.sQty.toFixed(2)).toLocaleString('en-US')} <span className="text-sm font-bold">KG</span>
                                     </div>
@@ -2254,7 +2365,9 @@ const SalesReport = ({
                                 </div>
                             ) : reportTab === 'product_wise' ? (
                                 <div className="border border-gray-200 p-5 rounded-2xl bg-white shadow-sm transition-all hover:shadow-md ring-2 ring-blue-500/10">
-                                    <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">Total Sales Quantity</div>
+                                    <div className="text-[12px] font-bold text-blue-500 uppercase tracking-wider mb-2">
+                                        {saleType === 'Order' ? 'Total Order Quantity' : 'Total Sales Quantity'}
+                                    </div>
                                     <div className="text-2xl font-black text-gray-900">
                                         {productWiseTotals.totalQty.toLocaleString('en-US')} <span className="text-sm font-bold">KG</span>
                                     </div>
@@ -2276,7 +2389,7 @@ const SalesReport = ({
                             )}
                             <div className="border border-gray-200 p-5 rounded-2xl bg-gray-50 shadow-sm transition-all hover:shadow-md">
                                 <div className="text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                                    {reportTab === 'lc_wise' ? 'Total Remaining (Saleable)' : 'Total Sales Amount'}
+                                    {reportTab === 'lc_wise' ? 'Total Remaining (Saleable)' : (saleType === 'Order' ? 'Total Order Amount' : 'Total Sales Amount')}
                                 </div>
                                 <div className={`text-2xl font-black ${reportTab === 'lc_wise' && lcWiseTotals.rQty < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                                     {reportTab === 'lc_wise'

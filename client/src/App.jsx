@@ -3082,6 +3082,14 @@ function App() {
             setShowSalesReport={setShowSalesReport}
             setSalesReportData={setFilteredSalesForReport}
             setSalesReportSearchQuery={setSalesReportSearchQuery}
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            toggleSelection={toggleSelection}
+            isLongPressTriggered={isLongPressTriggered}
             activeBaseline={activeBaseline}
           />
         );

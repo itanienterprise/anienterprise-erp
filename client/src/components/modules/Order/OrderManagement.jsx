@@ -59,6 +59,7 @@ const OrderManagement = ({
     setIsSelectionMode,
     selectedItems = new Set(),
     setSelectedItems,
+    toggleSelection: propToggleSelection,
     startLongPress,
     endLongPress,
     isLongPressTriggered,
@@ -66,6 +67,16 @@ const OrderManagement = ({
     isRequestedNotif,
     activeBaseline: propActiveBaseline
 }) => {
+    
+    const toggleSelection = propToggleSelection || ((id) => {
+        if (!setSelectedItems) return;
+        setSelectedItems(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    });
     
     // --- State Management ---
     const recentStatusUpdatesRef = useRef(new Map());
@@ -234,6 +245,11 @@ const OrderManagement = ({
     const [confirmModalConfig, setConfirmModalConfig] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [collapsedRows, setCollapsedRows] = useState([]);
+    const [expandedMobileCardId, setExpandedMobileCardId] = useState(null);
+
+    const toggleCardExpansion = (id) => {
+        setExpandedMobileCardId(prev => (prev === id ? null : id));
+    };
 
     // Show Unit Preference (BAG | QTY | BOTH)
     const [displayUnit, setDisplayUnit] = useState(() => {
@@ -2308,18 +2324,18 @@ const OrderManagement = ({
                 )}
 
                 {!showForm && (
-                    <div className="grid grid-cols-2 md:flex items-center justify-center md:justify-end gap-1.5 md:gap-3 z-50 w-full md:w-auto">
+                    <div className="w-full md:w-auto flex flex-row items-center justify-between md:justify-end gap-2 z-50">
                         {/* Filter Button */}
-                        <div className="relative">
+                        <div className="relative flex-1 md:flex-none">
                             <button
                                 ref={saleFilterButtonRef}
                                 onClick={() => setShowSaleFilterPanel(prev => !prev)}
-                                className={`sale-mgmt-btn-action ${showSaleFilterPanel || hasActiveFilters ? 'sale-mgmt-btn-blue' : 'sale-mgmt-btn-white'}`}
+                                className={`flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 rounded-xl transition-all border ${showSaleFilterPanel || hasActiveFilters ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'} h-[42px] font-semibold text-xs md:text-sm whitespace-nowrap`}
                             >
-                                <FunnelIcon className="w-5 h-5" />
+                                <FunnelIcon className={`w-4 h-4 ${showSaleFilterPanel || hasActiveFilters ? 'text-white' : 'text-gray-400'}`} />
                                 <span>Filter</span>
                                 {hasActiveFilters && (
-                                    <span className="flex items-center justify-center w-4 h-4 text-[10px] font-black bg-white text-blue-600 rounded-full ml-1">
+                                    <span className="flex items-center justify-center w-5 h-5 text-[11px] font-bold rounded-full bg-white text-blue-600 ml-0.5 shadow-sm">
                                         {activeFilterCount}
                                     </span>
                                 )}
@@ -2671,25 +2687,28 @@ const OrderManagement = ({
 
                         {/* Report Button */}
                         <button
+                            type="button"
                             onClick={() => {
                                 const currentData = getFilteredData || [];
                                 if (setSalesReportData) setSalesReportData(currentData);
                                 if (setSalesReportSearchQuery) setSalesReportSearchQuery(searchQuery);
                                 if (setShowSalesReport) setShowSalesReport(true);
                             }}
-                            className="sale-mgmt-btn-action sale-mgmt-btn-white"
+                            className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 h-[42px] font-semibold text-xs md:text-sm whitespace-nowrap"
                         >
-                            <BarChartIcon className="w-5 h-5" />
+                            <BarChartIcon className="w-4 h-4 text-blue-600" />
                             <span>Report</span>
                         </button>
 
                         {/* Add Order Button */}
                         {canAdd && (
                             <button
+                                type="button"
                                 onClick={handleOpenCreateForm}
-                                className="sale-mgmt-btn-action sale-mgmt-btn-blue"
+                                className="flex-1 md:flex-none w-full md:w-auto justify-center px-3 md:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm h-[42px] whitespace-nowrap"
                             >
-                                <span className="flex items-center gap-2"><span className="text-xl leading-none">+</span> Add Order</span>
+                                <PlusIcon className="w-4 h-4 shrink-0" />
+                                <span>Add Order</span>
                             </button>
                         )}
                     </div>
@@ -3222,7 +3241,7 @@ const OrderManagement = ({
             {/* Table Container matching General Sale */}
             {!showForm && (
                 <div className="sale-mgmt-table-container">
-                    <div className="overflow-x-auto">
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="sale-mgmt-table">
                             <thead>
                                 <tr>
@@ -3615,7 +3634,313 @@ const OrderManagement = ({
                             </tbody>
                         </table>
                     </div>
-                    <TableScrollNav count={getFilteredData.length} />
+                    <TableScrollNav className="hidden md:flex" count={getFilteredData.length} />
+
+                    {/* Mobile Card View */}
+                    <div className="block md:hidden px-3 py-3 space-y-3">
+                        {isLoading ? (
+                            Array(3).fill(0).map((_, i) => (
+                                <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
+                                    <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                                    <div className="h-6 bg-gray-200 rounded w-full"></div>
+                                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                                </div>
+                            ))
+                        ) : getFilteredData.length > 0 ? (
+                            getFilteredData.map((order, idx) => {
+                                const { deliveryMap, statusText, statusBadgeClass } = computeOrderFulfillment(order, allSalesRecords, returnsList);
+                                const totalAmt = calculateOrderTotal(order.items);
+                                const isRequested = (order.status || '').toLowerCase() === 'requested';
+                                const isEditRequested = order.isEdited === true && !isRequested;
+                                const cardKey = order._id || idx;
+                                const isExpanded = expandedMobileCardId === cardKey;
+
+                                const paid = parseFloat(order.paidAmount) || 0;
+                                const due = !isNaN(parseFloat(order.dueAmount)) ? parseFloat(order.dueAmount) : Math.max(0, totalAmt - paid);
+
+                                const orderDisplayNo = (order.orderNo && order.orderNo.toUpperCase().startsWith('ORD'))
+                                    ? order.orderNo
+                                    : (order.invoiceNo && order.invoiceNo.toUpperCase().startsWith('ORD'))
+                                    ? order.invoiceNo
+                                    : (order.orderNo || order.invoiceNo || '—');
+
+                                // Collect all order brand entries
+                                const orderEntries = [];
+                                (order.items || []).forEach((item, itemIdx) => {
+                                    const pName = item.productName || item.product || '—';
+                                    const entries = (item.brandEntries && item.brandEntries.length > 0)
+                                        ? item.brandEntries
+                                        : [{
+                                            brand: item.brand || item.brandName || '—',
+                                            warehouse: item.warehouseName || item.warehouse || order.warehouse || '—',
+                                            bag: item.bag || item.packet || 0,
+                                            qty: item.quantity || item.qty || 0,
+                                            rate: item.rate || item.unitPrice || 0,
+                                            amount: item.amount || item.totalAmount || 0,
+                                            packetSize: item.packetSize || 30
+                                        }];
+
+                                    entries.forEach((b, bIdx) => {
+                                        const pktSize = parseFloat(b.packetSize) || parseFloat(item.packetSize) || 30;
+                                        const bQty = parseFloat(b.quantity || b.qty || 0) || (parseFloat(b.bag || b.packet || 0) * pktSize);
+                                        const bBag = parseFloat(b.bag || b.packet || 0) || (pktSize > 0 ? bQty / pktSize : 0);
+                                        const bRate = parseFloat(b.rate || b.unitPrice || 0);
+                                        const bAmt = parseFloat(b.amount || b.totalAmount || 0) || (bQty * bRate);
+
+                                        const itemDelivery = deliveryMap[`${itemIdx}_${bIdx}`] || { deliveredQty: 0, remainQty: 0, deliveredBag: 0, remainBag: 0 };
+
+                                        orderEntries.push({
+                                            productName: pName,
+                                            brand: b.brandName || b.brand || '—',
+                                            warehouse: b.warehouseName || b.warehouse || order.warehouse || '—',
+                                            bag: bBag,
+                                            qty: bQty,
+                                            rate: bRate,
+                                            amount: bAmt,
+                                            deliveredQty: itemDelivery.deliveredQty || 0,
+                                            remainQty: itemDelivery.remainQty !== undefined ? itemDelivery.remainQty : Math.max(0, bQty - (itemDelivery.deliveredQty || 0)),
+                                            deliveredBag: itemDelivery.deliveredBag || 0,
+                                            remainBag: itemDelivery.remainBag !== undefined ? itemDelivery.remainBag : Math.max(0, bBag - (itemDelivery.deliveredBag || 0))
+                                        });
+                                    });
+                                });
+
+                                return (
+                                    <div
+                                        key={cardKey}
+                                        onMouseDown={() => startLongPress && startLongPress(order._id)}
+                                        onMouseUp={endLongPress}
+                                        onMouseLeave={endLongPress}
+                                        onTouchStart={() => startLongPress && startLongPress(order._id)}
+                                        onTouchEnd={endLongPress}
+                                        onClick={() => {
+                                            if (isLongPressTriggered && isLongPressTriggered.current) return;
+                                            if (isSelectionMode || selectedItems.size > 0) {
+                                                toggleSelection(order._id);
+                                            } else {
+                                                toggleCardExpansion(cardKey);
+                                            }
+                                        }}
+                                        className={`bg-white border rounded-2xl overflow-hidden shadow-sm select-none transition-all duration-200 cursor-pointer ${
+                                            selectedItems.has(order._id) ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''
+                                        } ${
+                                            isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-200 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        {/* Card Header (Always Visible) */}
+                                        <div className={`bg-gray-50/70 px-3.5 py-2.5 flex flex-col gap-1.5 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-blue-50/20' : ''}`}>
+                                            {/* Line 1: Order No & Status Badge */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    {(isSelectionMode || selectedItems.size > 0) ? (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(order._id)}
+                                                            onChange={() => toggleSelection(order._id)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                                            #{idx + 1}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-xs font-black text-blue-600 truncate">
+                                                        {orderDisplayNo}
+                                                    </span>
+                                                </div>
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${statusBadgeClass}`}>
+                                                    {isEditRequested && (
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1"></span>
+                                                    )}
+                                                    {statusText}
+                                                </span>
+                                            </div>
+
+                                            {/* Line 2: Date on top of Customer on left & Total Amount on right */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex-1 min-w-0 pr-2">
+                                                    <div className="text-[10px] font-bold text-gray-400 tracking-wider">
+                                                        {formatDate(order.date)}
+                                                    </div>
+                                                    <div className="font-black text-gray-900 text-sm tracking-tight truncate">
+                                                        {order.companyName || order.customerName || '—'}
+                                                    </div>
+                                                </div>
+                                                <div className="shrink-0 text-right">
+                                                    <span className="font-black text-blue-600 text-sm">
+                                                        ৳{Number(totalAmt || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Card Body: Products Breakdown & Details (Expanded View) */}
+                                        {isExpanded && (
+                                            <div className="p-3.5 space-y-2.5 animate-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+                                                {/* Product Items Breakdown */}
+                                                <div className="space-y-2">
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                        Products ({orderEntries.length})
+                                                    </div>
+                                                    {orderEntries.map((e, eIdx) => (
+                                                        <div key={eIdx} className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">Product:</span>
+                                                                <span className="font-bold text-gray-900 text-right">{e.productName}</span>
+                                                            </div>
+                                                            {e.brand && e.brand !== '—' && (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Brand:</span>
+                                                                    <span className="font-bold text-gray-800 text-right">{e.brand}</span>
+                                                                </div>
+                                                            )}
+                                                            {e.warehouse && e.warehouse !== '—' && (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Warehouse:</span>
+                                                                    <span className="font-bold text-gray-800 text-right">{e.warehouse}</span>
+                                                                </div>
+                                                            )}
+                                                            {showBag && (
+                                                                <>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Order Bag:</span>
+                                                                        <span className="font-bold text-purple-700 text-right">{Math.round(e.bag).toLocaleString('en-US')} Bag</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Delivered Bag:</span>
+                                                                        <span className="font-bold text-blue-700 text-right">{e.deliveredBag > 0 ? `${Math.round(e.deliveredBag).toLocaleString('en-US')} Bag` : '—'}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Remaining Bag:</span>
+                                                                        <span className={`font-bold text-right ${e.remainBag > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
+                                                                            {e.remainBag > 0 ? `${Math.round(e.remainBag).toLocaleString('en-US')} Bag` : '0 Bag'}
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                            {showQty && (
+                                                                <>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Order Qty:</span>
+                                                                        <span className="font-bold text-orange-800 text-right">{Math.round(e.qty).toLocaleString('en-US')} kg</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Delivered:</span>
+                                                                        <span className="font-bold text-blue-700 text-right">{e.deliveredQty > 0 ? `${Math.round(e.deliveredQty).toLocaleString('en-US')} kg` : '—'}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Remaining:</span>
+                                                                        <span className={`font-bold text-right ${e.remainQty > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
+                                                                            {e.remainQty > 0 ? `${Math.round(e.remainQty).toLocaleString('en-US')} kg` : '0 kg'}
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                            {e.rate > 0 && (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Rate:</span>
+                                                                    <span className="font-bold text-gray-900 text-right">৳{Number(e.rate).toLocaleString('en-IN')}{showQty ? '/kg' : ''}</span>
+                                                                </div>
+                                                            )}
+                                                            {orderEntries.length === 1 && (
+                                                                <>
+                                                                    <div className="flex justify-between items-center pt-1.5 border-t border-gray-200/60">
+                                                                        <span className="text-gray-500 font-medium">Paid:</span>
+                                                                        <span className="font-bold text-emerald-600 text-right">৳{Number(paid || 0).toLocaleString('en-IN')}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-medium">Due:</span>
+                                                                        <span className={`font-bold text-right ${due > 0 ? 'text-rose-600' : 'text-gray-700'}`}>৳{Number(due || 0).toLocaleString('en-IN')}</span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    ))}
+
+                                                    {orderEntries.length > 1 && (
+                                                        <div className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">Paid:</span>
+                                                                <span className="font-bold text-emerald-600 text-right">৳{Number(paid || 0).toLocaleString('en-IN')}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">Due:</span>
+                                                                <span className={`font-bold text-right ${due > 0 ? 'text-rose-600' : 'text-gray-700'}`}>৳{Number(due || 0).toLocaleString('en-IN')}</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Footer: Entry By & Action Buttons */}
+                                                <div className="flex items-center justify-between pt-2 border-t border-gray-100 gap-2">
+                                                    <div className="text-[10px] text-gray-500 truncate flex items-center gap-1">
+                                                        {canShowEntryBy && (
+                                                            <span>By: <strong className="text-gray-700">{getEntryByFirstName(order)}</strong></span>
+                                                        )}
+                                                        {(order.approvedByName || order.approvedBy || order.acceptedByName || order.acceptedBy) && (
+                                                            <span className="text-emerald-600 font-semibold" title="Approval">
+                                                                ✓✓ {getFirstNameFromIdentifier(order.approvedByName || order.approvedBy || order.acceptedByName || order.acceptedBy)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => setViewRecord(order)}
+                                                            className="p-1.5 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-lg transition-colors"
+                                                            title="View Details"
+                                                        >
+                                                            <EyeIcon className="w-4 h-4" />
+                                                        </button>
+                                                        {canUserEditOrder(order) && (
+                                                            <button
+                                                                onClick={() => handleEdit(order)}
+                                                                className="p-1.5 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-lg transition-colors"
+                                                                title="Edit Order"
+                                                            >
+                                                                <EditIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        {(isRequested ? canApprove : (order.isEdited === true && (canApproveEditRequest || canApprove))) && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleStatusUpdate(order, 'Accepted')}
+                                                                    className="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                                                                    title="Accept Order / Edit"
+                                                                >
+                                                                    <CheckIcon className="w-3.5 h-3.5" /> Accept
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleStatusUpdate(order, 'Rejected')}
+                                                                    className="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                                                                    title="Reject Order / Edit"
+                                                                >
+                                                                    <XIcon className="w-3.5 h-3.5" /> Reject
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        {!isRequested && !order.isEdited && canDelete && (
+                                                            <button
+                                                                onClick={() => handleDeleteOrder(order)}
+                                                                className="p-1.5 text-rose-600 bg-rose-50/80 hover:bg-rose-100 rounded-lg transition-colors"
+                                                                title="Delete Order"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="py-12 px-4 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
+                                No order records found.
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
