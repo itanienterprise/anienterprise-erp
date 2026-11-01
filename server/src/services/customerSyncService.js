@@ -528,9 +528,9 @@ async function syncSaleOnSave(saleDoc, reqBody, existingData = null) {
           return true;
         });
 
-        // Add new entries if not rejected
+        // Add new entries if not rejected and not still in requested/pending-approval state
         const saleStatus = (reqBody.status || saleDoc.status || '').toLowerCase();
-        if (saleStatus !== 'rejected') {
+        if (saleStatus !== 'rejected' && saleStatus !== 'requested' && saleStatus !== 'edit_requested') {
           const newEntries = buildSaleHistoryEntries(reqBody, cData);
           if (newEntries.length > 0) {
             cData.salesHistory.unshift(...newEntries);

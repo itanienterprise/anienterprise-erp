@@ -938,6 +938,9 @@ const Customer = ({
             if ((itemInv && processedInvoices.has(itemInv)) || (itemOrd && processedInvoices.has(itemOrd))) {
                 return; // Already processed from effectiveSalesRecords
             }
+            // Skip entries that have not been approved yet
+            const itemStatus = (item.status || '').toLowerCase();
+            if (itemStatus === 'requested' || itemStatus === 'edit_requested') return;
             history.push({
                 ...item,
                 brand: item.brand || item.brandName || ''
