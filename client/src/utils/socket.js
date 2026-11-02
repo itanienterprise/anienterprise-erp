@@ -1,11 +1,13 @@
 import { io } from 'socket.io-client';
+import { getBaseServerUrl } from './api';
 
 let socket = null;
 let hasConnectedOnce = false;
 
 export const getSocket = () => {
   if (!socket) {
-    socket = io({
+    const serverUrl = getBaseServerUrl() || undefined;
+    socket = io(serverUrl, {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       autoConnect: true,

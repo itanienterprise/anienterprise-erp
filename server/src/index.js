@@ -94,7 +94,7 @@ app.set('trust proxy', 1);
 
 // Restricted CORS Whitelisting
 const isAllowedOrigin = (origin) => {
-  if (!origin) return true; // allow non-browser / same-origin requests
+  if (!origin || origin === 'null' || origin.startsWith('capacitor://') || origin.startsWith('ionic://')) return true; // allow non-browser / mobile WebView requests
   try {
     const url = new URL(origin);
     const hostname = url.hostname;
@@ -367,6 +367,53 @@ app.use('/api', generalLimiter);
 const securityMiddleware = require('./middleware/securityMiddleware');
 app.use(securityMiddleware);
 
+// Mobile APK & Cross-Origin Session Header Bridge
+// Allows Android WebView / Capacitor requests where third-party cookies are blocked
+// to seamlessly authenticate via X-Session-Id or X-Session-Token
+const cookieSignature = require('cookie-signature');
+const tokenToSessionIdCache = new Map();
+
+const resolveSessionIdFromToken = async (token) => {
+  if (!token) return null;
+  if (tokenToSessionIdCache.has(token)) {
+    return tokenToSessionIdCache.get(token);
+  }
+  try {
+    const sessionCol = mongoose.connection.collection('sessions');
+    const doc = await sessionCol.findOne({
+      session: { $regex: token }
+    });
+    if (doc && doc._id) {
+      tokenToSessionIdCache.set(token, doc._id);
+      return doc._id;
+    }
+  } catch (err) {
+    console.error('[Session Bridge] Error looking up token in sessions:', err);
+  }
+  return null;
+};
+
+app.use(async (req, res, next) => {
+  try {
+    let sessionId = req.headers['x-session-id'];
+    const sessionToken = req.headers['x-session-token'];
+
+    if (!sessionId && sessionToken) {
+      sessionId = await resolveSessionIdFromToken(sessionToken);
+    }
+
+    if (sessionId && (!req.headers.cookie || !req.headers.cookie.includes('erp_session='))) {
+      const sessionSecret = process.env.SESSION_SECRET || 'ani_enterprise_erp_secret_key';
+      const signed = 's:' + cookieSignature.sign(sessionId, sessionSecret);
+      const existing = req.headers.cookie ? `${req.headers.cookie}; ` : '';
+      req.headers.cookie = `${existing}erp_session=${encodeURIComponent(signed)}`;
+    }
+  } catch (e) {
+    console.error('[Session Bridge] Error synthesizing session cookie:', e);
+  }
+  next();
+});
+
 // Session Configuration
 app.use(session({
   name: 'erp_session',
@@ -461,6 +508,11 @@ const AttendanceLog = require('./models/AttendanceLog');
 const ShiftConfig = require('./models/ShiftConfig');
 const LeaveRequest = require('./models/LeaveRequest');
 const DeviceMapping = require('./models/DeviceMapping');
+
+// ─── MDM (Mobile Device Management) Module ───────────────────
+const DeviceRegistry = require('./models/DeviceRegistry');
+const DeviceLocationLog = require('./models/DeviceLocationLog');
+const createMdmRouter = require('./services/mdmRoutes');
 // ────────────────────────────────────────────────────────────────────────────
 
 // Intelligent Cluster-based Calculation of Actual ERP Active Usage Time
@@ -965,10 +1017,17 @@ app.post('/v', (req, res, next) => {
   if (!p || !m) return res.status(400).json({ message: 'Invalid gateway request' });
 
   const executeDispatch = () => {
-    // Internal dispatching
-    req.targetApiPath = p;
-    req.url = p;
-    req.originalUrl = p;
+    // Internal dispatching (strip any protocol/host so p is always a relative path)
+    let cleanP = p;
+    if (typeof cleanP === 'string' && (cleanP.startsWith('http://') || cleanP.startsWith('https://'))) {
+      try {
+        const u = new URL(cleanP);
+        cleanP = u.pathname + u.search;
+      } catch (_) {}
+    }
+    req.targetApiPath = cleanP;
+    req.url = cleanP;
+    req.originalUrl = cleanP;
     req.method = m;
     req.body = d;
 
@@ -1025,8 +1084,13 @@ app.post('/v', (req, res, next) => {
 const requireAuth = (req, res, next) => {
   if (req.method === 'OPTIONS') return next();
 
-  // Extract path without query parameters or trailing slashes
-  const rawPath = (req.originalUrl || req.url || '').split('?')[0].replace(/\/+$/, '') || '/';
+  // Extract path without query parameters or trailing slashes, stripping any protocol/host
+  let rawPath = (req.originalUrl || req.url || '').split('?')[0].replace(/\/+$/, '') || '/';
+  if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+    try {
+      rawPath = new URL(rawPath).pathname.replace(/\/+$/, '') || '/';
+    } catch (_) {}
+  }
 
   // Whitelisted public routes that do not require an active session
   const publicPaths = [
@@ -1037,7 +1101,9 @@ const requireAuth = (req, res, next) => {
     '/api/health',
     '/api/system/run-migrations',
     '/api/logs/client-action',
-    '/api/logs/heartbeat'
+    '/api/logs/heartbeat',
+    '/api/mdm/ping',
+    '/api/mdm/register'
   ];
 
   if (publicPaths.includes(rawPath)) {
@@ -1079,6 +1145,7 @@ apiRouter.use((req, res, next) => {
 
 // Mount apiRouter for direct API requests (e.g. backup & restore uploads/downloads)
 app.use(apiRouter);
+app.use('/api/mdm', createMdmRouter(io));
 
 // Routes
 app.get('/', (req, res) => {
@@ -5711,11 +5778,14 @@ apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
       req.session.cookie.maxAge = null; // Session-only cookie (cleared when browser session ends)
     }
 
+    tokenToSessionIdCache.set(sessionToken, req.sessionID);
+
     res.json({
       success: true,
       user: userData,
       rememberMe: isRemember,
-      sessionToken: sessionToken
+      sessionToken: sessionToken,
+      sessionId: req.sessionID
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -5794,7 +5864,8 @@ apiRouter.get('/api/auth/check', async (req, res) => {
         authenticated: true,
         user: req.session.user,
         rememberMe: !!req.session.rememberMe,
-        sessionToken: req.session.sessionToken
+        sessionToken: req.session.sessionToken,
+        sessionId: req.sessionID
       });
     } catch (err) {
       console.error('Session check error:', err);
@@ -5803,7 +5874,8 @@ apiRouter.get('/api/auth/check', async (req, res) => {
         authenticated: true,
         user: req.session.user,
         rememberMe: !!req.session.rememberMe,
-        sessionToken: req.session?.sessionToken
+        sessionToken: req.session?.sessionToken,
+        sessionId: req.sessionID
       });
     }
   } else {
@@ -6022,6 +6094,8 @@ apiRouter.post('/api/profile/photo', async (req, res) => {
 
 
 apiRouter.post('/api/auth/logout', (req, res) => {
+  const token = req.session?.sessionToken || req.headers['x-session-token'];
+  if (token) tokenToSessionIdCache.delete(token);
   req.session.destroy((err) => {
     if (err) {
       return res.status(500).json({ message: 'Could not log out' });

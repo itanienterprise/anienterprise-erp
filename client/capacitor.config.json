@@ -1,0 +1,16 @@
+{
+  "appId": "com.anienterprise.erp",
+  "appName": "ANI ERP",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  }
+}
+

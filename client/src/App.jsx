@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon, TruckIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon, ActivityLogIcon, TicketIcon, WalletIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon, ActivityLogIcon, TicketIcon, WalletIcon, MapPinIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -86,10 +86,12 @@ import CostOfGoods from './components/modules/CostOfGoods/CostOfGoods';
 import Token from './components/modules/Token/Token';
 import LogManagement from './components/modules/Log/LogManagement';
 import Attendance from './components/modules/Attendance/Attendance';
+import MdmManagement from './components/modules/MDM/MdmManagement';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 
 import { initActivityTracker } from './utils/activityTracker';
 import { hasPermission } from './utils/permissionHelper';
+import mdmService from './utils/mdmService';
 
 
 function App() {
@@ -250,7 +252,17 @@ function App() {
     };
   }, [isAuthenticated, currentUser]);
 
-  const handleLogin = (user, rememberMe = false, sessionToken = null) => {
+  // Auto-manage MDM telemetry tracking inside the native Mobile APK
+  useEffect(() => {
+    const isNativeApk = mdmService.isNative;
+    if (isAuthenticated && currentUser && isNativeApk) {
+      mdmService.startTracking(30000, true, currentUser);
+    } else if (!isAuthenticated) {
+      mdmService.stopTracking();
+    }
+  }, [isAuthenticated, currentUser?.username, currentUser?.id]);
+
+  const handleLogin = (user, rememberMe = false, sessionToken = null, sessionId = null) => {
     setIsAuthenticated(true);
     setCurrentUser(user);
     setSidebarOpen(false);
@@ -269,6 +281,15 @@ function App() {
       }
     }
 
+    if (sessionId) {
+      sessionStorage.setItem('erp_session_id', sessionId);
+      if (rememberMe) {
+        localStorage.setItem('erp_session_id', sessionId);
+      } else {
+        localStorage.removeItem('erp_session_id');
+      }
+    }
+
     if (rememberMe) {
       localStorage.setItem('rememberMe', 'true');
       localStorage.setItem('isAuthenticated', 'true');
@@ -284,7 +305,7 @@ function App() {
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
         const channel = new BroadcastChannel('erp_auth_sync');
-        channel.postMessage({ type: 'LOGIN', user, rememberMe, sessionToken });
+        channel.postMessage({ type: 'LOGIN', user, rememberMe, sessionToken, sessionId });
         channel.close();
       } catch (e) { }
     }
@@ -319,11 +340,13 @@ function App() {
       localStorage.removeItem('isAuthenticated');
       localStorage.removeItem('rememberMe');
       localStorage.removeItem('erp_session_token');
+      localStorage.removeItem('erp_session_id');
       localStorage.removeItem('currentView');
 
       sessionStorage.removeItem('currentUser');
       sessionStorage.removeItem('isAuthenticated');
       sessionStorage.removeItem('erp_session_token');
+      sessionStorage.removeItem('erp_session_id');
 
       // Notify other open tabs of logout
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -671,6 +694,12 @@ function App() {
                   localStorage.setItem('erp_session_token', responseData.sessionToken);
                 }
               }
+              if (responseData.sessionId) {
+                sessionStorage.setItem('erp_session_id', responseData.sessionId);
+                if (responseData.rememberMe) {
+                  localStorage.setItem('erp_session_id', responseData.sessionId);
+                }
+              }
               if (responseData.rememberMe) {
                 localStorage.setItem('rememberMe', 'true');
                 localStorage.setItem('isAuthenticated', 'true');
@@ -688,9 +717,11 @@ function App() {
             localStorage.removeItem('isAuthenticated');
             localStorage.removeItem('rememberMe');
             localStorage.removeItem('erp_session_token');
+            localStorage.removeItem('erp_session_id');
             sessionStorage.removeItem('currentUser');
             sessionStorage.removeItem('isAuthenticated');
             sessionStorage.removeItem('erp_session_token');
+            sessionStorage.removeItem('erp_session_id');
             try {
               await axios.post(`${API_BASE_URL}/api/auth/logout`);
             } catch (e) { }
@@ -717,6 +748,12 @@ function App() {
               localStorage.setItem('erp_session_token', response.data.sessionToken);
             }
           }
+          if (response.data.sessionId) {
+            sessionStorage.setItem('erp_session_id', response.data.sessionId);
+            if (response.data.rememberMe) {
+              localStorage.setItem('erp_session_id', response.data.sessionId);
+            }
+          }
           if (response.data.rememberMe) {
             localStorage.setItem('rememberMe', 'true');
             localStorage.setItem('isAuthenticated', 'true');
@@ -728,9 +765,11 @@ function App() {
           localStorage.removeItem('isAuthenticated');
           localStorage.removeItem('rememberMe');
           localStorage.removeItem('erp_session_token');
+          localStorage.removeItem('erp_session_id');
           sessionStorage.removeItem('currentUser');
           sessionStorage.removeItem('isAuthenticated');
           sessionStorage.removeItem('erp_session_token');
+          sessionStorage.removeItem('erp_session_id');
         }
       } catch (err) {
         if (!isCancelled) {
@@ -740,9 +779,11 @@ function App() {
           localStorage.removeItem('isAuthenticated');
           localStorage.removeItem('rememberMe');
           localStorage.removeItem('erp_session_token');
+          localStorage.removeItem('erp_session_id');
           sessionStorage.removeItem('currentUser');
           sessionStorage.removeItem('isAuthenticated');
           sessionStorage.removeItem('erp_session_token');
+          sessionStorage.removeItem('erp_session_id');
         }
       } finally {
         if (!isCancelled) {
@@ -812,9 +853,11 @@ function App() {
       localStorage.removeItem('isAuthenticated');
       localStorage.removeItem('rememberMe');
       localStorage.removeItem('erp_session_token');
+      localStorage.removeItem('erp_session_id');
       sessionStorage.removeItem('currentUser');
       sessionStorage.removeItem('isAuthenticated');
       sessionStorage.removeItem('erp_session_token');
+      sessionStorage.removeItem('erp_session_id');
     };
     window.addEventListener('erp:auth_unauthorized', handleAuthUnauthorized);
     return () => window.removeEventListener('erp:auth_unauthorized', handleAuthUnauthorized);
@@ -3168,6 +3211,13 @@ function App() {
       case 'attendance-section':
         return <Attendance currentUser={currentUser} />;
 
+      case 'mdm-section':
+        return (
+          <div className="w-full max-w-full min-w-0 overflow-x-hidden">
+            <MdmManagement currentUser={currentUser} />
+          </div>
+        );
+
       case 'role-creation': {
         const isAdminUser = currentUser?.username === 'admin';
         const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
@@ -3406,7 +3456,7 @@ function App() {
                       }
                     }}
                     title={isMini ? 'HRMS' : undefined}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['employee-section', 'attendance-section', 'role-creation', 'system-access'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['employee-section', 'attendance-section', 'mdm-section', 'role-creation', 'system-access'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
                     <div className="flex items-center min-w-0">
                       <BriefcaseIcon className="w-5 h-5 flex-shrink-0" />
@@ -3436,6 +3486,15 @@ function App() {
                         >
                           <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                           <span>Attendance</span>
+                        </button>
+                      )}
+                      {(hasPermission(currentUser, 'employees', 'view') || (currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (
+                        <button
+                          onClick={() => { handleViewChange('mdm-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'mdm-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                        >
+                          <MapPinIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>MDM & Tracking</span>
                         </button>
                       )}
                       {((currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (

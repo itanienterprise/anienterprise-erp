@@ -1,0 +1,23 @@
+{
+  "appId": "com.anienterprise.erp",
+  "appName": "ANI ERP",
+  "webDir": "client/dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#1e3a8a",
+      "showSpinner": true
+    }
+  }
+}
+

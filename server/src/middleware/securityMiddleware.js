@@ -6,6 +6,9 @@ const securityMiddleware = (req, res, next) => {
         req.method === 'OPTIONS' ||
         (!req.path.startsWith('/api') && req.path !== '/v') ||
         req.path === '/api/health' ||
+        req.path === '/api/auth/login' ||
+        req.path === '/api/auth/check' ||
+        req.path.startsWith('/api/mdm') ||
         req.path === '/api/system/run-migrations' ||
         req.path.startsWith('/api/backup') ||
         req.path.startsWith('/api/restore')

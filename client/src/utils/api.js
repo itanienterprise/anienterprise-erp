@@ -1,21 +1,64 @@
 import axios from 'axios';
 import { encryptData, decryptData, generateSignature } from './encryption';
 
-const API_BASE_URL = ''; // Relative path, handled by Vite proxy
+export const sanitizeServerUrl = (url) => {
+    if (!url) return '';
+    let clean = url.trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(clean)) {
+        clean = 'http://' + clean;
+    }
+    const withoutProto = clean.replace(/^https?:\/\//i, '');
+    if (!withoutProto.includes(':') && /^(\d{1,3}\.){3}\d{1,3}$/.test(withoutProto)) {
+        clean = clean + ':5000';
+    }
+    return clean;
+};
+
+export const isNativePlatform = () => {
+    if (typeof window === 'undefined') return false;
+    if (window.AndroidBridge) return true;
+    if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function') {
+        return window.Capacitor.isNativePlatform();
+    }
+    return false;
+};
+
+export const getBaseServerUrl = () => {
+    if (typeof window !== 'undefined') {
+        const customUrl = localStorage.getItem('erp_server_url');
+        if (customUrl) return sanitizeServerUrl(customUrl);
+        if (isNativePlatform()) {
+            return 'http://192.168.0.27:5000';
+        }
+    }
+    return '';
+};
+
+const API_BASE_URL = getBaseServerUrl();
 
 // Configure Axios defaults
 axios.defaults.withCredentials = true;
+if (API_BASE_URL) {
+    axios.defaults.baseURL = API_BASE_URL;
+}
 
 /**
  * Request Interceptor: Automatically encrypts the body and adds security headers.
  */
 axios.interceptors.request.use((config) => {
-    // Attach anti-hijacking session token if available
+    // Attach anti-hijacking session token & session ID if available
     const sessionToken = (typeof window !== 'undefined')
         ? (sessionStorage.getItem('erp_session_token') || localStorage.getItem('erp_session_token'))
         : null;
     if (sessionToken && config.headers) {
         config.headers['X-Session-Token'] = sessionToken;
+    }
+
+    const sessionId = (typeof window !== 'undefined')
+        ? (sessionStorage.getItem('erp_session_id') || localStorage.getItem('erp_session_id'))
+        : null;
+    if (sessionId && config.headers) {
+        config.headers['X-Session-Id'] = sessionId;
     }
 
     // skip non-api requests or health checks
@@ -58,8 +101,19 @@ axios.interceptors.request.use((config) => {
         delete config.params;
     }
 
+    // Strip protocol and host so p is always a relative path
+    let cleanPath = fullUrl;
+    if (/^https?:\/\//i.test(cleanPath)) {
+        try {
+            const u = new URL(cleanPath);
+            cleanPath = u.pathname + u.search;
+        } catch (_) {}
+    }
+
+    config._originalUrl = cleanPath;
+
     // Capture original details for the gateway
-    const originalUrl = fullUrl;
+    const originalUrl = cleanPath;
     const originalMethod = config.method.toUpperCase();
     const originalData = config.data || {};
 
@@ -105,7 +159,7 @@ axios.interceptors.response.use((response) => {
         console.error('Security verification failed:', error.response.data?.message || error.response.data);
     }
     if (error.response && error.response.status === 401) {
-        const reqUrl = error.config?.url || '';
+        const reqUrl = error.config?._originalUrl || error.config?.url || '';
         if (!reqUrl.includes('/api/auth/login') && !reqUrl.includes('/api/auth/check')) {
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('erp:auth_unauthorized'));
@@ -130,9 +184,18 @@ const secureFetch = async (url, options = {}) => {
     const originalMethod = (options.method || 'GET').toUpperCase();
     const originalData = options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : {};
 
+    // Strip protocol and host so p is always a relative path
+    let cleanPath = url;
+    if (/^https?:\/\//i.test(cleanPath)) {
+        try {
+            const u = new URL(cleanPath);
+            cleanPath = u.pathname + u.search;
+        } catch (_) {}
+    }
+
     // Transform to Gateway Request
     const gatewayPayload = {
-        p: url,
+        p: cleanPath,
         m: originalMethod,
         d: originalData
     };
@@ -141,17 +204,24 @@ const secureFetch = async (url, options = {}) => {
         ? (sessionStorage.getItem('erp_session_token') || localStorage.getItem('erp_session_token'))
         : null;
 
+    const sessionId = (typeof window !== 'undefined')
+        ? (sessionStorage.getItem('erp_session_id') || localStorage.getItem('erp_session_id'))
+        : null;
+
     const headers = {
         ...options.headers,
         'Content-Type': 'application/json',
         'X-Timestamp': timestamp,
         'X-Signature': generateSignature(gatewayPayload, timestamp),
-        ...(sessionToken ? { 'X-Session-Token': sessionToken } : {})
+        ...(sessionToken ? { 'X-Session-Token': sessionToken } : {}),
+        ...(sessionId ? { 'X-Session-Id': sessionId } : {})
     };
 
     const body = JSON.stringify({ payload: encryptData(gatewayPayload) });
 
-    const response = await originalFetch('/v', { ...options, method: 'POST', headers, body });
+    const base = getBaseServerUrl() || '';
+    const gatewayEndpoint = base ? (base + '/v') : '/v';
+    const response = await originalFetch(gatewayEndpoint, { ...options, method: 'POST', headers, body });
     
     // We need to return something that looks like a Response object
     // because components call .json(), .ok, etc. on it.

@@ -1,12 +1,13 @@
 import React from 'react';
-import axios from './api';
+import axios, { getBaseServerUrl } from './api';
 import { ChevronUpIcon, ChevronDownIcon } from '../components/Icons';
 
 // Set axios defaults for session handling
 axios.defaults.withCredentials = true;
 
-// API Base URL - In development Vite proxies this; in production Nginx proxies this.
-export const API_BASE_URL = '';
+// API Base URL - In development Vite proxies this; in APK or custom setup it uses configured server IP
+export const API_BASE_URL = getBaseServerUrl();
+export { getBaseServerUrl };
 
 // Date Formatting Utilities
 export const formatDate = (dateString) => {

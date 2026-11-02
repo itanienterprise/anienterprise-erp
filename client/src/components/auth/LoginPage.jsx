@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { API_BASE_URL } from '../../utils/helpers';
+import { getBaseServerUrl, sanitizeServerUrl } from '../../utils/api';
 import './LoginPage.css';
 
 const LoginPage = ({ onLogin }) => {
@@ -14,13 +15,96 @@ const LoginPage = ({ onLogin }) => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // Dynamic Server IP Configuration
+    const [showServerConfig, setShowServerConfig] = useState(false);
+    const [serverIpInput, setServerIpInput] = useState(() => {
+        return localStorage.getItem('erp_server_url') || getBaseServerUrl() || '';
+    });
+    const [testStatus, setTestStatus] = useState(null);
+    const [isTesting, setIsTesting] = useState(false);
+
+    // Prompt for required permissions on mobile APK launch
+    React.useEffect(() => {
+        const isNative = typeof window !== 'undefined' && (
+            !!window.AndroidBridge ||
+            (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform())
+        );
+        if (isNative) {
+            import('@capacitor/geolocation').then(({ Geolocation }) => {
+                Geolocation.requestPermissions().catch(() => {});
+            }).catch(() => {});
+        }
+    }, []);
+
+    const handleTestConnection = async () => {
+        const raw = serverIpInput.trim();
+        if (!raw) {
+            setTestStatus({ type: 'error', text: 'Please enter an IP address or hostname.' });
+            return;
+        }
+        const target = sanitizeServerUrl(raw);
+        setIsTesting(true);
+        setTestStatus({ type: 'info', text: `Testing connection to ${target}...` });
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const res = await fetch(`${target}/api/health`, {
+                method: 'GET',
+                signal: controller.signal
+            }).catch(async () => {
+                // Fallback test on /health
+                return await fetch(`${target}/health`, {
+                    method: 'GET',
+                    signal: controller.signal
+                });
+            });
+            clearTimeout(timeoutId);
+            if (res && (res.ok || res.status === 200 || res.status === 401 || res.status === 404)) {
+                setTestStatus({ type: 'success', text: `Connected successfully to ${target}!` });
+            } else {
+                setTestStatus({ type: 'error', text: `Server returned HTTP status ${res ? res.status : 'offline'}.` });
+            }
+        } catch (err) {
+            setTestStatus({
+                type: 'error',
+                text: `Cannot reach ${target}. Ensure phone is on same Wi-Fi and server is running.`
+            });
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
+    const handleSaveServerIp = () => {
+        const raw = serverIpInput.trim();
+        if (!raw) {
+            localStorage.removeItem('erp_server_url');
+        } else {
+            const clean = sanitizeServerUrl(raw);
+            localStorage.setItem('erp_server_url', clean);
+        }
+        setTestStatus({ type: 'success', text: 'IP saved! Reloading application...' });
+        setTimeout(() => {
+            window.location.reload();
+        }, 500);
+    };
+
+    const handleResetServerIp = () => {
+        localStorage.removeItem('erp_server_url');
+        setServerIpInput(getBaseServerUrl());
+        setTestStatus({ type: 'info', text: 'Reset to default! Reloading application...' });
+        setTimeout(() => {
+            window.location.reload();
+        }, 500);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
 
+        const activeBase = getBaseServerUrl() || API_BASE_URL || '';
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            const response = await fetch(`${activeBase}/api/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -45,6 +129,14 @@ const LoginPage = ({ onLogin }) => {
                             localStorage.removeItem('erp_session_token');
                         }
                     }
+                    if (data.sessionId) {
+                        sessionStorage.setItem('erp_session_id', data.sessionId);
+                        if (isRemember) {
+                            localStorage.setItem('erp_session_id', data.sessionId);
+                        } else {
+                            localStorage.removeItem('erp_session_id');
+                        }
+                    }
                     if (isRemember) {
                         localStorage.setItem('savedUsername', username);
                         localStorage.setItem('rememberMe', 'true');
@@ -52,18 +144,21 @@ const LoginPage = ({ onLogin }) => {
                         localStorage.removeItem('savedUsername');
                         localStorage.removeItem('rememberMe');
                     }
-                    onLogin(data.user, isRemember, data.sessionToken);
+                    onLogin(data.user, isRemember, data.sessionToken, data.sessionId);
                 }
             } else {
                 setError(data.message || 'Invalid username or password');
             }
         } catch (err) {
             console.error('Login error:', err);
-            setError('Server error. Please try again later.');
+            const targetHost = activeBase || window.location.origin;
+            setError(`Cannot reach backend server (${targetHost}). If your computer's IP changed, tap "Server IP Settings" below.`);
         } finally {
             setLoading(false);
         }
     };
+
+    const currentSavedIp = localStorage.getItem('erp_server_url') || getBaseServerUrl();
 
     return (
         <div className="lp-bg">
@@ -173,7 +268,7 @@ const LoginPage = ({ onLogin }) => {
                                     <line x1="12" y1="8" x2="12" y2="12" />
                                     <line x1="12" y1="16" x2="12.01" y2="16" />
                                 </svg>
-                                {error}
+                                <span>{error}</span>
                             </div>
                         )}
 
@@ -182,6 +277,79 @@ const LoginPage = ({ onLogin }) => {
                                 <span className="lp-spinner" />
                             ) : 'Login'}
                         </button>
+
+                        {/* Option to Change IP (Configurable & Easy to Remove Later) */}
+                        <div className="lp-server-section">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowServerConfig(!showServerConfig);
+                                    setTestStatus(null);
+                                }}
+                                className="lp-server-toggle-btn"
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="3" />
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                                </svg>
+                                <span>Change Server IP</span>
+                                <span className="lp-server-current-pill" title={currentSavedIp}>
+                                    {currentSavedIp ? currentSavedIp.replace(/^https?:\/\//i, '') : 'Default IP'}
+                                </span>
+                            </button>
+
+                            {showServerConfig && (
+                                <div className="lp-server-box">
+                                    <div className="lp-server-box-header">
+                                        <span className="lp-server-box-title">ERP Backend Server IP</span>
+                                        <span className="lp-server-box-sub">Enter your computer's IP (e.g. 192.168.0.27 or 192.168.0.27:5000)</span>
+                                    </div>
+                                    <div className="lp-server-input-group">
+                                        <input
+                                            type="text"
+                                            value={serverIpInput}
+                                            onChange={(e) => {
+                                                setServerIpInput(e.target.value);
+                                                setTestStatus(null);
+                                            }}
+                                            placeholder="192.168.0.27:5000"
+                                            className="lp-server-input"
+                                        />
+                                    </div>
+                                    {testStatus && (
+                                        <div className={`lp-server-msg lp-server-msg-${testStatus.type}`}>
+                                            {testStatus.text}
+                                        </div>
+                                    )}
+                                    <div className="lp-server-actions">
+                                        <button
+                                            type="button"
+                                            onClick={handleTestConnection}
+                                            disabled={isTesting}
+                                            className="lp-server-btn-test"
+                                        >
+                                            {isTesting ? 'Testing...' : 'Test'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveServerIp}
+                                            className="lp-server-btn-save"
+                                        >
+                                            Save & Apply
+                                        </button>
+                                        {localStorage.getItem('erp_server_url') && (
+                                            <button
+                                                type="button"
+                                                onClick={handleResetServerIp}
+                                                className="lp-server-btn-reset"
+                                            >
+                                                Reset
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </form>
                 </div>
             </div>
