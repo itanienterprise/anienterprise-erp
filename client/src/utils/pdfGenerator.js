@@ -5602,10 +5602,10 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     "—",
                     {
                         content: "Opening Balance",
-                        colSpan: 8,
+                        colSpan: isParty ? 10 : 8,
                         styles: { halign: 'center', fontStyle: 'bold' }
                     },
-                    `${(summary.openingBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    `${Math.round(summary.openingBalance || 0).toLocaleString('en-IN')}`
                 ];
                 tableRows.push(openingBalanceRow);
             }
@@ -5614,6 +5614,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             let grandDebit = 0;
             let grandCredit = 0;
             let grandDiscount = 0;
+            let grandTruck = 0;
 
             // Merge same invoice if date is same for sales, purchases, and returns
             const mergedChronoHistory = sortedHistoryData.reduce((acc, item) => {
@@ -5754,37 +5755,89 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 grandCredit += creditVal;
                 grandDiscount += discVal;
 
+                let portColStr = '-';
+                let truckColStr = '-';
+                let entryTruck = 0;
+                if (isParty) {
+                    if (entry.type === 'sale' || entry.type === 'purchase') {
+                        if (entry.subItems.length > 1) {
+                            portColStr = entry.subItems.map(si => si.port || entry.port || '-').join('\n');
+                            truckColStr = entry.subItems.map(si => {
+                                const t = si.truck !== undefined && si.truck !== null && si.truck !== '' ? si.truck : (si.truckNo || '');
+                                if (!t || t === 0 || t === '0') return '-';
+                                const n = Number(t);
+                                return !isNaN(n) && n > 0 ? String(n) : String(t);
+                            }).join('\n');
+                            entry.subItems.forEach(si => {
+                                const rawT = si.truck !== undefined && si.truck !== null && si.truck !== '' ? si.truck : (si.truckNo || '');
+                                const n = parseFloat(rawT);
+                                if (!isNaN(n) && n > 0) entryTruck += n;
+                            });
+                        } else {
+                            const item = entry.subItems[0];
+                            portColStr = item.port || entry.port || '-';
+                            const rawT = item.truck !== undefined && item.truck !== null && item.truck !== '' && item.truck !== 0 ? item.truck : (item.truckNo || '');
+                            if (!rawT || rawT === '0') {
+                                truckColStr = '-';
+                            } else {
+                                const n = Number(rawT);
+                                truckColStr = !isNaN(n) && n > 0 ? String(n) : String(rawT);
+                            }
+                            const n = parseFloat(rawT);
+                            if (!isNaN(n) && n > 0) entryTruck += n;
+                        }
+                    }
+                    grandTruck += entryTruck;
+                }
+
+                const balNum = parseFloat(entry.runningBalance || 0);
+                const balFormatted = Math.round(balNum).toLocaleString('en-IN');
+
                 const row = [
                     idx + 1,
                     formatDate(entry.date),
                     entry.refNo || '-',
                     particularsStr,
+                    ...(isParty ? [portColStr, truckColStr] : []),
                     qtyColStr,
                     rateColStr,
                     debitVal > 0 ? debitVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
                     creditVal > 0 ? creditVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
                     discVal > 0 ? discVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
-                    parseFloat(entry.runningBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    balFormatted
                 ];
                 tableRows.push(row);
             });
 
-            const head = ['SL', 'Date', 'Ref No', 'Particulars', 'Qty', 'Rate', 'Debit (Dr)', 'Credit (Cr)', 'Discount', 'Balance'];
+            const head = isParty
+                ? ['SL', 'Date', 'Ref No', 'Particulars', 'Port', 'Truck', 'Qty', 'Rate', 'Debit (Dr)', 'Credit (Cr)', 'Discount', 'Balance']
+                : ['SL', 'Date', 'Ref No', 'Particulars', 'Qty', 'Rate', 'Debit (Dr)', 'Credit (Cr)', 'Discount', 'Balance'];
 
-            const foot = [
+            const lastBalFormatted = Math.round(lastBalance).toLocaleString('en-IN');
+
+            const foot = isParty ? [
+                { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: grandTruck > 0 ? grandTruck.toLocaleString('en-US') : '-', styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: grandQty > 0 ? grandQty.toLocaleString('en-US') : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: '', styles: { fillColor: [240, 240, 240] } },
+                { content: grandDebit > 0 ? grandDebit.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: grandCredit > 0 ? grandCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: grandDiscount > 0 ? grandDiscount.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: lastBalFormatted, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+            ] : [
                 { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: grandQty > 0 ? grandQty.toLocaleString('en-US') : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: '', styles: { fillColor: [240, 240, 240] } },
                 { content: grandDebit > 0 ? grandDebit.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: grandCredit > 0 ? grandCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: grandDiscount > 0 ? grandDiscount.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                { content: lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+                { content: lastBalFormatted, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
             ];
 
             // Draw Single Summary Card (matching C&F History style)
             const cardY = 43;
             const cardWidth = 78;
-            const cardHeight = 23;
+            const cardHeight = isParty ? 28 : 23;
             const cardX = (pageWidth - cardWidth) / 2;
 
             doc.setFillColor(255, 255, 255);
@@ -5798,6 +5851,13 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
 
             const cardLineHeight = 5;
             let currentCardY = cardY + 1;
+
+            if (isParty) {
+                currentCardY += cardLineHeight;
+                doc.text("TOTAL TRUCK", cardX + 4, currentCardY);
+                doc.text(":", cardX + 40, currentCardY);
+                doc.text(grandTruck.toLocaleString('en-US'), cardX + 44, currentCardY);
+            }
 
             currentCardY += cardLineHeight;
             doc.text("TOTAL DEBIT (DR)", cardX + 4, currentCardY);
@@ -5817,7 +5877,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             currentCardY += cardLineHeight;
             doc.text("TOTAL BALANCE", cardX + 4, currentCardY);
             doc.text(":", cardX + 40, currentCardY);
-            doc.text(lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), cardX + 44, currentCardY);
+            doc.text(lastBalFormatted, cardX + 44, currentCardY);
 
             const tableStartY = Math.max(yPos + 8, cardY + cardHeight + 4);
 
@@ -5831,7 +5891,20 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 rowPageBreak: 'avoid',
                 styles: { fontSize: 9, cellPadding: { top: 1, bottom: 1, left: 1.5, right: 1.5 }, minCellHeight: 5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'top' },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center', noWrap: true, valign: 'middle' },
-                columnStyles: {
+                columnStyles: isParty ? {
+                    0: { halign: 'center', cellWidth: 8 },
+                    1: { cellWidth: 20, halign: 'center' },
+                    2: { cellWidth: 24, halign: 'center' },
+                    3: { cellWidth: 64, halign: 'left', fontStyle: 'normal' },
+                    4: { cellWidth: 22, halign: 'center' },
+                    5: { cellWidth: 14, halign: 'center' },
+                    6: { halign: 'right', cellWidth: 22 },
+                    7: { halign: 'right', cellWidth: 20 },
+                    8: { halign: 'right', cellWidth: 24, fontStyle: 'bold' },
+                    9: { halign: 'right', cellWidth: 23, fontStyle: 'bold' },
+                    10: { halign: 'right', cellWidth: 18 },
+                    11: { halign: 'right', cellWidth: 28, fontStyle: 'bold' }
+                } : {
                     0: { halign: 'center', cellWidth: 10 },
                     1: { cellWidth: 24, halign: 'center' },
                     2: { cellWidth: 26, halign: 'center' },
@@ -6045,7 +6118,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
                     discount > 0 ? discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00',
                     paid > 0 ? paid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00',
-                    balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                    balance > 0 ? Math.round(balance).toLocaleString('en-IN') : '0',
                     item.warehouse || '-'
                 ]);
             });
@@ -6058,7 +6131,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: totalDiscount > 0 ? totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: totalPaid > 0 ? totalPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                { content: totalBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: Math.round(totalBalance).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: '', styles: { fillColor: [240, 240, 240] } }
             ]);
 

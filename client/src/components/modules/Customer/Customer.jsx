@@ -330,6 +330,13 @@ const Customer = ({
         return lc?.port || '-';
     };
 
+    const formatTruckNumber = (val) => {
+        if (val === undefined || val === null || val === '' || val === 0 || val === '0') return '—';
+        const num = Number(val);
+        if (!isNaN(num) && num > 0) return num.toLocaleString('en-US');
+        return String(val);
+    };
+
     const fetchCustomers = async (silent = false) => {
         const cached = queryClient.getQueryData(['customers']);
         if (cached && cached.length > 0) {
@@ -849,6 +856,9 @@ const Customer = ({
                                     const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
                                     const due = isFirstEntry ? (parseFloat(s.dueAmount || s.due) || Math.max(0, amt - paid - discount)) : amt;
 
+                                    const itemPort = entry.port || product.port || s.port || (entry.lcNo || product.lcNo || s.lcNo ? (getLcPort(entry.lcNo || product.lcNo || s.lcNo) !== '-' ? getLcPort(entry.lcNo || product.lcNo || s.lcNo) : '') : '') || '';
+                                    const itemTruck = entry.truck || product.truck || s.truck || s.truckNo || '';
+
                                     history.push({
                                         id: `${s._id || s.invoiceNo}_${pIdx}_${eIdx}`,
                                         date: s.date,
@@ -860,7 +870,8 @@ const Customer = ({
                                         quantity: qty,
                                         rate: rate,
                                         unitPrice: rate,
-                                        truck: entry.truck || s.truck || '',
+                                        truck: itemTruck,
+                                        port: itemPort,
                                         amount: amt,
                                         totalAmount: amt,
                                         paid: paid,
@@ -904,6 +915,9 @@ const Customer = ({
                                 const discount = isFirstEntry ? (parseFloat(s.discount) || 0) : 0;
                                 const due = isFirstEntry ? (parseFloat(s.dueAmount || s.due) || Math.max(0, amt - paid - discount)) : amt;
 
+                                const itemPort = product.port || s.port || (product.lcNo || s.lcNo ? (getLcPort(product.lcNo || s.lcNo) !== '-' ? getLcPort(product.lcNo || s.lcNo) : '') : '') || '';
+                                const itemTruck = product.truck || s.truck || s.truckNo || '';
+
                                 history.push({
                                     id: `${s._id || s.invoiceNo}_${pIdx}_0`,
                                     date: s.date,
@@ -915,7 +929,8 @@ const Customer = ({
                                     quantity: qty,
                                     rate: rate,
                                     unitPrice: rate,
-                                    truck: product.truck || s.truck || '',
+                                    truck: itemTruck,
+                                    port: itemPort,
                                     amount: amt,
                                     totalAmount: amt,
                                     paid: paid,
@@ -943,7 +958,9 @@ const Customer = ({
             if (itemStatus === 'requested' || itemStatus === 'edit_requested') return;
             history.push({
                 ...item,
-                brand: item.brand || item.brandName || ''
+                brand: item.brand || item.brandName || '',
+                port: item.port || (item.lcNo && getLcPort(item.lcNo) !== '-' ? getLcPort(item.lcNo) : '') || '',
+                truck: item.truck || item.truckNo || ''
             });
         });
 
@@ -1451,6 +1468,8 @@ const Customer = ({
             ...pu,
             type: 'purchase',
             invoiceNo: pu.purchaseNo || pu.invoiceNo || 'PUR-0000',
+            port: pu.port || (pu.lcNo && getLcPort(pu.lcNo) !== '-' ? getLcPort(pu.lcNo) : '') || '',
+            truck: pu.truck || pu.truckNo || '',
             sortDate: new Date(pu.date)
         }));
 
@@ -1499,6 +1518,8 @@ const Customer = ({
                                 discount: p.discount || 0,
                                 paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
                                 type: 'purchase',
+                                port: item.port || p.port || (p.lcNo && getLcPort(p.lcNo) !== '-' ? getLcPort(p.lcNo) : '') || '',
+                                truck: b.truck || item.truck || p.truck || p.truckNo || '',
                                 sortDate: new Date(p.date)
                             };
                         });
@@ -1516,6 +1537,8 @@ const Customer = ({
                         discount: p.discount || 0,
                         paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
                         type: 'purchase',
+                        port: item.port || p.port || (p.lcNo && getLcPort(p.lcNo) !== '-' ? getLcPort(p.lcNo) : '') || '',
+                        truck: item.truck || p.truck || p.truckNo || '',
                         sortDate: new Date(p.date)
                     }];
                 });
@@ -1533,6 +1556,8 @@ const Customer = ({
                 discount: p.discount || 0,
                 paid: p.paid || p.paidAmount || 0,
                 type: 'purchase',
+                port: p.port || (p.lcNo && getLcPort(p.lcNo) !== '-' ? getLcPort(p.lcNo) : '') || '',
+                truck: p.truck || p.truckNo || '',
                 sortDate: new Date(p.date)
             }];
         });
@@ -1583,7 +1608,9 @@ const Customer = ({
                 ((item.method || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
                 ((item.bankName || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
                 ((item.product || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
-                ((item.brand || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
+                ((item.brand || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.port || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((String(item.truck || '')).toLowerCase().includes(historySearchQuery.toLowerCase()));
 
             const matchesFilters =
                 (!historyFilters.startDate || new Date(item.date) >= new Date(historyFilters.startDate)) &&
@@ -1619,7 +1646,7 @@ const Customer = ({
             } else if (key === 'balance') {
                 aVal = a.runningBalance;
                 bVal = b.runningBalance;
-            } else if (key === 'rate' || key === 'quantity') {
+            } else if (key === 'rate' || key === 'quantity' || key === 'truck') {
                 aVal = parseFloat(a[key]) || 0;
                 bVal = parseFloat(b[key]) || 0;
             } else if (typeof aVal === 'string') {
@@ -3015,8 +3042,8 @@ const Customer = ({
                                                             </div>
                                                             <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
                                                                 <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1 truncate">Total Balance</p>
-                                                                <p className="text-base md:text-lg font-black text-orange-700 truncate" title={`৳${Number(displayTotalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}>
-                                                                    ৳{Number(displayTotalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                                <p className="text-base md:text-lg font-black text-orange-700 truncate" title={`৳${Math.round(Number(displayTotalBalance || 0)).toLocaleString('en-IN')}`}>
+                                                                    ৳{Math.round(Number(displayTotalBalance || 0)).toLocaleString('en-IN')}
                                                                 </p>
                                                             </div>
                                                         </>
@@ -4183,6 +4210,22 @@ const Customer = ({
                                                                         <SortIcon config={historySortConfig} columnKey="product" />
                                                                     </div>
                                                                 </th>
+                                                                {isParty && (
+                                                                    <>
+                                                                        <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('port')}>
+                                                                            <div className="flex items-center gap-1">
+                                                                                <span>Port</span>
+                                                                                <SortIcon config={historySortConfig} columnKey="port" />
+                                                                            </div>
+                                                                        </th>
+                                                                        <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('truck')}>
+                                                                            <div className="flex items-center gap-1">
+                                                                                <span>Truck</span>
+                                                                                <SortIcon config={historySortConfig} columnKey="truck" />
+                                                                            </div>
+                                                                        </th>
+                                                                    </>
+                                                                )}
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
                                                                     <div className="flex items-center justify-start gap-1">
                                                                         <span>Qty</span>
@@ -4220,10 +4263,10 @@ const Customer = ({
                                                         <tbody>
                                                             {isFiltered && combinedHistory && combinedHistory.length > 0 && (
                                                                 <tr className="border-b border-gray-100 bg-gray-50/30 font-medium">
-                                                                    <td colSpan="8" className="px-4 py-3 text-gray-950 font-bold text-center">
+                                                                    <td colSpan={isParty ? "10" : "8"} className="px-4 py-3 text-gray-950 font-bold text-center">
                                                                         Opening Balance
                                                                     </td>
-                                                                    <td className="px-4 py-3 text-left font-black text-orange-600">৳{openingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                    <td className="px-4 py-3 text-left font-black text-orange-600">৳{Math.round(openingBalance).toLocaleString('en-IN')}</td>
                                                                     <td className="px-4 py-3 text-center"></td>
                                                                 </tr>
                                                             )}
@@ -4248,7 +4291,9 @@ const Customer = ({
                                                                                 product: existing.product_original || existing.product,
                                                                                 brand: existing.brand_original || existing.brand,
                                                                                 quantity: parseFloat(existing.quantity_original || existing.quantity) || 0,
-                                                                                rate: parseFloat(existing.rate_original || existing.rate) || 0
+                                                                                rate: parseFloat(existing.rate_original || existing.rate) || 0,
+                                                                                port: existing.port_original || existing.port || '',
+                                                                                truck: existing.truck_original || existing.truck || ''
                                                                             }];
                                                                         }
 
@@ -4268,7 +4313,9 @@ const Customer = ({
                                                                                 product: item.product,
                                                                                 brand: item.brand,
                                                                                 quantity: parseFloat(item.quantity || 0),
-                                                                                rate: itemRate
+                                                                                rate: itemRate,
+                                                                                port: item.port || '',
+                                                                                truck: item.truck || ''
                                                                             });
                                                                         }
 
@@ -4276,6 +4323,8 @@ const Customer = ({
                                                                         existing.product = existing.product_display;
                                                                         existing.quantity_display = existing.items.map(si => si.quantity > 0 ? si.quantity.toLocaleString('en-US') : '—').join('\n');
                                                                         existing.rate_display = existing.items.map(si => si.rate > 0 ? `৳${si.rate.toLocaleString('en-IN')}` : '—').join('\n');
+                                                                        existing.port_display = existing.items.map(si => si.port || existing.port || (si.lcNo ? (getLcPort(si.lcNo) !== '-' ? getLcPort(si.lcNo) : '') : '') || '—').join('\n');
+                                                                        existing.truck_display = existing.items.map(si => formatTruckNumber(si.truck)).join('\n');
 
                                                                         existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || 0));
                                                                         existing.runningBalance = item.runningBalance;
@@ -4287,7 +4336,9 @@ const Customer = ({
                                                                         product_original: item.product,
                                                                         brand_original: item.brand,
                                                                         quantity_original: item.quantity,
-                                                                        rate_original: item.rate
+                                                                        rate_original: item.rate,
+                                                                        port_original: item.port,
+                                                                        truck_original: item.truck
                                                                     });
                                                                     return acc;
                                                                 }, []).map((item, index) => (
@@ -4354,6 +4405,20 @@ const Customer = ({
                                                                                 )}
                                                                             </div>
                                                                         </td>
+                                                                        {isParty && (
+                                                                            <>
+                                                                                <td className="px-4 py-3 text-left text-gray-800 font-medium whitespace-pre-wrap text-xs">
+                                                                                    {item.type === 'sale' || item.type === 'purchase'
+                                                                                        ? (item.port_display || item.port || (item.lcNo && getLcPort(item.lcNo) !== '-' ? getLcPort(item.lcNo) : '') || '—')
+                                                                                        : '—'}
+                                                                                </td>
+                                                                                <td className="px-4 py-3 text-left text-gray-900 font-bold whitespace-pre-wrap text-xs">
+                                                                                    {item.type === 'sale' || item.type === 'purchase'
+                                                                                        ? (item.truck_display || formatTruckNumber(item.truck || item.truckNo))
+                                                                                        : '—'}
+                                                                                </td>
+                                                                            </>
+                                                                        )}
                                                                         <td className="px-4 py-3 text-left text-gray-900 whitespace-pre-wrap text-xs">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString('en-US') : '—')}</td>
                                                                         <td className="px-4 py-3 text-left text-gray-500 whitespace-pre-wrap text-xs">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString('en-IN')}` : '—')}</td>
                                                                         <td className="px-4 py-3 text-left font-black text-violet-700 text-xs">
@@ -4414,7 +4479,7 @@ const Customer = ({
                                                                 ))
                                                             ) : (
                                                                 <tr>
-                                                                    <td colSpan="10" className="px-4 py-12 text-left text-gray-400 font-medium italic">No ledger entries found</td>
+                                                                    <td colSpan={isParty ? "12" : "10"} className="px-4 py-12 text-left text-gray-400 font-medium italic">No ledger entries found</td>
                                                                 </tr>
                                                             )}
                                                         </tbody>
@@ -4451,6 +4516,7 @@ const Customer = ({
                                                                             uom: existing.uom,
                                                                             bag: existing.bag,
                                                                             truck: existing.truck,
+                                                                            port: existing.port,
                                                                             lcNo: existing.lcNo
                                                                         }];
                                                                     }
@@ -4479,6 +4545,7 @@ const Customer = ({
                                                                             uom: item.uom,
                                                                             bag: item.bag,
                                                                             truck: item.truck,
+                                                                            port: item.port,
                                                                             lcNo: item.lcNo
                                                                         });
                                                                     }
@@ -4500,7 +4567,9 @@ const Customer = ({
                                                                     brand_original: item.brand,
                                                                     quantity_original: item.quantity,
                                                                     rate_original: item.rate,
-                                                                    amount_original: item.amount
+                                                                    amount_original: item.amount,
+                                                                    port_original: item.port,
+                                                                    truck_original: item.truck
                                                                 });
                                                                 return acc;
                                                             }, []).map((item, index) => {
@@ -4516,6 +4585,7 @@ const Customer = ({
                                                                         uom: item.uom,
                                                                         bag: item.bag,
                                                                         truck: item.truck,
+                                                                        port: item.port,
                                                                         lcNo: item.lcNo
                                                                     }];
                                                                 return (
@@ -4561,10 +4631,19 @@ const Customer = ({
                                                                                                                         ({sItem.brand})
                                                                                                                     </span>
                                                                                                                 )}
-                                                                                                                {isParty && sItem.lcNo && (
-                                                                                                                    <span className="text-[10px] text-blue-600 font-semibold block mt-0.5">
-                                                                                                                        LC: {sItem.lcNo}
-                                                                                                                    </span>
+                                                                                                                {isParty && (
+                                                                                                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                                                                                                                        {sItem.lcNo && (
+                                                                                                                            <span className="text-[10px] text-blue-600 font-semibold">
+                                                                                                                                LC: {sItem.lcNo}
+                                                                                                                            </span>
+                                                                                                                        )}
+                                                                                                                        {(sItem.port || item.port || (sItem.lcNo && getLcPort(sItem.lcNo) !== '-' ? getLcPort(sItem.lcNo) : '')) && (
+                                                                                                                            <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-medium">
+                                                                                                                                Port: {sItem.port || item.port || getLcPort(sItem.lcNo)}
+                                                                                                                            </span>
+                                                                                                                        )}
+                                                                                                                    </div>
                                                                                                                 )}
                                                                                                             </div>
                                                                                                             <span className="font-black text-violet-700 shrink-0">
@@ -4725,7 +4804,7 @@ const Customer = ({
                         activeHistoryTab === 'purchase' ? filteredPurchaseHistory : activeHistoryTab === 'sales' ? filteredSalesHistory : activeHistoryTab === 'payment' ? filteredPaymentHistory : combinedHistory,
                         activeHistoryTab === 'purchase'
                             ? { totalAmount: purchaseTotalAmount, totalPaid: purchaseTotalPaid, totalDiscount: purchaseTotalDiscount, totalBalance: purchaseTotalBalance, openingBalance: 0, isFiltered }
-                            : { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
+                            : { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, totalTruck, openingBalance, isFiltered },
                         historyFilters,
                         activeHistoryTab
                     );
@@ -4736,7 +4815,7 @@ const Customer = ({
                         activeHistoryTab === 'purchase' ? filteredPurchaseHistory : activeHistoryTab === 'sales' ? filteredSalesHistory : activeHistoryTab === 'payment' ? filteredPaymentHistory : combinedHistory,
                         activeHistoryTab === 'purchase'
                             ? { totalAmount: purchaseTotalAmount, totalPaid: purchaseTotalPaid, totalDiscount: purchaseTotalDiscount, totalBalance: purchaseTotalBalance, openingBalance: 0, isFiltered }
-                            : { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
+                            : { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, totalTruck, openingBalance, isFiltered },
                         historyFilters,
                         activeHistoryTab
                     );

@@ -2972,12 +2972,17 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
         }
         rows.push([]); // Blank separator
 
+        const customerType = (customer?.customerType || '').toLowerCase();
+        const isParty = customerType.includes('party');
+
         // Sort history chronologically
         const sortedHistory = [...historyData].sort((a, b) => new Date(a.date) - new Date(b.date));
 
         if (isAll) {
             // Customer Account Ledger
-            const headers = ['Date', 'Type', 'Ref / Inv No', 'Particulars', 'Qty (KG)', 'Debit (TK)', 'Credit (TK)', 'Discount (TK)', 'Balance (TK)'];
+            const headers = isParty
+                ? ['Date', 'Type', 'Ref / Inv No', 'Particulars', 'Port', 'Truck', 'Qty (KG)', 'Debit (TK)', 'Credit (TK)', 'Discount (TK)', 'Balance (TK)']
+                : ['Date', 'Type', 'Ref / Inv No', 'Particulars', 'Qty (KG)', 'Debit (TK)', 'Credit (TK)', 'Discount (TK)', 'Balance (TK)'];
             rows.push(headers);
 
             if (summary?.isFiltered) {
@@ -2986,6 +2991,7 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                     'OPENING',
                     '-',
                     'Opening Balance',
+                    ...(isParty ? ['', ''] : []),
                     '',
                     '',
                     '',
@@ -2998,6 +3004,7 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
             let totalDebit = 0;
             let totalCredit = 0;
             let totalDiscount = 0;
+            let totalTrucks = 0;
 
             // Merge same invoice if date is same for sales, purchases, and returns
             const mergedHistory = sortedHistory.reduce((acc, item) => {
@@ -3091,11 +3098,47 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                 totalCredit += creditVal;
                 totalDiscount += discVal;
 
+                let portDisplay = '';
+                let truckDisplay = '';
+                let entryTrucks = 0;
+                if (isParty) {
+                    if (entry.type === 'sale' || entry.type === 'purchase') {
+                        if (entry.subItems.length > 1) {
+                            portDisplay = entry.subItems.map(si => si.port || entry.port || '-').join('\n');
+                            truckDisplay = entry.subItems.map(si => {
+                                const t = si.truck !== undefined && si.truck !== null && si.truck !== '' ? si.truck : (si.truckNo || '');
+                                if (!t || t === 0 || t === '0') return '-';
+                                const n = Number(t);
+                                return !isNaN(n) && n > 0 ? String(n) : String(t);
+                            }).join('\n');
+                            entry.subItems.forEach(si => {
+                                const rawT = si.truck !== undefined && si.truck !== null && si.truck !== '' ? si.truck : (si.truckNo || '');
+                                const n = parseFloat(rawT);
+                                if (!isNaN(n) && n > 0) entryTrucks += n;
+                            });
+                        } else {
+                            const item = entry.subItems[0];
+                            portDisplay = item.port || entry.port || '-';
+                            const rawT = item.truck !== undefined && item.truck !== null && item.truck !== '' && item.truck !== 0 ? item.truck : (item.truckNo || '');
+                            if (!rawT || rawT === '0') {
+                                truckDisplay = '-';
+                            } else {
+                                const n = Number(rawT);
+                                truckDisplay = !isNaN(n) && n > 0 ? String(n) : String(rawT);
+                            }
+                            const n = parseFloat(rawT);
+                            if (!isNaN(n) && n > 0) entryTrucks += n;
+                        }
+                    }
+                    totalTrucks += entryTrucks;
+                }
+
                 rows.push([
                     entry.date ? formatDate(entry.date) : '-',
                     typeLabel,
                     refNo,
                     particulars || '-',
+                    ...(isParty ? [portDisplay || '-', truckDisplay || '-'] : []),
                     qtyDisplay,
                     debitVal > 0 ? Math.round(debitVal) : '',
                     creditVal > 0 ? Math.round(creditVal) : '',
@@ -3110,6 +3153,7 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                 '',
                 '',
                 '',
+                ...(isParty ? ['', totalTrucks > 0 ? Math.round(totalTrucks) : ''] : []),
                 totalQty > 0 ? Math.round(totalQty) : '',
                 Math.round(totalDebit),
                 Math.round(totalCredit),
@@ -3118,7 +3162,19 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
             ]);
 
             const ws = XLSX.utils.aoa_to_sheet(rows);
-            ws['!cols'] = [
+            ws['!cols'] = isParty ? [
+                { wch: 14 }, // Date
+                { wch: 14 }, // Type
+                { wch: 18 }, // Ref / Inv No
+                { wch: 32 }, // Particulars
+                { wch: 16 }, // Port
+                { wch: 12 }, // Truck
+                { wch: 14 }, // Qty
+                { wch: 16 }, // Debit
+                { wch: 16 }, // Credit
+                { wch: 16 }, // Discount
+                { wch: 18 }  // Balance
+            ] : [
                 { wch: 14 }, // Date
                 { wch: 14 }, // Type
                 { wch: 18 }, // Ref / Inv No
