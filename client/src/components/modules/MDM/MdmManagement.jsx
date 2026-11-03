@@ -927,7 +927,7 @@ const MdmManagement = ({ currentUser }) => {
       <div className="mdm-header-banner">
         <div className="mdm-header-text">
           <h1 className="mdm-header-title">
-            <span style={{ fontSize: '1.5rem' }}>📱</span>
+            <span className="text-xl sm:text-2xl">📱</span>
             <span>Mobile Device Management (MDM)</span>
           </h1>
           <p className="mdm-header-sub">
@@ -946,37 +946,67 @@ const MdmManagement = ({ currentUser }) => {
       {/* ─── Dedicated Navigation Tabs Bar ───────────────────────────────────── */}
       <div className="mdm-nav-tabs">
         <button
+          type="button"
           onClick={() => setActiveTab('live-map')}
           className={`mdm-nav-tab ${activeTab === 'live-map' ? 'active' : ''}`}
+          title="Live Map"
         >
-          <MapPinIcon className="w-4 h-4" />
-          <span>Live Map</span>
-          <span className="mdm-nav-tab-badge">{liveLocations.length}</span>
+          <div className="mdm-tab-icon-wrap">
+            <MapPinIcon />
+            {liveLocations.length > 0 && (
+              <span className="mdm-tab-badge mdm-tab-badge-mobile">{liveLocations.length}</span>
+            )}
+          </div>
+          <span className="mdm-tab-label-desktop">Live Map</span>
+          <span className="mdm-tab-label-mobile">Live Map</span>
+          {liveLocations.length > 0 && (
+            <span className="mdm-tab-badge mdm-tab-badge-desktop">{liveLocations.length}</span>
+          )}
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('devices')}
           className={`mdm-nav-tab ${activeTab === 'devices' ? 'active' : ''}`}
+          title="Device Inventory"
         >
-          <UsersIcon className="w-4 h-4" />
-          <span>Device Inventory</span>
-          <span className="mdm-nav-tab-badge">{devices.length}</span>
+          <div className="mdm-tab-icon-wrap">
+            <UsersIcon />
+            {devices.length > 0 && (
+              <span className="mdm-tab-badge mdm-tab-badge-mobile">{devices.length}</span>
+            )}
+          </div>
+          <span className="mdm-tab-label-desktop">Device Inventory</span>
+          <span className="mdm-tab-label-mobile">Inventory</span>
+          {devices.length > 0 && (
+            <span className="mdm-tab-badge mdm-tab-badge-desktop">{devices.length}</span>
+          )}
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('route-history')}
           className={`mdm-nav-tab ${activeTab === 'route-history' ? 'active' : ''}`}
+          title="Route History"
         >
-          <CalendarIcon className="w-4 h-4" />
-          <span>Route History</span>
+          <div className="mdm-tab-icon-wrap">
+            <CalendarIcon />
+          </div>
+          <span className="mdm-tab-label-desktop">Route History</span>
+          <span className="mdm-tab-label-mobile">History</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('simulator')}
           className={`mdm-nav-tab ${activeTab === 'simulator' ? 'active' : ''}`}
+          title="APK Bridge & Test"
         >
-          <ArrowUpRightIcon className="w-4 h-4" />
-          <span>APK Bridge & Test</span>
+          <div className="mdm-tab-icon-wrap">
+            <ArrowUpRightIcon />
+          </div>
+          <span className="mdm-tab-label-desktop">APK Bridge & Test</span>
+          <span className="mdm-tab-label-mobile">APK Bridge</span>
         </button>
       </div>
 
@@ -1097,24 +1127,24 @@ const MdmManagement = ({ currentUser }) => {
         {/* ─── TAB 2: DEVICE REGISTRY TABLE ────────────────────────────────── */}
         {activeTab === 'devices' && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col w-full max-w-full min-w-0">
-            <div className="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
-              <div className="relative min-w-[260px]">
+            <div className="p-3 sm:p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+              <div className="relative w-full sm:w-auto sm:min-w-[260px]">
                 <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Filter by employee, model or device ID..."
-                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full pl-9 pr-3 py-2 sm:py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg sm:rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                 <button
                   onClick={handlePingMyDeviceNow}
                   disabled={isPingingSelf}
                   title="Send a live telemetry ping from this device now"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-md shadow-sm hover:bg-emerald-700 transition-colors"
+                  className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg sm:rounded-md shadow-xs hover:bg-emerald-700 transition-colors"
                 >
                   <MapPinIcon className="w-3.5 h-3.5" />
                   <span>{isPingingSelf ? 'Pinging...' : 'Ping From This Device'}</span>
@@ -1122,7 +1152,7 @@ const MdmManagement = ({ currentUser }) => {
 
                 <button
                   onClick={() => openEnrollModal()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md shadow-sm hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg sm:rounded-md shadow-xs hover:bg-blue-700 transition-colors"
                 >
                   <PlusIcon className="w-3.5 h-3.5" />
                   <span>Enroll Device</span>
@@ -1130,7 +1160,7 @@ const MdmManagement = ({ currentUser }) => {
 
                 <button
                   onClick={fetchDevices}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-700 text-xs font-medium rounded-md border border-gray-200 hover:bg-gray-100 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg sm:rounded-md border border-gray-200 hover:bg-gray-100 transition-colors shadow-2xs"
                 >
                   <RefreshIcon className="w-3.5 h-3.5" />
                   <span>Refresh</span>
@@ -1138,7 +1168,8 @@ const MdmManagement = ({ currentUser }) => {
               </div>
             </div>
 
-            <div className="overflow-x-auto w-full min-w-0">
+            {/* Desktop Table View (>= 768px) */}
+            <div className="hidden md:block overflow-x-auto w-full min-w-0">
               <table className="mdm-table">
                 <thead>
                   <tr>
@@ -1308,19 +1339,189 @@ const MdmManagement = ({ currentUser }) => {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Card View (< 768px) */}
+            <div className="md:hidden flex flex-col p-2.5 sm:p-3 space-y-3">
+              {filteredDevices.length === 0 ? (
+                <div className="text-center py-10 text-gray-400 text-xs">
+                  No registered devices found.
+                </div>
+              ) : (
+                filteredDevices.map(device => {
+                  const isOnline = device.isOnline;
+                  const hasGps = device.lastLocation?.lat && device.lastLocation?.lng;
+                  return (
+                    <div
+                      key={device._id}
+                      className="bg-white rounded-xl p-3.5 border border-slate-200/90 shadow-2xs space-y-3"
+                    >
+                      {/* Top Header Row: Employee Avatar & Name + Status Badge */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                            {(device.employeeName || 'E').charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-800 text-sm leading-snug truncate m-0">
+                              {device.employeeName || 'Unassigned Device'}
+                            </h4>
+                            <p className="text-[11px] text-slate-500 m-0 truncate">
+                              ID: {device.employeeEmpId || 'N/A'} • {device.osVersion || 'Android'} v{device.appVersion || '1.0.0'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            device.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                            device.status === 'suspended' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                            'bg-rose-50 text-rose-700 border border-rose-200'
+                          }`}>
+                            {device.status}
+                          </span>
+                          <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-xs shadow-emerald-400' : 'bg-slate-400'}`} />
+                            <span>{isOnline ? 'Online' : 'Offline'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Device Model & Hardware Tag */}
+                      <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-slate-700 text-xs truncate">
+                            {device.deviceModel || 'Unknown Device'}
+                          </span>
+                          <span className="font-mono text-[10px] bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 truncate max-w-[150px]">
+                            {device.deviceId}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-semibold">IMEI</span>
+                            <span className="font-mono text-slate-700 truncate block">
+                              {device.imei || '—'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-semibold">MAC</span>
+                            <span className="font-mono text-slate-700 truncate block uppercase">
+                              {device.macAddress || '—'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Telemetry Snapshot Row: Battery, GPS, Last Ping */}
+                      <div className="grid grid-cols-3 gap-2 text-center bg-slate-50/70 p-2 rounded-lg border border-slate-100">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Battery</span>
+                          <BatteryIndicator level={device.batteryLevel} isCharging={device.isCharging} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">GPS</span>
+                          <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${device.isGpsEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                            {device.isGpsEnabled ? 'GPS ON' : 'GPS OFF'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Last Ping</span>
+                          <span className="text-[11px] font-medium text-slate-700 block truncate">
+                            {device.lastSeen ? new Date(device.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Mobile Actions Toolbar */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          {hasGps ? (
+                            <a
+                              href={`https://www.google.com/maps?q=${device.lastLocation.lat},${device.lastLocation.lng}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
+                            >
+                              <MapPinIcon className="w-3.5 h-3.5" />
+                              <span>Map</span>
+                            </a>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-400 bg-slate-100 rounded-lg cursor-not-allowed">
+                              <MapPinIcon className="w-3.5 h-3.5 opacity-50" />
+                              <span>No GPS</span>
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleTriggerDevicePing(device)}
+                            title="Request Instant Ping from Phone"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100"
+                          >
+                            <RefreshIcon className="w-3.5 h-3.5" />
+                            <span>Ping</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEnrollModal(device)}
+                            className="p-1.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg"
+                            title="Edit / Reassign"
+                          >
+                            <EditIcon className="w-4 h-4" />
+                          </button>
+
+                          {device.status === 'approved' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateDeviceStatus(device._id, 'suspended')}
+                              className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg"
+                              title="Suspend Tracking"
+                            >
+                              <ShieldIcon className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateDeviceStatus(device._id, 'approved')}
+                              className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg"
+                              title="Approve Device"
+                            >
+                              <CheckIcon className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDevice(device._id)}
+                            className="p-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg"
+                            title="Unbind Device"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
 
         {/* ─── TAB 3: ROUTE HISTORY PLAYBACK ───────────────────────────────── */}
         <div className="flex flex-col gap-4" style={{ display: activeTab === 'route-history' ? 'flex' : 'none' }}>
           {/* Filter Bar */}
-          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-wrap items-center gap-4">
-            <div className="flex-1 min-w-[200px]">
+          <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
+            <div className="flex-1 min-w-0 w-full sm:w-auto">
               <label className="block text-xs font-semibold text-gray-700 mb-1">Select Employee</label>
               <select
                 value={historyEmpId}
                 onChange={(e) => setHistoryEmpId(e.target.value)}
-                className="w-full text-xs py-2 px-3 border border-gray-200 rounded-md bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full text-xs py-2 px-3 border border-gray-200 rounded-lg sm:rounded-md bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">-- Choose Employee --</option>
                 {devices.map(d => (
@@ -1331,22 +1532,21 @@ const MdmManagement = ({ currentUser }) => {
               </select>
             </div>
 
-            <div className="w-48">
+            <div className="w-full sm:w-48">
               <label className="block text-xs font-semibold text-gray-700 mb-1">Date</label>
               <input
                 type="date"
                 value={historyDate}
                 onChange={(e) => setHistoryDate(e.target.value)}
-                className="w-full text-xs py-2 px-3 border border-gray-200 rounded-md bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-              </input>
+                className="w-full text-xs py-2 px-3 border border-gray-200 rounded-lg sm:rounded-md bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
             </div>
 
-            <div className="pt-5">
+            <div className="w-full sm:w-auto">
               <button
                 onClick={handleFetchHistory}
                 disabled={!historyEmpId || isHistoryLoading}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg sm:rounded-md hover:bg-blue-700 disabled:opacity-50 shadow-xs transition-colors"
               >
                 <SearchIcon className="w-4 h-4" />
                 <span>{isHistoryLoading ? 'Loading Route...' : 'View Route'}</span>
@@ -1522,18 +1722,18 @@ const MdmManagement = ({ currentUser }) => {
                   </div>
                 </div>
 
-                <div className="pt-2 flex items-center gap-3">
+                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
                   <button
                     type="button"
                     onClick={handleUseBrowserLocation}
-                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium rounded-md"
+                    className="w-full sm:w-auto px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg sm:rounded-md transition-colors"
                   >
                     Acquire My Current GPS
                   </button>
                   <button
                     type="button"
                     onClick={handleSendSimulatedPing}
-                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-md shadow-sm"
+                    className="w-full sm:flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg sm:rounded-md shadow-xs transition-colors"
                   >
                     Emit Live Telemetry Ping
                   </button>
@@ -1575,10 +1775,10 @@ const MdmManagement = ({ currentUser }) => {
 
       {/* ─── ENROLL / EDIT DEVICE MODAL ────────────────────────────────────── */}
       {showEnrollModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-3 sm:p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-slate-50">
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-gray-200 flex items-center justify-between bg-slate-50 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-blue-100 text-blue-700 rounded-lg">
                   <UsersIcon className="w-4 h-4" />
@@ -1597,7 +1797,7 @@ const MdmManagement = ({ currentUser }) => {
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleEnrollSubmit} className="p-5 space-y-4">
+            <form onSubmit={handleEnrollSubmit} className="p-4 sm:p-5 space-y-3.5 sm:space-y-4 overflow-y-auto">
               {enrollError && (
                 <div className="p-3 rounded-lg text-xs bg-rose-50 text-rose-700 border border-rose-200">
                   {enrollError}
@@ -1670,7 +1870,7 @@ const MdmManagement = ({ currentUser }) => {
               </div>
 
               {/* Device Model & Platform */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
                     Device Model
@@ -1700,7 +1900,7 @@ const MdmManagement = ({ currentUser }) => {
               </div>
 
               {/* Hardware Identifiers: IMEI & MAC Address */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
                     IMEI Number <span className="text-gray-400 font-normal">(15 digits)</span>
