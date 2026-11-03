@@ -9,14 +9,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.view.View;
+import android.view.WindowInsets;
+import android.webkit.CookieManager;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
-import android.webkit.CookieManager;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends BridgeActivity {
+public class MainActivity extends BridgeActivity implements View.OnApplyWindowInsetsListener {
     private static final int PERMISSION_REQUEST_CODE = 1001;
     private static final int BACKGROUND_LOCATION_REQUEST_CODE = 1002;
 
@@ -38,9 +40,25 @@ public class MainActivity extends BridgeActivity {
         checkAndStartMdmService();
     }
 
+    @Override
+    public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.graphics.Insets sbInsets = insets.getInsets(WindowInsets.Type.statusBars());
+                v.setPadding(0, sbInsets.top, 0, 0);
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+                v.setPadding(0, insets.getSystemWindowInsetTop(), 0, 0);
+            }
+        } catch (Exception ignored) {}
+        return insets;
+    }
+
     private void configureSystemBars() {
         try {
-            // 1. Force the system navigation bar to pure white
+            // 1. Force both status bar and navigation bar to pure white
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                getWindow().setStatusBarColor(android.graphics.Color.WHITE);
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 getWindow().setNavigationBarColor(android.graphics.Color.WHITE);
             }
@@ -50,20 +68,31 @@ public class MainActivity extends BridgeActivity {
                 getWindow().setNavigationBarContrastEnforced(false);
             }
 
-            // 3. Make navigation bar icons & gesture pill dark so they are visible on the white bar
-            androidx.core.view.WindowInsetsControllerCompat insetsController =
-                androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-            if (insetsController != null) {
-                insetsController.setAppearanceLightNavigationBars(true);
-                insetsController.setAppearanceLightStatusBars(true);
+            // 3. Make system bar icons (clock/battery/wifi and navigation bar buttons) dark
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.view.WindowInsetsController controller = getWindow().getInsetsController();
+                if (controller != null) {
+                    controller.setSystemBarsAppearance(
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS |
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS |
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                    );
+                }
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 int flags = getWindow().getDecorView().getSystemUiVisibility();
-                flags |= android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
-                flags |= android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
                 getWindow().getDecorView().setSystemUiVisibility(flags);
             }
 
-            // 4. Ensure WebView background is solid white
+            // 4. Ensure window insets pad content below the status bar on edge-to-edge Android versions (e.g. Android 15)
+            View contentView = findViewById(android.R.id.content);
+            if (contentView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+                contentView.setOnApplyWindowInsetsListener(this);
+            }
+
+            // 5. Ensure WebView background is solid white
             if (getBridge() != null && getBridge().getWebView() != null) {
                 getBridge().getWebView().setBackgroundColor(android.graphics.Color.WHITE);
             }
@@ -141,17 +170,17 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void requestBatteryOptimization() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            try {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                 if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
                     Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
                     intent.setData(Uri.parse("package:" + getPackageName()));
                     startActivity(intent);
                 }
-            } catch (Exception ignored) {
-                // Ignore vendor specific restriction if activity is not supported
             }
+        } catch (Exception ignored) {
+            // Ignore vendor specific restriction if activity is not supported
         }
     }
 
