@@ -24,6 +24,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         enableCookies();
+        setupNativeBridge();
         requestAllRequiredPermissions();
     }
 
@@ -31,6 +32,8 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         enableCookies();
+        setupNativeBridge();
+        checkAndStartMdmService();
     }
 
     private void enableCookies() {
@@ -41,6 +44,20 @@ public class MainActivity extends BridgeActivity {
                 cookieManager.setAcceptThirdPartyCookies(getBridge().getWebView(), true);
             }
         } catch (Exception ignored) {}
+    }
+
+    private void setupNativeBridge() {
+        try {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().addJavascriptInterface(new MdmNativeBridge(this), "AndroidBridge");
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void checkAndStartMdmService() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            MdmLocationService.startService(this);
+        }
     }
 
     private void requestAllRequiredPermissions() {
@@ -68,8 +85,9 @@ public class MainActivity extends BridgeActivity {
                 PERMISSION_REQUEST_CODE
             );
         } else {
-            // Foreground location is already granted, prompt for background location
+            // Foreground location is already granted, prompt for background location and launch service
             requestBackgroundLocationPermission();
+            checkAndStartMdmService();
         }
 
         // 3. Prompt for unconstrained battery optimization (so device sleep won't kill telemetry)
@@ -116,6 +134,7 @@ public class MainActivity extends BridgeActivity {
             }
             if (locationGranted) {
                 requestBackgroundLocationPermission();
+                checkAndStartMdmService();
             }
         }
     }

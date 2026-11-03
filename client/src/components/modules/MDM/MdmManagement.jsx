@@ -790,20 +790,26 @@ const MdmManagement = ({ currentUser }) => {
 
   const [isPingingSelf, setIsPingingSelf] = useState(false);
   const [pingStatusMap, setPingStatusMap] = useState({});
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const showToast = (text, type = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   const handlePingMyDeviceNow = async () => {
     setIsPingingSelf(true);
     try {
       const res = await mdmService.sendPing();
       if (res?.success) {
-        alert('Telemetry ping successfully sent from this device!');
+        showToast('Telemetry ping successfully sent from this device!', 'success');
       } else {
-        alert('Ping submitted. Refreshing registry...');
+        showToast('Ping submitted. Refreshing registry...', 'success');
       }
       await fetchDevices();
       await fetchLiveLocations();
     } catch (e) {
-      alert('Ping error: ' + e.message);
+      showToast('Ping error: ' + e.message, 'error');
     } finally {
       setIsPingingSelf(false);
     }
@@ -813,17 +819,18 @@ const MdmManagement = ({ currentUser }) => {
     try {
       setPingStatusMap(prev => ({ ...prev, [device._id]: 'pinging' }));
       await axios.post(`/api/mdm/devices/${device._id}/ping`);
-      alert(`Ping signal dispatched to ${device.deviceModel || device.deviceId}! If the phone is connected, it will respond immediately with fresh GPS and battery.`);
+      showToast(`Ping signal dispatched to ${device.deviceModel || device.deviceId}! Fresh telemetry incoming.`, 'success');
       setPingStatusMap(prev => ({ ...prev, [device._id]: 'dispatched' }));
+      setTimeout(() => setPingStatusMap(prev => ({ ...prev, [device._id]: null })), 3000);
     } catch (err) {
-      alert(err.response?.data?.message || err.message);
+      showToast(err.response?.data?.message || err.message, 'error');
       setPingStatusMap(prev => ({ ...prev, [device._id]: null }));
     }
   };
 
   const handleForcePingWithBrowserGps = async (device) => {
     if (!navigator.geolocation) {
-      alert('Geolocation not supported in this browser');
+      showToast('Geolocation not supported in this browser', 'error');
       return;
     }
     navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -844,15 +851,15 @@ const MdmManagement = ({ currentUser }) => {
         if (res.data?.success) {
           await fetchDevices();
           await fetchLiveLocations();
-          alert(`Successfully updated telemetry for ${device.deviceModel || device.deviceId} using current GPS!`);
+          showToast(`Successfully updated telemetry for ${device.deviceModel || device.deviceId}!`, 'success');
         }
       } catch (e) {
-        alert(e.response?.data?.message || e.message);
+        showToast(e.response?.data?.message || e.message, 'error');
       } finally {
         setPingStatusMap(prev => ({ ...prev, [device._id]: null }));
       }
     }, (err) => {
-      alert('Could not acquire GPS: ' + err.message);
+      showToast('Could not acquire GPS: ' + err.message, 'error');
     }, { enableHighAccuracy: true });
   };
 
@@ -1705,6 +1712,15 @@ const MdmManagement = ({ currentUser }) => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+      {/* Sleek Floating Toast Notification */}
+      {toastMessage && (
+        <div className={`fixed bottom-6 right-6 z-[9999] px-4 py-3 rounded-lg shadow-xl text-xs font-semibold flex items-center gap-2 border transition-all pointer-events-none ${
+          toastMessage.type === 'success' ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-900/20' : 'bg-rose-600 text-white border-rose-500 shadow-rose-900/20'
+        }`}>
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          <span>{toastMessage.text}</span>
         </div>
       )}
     </div>

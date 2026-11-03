@@ -19,6 +19,12 @@ const TRACKING_ENABLED_KEY = 'erp_mdm_tracking_enabled';
 // Get or generate a persistent unique device ID for this phone/app
 export const getOrCreateDeviceId = () => {
   let deviceId = typeof localStorage !== 'undefined' ? localStorage.getItem(DEVICE_ID_KEY) : null;
+  if (!deviceId && typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.getDeviceId === 'function') {
+    try {
+      const nativeId = window.AndroidBridge.getDeviceId();
+      if (nativeId && nativeId.trim()) deviceId = nativeId.trim();
+    } catch (_) {}
+  }
   if (!deviceId) {
     // Generate UUID-like unique identifier
     deviceId = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase() + '-' + Date.now().toString(36).toUpperCase();
@@ -261,6 +267,22 @@ class MdmService {
       this.pingInterval = null;
     }
 
+    // Configure native Android Foreground Service for 24/7 background tracking (works when screen is off / phone sleeping)
+    if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.updateConfig === 'function') {
+      try {
+        const serverUrl = localStorage.getItem('erp_server_url') || 'http://192.168.0.27:5000';
+        window.AndroidBridge.updateConfig(
+          serverUrl,
+          this.deviceId,
+          String(this.currentUser?.id || this.currentUser?._id || ''),
+          String(this.currentUser?.name || ''),
+          String(this.currentUser?.username || '')
+        );
+      } catch (err) {
+        console.warn('[MDM] AndroidBridge.updateConfig error:', err);
+      }
+    }
+
     // Register on start with active user, then send initial ping
     this.registerDevice(this.currentUser).finally(() => {
       if (this.isTracking) {
@@ -328,6 +350,12 @@ class MdmService {
     this.isTracking = false;
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(TRACKING_ENABLED_KEY);
+    }
+
+    if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.stopService === 'function') {
+      try {
+        window.AndroidBridge.stopService();
+      } catch (_) {}
     }
 
     if (this.pingInterval) {
