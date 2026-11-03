@@ -12,6 +12,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import CustomerReport from './CustomerReport';
 import './Customer.css';
 
@@ -53,6 +54,15 @@ const Customer = ({
     const [stockList, setStockList] = useState([]);
     const [purchaseReceivesList, setPurchaseReceivesList] = useState([]);
     const [returnsList, setReturnsList] = useState(propReturnsList);
+    const [pageSize, setPageSize] = useState(() => {
+        const saved = localStorage.getItem('customer_page_size');
+        return saved ? Number(saved) : 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+
+    useEffect(() => {
+        localStorage.setItem('customer_page_size', pageSize);
+    }, [pageSize]);
 
     const effectiveSalesRecords = useMemo(() => {
         if (salesRecords && salesRecords.length > 0) return salesRecords;
@@ -758,18 +768,23 @@ const Customer = ({
         });
     };
 
-    const getFilteredAndSortedData = () => {
+    const filteredAndSortedCustomers = useMemo(() => {
         let filtered = customers;
 
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            filtered = customers.filter(c =>
-                c.customerId?.toLowerCase().includes(query) ||
-                c.companyName?.toLowerCase().includes(query) ||
-                c.customerName?.toLowerCase().includes(query) ||
-                c.location?.toLowerCase().includes(query) ||
-                c.phone?.toLowerCase().includes(query)
-            );
+        if (searchQuery && searchQuery.trim()) {
+            const tokens = searchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+            filtered = customers.filter(c => {
+                const combined = [
+                    c.customerId,
+                    c.companyName,
+                    c.customerName,
+                    c.location,
+                    c.phone,
+                    c.customerType,
+                    c.status
+                ].filter(Boolean).join(' ').toLowerCase();
+                return tokens.every(tok => combined.includes(tok));
+            });
         }
 
         if (filters.type && filters.type !== 'All Customer') {
@@ -781,7 +796,18 @@ const Customer = ({
         }
 
         return sortData(filtered);
-    };
+    }, [customers, searchQuery, filters.type, filters.status, sortConfig.customer, customerBalanceMap]);
+
+    const paginatedCustomers = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filteredAndSortedCustomers.slice(start, start + pageSize);
+    }, [filteredAndSortedCustomers, currentPage, pageSize]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, filters]);
+
+    const getFilteredAndSortedData = () => filteredAndSortedCustomers;
 
     // Map raw sales history with updated prices and accurate customer ownership from live salesRecords
     const rawSalesWithUpdatedPrices = useMemo(() => {
@@ -2263,7 +2289,7 @@ const Customer = ({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
-                                            {getFilteredAndSortedData().map(c => {
+                                            {paginatedCustomers.map(c => {
                                                 // Calculate this customer's last running balance from all history
                                                 const custTotalDue = getCustomerFinalBalance(c);
 
@@ -2311,7 +2337,7 @@ const Customer = ({
 
                                 {/* Mobile Card View */}
                                 <div className="block md:hidden px-1 py-4 space-y-3">
-                                        {getFilteredAndSortedData().map(c => {
+                                        {paginatedCustomers.map(c => {
                                             const custTotalDue = getCustomerFinalBalance(c);
                                             const isExpanded = expandedMobileCards === c._id;
 
@@ -2424,6 +2450,17 @@ const Customer = ({
                                             );
                                         })}
                                     </div>
+
+                                    <PaginationBar
+                                        currentPage={currentPage}
+                                        pageSize={pageSize}
+                                        totalItems={filteredAndSortedCustomers.length}
+                                        totalUnfiltered={customers.length}
+                                        onPageChange={setCurrentPage}
+                                        onPageSizeChange={setPageSize}
+                                        pageSizeOptions={[15, 30, 50, 100]}
+                                        itemName="Customers"
+                                    />
                                 </>
                             )}
                         </div>

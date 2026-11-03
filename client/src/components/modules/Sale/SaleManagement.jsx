@@ -371,7 +371,6 @@ const SaleManagement = ({
     const [expandedMobileRows, setExpandedMobileRows] = useState([]);
 
     const toggleMobileRowExpansion = (saleId) => {
-        const sale = (sales || []).find(s => s._id === saleId) || (allSalesRecords || []).find(s => s._id === saleId);
         const isCurrentlyExpanded = expandedMobileRows.includes(saleId);
         const nextState = !isCurrentlyExpanded;
 
@@ -379,30 +378,34 @@ const SaleManagement = ({
             prev.includes(saleId) ? [] : [saleId]
         );
 
-        const inv = sale?.invoiceNo ? `Invoice #${sale.invoiceNo}` : '';
-        const name = sale?.customerName || sale?.companyName || '';
-        const namePart = name ? `("${name}")` : '';
-        const modName = saleType === 'Border' ? 'Border Sale' : saleType === 'Order' ? 'Order Sale' : 'Sales';
+        // Defer telemetry to next event loop tick so touch/accordion animation starts instantly
+        setTimeout(() => {
+            const sale = (paginatedSales || []).find(s => s._id === saleId) || (sales || []).find(s => s._id === saleId) || (allSalesRecords || []).find(s => s._id === saleId);
+            const inv = sale?.invoiceNo ? `Invoice #${sale.invoiceNo}` : '';
+            const name = sale?.customerName || sale?.companyName || '';
+            const namePart = name ? `("${name}")` : '';
+            const modName = saleType === 'Border' ? 'Border Sale' : saleType === 'Order' ? 'Order Sale' : 'Sales';
 
-        if (nextState) {
-            trackUserAction('Card Open', modName, {
-                action: 'CARD OPEN',
-                actionCategory: 'UI_INTERACTION',
-                description: `Opened card: ${inv} ${namePart} in ${modName}`.replace(/\s+/g, ' ').trim(),
-                invoiceNo: sale?.invoiceNo,
-                customerName: sale?.customerName || sale?.companyName,
-                targetId: saleId
-            });
-        } else {
-            trackUserAction('Card Close', modName, {
-                action: 'CARD CLOSE',
-                actionCategory: 'UI_INTERACTION',
-                description: `Closed card: ${inv} ${namePart} in ${modName}`.replace(/\s+/g, ' ').trim(),
-                invoiceNo: sale?.invoiceNo,
-                customerName: sale?.customerName || sale?.companyName,
-                targetId: saleId
-            });
-        }
+            if (nextState) {
+                trackUserAction('Card Open', modName, {
+                    action: 'CARD OPEN',
+                    actionCategory: 'UI_INTERACTION',
+                    description: `Opened card: ${inv} ${namePart} in ${modName}`.replace(/\s+/g, ' ').trim(),
+                    invoiceNo: sale?.invoiceNo,
+                    customerName: sale?.customerName || sale?.companyName,
+                    targetId: saleId
+                });
+            } else {
+                trackUserAction('Card Close', modName, {
+                    action: 'CARD CLOSE',
+                    actionCategory: 'UI_INTERACTION',
+                    description: `Closed card: ${inv} ${namePart} in ${modName}`.replace(/\s+/g, ' ').trim(),
+                    invoiceNo: sale?.invoiceNo,
+                    customerName: sale?.customerName || sale?.companyName,
+                    targetId: saleId
+                });
+            }
+        }, 0);
     };
     const [showSaleFilterPanel, setShowSaleFilterPanel] = useState(false);
     const [saleFilterSearch, setSaleFilterSearch] = useState({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });

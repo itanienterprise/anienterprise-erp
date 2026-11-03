@@ -124,9 +124,29 @@ export default defineConfig(({ mode }) => ({
         entryFileNames: `s/[hash].js`,
         chunkFileNames: `s/[hash].js`,
         assetFileNames: `s/[hash].[ext]`,
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'axios', 'crypto-js'],
-          export: ['xlsx', 'jspdf', 'jspdf-autotable']
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('xlsx')) return 'vendor-xlsx';
+            if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('canvg')) return 'vendor-pdf';
+            if (id.includes('@capacitor')) return 'vendor-capacitor';
+            if (id.includes('socket.io-client')) return 'vendor-socket';
+            if (id.includes('@tanstack')) return 'vendor-query';
+            if (id.includes('crypto-js')) return 'vendor-crypto';
+            return 'vendor-core';
+          }
+          if (id.includes('/components/modules/')) {
+            if (id.includes('/LCManagement/')) return 'module-lc';
+            if (id.includes('/Sale/')) return 'module-sale';
+            if (id.includes('/StockManagement/')) return 'module-stock';
+            if (id.includes('/Customer/')) return 'module-customer';
+            if (id.includes('/Order/')) return 'module-order';
+            if (id.includes('/Purchase/') || id.includes('/PurchaseReceive/')) return 'module-purchase';
+            if (id.includes('/PaymentCollection/') || id.includes('/PayToCustomer/')) return 'module-payments';
+            if (id.includes('/Bank/')) return 'module-bank';
+            if (id.includes('/Employee/')) return 'module-employee';
+            if (id.includes('/Warehouse/') || id.includes('/Transfer/')) return 'module-warehouse';
+            if (id.includes('/IPManagement/') || id.includes('/PI/') || id.includes('/PackingList/')) return 'module-ip-pi';
+          }
         }
       }
     }

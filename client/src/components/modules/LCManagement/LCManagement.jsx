@@ -6115,20 +6115,87 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         emptyFields: [],
         onConfirm: null
     });
+    const cleanDigits = (val) => String(val || '').replace(/\D/g, '');
+
+    const lcStockBalanceMap = useMemo(() => {
+        const map = new Map();
+        (allStockRecords || []).forEach(s => {
+            if (!isAcceptedStock(s)) return;
+            const digits = cleanDigits(s.lcNo);
+            if (!digits) return;
+            if (!map.has(digits)) map.set(digits, []);
+            map.get(digits).push(s);
+        });
+        return map;
+    }, [allStockRecords]);
+
+    const lcBorderSalesMap = useMemo(() => {
+        const map = new Map();
+        (allSalesRecords || []).forEach(s => {
+            const status = (s.status || '').toLowerCase();
+            if (status.includes('rejected') || status === 'requested') return;
+            const sTypeLow = (s.saleType || '').toLowerCase().trim();
+            const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
+            if (!isBorder) return;
+
+            const digits = cleanDigits(s.lcNo || s.lcNumber || s.lc_no || '');
+            if (digits) {
+                if (!map.has(digits)) map.set(digits, []);
+                map.get(digits).push(s);
+            }
+            (s.items || []).forEach(item => {
+                const itemDigits = cleanDigits(item.lcNo);
+                if (itemDigits && itemDigits !== digits) {
+                    if (!map.has(itemDigits)) map.set(itemDigits, []);
+                    map.get(itemDigits).push(s);
+                }
+            });
+        });
+        return map;
+    }, [allSalesRecords]);
+
+    const lcGpMap = useMemo(() => {
+        const map = new Map();
+        (gpRecords || []).forEach(gp => {
+            const digits = cleanDigits(gp.lcNumber);
+            if (!digits) return;
+            map.set(digits, (map.get(digits) || 0) + (parseFloat(gp.gpQuantity) || 0));
+        });
+        return map;
+    }, [gpRecords]);
+
+    const lcExpenseMap = useMemo(() => {
+        const map = new Map();
+        (lcExpenses || []).forEach(exp => {
+            if (exp.type === 'bill') return;
+            const lc = exp.lcNo;
+            if (!lc) return;
+            map.set(lc, (map.get(lc) || 0) + (parseFloat(exp.amount) || 0));
+        });
+        return map;
+    }, [lcExpenses]);
+
+    const lcInsuranceMap = useMemo(() => {
+        const map = new Map();
+        (insurancePayments || []).forEach(p => {
+            if (p.type === 'Return Collection') return;
+            const lc = p.lcNo;
+            if (!lc) return;
+            map.set(lc, (map.get(lc) || 0) + (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0));
+        });
+        return map;
+    }, [insurancePayments]);
+
     const getLcTotalPaidExpense = (record) => {
         const adj = getAdjustedLcValues ? getAdjustedLcValues(record) : null;
         const activeTotal = (adj?.adjustedTotalAmount > 0) ? adj.adjustedTotalAmount : (parseFloat(record.totalAmount) || 0);
         const dynamicBills = calculateBankBills({ ...record, totalAmount: activeTotal });
 
         // 1. Paid LC expenses (excluding bills)
-        const paidExpenses = lcExpenses
-            .filter(exp => exp.lcNo === record.lcNo && exp.type !== 'bill')
-            .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+        const paidExpenses = lcExpenseMap.get(record.lcNo) || 0;
 
         // 2. Paid insurance premiums
-        const paidInsurance = insurancePayments
-            .filter(p => p.lcNo === record.lcNo && p.type !== 'Return Collection')
-            .reduce((sum, p) => sum + (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0), 0);
+        const paidInsurance = lcInsuranceMap.get(record.lcNo) || 0;
 
         // 3. Margin paid (original)
         const marginPaidAmt = parseFloat(dynamicBills.marginPaid) || (() => {
@@ -12481,52 +12548,41 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         // Received: From allStockRecords where lcNo matches and status is NOT requested/rejected
                                         const lcNoClean = cleanLc(record.lcNo);
 
+                                        const matchingStocks = lcStockBalanceMap.get(lcNoClean) || [];
                                         const receiptsMapForBalance = {};
-                                        allStockRecords
-                                            .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
-                                            .forEach(s => {
-                                                const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                                                const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                                                const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                                                const key = `${dateStr}_${groupVal}`;
+                                        matchingStocks.forEach(s => {
+                                            const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                                            const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                                            const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                                            const key = `${dateStr}_${groupVal}`;
 
-                                                if (!receiptsMapForBalance[key]) {
-                                                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                                                    receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                                                } else {
-                                                    if (!s.totalLcQuantity) {
-                                                        receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                                                    }
+                                            if (!receiptsMapForBalance[key]) {
+                                                const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                                                receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                                            } else {
+                                                if (!s.totalLcQuantity) {
+                                                    receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
                                                 }
-                                            });
+                                            }
+                                        });
                                         const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
 
-                                        // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
-                                        const borderSaleQtyKg = allSalesRecords
-                                            .filter(s => {
-                                                const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
-                                                const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                                                const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
-                                                const status = (s.status || '').toLowerCase();
-                                                const isValidStatus = !status.includes('rejected') && status !== 'requested';
-                                                return matchesLc && isValidStatus && isBorder;
-                                            })
-                                            .reduce((sum, s) => {
-                                                const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                                                    const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                                                    return iSum + (brandSubtotal || parseNum(item.quantity));
-                                                }, 0);
-                                                const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
-                                                return sum + qty;
+                                        // Border Sale: From indexed lcBorderSalesMap
+                                        const matchingBorderSales = lcBorderSalesMap.get(lcNoClean) || [];
+                                        const borderSaleQtyKg = matchingBorderSales.reduce((sum, s) => {
+                                            const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                                                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                                                return iSum + (brandSubtotal || parseNum(item.quantity));
                                             }, 0);
+                                            const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
+                                            return sum + qty;
+                                        }, 0);
 
                                         const adj = getAdjustedLcValues(record);
                                         const combinedRemKg = adj.combinedRemKg;
 
-                                        // Calculate Rem G.P
-                                        const totalGpQtyKg = gpRecords
-                                            .filter(gp => String(gp.lcNumber || '').replace(/\D/g, '') === lcNoClean)
-                                            .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
+                                        // Calculate Rem G.P from indexed lcGpMap
+                                        const totalGpQtyKg = lcGpMap.get(lcNoClean) || 0;
                                         const remGpKg = Math.max(0, adj.adjustedQtyKg - totalGpQtyKg);
                                         return (
                                             <React.Fragment key={record._id ? `${record._id}_${index}` : index}>
@@ -13286,55 +13342,44 @@ style={
                                 const qtyKg = totalQtyTons * 1000;
 
                                 // Calculate Remaining Quantities
-                                // Received: From allStockRecords where lcNo matches and status is NOT requested/rejected
+                                // Received: From indexed lcStockBalanceMap
                                 const lcNoClean = cleanLc(record.lcNo);
 
+                                const matchingStocks = lcStockBalanceMap.get(lcNoClean) || [];
                                 const receiptsMapForBalance = {};
-                                allStockRecords
-                                    .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
-                                    .forEach(s => {
-                                        const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                                        const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                                        const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                                        const key = `${dateStr}_${groupVal}`;
+                                matchingStocks.forEach(s => {
+                                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                                    const key = `${dateStr}_${groupVal}`;
 
-                                        if (!receiptsMapForBalance[key]) {
-                                            const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                                            receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                                        } else {
-                                            if (!s.totalLcQuantity) {
-                                                receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                                            }
+                                    if (!receiptsMapForBalance[key]) {
+                                        const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                                        receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                                    } else {
+                                        if (!s.totalLcQuantity) {
+                                            receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
                                         }
-                                    });
+                                    }
+                                });
                                 const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
 
-                                // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
-                                const borderSaleQtyKg = allSalesRecords
-                                    .filter(s => {
-                                        const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
-                                        const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                                        const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
-                                        const status = (s.status || '').toLowerCase();
-                                        const isValidStatus = !status.includes('rejected') && status !== 'requested';
-                                        return matchesLc && isValidStatus && isBorder;
-                                    })
-                                    .reduce((sum, s) => {
-                                        const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                                            const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                                            return iSum + (brandSubtotal || parseNum(item.quantity));
-                                        }, 0);
-                                        const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
-                                        return sum + qty;
+                                // Border Sale: From indexed lcBorderSalesMap
+                                const matchingBorderSales = lcBorderSalesMap.get(lcNoClean) || [];
+                                const borderSaleQtyKg = matchingBorderSales.reduce((sum, s) => {
+                                    const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                                        return iSum + (brandSubtotal || parseNum(item.quantity));
                                     }, 0);
+                                    const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
+                                    return sum + qty;
+                                }, 0);
 
                                 const adj = getAdjustedLcValues(record);
                                 const combinedRemKg = adj.combinedRemKg;
 
-                                // Calculate Rem G.P
-                                const totalGpQtyKg = gpRecords
-                                    .filter(gp => String(gp.lcNumber || '').replace(/\D/g, '') === lcNoClean)
-                                    .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
+                                // Calculate Rem G.P from indexed lcGpMap
+                                const totalGpQtyKg = lcGpMap.get(lcNoClean) || 0;
                                 const remGpKg = Math.max(0, adj.adjustedQtyKg - totalGpQtyKg);
 
                                 const totalExpense = getLcTotalPaidExpense(record);

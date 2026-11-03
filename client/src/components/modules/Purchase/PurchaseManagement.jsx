@@ -12,6 +12,7 @@ import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import { getSocket } from '../../../utils/socket';
 import PurchaseReport from './PurchaseReport';
 import '../Sale/SaleManagement.css';
@@ -859,6 +860,25 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         });
         return { totalPurchases, totalDiscount, totalPaid, totalDue, totalQty };
     }, [filteredPurchases, isRequestedOnly]);
+
+    const [pageSize, setPageSize] = useState(() => {
+        const saved = localStorage.getItem('purchase_page_size');
+        return saved ? Number(saved) : 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+
+    useEffect(() => {
+        localStorage.setItem('purchase_page_size', pageSize);
+    }, [pageSize]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, filters, isRequestedOnly]);
+
+    const paginatedPurchases = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filteredPurchases.slice(start, start + pageSize);
+    }, [filteredPurchases, currentPage, pageSize]);
 
     const filteredCustomers = useMemo(() => {
         if (!customerSearch) return customersList;
@@ -1935,8 +1955,8 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                                         Loading purchase records...
                                     </td>
                                 </tr>
-                            ) : filteredPurchases.length > 0 ? (
-                                filteredPurchases.map(p => (
+                            ) : paginatedPurchases.length > 0 ? (
+                                paginatedPurchases.map(p => (
                                     <tr key={p._id} className={`hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 align-middle ${highlightId && (String(p._id) === String(highlightId) || (p.purchaseNo && String(p.purchaseNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => { if (p.purchaseNo) rowRefs.current[p.purchaseNo] = el; }}
                                                     style={highlightId && (String(p._id) === String(highlightId) || (p.purchaseNo && String(p.purchaseNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}>
                                         <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-600 align-top">{formatDate(p.date)}</td>
@@ -2072,8 +2092,9 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                                 <div className="h-4 bg-gray-200 rounded w-1/2"></div>
                             </div>
                         ))
-                    ) : filteredPurchases.length > 0 ? (
-                        filteredPurchases.map((p, idx) => {
+                    ) : paginatedPurchases.length > 0 ? (
+                        paginatedPurchases.map((p, idx) => {
+                            const sl = (currentPage - 1) * pageSize + idx + 1;
                             const { statusText, badgeClass } = computePurchaseStatus(p);
                             const brandEntries = getPurchaseBrandEntries(p);
                             const cardKey = p._id || idx;
@@ -2093,7 +2114,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                                                    #{idx + 1}
+                                                    #{sl}
                                                 </span>
                                                 <span className="text-xs font-black text-blue-600 truncate">
                                                     {p.purchaseNo || '—'}
@@ -2254,6 +2275,23 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                         </div>
                     )}
                 </div>
+
+                {/* Pagination Controls */}
+                {filteredPurchases.length > 0 && (
+                    <div className="border-t border-gray-100 bg-white/50 px-4 py-3">
+                        <PaginationBar
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            totalItems={filteredPurchases.length}
+                            onPageChange={setCurrentPage}
+                            onPageSizeChange={(newSize) => {
+                                setPageSize(newSize);
+                                setCurrentPage(1);
+                            }}
+                            pageSizeOptions={[15, 30, 50, 100]}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Modal for Add / Edit Purchase */}

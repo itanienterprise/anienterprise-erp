@@ -12,6 +12,7 @@ import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import PurchaseReceiveReport from './PurchaseReceiveReport';
 import '../Sale/SaleManagement.css';
 
@@ -739,6 +740,25 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         });
         return { totalPurchases, totalDiscount, totalPaid, totalDue };
     }, [filteredPurchaseReceives, isRequestedOnly]);
+
+    const [pageSize, setPageSize] = useState(() => {
+        const saved = localStorage.getItem('purchase_receive_page_size');
+        return saved ? Number(saved) : 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+
+    useEffect(() => {
+        localStorage.setItem('purchase_receive_page_size', pageSize);
+    }, [pageSize]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, filters, isRequestedOnly]);
+
+    const paginatedPurchaseReceives = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filteredPurchaseReceives.slice(start, start + pageSize);
+    }, [filteredPurchaseReceives, currentPage, pageSize]);
 
     const filteredCustomers = useMemo(() => {
         if (!customerSearch) return customersList;
@@ -2096,8 +2116,8 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                         Loading purchase receive records...
                                     </td>
                                 </tr>
-                            ) : filteredPurchaseReceives.length > 0 ? (
-                                filteredPurchaseReceives.map(p => (
+                            ) : paginatedPurchaseReceives.length > 0 ? (
+                                paginatedPurchaseReceives.map(p => (
                                     <tr key={p._id} className={`hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 align-middle ${highlightId && (String(p._id) === String(highlightId) || ((p.purchaseReceiveNo || p.purchaseNo) && String(p.purchaseReceiveNo || p.purchaseNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => { if (p.purchaseReceiveNo || p.purchaseNo) rowRefs.current[p.purchaseReceiveNo || p.purchaseNo] = el; }}
                                         style={highlightId && (String(p._id) === String(highlightId) || ((p.purchaseReceiveNo || p.purchaseNo) && String(p.purchaseReceiveNo || p.purchaseNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}>
                                         <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-600 align-top">{formatDate(p.date)}</td>
@@ -2258,8 +2278,9 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                 <div className="h-4 bg-gray-200 rounded w-1/2"></div>
                             </div>
                         ))
-                    ) : filteredPurchaseReceives.length > 0 ? (
-                        filteredPurchaseReceives.map((p, idx) => {
+                    ) : paginatedPurchaseReceives.length > 0 ? (
+                        paginatedPurchaseReceives.map((p, idx) => {
+                            const sl = (currentPage - 1) * pageSize + idx + 1;
                             const statusLower = (p.status || 'Accepted').toLowerCase();
                             const badgeClass = statusLower === 'accepted' || statusLower === 'approved'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -2286,7 +2307,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                                                    #{idx + 1}
+                                                    #{sl}
                                                 </span>
                                                 <span className="text-xs font-black text-blue-600 truncate">
                                                     {p.purchaseReceiveNo || p.purchaseNo || '—'}
@@ -2478,6 +2499,23 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                         </div>
                     )}
                 </div>
+
+                {/* Pagination Controls */}
+                {filteredPurchaseReceives.length > 0 && (
+                    <div className="border-t border-gray-100 bg-white/50 px-4 py-3">
+                        <PaginationBar
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            totalItems={filteredPurchaseReceives.length}
+                            onPageChange={setCurrentPage}
+                            onPageSizeChange={(newSize) => {
+                                setPageSize(newSize);
+                                setCurrentPage(1);
+                            }}
+                            pageSizeOptions={[15, 30, 50, 100]}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Modal for Create/Edit */}

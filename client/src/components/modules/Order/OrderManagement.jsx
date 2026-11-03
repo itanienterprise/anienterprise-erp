@@ -1714,6 +1714,58 @@ const OrderManagement = ({
         );
     };
 
+    // High-performance pre-indexed maps for instantaneous order fulfillment calculations
+    const salesByOrderRefMap = useMemo(() => {
+        const map = new Map();
+        (allSalesRecords || []).forEach(s => {
+            const sType = (s.saleType || '').toLowerCase();
+            const sStatus = (s.status || '').toLowerCase();
+            const isOrder = sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry === true;
+            if (isOrder || sStatus === 'rejected' || sStatus === 'cancelled') return;
+
+            const sRefs = [s.orderNo, s.orderId, s.orderRef].filter(Boolean);
+            sRefs.forEach(r => {
+                const key = r.toString().trim().toUpperCase();
+                if (key) {
+                    let list = map.get(key);
+                    if (!list) {
+                        list = [];
+                        map.set(key, list);
+                    }
+                    list.push(s);
+                }
+            });
+        });
+        return map;
+    }, [allSalesRecords]);
+
+    const returnsByRefMap = useMemo(() => {
+        const map = new Map();
+        (returnsList || []).forEach(r => {
+            const rStatus = (r.status || '').toLowerCase();
+            if (rStatus === 'cancelled' || rStatus === 'rejected') return;
+            const inv = (r.invoiceNo || '').trim().toUpperCase();
+            if (inv) {
+                let list = map.get(inv);
+                if (!list) {
+                    list = [];
+                    map.set(inv, list);
+                }
+                list.push(r);
+            }
+            const rOrdNo = (r.orderNo || r.orderRef || '').trim().toUpperCase();
+            if (rOrdNo && rOrdNo !== inv) {
+                let list = map.get(rOrdNo);
+                if (!list) {
+                    list = [];
+                    map.set(rOrdNo, list);
+                }
+                list.push(r);
+            }
+        });
+        return map;
+    }, [returnsList]);
+
     // Helper function to calculate exact fulfillment and remaining quantities for each line of an order
     const computeOrderFulfillment = (order, salesHistory = allSalesRecords, returns = returnsList) => {
         if (!order) {
@@ -1741,8 +1793,29 @@ const OrderManagement = ({
         // Set of product names in this order
         const orderProductNames = new Set((order.items || []).map(i => (i.productName || i.product || '').trim().toLowerCase()).filter(Boolean));
 
+        // Gather candidate sales using index map if salesHistory is allSalesRecords
+        const candidateSales = (salesHistory === allSalesRecords)
+            ? (() => {
+                const candidates = [];
+                const seenIds = new Set();
+                validRefs.forEach(ref => {
+                    const list = salesByOrderRefMap.get(ref);
+                    if (list) {
+                        list.forEach(s => {
+                            const id = s._id || s.invoiceNo;
+                            if (id && !seenIds.has(id)) {
+                                seenIds.add(id);
+                                candidates.push(s);
+                            }
+                        });
+                    }
+                });
+                return candidates;
+            })()
+            : (salesHistory || []);
+
         // Find all fulfilling sales
-        const fulfillingSales = (salesHistory || []).filter(s => {
+        const fulfillingSales = candidateSales.filter(s => {
             const sType = (s.saleType || '').toLowerCase();
             const sStatus = (s.status || '').toLowerCase();
             const isOrder = sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry === true;
@@ -1926,16 +1999,35 @@ const OrderManagement = ({
             };
         });
 
-        // Calculate returns matching this order or any of its fulfilling deliveries
-        const matchingReturns = (returns || []).filter(r => {
-            const rStatus = (r.status || '').toLowerCase();
-            if (rStatus === 'cancelled' || rStatus === 'rejected') return false;
-            const rInv = (r.invoiceNo || '').trim().toUpperCase();
-            if (rInv && (validRefs.includes(rInv) || fulfillingInvoices.includes(rInv))) return true;
-            const rOrdNo = (r.orderNo || r.orderRef || '').trim().toUpperCase();
-            if (rOrdNo && validRefs.includes(rOrdNo)) return true;
-            return false;
-        });
+        // Calculate returns matching this order or any of its fulfilling deliveries using index map
+        const matchingReturns = (returns === returnsList)
+            ? (() => {
+                const list = [];
+                const seenReturnIds = new Set();
+                const allQueryRefs = [...validRefs, ...fulfillingInvoices];
+                allQueryRefs.forEach(qRef => {
+                    const retList = returnsByRefMap.get(qRef);
+                    if (retList) {
+                        retList.forEach(r => {
+                            const rId = r._id || `${r.invoiceNo}_${r.quantity}`;
+                            if (!seenReturnIds.has(rId)) {
+                                seenReturnIds.add(rId);
+                                list.push(r);
+                            }
+                        });
+                    }
+                });
+                return list;
+            })()
+            : (returns || []).filter(r => {
+                const rStatus = (r.status || '').toLowerCase();
+                if (rStatus === 'cancelled' || rStatus === 'rejected') return false;
+                const rInv = (r.invoiceNo || '').trim().toUpperCase();
+                if (rInv && (validRefs.includes(rInv) || fulfillingInvoices.includes(rInv))) return true;
+                const rOrdNo = (r.orderNo || r.orderRef || '').trim().toUpperCase();
+                if (rOrdNo && validRefs.includes(rOrdNo)) return true;
+                return false;
+            });
 
         let returnsTableQty = 0;
         matchingReturns.forEach(r => {
