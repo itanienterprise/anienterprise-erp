@@ -303,7 +303,15 @@ public class MdmLocationService extends Service {
 
         String deviceId = prefs.getString("device_id", "");
         if (deviceId.isEmpty()) {
-            deviceId = "DEV-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase() + "-" + Long.toString(System.currentTimeMillis(), 36).toUpperCase();
+            String androidId = "";
+            try {
+                androidId = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
+            } catch (Exception ignored) {}
+            if (androidId != null && !androidId.trim().isEmpty()) {
+                deviceId = "DEV-" + androidId.toUpperCase();
+            } else {
+                deviceId = "DEV-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase() + "-" + Long.toString(System.currentTimeMillis(), 36).toUpperCase();
+            }
             prefs.edit().putString("device_id", deviceId).apply();
         }
 

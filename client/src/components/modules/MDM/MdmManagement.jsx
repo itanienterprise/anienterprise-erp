@@ -111,6 +111,18 @@ const MdmManagement = ({ currentUser }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDevice, setSelectedDevice] = useState(null);
 
+  // Mobile Card View: Expand / Collapse Devices
+  const [expandedDeviceIds, setExpandedDeviceIds] = useState(new Set());
+
+  const toggleExpandDevice = (id) => {
+    setExpandedDeviceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   // Employees List for Enrollment & Reassignment
   const [employees, setEmployees] = useState([]);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
@@ -140,6 +152,9 @@ const MdmManagement = ({ currentUser }) => {
   const [simCharging, setSimCharging] = useState(false);
   const [simDeviceId, setSimDeviceId] = useState('TEST-ANDROID-001');
   const [simMessage, setSimMessage] = useState(null);
+
+  // Refresh State
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   // Map Layer Style: 'googleStreets' | 'googleHybrid' | 'osm'
   const [mapLayerType, setMapLayerType] = useState('googleStreets');
@@ -199,6 +214,19 @@ const MdmManagement = ({ currentUser }) => {
       console.warn('[MDM] Could not load employees list:', err.message);
     }
   }, []);
+
+  const handleManualRefresh = async () => {
+    if (isManualRefreshing) return;
+    setIsManualRefreshing(true);
+    try {
+      await Promise.all([fetchDevices(), fetchLiveLocations()]);
+      showToast('Device inventory and live telemetry refreshed!', 'success');
+    } catch (err) {
+      showToast('Refresh failed: ' + (err.message || 'Error'), 'error');
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  };
 
   const generateSuggestedDeviceId = (empId) => {
     const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -456,6 +484,20 @@ const MdmManagement = ({ currentUser }) => {
     };
   }, []);
 
+  // Deduplicate live locations so only one pin per device/employee appears on live map
+  const dedupedLiveLocations = useMemo(() => {
+    const sorted = [...liveLocations].sort((a, b) => new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0));
+    const seen = new Set();
+    const result = [];
+    for (const loc of sorted) {
+      const key = loc.employeeId || loc.deviceId || loc.deviceModel;
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      result.push(loc);
+    }
+    return result;
+  }, [liveLocations]);
+
   // ─── Render Live Map Markers ────────────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== 'live-map' || !mapInstanceRef.current || !markersGroupRef.current) return;
@@ -463,7 +505,7 @@ const MdmManagement = ({ currentUser }) => {
     markersGroupRef.current.clearLayers();
     const bounds = [];
 
-    liveLocations.forEach(loc => {
+    dedupedLiveLocations.forEach(loc => {
       if (!loc.lat || !loc.lng) return;
 
       const initials = (loc.employeeName || 'EM')
@@ -555,7 +597,7 @@ const MdmManagement = ({ currentUser }) => {
         mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
       } catch (_) {}
     }
-  }, [liveLocations, activeTab, selectedDevice]);
+  }, [dedupedLiveLocations, activeTab, selectedDevice]);
 
   // Center on selected employee in live map
   const handleSelectEmployeeMap = (loc) => {
@@ -907,11 +949,52 @@ const MdmManagement = ({ currentUser }) => {
     }
   };
 
-  // Filter devices by search
+  // Filter devices by search and deduplicate (if IMEI and/or MAC address is same, show only one)
   const filteredDevices = useMemo(() => {
-    if (!searchQuery) return devices;
+    const sorted = [...devices].sort((a, b) => new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0));
+    const seenImeis = new Set();
+    const seenMacs = new Set();
+    const seenModels = new Map();
+    const deduplicated = [];
+
+    for (const d of sorted) {
+      const imei = (d.imei || '').trim();
+      const mac = (d.macAddress || '').trim().toUpperCase();
+      const model = (d.deviceModel || '').trim().toLowerCase();
+
+      // 1. If explicit IMEI already seen, skip duplicate
+      if (imei && seenImeis.has(imei)) continue;
+
+      // 2. If explicit MAC already seen, skip duplicate
+      if (mac && seenMacs.has(mac)) continue;
+
+      if (imei) seenImeis.add(imei);
+      if (mac) seenMacs.add(mac);
+
+      // 3. If matching device model with matching/empty IMEI and MAC (e.g. reinstall duplicate)
+      if (model) {
+        if (seenModels.has(model)) {
+          const prev = seenModels.get(model);
+          const sameImei = (prev.imei || '').trim() === imei;
+          const sameMac = (prev.macAddress || '').trim().toUpperCase() === mac;
+          if (sameImei && sameMac) {
+            if ((!prev.employeeName || prev.employeeName === 'Administrator') && d.employeeName && d.employeeName !== 'Administrator') {
+              prev.employeeName = d.employeeName;
+              prev.employeeEmpId = d.employeeEmpId;
+            }
+            continue;
+          }
+        } else {
+          seenModels.set(model, d);
+        }
+      }
+
+      deduplicated.push(d);
+    }
+
+    if (!searchQuery) return deduplicated;
     const q = searchQuery.toLowerCase();
-    return devices.filter(d =>
+    return deduplicated.filter(d =>
       (d.employeeName && d.employeeName.toLowerCase().includes(q)) ||
       (d.employeeEmpId && d.employeeEmpId.toLowerCase().includes(q)) ||
       (d.deviceModel && d.deviceModel.toLowerCase().includes(q)) ||
@@ -953,14 +1036,14 @@ const MdmManagement = ({ currentUser }) => {
         >
           <div className="mdm-tab-icon-wrap">
             <MapPinIcon />
-            {liveLocations.length > 0 && (
-              <span className="mdm-tab-badge mdm-tab-badge-mobile">{liveLocations.length}</span>
+            {dedupedLiveLocations.length > 0 && (
+              <span className="mdm-tab-badge mdm-tab-badge-mobile">{dedupedLiveLocations.length}</span>
             )}
           </div>
           <span className="mdm-tab-label-desktop">Live Map</span>
           <span className="mdm-tab-label-mobile">Live Map</span>
-          {liveLocations.length > 0 && (
-            <span className="mdm-tab-badge mdm-tab-badge-desktop">{liveLocations.length}</span>
+          {dedupedLiveLocations.length > 0 && (
+            <span className="mdm-tab-badge mdm-tab-badge-desktop">{dedupedLiveLocations.length}</span>
           )}
         </button>
 
@@ -972,14 +1055,14 @@ const MdmManagement = ({ currentUser }) => {
         >
           <div className="mdm-tab-icon-wrap">
             <UsersIcon />
-            {devices.length > 0 && (
-              <span className="mdm-tab-badge mdm-tab-badge-mobile">{devices.length}</span>
+            {filteredDevices.length > 0 && (
+              <span className="mdm-tab-badge mdm-tab-badge-mobile">{filteredDevices.length}</span>
             )}
           </div>
           <span className="mdm-tab-label-desktop">Device Inventory</span>
           <span className="mdm-tab-label-mobile">Inventory</span>
-          {devices.length > 0 && (
-            <span className="mdm-tab-badge mdm-tab-badge-desktop">{devices.length}</span>
+          {filteredDevices.length > 0 && (
+            <span className="mdm-tab-badge mdm-tab-badge-desktop">{filteredDevices.length}</span>
           )}
         </button>
 
@@ -1030,13 +1113,13 @@ const MdmManagement = ({ currentUser }) => {
             </div>
 
             <div className="mdm-sidebar-list">
-              {liveLocations.length === 0 ? (
+              {dedupedLiveLocations.length === 0 ? (
                 <div className="text-center py-8 text-gray-400 text-xs">
                   No active device telemetry received yet.<br />
                   Use the <strong>APK Bridge & Test</strong> tab to send a test ping.
                 </div>
               ) : (
-                liveLocations
+                dedupedLiveLocations
                   .filter(loc => !searchQuery || (loc.employeeName || '').toLowerCase().includes(searchQuery.toLowerCase()))
                   .map((loc) => {
                     const isSelected = selectedDevice?.deviceId === loc.deviceId;
@@ -1159,11 +1242,14 @@ const MdmManagement = ({ currentUser }) => {
                 </button>
 
                 <button
-                  onClick={fetchDevices}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg sm:rounded-md border border-gray-200 hover:bg-gray-100 transition-colors shadow-2xs"
+                  type="button"
+                  onClick={handleManualRefresh}
+                  disabled={isManualRefreshing}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg sm:rounded-md border border-gray-200 hover:bg-gray-100 transition-colors shadow-2xs cursor-pointer disabled:opacity-60"
+                  title="Refresh device inventory and telemetry"
                 >
-                  <RefreshIcon className="w-3.5 h-3.5" />
-                  <span>Refresh</span>
+                  <RefreshIcon className={`w-3.5 h-3.5 text-blue-600 ${isManualRefreshing ? 'animate-spin' : ''}`} />
+                  <span>{isManualRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                 </button>
               </div>
             </div>
@@ -1341,7 +1427,28 @@ const MdmManagement = ({ currentUser }) => {
             </div>
 
             {/* Mobile Card View (< 768px) */}
-            <div className="md:hidden flex flex-col p-2.5 sm:p-3 space-y-3">
+            <div className="md:hidden flex flex-col p-2.5 sm:p-3 space-y-2.5">
+              {filteredDevices.length > 0 && (
+                <div className="flex items-center justify-between px-1 text-[11px] text-slate-500">
+                  <span className="font-medium">
+                    Showing {filteredDevices.length} {filteredDevices.length === 1 ? 'device' : 'devices'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (expandedDeviceIds.size === filteredDevices.length) {
+                        setExpandedDeviceIds(new Set());
+                      } else {
+                        setExpandedDeviceIds(new Set(filteredDevices.map(d => d._id)));
+                      }
+                    }}
+                    className="text-blue-600 font-bold hover:text-blue-800 transition-colors"
+                  >
+                    {expandedDeviceIds.size === filteredDevices.length ? 'Collapse All' : 'Expand All'}
+                  </button>
+                </div>
+              )}
+
               {filteredDevices.length === 0 ? (
                 <div className="text-center py-10 text-gray-400 text-xs">
                   No registered devices found.
@@ -1350,13 +1457,19 @@ const MdmManagement = ({ currentUser }) => {
                 filteredDevices.map(device => {
                   const isOnline = device.isOnline;
                   const hasGps = device.lastLocation?.lat && device.lastLocation?.lng;
+                  const isExpanded = expandedDeviceIds.has(device._id);
                   return (
                     <div
                       key={device._id}
-                      className="bg-white rounded-xl p-3.5 border border-slate-200/90 shadow-2xs space-y-3"
+                      className={`bg-white rounded-xl p-3.5 border border-slate-200/90 shadow-2xs transition-all duration-200 ${
+                        isExpanded ? 'space-y-3 ring-1 ring-blue-100 shadow-sm' : 'hover:border-slate-300'
+                      }`}
                     >
-                      {/* Top Header Row: Employee Avatar & Name + Status Badge */}
-                      <div className="flex items-start justify-between gap-2">
+                      {/* Top Header Row: Clickable to Toggle Expand/Collapse */}
+                      <div
+                        onClick={() => toggleExpandDevice(device._id)}
+                        className="flex items-center justify-between gap-2 cursor-pointer select-none"
+                      >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
                             {(device.employeeName || 'E').charAt(0).toUpperCase()}
@@ -1371,139 +1484,187 @@ const MdmManagement = ({ currentUser }) => {
                           </div>
                         </div>
 
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            device.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                            device.status === 'suspended' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                            'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}>
-                            {device.status}
-                          </span>
-                          <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-xs shadow-emerald-400' : 'bg-slate-400'}`} />
-                            <span>{isOnline ? 'Online' : 'Offline'}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex flex-col items-end gap-1">
+                            {isExpanded ? (
+                              <>
+                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  device.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                  device.status === 'suspended' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                  'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}>
+                                  {device.status}
+                                </span>
+                                <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-xs shadow-emerald-400' : 'bg-slate-400'}`} />
+                                  <span>{isOnline ? 'Online' : 'Offline'}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <BatteryIndicator level={device.batteryLevel} isCharging={device.isCharging} />
+                                <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-xs shadow-emerald-400' : 'bg-slate-400'}`} />
+                                  <span>{isOnline ? 'Online' : 'Offline'}</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <div className={`p-1 text-slate-400 hover:text-slate-600 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-blue-600' : ''}`}>
+                            <ChevronDownIcon className="w-4 h-4" />
                           </div>
                         </div>
                       </div>
 
-                      {/* Device Model & Hardware Tag */}
-                      <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 space-y-1.5 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-slate-700 text-xs truncate">
-                            {device.deviceModel || 'Unknown Device'}
-                          </span>
-                          <span className="font-mono text-[10px] bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 truncate max-w-[150px]">
-                            {device.deviceId}
-                          </span>
-                        </div>
+                      {/* Expandable Details Section */}
+                      {isExpanded && (
+                        <div className="space-y-3 pt-2 border-t border-slate-100 animate-in fade-in duration-200">
+                          {/* Device Model & Hardware Tag */}
+                          <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-slate-700 text-xs truncate">
+                                {device.deviceModel || 'Unknown Device'}
+                              </span>
+                              <span className="font-mono text-[10px] bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 truncate max-w-[150px]">
+                                {device.deviceId}
+                              </span>
+                            </div>
 
-                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
-                          <div>
-                            <span className="text-slate-400 block text-[10px] uppercase font-semibold">IMEI</span>
-                            <span className="font-mono text-slate-700 truncate block">
-                              {device.imei || '—'}
-                            </span>
+                            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
+                              <div>
+                                <span className="text-slate-400 block text-[10px] uppercase font-semibold">IMEI</span>
+                                <span className="font-mono text-slate-700 truncate block">
+                                  {device.imei || '—'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[10px] uppercase font-semibold">MAC</span>
+                                <span className="font-mono text-slate-700 truncate block uppercase">
+                                  {device.macAddress || '—'}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-slate-400 block text-[10px] uppercase font-semibold">MAC</span>
-                            <span className="font-mono text-slate-700 truncate block uppercase">
-                              {device.macAddress || '—'}
-                            </span>
+
+                          {/* Telemetry Snapshot Row: Battery, GPS, Last Ping */}
+                          <div className="grid grid-cols-3 gap-2 text-center bg-slate-50/70 p-2 rounded-lg border border-slate-100">
+                            <div>
+                              <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Battery</span>
+                              <BatteryIndicator level={device.batteryLevel} isCharging={device.isCharging} />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">GPS</span>
+                              <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${device.isGpsEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                                {device.isGpsEnabled ? 'GPS ON' : 'GPS OFF'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Last Ping</span>
+                              <span className="text-[11px] font-medium text-slate-700 block truncate">
+                                {device.lastSeen ? new Date(device.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Mobile Actions Toolbar */}
+                          <div className="pt-2.5 mt-2 border-t border-slate-100 flex items-center justify-between gap-1.5 flex-wrap">
+                            {/* Telemetry Actions (Left) */}
+                            <div className="flex items-center gap-1.5">
+                              {/* 1. Open Google Maps */}
+                              {hasGps ? (
+                                <a
+                                  href={`https://www.google.com/maps?q=${device.lastLocation.lat},${device.lastLocation.lng}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="h-8 px-2.5 inline-flex items-center justify-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors shadow-2xs"
+                                  title="Open in Google Maps"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+                                    <line x1="9" y1="3" x2="9" y2="18" />
+                                    <line x1="15" y1="6" x2="15" y2="21" />
+                                  </svg>
+                                  <span>Map</span>
+                                </a>
+                              ) : (
+                                <span className="h-8 px-2.5 inline-flex items-center justify-center gap-1 text-xs font-medium text-slate-400 bg-slate-100 border border-slate-200 rounded-lg cursor-not-allowed" title="No GPS location available">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-40 shrink-0">
+                                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+                                    <line x1="9" y1="3" x2="9" y2="18" />
+                                    <line x1="15" y1="6" x2="15" y2="21" />
+                                  </svg>
+                                  <span>Map</span>
+                                </span>
+                              )}
+
+                              {/* 2. Request Instant Ping from Phone (Socket) */}
+                              <button
+                                type="button"
+                                onClick={() => handleTriggerDevicePing(device)}
+                                title="Request Instant Ping from Phone (Socket)"
+                                className="h-8 px-2.5 inline-flex items-center justify-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors shadow-2xs"
+                              >
+                                <MapPinIcon className="w-3.5 h-3.5 shrink-0" />
+                                <span>Ping</span>
+                              </button>
+
+                              {/* 3. Force Ping with Browser GPS */}
+                              <button
+                                type="button"
+                                onClick={() => handleForcePingWithBrowserGps(device)}
+                                title="Update Device Telemetry with Current GPS"
+                                className="w-8 h-8 inline-flex items-center justify-center text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors shadow-2xs"
+                              >
+                                <RefreshIcon className="w-4 h-4 shrink-0" />
+                              </button>
+                            </div>
+
+                            {/* Device Management Actions (Right) */}
+                            <div className="flex items-center gap-1.5">
+                              {/* 4. Edit / Reassign */}
+                              <button
+                                type="button"
+                                onClick={() => openEnrollModal(device)}
+                                className="w-8 h-8 inline-flex items-center justify-center text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors shadow-2xs"
+                                title="Edit / Reassign"
+                              >
+                                <EditIcon className="w-4 h-4 shrink-0" />
+                              </button>
+
+                              {/* 5. Approve / Suspend */}
+                              {device.status === 'approved' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDeviceStatus(device._id, 'suspended')}
+                                  className="w-8 h-8 inline-flex items-center justify-center text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors shadow-2xs"
+                                  title="Suspend Tracking"
+                                >
+                                  <ShieldIcon className="w-4 h-4 shrink-0" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDeviceStatus(device._id, 'approved')}
+                                  className="w-8 h-8 inline-flex items-center justify-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors shadow-2xs"
+                                  title="Approve Device"
+                                >
+                                  <CheckIcon className="w-4 h-4 shrink-0" />
+                                </button>
+                              )}
+
+                              {/* 6. Unbind Device */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDevice(device._id)}
+                                className="w-8 h-8 inline-flex items-center justify-center text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors shadow-2xs"
+                                title="Unbind Device"
+                              >
+                                <TrashIcon className="w-4 h-4 shrink-0" />
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-
-                      {/* Telemetry Snapshot Row: Battery, GPS, Last Ping */}
-                      <div className="grid grid-cols-3 gap-2 text-center bg-slate-50/70 p-2 rounded-lg border border-slate-100">
-                        <div>
-                          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Battery</span>
-                          <BatteryIndicator level={device.batteryLevel} isCharging={device.isCharging} />
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">GPS</span>
-                          <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${device.isGpsEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                            {device.isGpsEnabled ? 'GPS ON' : 'GPS OFF'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Last Ping</span>
-                          <span className="text-[11px] font-medium text-slate-700 block truncate">
-                            {device.lastSeen ? new Date(device.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Mobile Actions Toolbar */}
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 flex-wrap">
-                        <div className="flex items-center gap-1.5">
-                          {hasGps ? (
-                            <a
-                              href={`https://www.google.com/maps?q=${device.lastLocation.lat},${device.lastLocation.lng}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
-                            >
-                              <MapPinIcon className="w-3.5 h-3.5" />
-                              <span>Map</span>
-                            </a>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-400 bg-slate-100 rounded-lg cursor-not-allowed">
-                              <MapPinIcon className="w-3.5 h-3.5 opacity-50" />
-                              <span>No GPS</span>
-                            </span>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => handleTriggerDevicePing(device)}
-                            title="Request Instant Ping from Phone"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100"
-                          >
-                            <RefreshIcon className="w-3.5 h-3.5" />
-                            <span>Ping</span>
-                          </button>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => openEnrollModal(device)}
-                            className="p-1.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg"
-                            title="Edit / Reassign"
-                          >
-                            <EditIcon className="w-4 h-4" />
-                          </button>
-
-                          {device.status === 'approved' ? (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateDeviceStatus(device._id, 'suspended')}
-                              className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg"
-                              title="Suspend Tracking"
-                            >
-                              <ShieldIcon className="w-4 h-4" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateDeviceStatus(device._id, 'approved')}
-                              className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg"
-                              title="Approve Device"
-                            >
-                              <CheckIcon className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteDevice(device._id)}
-                            className="p-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg"
-                            title="Unbind Device"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   );
                 })

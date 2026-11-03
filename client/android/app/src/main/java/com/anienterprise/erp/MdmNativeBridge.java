@@ -46,7 +46,18 @@ public class MdmNativeBridge {
     public String getDeviceId() {
         if (context == null) return "";
         SharedPreferences prefs = context.getSharedPreferences("mdm_prefs", Context.MODE_PRIVATE);
-        return prefs.getString("device_id", "");
+        String deviceId = prefs.getString("device_id", "");
+        if (deviceId.isEmpty()) {
+            String androidId = "";
+            try {
+                androidId = android.provider.Settings.Secure.getString(context.getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
+            } catch (Exception ignored) {}
+            if (androidId != null && !androidId.trim().isEmpty()) {
+                deviceId = "DEV-" + androidId.toUpperCase();
+                prefs.edit().putString("device_id", deviceId).apply();
+            }
+        }
+        return deviceId;
     }
 
     @JavascriptInterface

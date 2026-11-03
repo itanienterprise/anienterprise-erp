@@ -19,6 +19,63 @@ const decryptEmployee = (empDoc) => {
   }
 };
 
+// Helper to deduplicate device list: if IMEI and/or MAC address is the same (or matching hardware), show only one
+function deduplicateDeviceList(list) {
+  if (!Array.isArray(list) || list.length <= 1) return list || [];
+
+  // Sort freshest lastSeen first so the most recent telemetry is preserved
+  const sorted = [...list].sort((a, b) => new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0));
+  const seenImeis = new Set();
+  const seenMacs = new Set();
+  const seenModels = new Map();
+  const result = [];
+
+  for (const d of sorted) {
+    const imei = (d.imei || '').trim();
+    const mac = (d.macAddress || '').trim().toUpperCase();
+    const model = (d.deviceModel || '').trim().toLowerCase();
+
+    // 1. If explicit IMEI already seen, skip duplicate
+    if (imei && seenImeis.has(imei)) {
+      continue;
+    }
+
+    // 2. If explicit MAC already seen, skip duplicate
+    if (mac && seenMacs.has(mac)) {
+      continue;
+    }
+
+    if (imei) seenImeis.add(imei);
+    if (mac) seenMacs.add(mac);
+
+    // 3. If matching device model with matching/empty IMEI and MAC (e.g. reinstall duplicate)
+    if (model) {
+      if (seenModels.has(model)) {
+        const prevIdx = seenModels.get(model);
+        const prev = result[prevIdx];
+        const sameImei = (prev.imei || '').trim() === imei;
+        const sameMac = (prev.macAddress || '').trim().toUpperCase() === mac;
+
+        if (sameImei && sameMac) {
+          // If previous entry was 'Administrator' and this duplicate has an assigned employee, preserve assigned employee
+          if ((!prev.employeeName || prev.employeeName === 'Administrator') && d.employeeName && d.employeeName !== 'Administrator') {
+            prev.employeeName = d.employeeName;
+            prev.employeeEmpId = d.employeeEmpId;
+            prev.employeeId = d.employeeId;
+          }
+          continue;
+        }
+      } else {
+        seenModels.set(model, result.length);
+      }
+    }
+
+    result.push(d);
+  }
+
+  return result;
+}
+
 module.exports = function createMdmRouter(io) {
   // Middleware to ensure user is authenticated for management endpoints
   const requireAdminAuth = (req, res, next) => {
@@ -48,8 +105,15 @@ module.exports = function createMdmRouter(io) {
         return res.status(400).json({ success: false, message: 'deviceId is required' });
       }
 
-      // Check if device already exists with an admin-assigned employee in DB
-      const existingDevice = await DeviceRegistry.findOne({ deviceId });
+      // Check if device already exists by deviceId OR by IMEI OR by MAC Address
+      const lookupConditions = [{ deviceId }];
+      if (req.body.imei && String(req.body.imei).trim()) {
+        lookupConditions.push({ imei: String(req.body.imei).trim() });
+      }
+      if (req.body.macAddress && String(req.body.macAddress).trim()) {
+        lookupConditions.push({ macAddress: String(req.body.macAddress).trim().toUpperCase() });
+      }
+      const existingDevice = await DeviceRegistry.findOne({ $or: lookupConditions });
 
       let employeeId = explicitEmployeeId || (existingDevice?.employeeId ? existingDevice.employeeId : null);
       let employeeName = (existingDevice?.employeeId && existingDevice?.employeeName && existingDevice.employeeName !== 'Administrator' && existingDevice.employeeName !== 'Unassigned')
@@ -317,7 +381,8 @@ module.exports = function createMdmRouter(io) {
         isOnline: d.lastSeen ? new Date(d.lastSeen) >= fiveMinutesAgo : false
       }));
 
-      return res.json({ success: true, count: enhanced.length, devices: enhanced });
+      const deduped = deduplicateDeviceList(enhanced);
+      return res.json({ success: true, count: deduped.length, devices: deduped });
     } catch (err) {
       console.error('[MDM] Fetch Devices Error:', err);
       return res.status(500).json({ success: false, message: err.message });
@@ -353,7 +418,8 @@ module.exports = function createMdmRouter(io) {
         updatedAt: d.lastLocation.updatedAt
       }));
 
-      return res.json({ success: true, count: liveLocations.length, locations: liveLocations });
+      const dedupedLocations = deduplicateDeviceList(liveLocations);
+      return res.json({ success: true, count: dedupedLocations.length, locations: dedupedLocations });
     } catch (err) {
       console.error('[MDM] Fetch Live Locations Error:', err);
       return res.status(500).json({ success: false, message: err.message });

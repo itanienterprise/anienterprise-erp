@@ -18,19 +18,22 @@ const TRACKING_ENABLED_KEY = 'erp_mdm_tracking_enabled';
 
 // Get or generate a persistent unique device ID for this phone/app
 export const getOrCreateDeviceId = () => {
-  let deviceId = typeof localStorage !== 'undefined' ? localStorage.getItem(DEVICE_ID_KEY) : null;
-  if (!deviceId && typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.getDeviceId === 'function') {
+  let deviceId = null;
+  if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.getDeviceId === 'function') {
     try {
       const nativeId = window.AndroidBridge.getDeviceId();
       if (nativeId && nativeId.trim()) deviceId = nativeId.trim();
     } catch (_) {}
   }
+  if (!deviceId && typeof localStorage !== 'undefined') {
+    deviceId = localStorage.getItem(DEVICE_ID_KEY);
+  }
   if (!deviceId) {
     // Generate UUID-like unique identifier
     deviceId = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase() + '-' + Date.now().toString(36).toUpperCase();
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(DEVICE_ID_KEY, deviceId);
-    }
+  }
+  if (typeof localStorage !== 'undefined' && deviceId) {
+    localStorage.setItem(DEVICE_ID_KEY, deviceId);
   }
   return deviceId;
 };
