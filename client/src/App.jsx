@@ -1071,7 +1071,10 @@ function App() {
   });
   const [stockDropdownOpen, setStockDropdownOpen] = useState(false);
   const [saleDropdownOpen, setSaleDropdownOpen] = useState(false);
-  const [hrmsDropdownOpen, setHrmsDropdownOpen] = useState(false);
+  const [hrmsDropdownOpen, setHrmsDropdownOpen] = useState(() => {
+    const saved = localStorage.getItem('currentView');
+    return saved === 'employee-section' || saved === 'attendance-section' || saved === 'role-creation' || saved === 'system-access' || saved === 'mdm-section';
+  });
   const [importerDropdownOpen, setImporterDropdownOpen] = useState(false);
   const [cnfDropdownOpen, setCnfDropdownOpen] = useState(false);
   const [bankDropdownOpen, setBankDropdownOpen] = useState(() => {
@@ -3445,7 +3448,7 @@ function App() {
               </button>
 
               {/* HRMS */}
-              {(hasPermission(currentUser, 'employees', 'view') || hasPermission(currentUser, 'attendance', 'view') || hasPermission(currentUser, 'backupRestore', 'view')) && (
+              {(hasPermission(currentUser, 'employees', 'view') || hasPermission(currentUser, 'attendance', 'view') || (currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin' || hasPermission(currentUser, 'mdm', 'view')) && (
                 <div>
                   <button
                     onClick={() => {
@@ -3456,7 +3459,7 @@ function App() {
                       }
                     }}
                     title={isMini ? 'HRMS' : undefined}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['employee-section', 'attendance-section', 'mdm-section', 'role-creation', 'system-access'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['employee-section', 'attendance-section', 'role-creation', 'system-access', 'mdm-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
                     <div className="flex items-center min-w-0">
                       <BriefcaseIcon className="w-5 h-5 flex-shrink-0" />
@@ -3468,7 +3471,7 @@ function App() {
                       <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${hrmsDropdownOpen ? 'transform rotate-180' : ''}`} />
                     </div>
                   </button>
-                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && hrmsDropdownOpen ? 'max-h-72 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && hrmsDropdownOpen ? 'max-h-[500px] opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                     <div className="pl-7 pr-2 space-y-1">
                       {hasPermission(currentUser, 'employees', 'view') && (
                         <button
@@ -3488,15 +3491,8 @@ function App() {
                           <span>Attendance</span>
                         </button>
                       )}
-                      {(hasPermission(currentUser, 'employees', 'view') || (currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (
-                        <button
-                          onClick={() => { handleViewChange('mdm-section'); }}
-                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'mdm-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                        >
-                          <MapPinIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                          <span>MDM & Tracking</span>
-                        </button>
-                      )}
+
+                      {/* HRMS Items: Employee, Attendance, Role Creation, System Access, MDM & Tracking */}
                       {((currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (
                         <>
                           <button
@@ -3511,9 +3507,18 @@ function App() {
                             className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'system-access' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                           >
                             <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                            <span>System access</span>
+                            <span>System Access</span>
                           </button>
                         </>
+                      )}
+                      {(hasPermission(currentUser, 'mdm', 'view') || (currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (
+                        <button
+                          onClick={() => { handleViewChange('mdm-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'mdm-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                        >
+                          <MapPinIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>MDM & Tracking</span>
+                        </button>
                       )}
                     </div>
                   </div>

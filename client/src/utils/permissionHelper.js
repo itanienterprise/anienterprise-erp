@@ -26,6 +26,17 @@ export const MODULES_LIST = [
             { key: 'deviceSync', label: 'Device & IP Sync' }
         ]
     },
+    {
+        key: 'mdm',
+        label: 'Access Control / MDM Tracking',
+        specialLabels: [
+            { key: 'enrollDevice', label: 'Enroll / Edit Device' },
+            { key: 'unbindDevice', label: 'Unbind / Delete Device' },
+            { key: 'statusChange', label: 'Approve / Suspend Device' },
+            { key: 'dispatchPing', label: 'Dispatch Live Ping' },
+            { key: 'viewHistory', label: 'View Route History' }
+        ]
+    },
     { key: 'port', label: 'Port Management' },
     { key: 'importerExporter', label: 'Importer / Exporter / Supplier' },
     { key: 'cnf', label: 'C&F Management' },

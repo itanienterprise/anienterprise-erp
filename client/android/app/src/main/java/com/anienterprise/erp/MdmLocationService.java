@@ -167,7 +167,7 @@ public class MdmLocationService extends Service {
         locationListener = new LocationListener() {
             @Override
             public void onLocationChanged(Location location) {
-                if (location != null) {
+                if (location != null && isBetterLocation(location, lastLocation)) {
                     lastLocation = location;
                 }
             }
@@ -183,28 +183,86 @@ public class MdmLocationService extends Service {
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    15000L,
-                    5.0f,
+                    5000L,
+                    0.0f,
                     locationListener,
                     Looper.getMainLooper()
                 );
                 Location loc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-                if (loc != null) lastLocation = loc;
+                if (isBetterLocation(loc, lastLocation)) lastLocation = loc;
             }
 
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                     LocationManager.NETWORK_PROVIDER,
-                    20000L,
-                    10.0f,
+                    15000L,
+                    5.0f,
                     locationListener,
                     Looper.getMainLooper()
                 );
                 Location loc = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                if (lastLocation == null && loc != null) lastLocation = loc;
+                if (isBetterLocation(loc, lastLocation)) lastLocation = loc;
             }
+
+            try {
+                if (locationManager.getAllProviders().contains(LocationManager.PASSIVE_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                        LocationManager.PASSIVE_PROVIDER,
+                        5000L,
+                        0.0f,
+                        locationListener,
+                        Looper.getMainLooper()
+                    );
+                }
+            } catch (Exception ignored) {}
         } catch (SecurityException ignored) {
         } catch (Exception ignored) {}
+    }
+
+    private static final int TWO_MINUTES = 1000 * 60 * 2;
+
+    /** Determines whether one Location reading is better than the current Location fix */
+    private boolean isBetterLocation(Location location, Location currentBestLocation) {
+        if (location == null) {
+            return false;
+        }
+        if (currentBestLocation == null) {
+            return true;
+        }
+
+        long timeDelta = location.getTime() - currentBestLocation.getTime();
+        boolean isSignificantlyNewer = timeDelta > TWO_MINUTES;
+        boolean isSignificantlyOlder = timeDelta < -TWO_MINUTES;
+        boolean isNewer = timeDelta > 0;
+
+        if (isSignificantlyNewer) {
+            return true;
+        } else if (isSignificantlyOlder) {
+            return false;
+        }
+
+        int accuracyDelta = (int) (location.getAccuracy() - currentBestLocation.getAccuracy());
+        boolean isLessAccurate = accuracyDelta > 0;
+        boolean isMoreAccurate = accuracyDelta < 0;
+        boolean isSignificantlyLessAccurate = accuracyDelta > 100;
+
+        boolean isFromSameProvider = isSameProvider(location.getProvider(), currentBestLocation.getProvider());
+
+        if (isMoreAccurate) {
+            return true;
+        } else if (isNewer && !isLessAccurate) {
+            return true;
+        } else if (isNewer && !isSignificantlyLessAccurate && isFromSameProvider) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isSameProvider(String provider1, String provider2) {
+        if (provider1 == null) {
+            return provider2 == null;
+        }
+        return provider1.equals(provider2);
     }
 
     private void startTelemetryLoop() {
@@ -285,14 +343,42 @@ public class MdmLocationService extends Service {
             }
         } catch (Exception ignored) {}
 
-        // Best location
+        // Active on-demand GPS reading on Android 11+ (API 30+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && locationManager != null) {
+            try {
+                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    locationManager.getCurrentLocation(
+                        LocationManager.GPS_PROVIDER,
+                        null,
+                        getMainExecutor(),
+                        new java.util.function.Consumer<Location>() {
+                            @Override
+                            public void accept(Location location) {
+                                if (location != null && isBetterLocation(location, lastLocation)) {
+                                    lastLocation = location;
+                                }
+                            }
+                        }
+                    );
+                }
+            } catch (SecurityException ignored) {
+            } catch (Exception ignored) {}
+        }
+
+        // Best location evaluation
         Location loc = lastLocation;
-        if (loc == null && locationManager != null) {
+        if (locationManager != null) {
             try {
                 Location lastGps = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                if (isBetterLocation(lastGps, loc)) {
+                    loc = lastGps;
+                    lastLocation = lastGps;
+                }
                 Location lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                if (lastGps != null) loc = lastGps;
-                else if (lastNet != null) loc = lastNet;
+                if (isBetterLocation(lastNet, loc)) {
+                    loc = lastNet;
+                    lastLocation = lastNet;
+                }
             } catch (SecurityException ignored) {}
         }
 

@@ -491,18 +491,20 @@ const MdmManagement = ({ currentUser }) => {
       const customIcon = L.divIcon({
         className: 'custom-mdm-marker',
         html: customHtml,
-        iconSize: [36, 46],
-        iconAnchor: [18, 46],
-        popupAnchor: [0, -46]
+        iconSize: [36, 44],
+        iconAnchor: [18, 44],
+        popupAnchor: [0, -44]
       });
 
       const marker = L.marker([loc.lat, loc.lng], { icon: customIcon });
 
       const lastSeenText = loc.lastSeen ? new Date(loc.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A';
       const speedText = loc.speed ? `${Math.round(loc.speed)} km/h` : 'Stationary';
+      const accuracyText = loc.accuracy ? `±${Math.round(loc.accuracy)}m ${loc.accuracy <= 25 ? '🎯 (Pinpoint GPS)' : '(Approximate)'}` : 'GPS Active';
+      const googleMapsUrl = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
 
       marker.bindPopup(`
-        <div style="font-family: inherit; min-width: 180px;">
+        <div style="font-family: inherit; min-width: 190px;">
           <h3 style="margin: 0 0 4px; font-size: 14px; font-weight: 700; color: #0f172a;">${loc.employeeName || 'Unknown Employee'}</h3>
           <p style="margin: 0 0 6px; font-size: 11px; color: #64748b;">ID: ${loc.employeeEmpId || 'N/A'} • ${loc.deviceModel || 'Mobile'}</p>
           <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0;">
@@ -514,11 +516,35 @@ const MdmManagement = ({ currentUser }) => {
             <strong>${speedText}</strong>
           </div>
           <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-top: 4px;">
+            <span>Accuracy:</span>
+            <strong style="color: ${loc.accuracy && loc.accuracy <= 25 ? '#059669' : '#334155'};">${accuracyText}</strong>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-top: 4px;">
             <span>Last Ping:</span>
             <span style="color: #64748b;">${lastSeenText}</span>
           </div>
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0; text-align: center;">
+            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; width: 100%; box-sizing: border-box; background: #2563eb; color: #ffffff; text-decoration: none; font-size: 11px; font-weight: 600; padding: 5px 8px; border-radius: 4px;">
+              📍 Open in Google Maps
+            </a>
+          </div>
         </div>
       `);
+
+      // Add high-precision accuracy radius circle around the device marker
+      if (loc.accuracy && loc.accuracy > 0) {
+        const isPrecise = loc.accuracy <= 25;
+        const circleColor = isPrecise ? '#10b981' : loc.accuracy <= 75 ? '#3b82f6' : '#f59e0b';
+        const accuracyCircle = L.circle([loc.lat, loc.lng], {
+          radius: loc.accuracy,
+          color: circleColor,
+          fillColor: circleColor,
+          fillOpacity: 0.12,
+          weight: 1.5,
+          dashArray: isPrecise ? null : '4, 4'
+        });
+        markersGroupRef.current.addLayer(accuracyCircle);
+      }
 
       markersGroupRef.current.addLayer(marker);
       bounds.push([loc.lat, loc.lng]);
@@ -526,7 +552,7 @@ const MdmManagement = ({ currentUser }) => {
 
     if (bounds.length > 0 && !selectedDevice) {
       try {
-        mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
       } catch (_) {}
     }
   }, [liveLocations, activeTab, selectedDevice]);
@@ -536,7 +562,7 @@ const MdmManagement = ({ currentUser }) => {
     setSelectedDevice(loc);
     if (mapInstanceRef.current && loc.lat && loc.lng) {
       mapInstanceRef.current.invalidateSize();
-      mapInstanceRef.current.setView([loc.lat, loc.lng], 16, { animate: true });
+      mapInstanceRef.current.setView([loc.lat, loc.lng], 18, { animate: true });
     }
   };
 
@@ -997,7 +1023,7 @@ const MdmManagement = ({ currentUser }) => {
                           <div className="overflow-hidden">
                             <p className="text-xs font-semibold text-gray-900 truncate m-0">{loc.employeeName || 'Unknown Employee'}</p>
                             <p className="text-[10px] text-gray-500 truncate m-0">
-                              {loc.deviceModel || 'Mobile'} • {loc.speed ? `${Math.round(loc.speed)} km/h` : 'Stopped'}
+                              {loc.deviceModel || 'Mobile'} • {loc.speed ? `${Math.round(loc.speed)} km/h` : 'Stopped'}{loc.accuracy ? ` • ±${Math.round(loc.accuracy)}m` : ''}
                             </p>
                           </div>
                         </div>
@@ -1178,10 +1204,11 @@ const MdmManagement = ({ currentUser }) => {
                             <BatteryIndicator level={device.batteryLevel} isCharging={device.isCharging} />
                           </td>
                           <td>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-xs capitalize text-gray-700">{device.networkType || 'Cellular'}</span>
                               <span className={`text-[10px] px-1.5 py-0.5 rounded ${device.isGpsEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                                 {device.isGpsEnabled ? 'GPS ON' : 'GPS OFF'}
+                                {device.lastLocation?.accuracy ? ` ±${Math.round(device.lastLocation.accuracy)}m` : ''}
                               </span>
                             </div>
                           </td>
@@ -1204,6 +1231,29 @@ const MdmManagement = ({ currentUser }) => {
                           </td>
                           <td className="text-right">
                             <div className="inline-flex items-center gap-1">
+                              {device.lastLocation?.lat && device.lastLocation?.lng ? (
+                                <a
+                                  href={`https://www.google.com/maps?q=${device.lastLocation.lat},${device.lastLocation.lng}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={`Open in Google Maps (${device.lastLocation.lat.toFixed(5)}, ${device.lastLocation.lng.toFixed(5)})`}
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded inline-flex items-center"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+                                    <line x1="9" y1="3" x2="9" y2="18" />
+                                    <line x1="15" y1="6" x2="15" y2="21" />
+                                  </svg>
+                                </a>
+                              ) : (
+                                <span title="No GPS location available" className="p-1 text-gray-300 cursor-not-allowed inline-flex items-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 opacity-40">
+                                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+                                    <line x1="9" y1="3" x2="9" y2="18" />
+                                    <line x1="15" y1="6" x2="15" y2="21" />
+                                  </svg>
+                                </span>
+                              )}
                               <button
                                 onClick={() => handleTriggerDevicePing(device)}
                                 title="Request Instant Ping from Phone (Socket)"

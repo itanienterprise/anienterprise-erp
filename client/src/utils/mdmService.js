@@ -115,24 +115,46 @@ class MdmService {
     return null;
   }
 
-  // Actively query current GPS position (works even when stationary)
+  // Intelligently update location, preserving high-accuracy GPS fixes over coarse network approximations
+  updateLocation(coords) {
+    if (!coords || typeof coords.latitude !== 'number') return;
+    const now = Date.now();
+    const newLoc = {
+      lat: coords.latitude,
+      lng: coords.longitude,
+      accuracy: coords.accuracy || null,
+      speed: coords.speed ? Math.round(coords.speed * 3.6) : 0,
+      heading: coords.heading || null,
+      altitude: coords.altitude || null,
+      timestamp: now
+    };
+
+    if (!this.lastLocation) {
+      this.lastLocation = newLoc;
+      return;
+    }
+
+    const timeDiff = now - (this.lastLocation.timestamp || 0);
+    const prevAcc = this.lastLocation.accuracy || 9999;
+    const newAcc = newLoc.accuracy || 9999;
+
+    // Favor high accuracy: never allow a coarse reading (e.g. 500m cell tower) to overwrite a pinpoint GPS fix (< 30m) within 3 minutes
+    if (newAcc <= prevAcc || timeDiff > 180000 || (timeDiff > 30000 && newAcc <= 35)) {
+      this.lastLocation = newLoc;
+    }
+  }
+
+  // Actively query current GPS position (forces fresh satellite fix with maximumAge: 0)
   async acquireCurrentLocation() {
     if (this.isNative) {
       try {
         const pos = await Geolocation.getCurrentPosition({
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 30000
+          timeout: 12000,
+          maximumAge: 0
         });
         if (pos && pos.coords) {
-          this.lastLocation = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy || null,
-            speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0,
-            heading: pos.coords.heading || null,
-            altitude: pos.coords.altitude || null
-          };
+          this.updateLocation(pos.coords);
         }
       } catch (e) {
         console.warn('[MDM] Native getCurrentPosition:', e.message);
@@ -143,19 +165,12 @@ class MdmService {
           navigator.geolocation.getCurrentPosition(
             (pos) => {
               if (pos && pos.coords) {
-                this.lastLocation = {
-                  lat: pos.coords.latitude,
-                  lng: pos.coords.longitude,
-                  accuracy: pos.coords.accuracy || null,
-                  speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0,
-                  heading: pos.coords.heading || null,
-                  altitude: pos.coords.altitude || null
-                };
+                this.updateLocation(pos.coords);
               }
               resolve();
             },
             () => resolve(),
-            { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
           );
         });
       } catch (_) {}
@@ -296,21 +311,14 @@ class MdmService {
         await Geolocation.requestPermissions();
         const watchCallback = (position, err) => {
           if (position && position.coords) {
-            this.lastLocation = {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-              accuracy: position.coords.accuracy || null,
-              speed: position.coords.speed ? Math.round(position.coords.speed * 3.6) : 0,
-              heading: position.coords.heading || null,
-              altitude: position.coords.altitude || null
-            };
+            this.updateLocation(position.coords);
           } else if (err) {
             console.warn('[MDM] Native watch callback:', err);
           }
         };
 
         this.watchId = await Geolocation.watchPosition(
-          { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
           watchCallback
         );
       } catch (e) {
@@ -321,18 +329,11 @@ class MdmService {
         this.watchId = navigator.geolocation.watchPosition(
           (position) => {
             if (position && position.coords) {
-              this.lastLocation = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                accuracy: position.coords.accuracy || null,
-                speed: position.coords.speed ? Math.round(position.coords.speed * 3.6) : 0,
-                heading: position.coords.heading || null,
-                altitude: position.coords.altitude || null
-              };
+              this.updateLocation(position.coords);
             }
           },
           () => {},
-          { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
         );
       } catch (_) {}
     }

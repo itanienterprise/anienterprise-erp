@@ -347,13 +347,17 @@
 /* Custom Leaflet Pin Styling */
 .custom-mdm-marker {
   position: relative;
+  background: transparent !important;
+  border: none !important;
 }
 
 .marker-pin-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: translate(-50%, -100%);
+  width: 36px;
+  height: 44px;
+  position: relative;
 }
 
 .marker-avatar {
