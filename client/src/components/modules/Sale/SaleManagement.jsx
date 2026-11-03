@@ -4047,47 +4047,47 @@ const SaleManagement = ({
         const resolvedAcceptedByUsername = viewData.acceptedByUsername || linkedDelivery?.acceptedByUsername || viewData.approvedByUsername;
 
         return createPortal(
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
                 <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
-                <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300 z-10">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-white">
-                        <div className="flex items-center gap-4">
-                            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
-                                <ReceiptIcon className="w-6 h-6" />
+                <div className="relative bg-white border border-gray-100 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300 z-10 flex flex-col max-h-[92vh] md:max-h-[85vh]">
+                    <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-50 bg-white shrink-0">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                            <div className="p-2 sm:p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+                                <ReceiptIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-gray-900 tracking-tight">
+                                <h3 className="text-base sm:text-xl font-bold text-gray-900 tracking-tight">
                                     {(viewData.saleType === 'Order' || (viewData.invoiceNo || '').startsWith('ORD')) ? 'Order Details' : 'Sale Invoice Details'}
                                 </h3>
-                                <p className="text-xs text-gray-500 font-medium">{viewData.invoiceNo || viewData.orderNo || 'No Invoice Number'}</p>
+                                <p className="text-[11px] sm:text-xs text-gray-500 font-medium">{viewData.invoiceNo || viewData.orderNo || 'No Invoice Number'}</p>
                             </div>
                         </div>
-                        <button onClick={() => setViewData(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all shadow-sm">
+                        <button onClick={() => setViewData(null)} className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all shadow-sm cursor-pointer">
                             <XIcon className="w-5 h-5" />
                         </button>
                     </div>
 
-                    <div className="overflow-y-auto max-h-[70vh] p-6 space-y-6 bg-gray-50/30">
+                    <div className="overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 bg-gray-50/30 flex-1">
 
-                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 p-6 bg-white rounded-2xl border border-gray-100/50 shadow-sm">
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-6 p-4 sm:p-6 bg-white rounded-2xl border border-gray-100/50 shadow-sm">
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Transaction Date</span>
-                                <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                                    {formatDate(viewData.date)}
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 flex items-center gap-1.5 sm:gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>
+                                    <span>{formatDate(viewData.date)}</span>
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Company Name</span>
-                                <div className="text-sm font-bold text-gray-900 truncate" title={getSafeString(viewData.companyName)}>{getSafeString(viewData.companyName) || '-'}</div>
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 break-words md:truncate" title={getSafeString(viewData.companyName)}>{getSafeString(viewData.companyName) || '-'}</div>
                             </div>
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Customer</span>
-                                <div className="text-sm font-bold text-gray-900">{getSafeString(viewData.customerName) || '-'}</div>
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 break-words">{getSafeString(viewData.customerName) || '-'}</div>
                             </div>
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Entry / Audit</span>
-                                <div className="text-xs space-y-0.5">
+                                <div className="text-[11px] sm:text-xs space-y-0.5">
                                     <div className="font-bold text-gray-900"><span className="text-gray-500 font-normal">Entry:</span> {getDisplayName(viewData.requestedByUsername || viewData.createdByUsername, viewData.requestedBy || viewData.createdByName || 'N/A')}</div>
                                     {resolvedAcceptedBy && (
                                         <div className="text-emerald-600 font-semibold"><span className="text-emerald-500 font-normal">Accepted:</span> ✓ {getDisplayName(resolvedAcceptedByUsername, resolvedAcceptedBy)}</div>
@@ -4100,9 +4100,9 @@ const SaleManagement = ({
                                     )}
                                 </div>
                             </div>
-                            <div className="space-y-1">
+                            <div className="space-y-1 col-span-2 lg:col-span-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status / Payment</span>
-                                <div className="flex flex-col gap-1.5">
+                                <div className="flex flex-row lg:flex-col gap-1.5 flex-wrap">
                                     <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold uppercase tracking-wider ${viewData.status === 'Requested' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
                                         viewData.status === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
                                             'bg-emerald-50 text-emerald-600 border border-emerald-100'
@@ -4117,7 +4117,8 @@ const SaleManagement = ({
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-2xl border border-gray-100/50 overflow-hidden shadow-sm">
+                        {/* Desktop Products Table - Unchanged */}
+                        <div className="hidden md:block bg-white rounded-2xl border border-gray-100/50 overflow-hidden shadow-sm">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-white border-b border-gray-50 group">
@@ -4191,19 +4192,89 @@ const SaleManagement = ({
                             </table>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                            <div className="p-5 bg-orange-50/30 rounded-2xl border border-orange-100/50 group hover:bg-orange-50/50 transition-colors">
-                                <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1.5">Total Discount</div>
-                                <div className="text-xl font-black text-orange-600 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.discount || 0).toLocaleString('en-IN')}</div>
+                        {/* Mobile Products Breakdown */}
+                        <div className="block md:hidden space-y-3">
+                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">
+                                Products ({viewData.items?.length || 0})
                             </div>
-                            <div className="p-5 bg-emerald-50/30 rounded-2xl border border-emerald-100/50 group hover:bg-emerald-50/50 transition-colors">
-                                <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5">Truck Fare</div>
-                                <div className="text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString('en-IN')}</div>
+                            {viewData.items?.map((product, pIdx) => {
+                                const entries = (product.brandEntries && product.brandEntries.length > 0)
+                                    ? product.brandEntries
+                                    : [{
+                                        brand: product.brand || '-',
+                                        warehouseName: product.warehouseName || '-',
+                                        bag: product.bag || product.packet || 0,
+                                        quantity: product.quantity || 0,
+                                        unitPrice: product.unitPrice || product.rate || 0,
+                                        totalAmount: product.totalAmount || product.amount || 0
+                                    }];
+
+                                return (
+                                    <div key={pIdx} className="bg-white rounded-2xl border border-gray-100 p-3.5 shadow-xs space-y-2.5">
+                                        <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                                            <div className="w-1.5 h-3.5 bg-blue-600 rounded-sm shrink-0"></div>
+                                            <span className="text-xs font-bold text-blue-900 truncate">
+                                                {resolveProductName(product.productName)}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {entries.map((entry, eIdx) => (
+                                                <div key={eIdx} className="bg-gray-50/70 rounded-xl p-2.5 border border-gray-100 text-xs space-y-2">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="font-bold text-gray-800 text-xs truncate">
+                                                            {entry.brand || entry.brandName || '-'}
+                                                        </div>
+                                                        {(entry.warehouseName && entry.warehouseName !== '-') && (
+                                                            <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1 shrink-0">
+                                                                <div className="w-1 h-1 rounded-full bg-blue-500"></div>
+                                                                {entry.warehouseName}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-gray-100">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Qty / Bag</span>
+                                                            <span className="font-bold text-gray-900 text-xs">
+                                                                {product.uom === 'BAG'
+                                                                    ? `${parseFloat(entry.bag || entry.packet || 0).toLocaleString('en-US')} Bag`
+                                                                    : `${parseFloat(entry.quantity || 0).toLocaleString('en-US')} kg`}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Unit Price</span>
+                                                            <span className="font-semibold text-gray-600 text-xs">
+                                                                ৳{parseFloat(entry.unitPrice || entry.rate || 0).toLocaleString('en-IN')}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Subtotal</span>
+                                                            <span className="font-black text-blue-700 text-xs">
+                                                                ৳{parseFloat(entry.totalAmount || entry.amount || 0).toLocaleString('en-IN')}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 pt-1 md:pt-2">
+                            <div className="p-3.5 sm:p-5 bg-orange-50/30 rounded-2xl border border-orange-100/50 group hover:bg-orange-50/50 transition-colors">
+                                <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1 sm:mb-1.5">Total Discount</div>
+                                <div className="text-base sm:text-xl font-black text-orange-600 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.discount || 0).toLocaleString('en-IN')}</div>
                             </div>
-                            <div className="p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
+                            <div className="p-3.5 sm:p-5 bg-emerald-50/30 rounded-2xl border border-emerald-100/50 group hover:bg-emerald-50/50 transition-colors">
+                                <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1 sm:mb-1.5">Truck Fare</div>
+                                <div className="text-base sm:text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString('en-IN')}</div>
+                            </div>
+                            <div className="col-span-2 md:col-span-1 p-3.5 sm:p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-                                <div className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1.5 relative z-10">Grand Total Invoice</div>
-                                <div className="text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">৳{parseFloat(viewData.totalAmount || 0).toLocaleString('en-IN')}</div>
+                                <div className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1 sm:mb-1.5 relative z-10">Grand Total Invoice</div>
+                                <div className="text-lg sm:text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">৳{parseFloat(viewData.totalAmount || 0).toLocaleString('en-IN')}</div>
                             </div>
                         </div>
                     </div>
@@ -8117,12 +8188,124 @@ const SaleManagement = ({
                                         </div>
                                     </div>
 
-                                    {/* Card Body: Action Buttons Only (Expanded View) */}
+                                    {/* Card Body: Products Breakdown, Summary & Actions (Expanded View) */}
                                     {isExpanded && (
-                                        <div className="px-3.5 py-2.5 flex items-center justify-end gap-2 animate-in slide-in-from-top-1 duration-150" onClick={(e) => e.stopPropagation()}>
+                                        <div className="p-3.5 space-y-3 animate-in slide-in-from-top-2 duration-200 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                                            {/* Products Breakdown */}
+                                            <div className="space-y-2">
+                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                    Products ({items.length})
+                                                </div>
+                                                {items.map((it, itIdx) => {
+                                                    const itQty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                                                    const itPrice = parseFloat(it.unitPrice || 0);
+                                                    const itTotal = itQty * itPrice;
+                                                    const hasBag = it.bag !== undefined && it.bag !== null && it.bag !== '';
+
+                                                    return (
+                                                        <div key={itIdx} className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">Product:</span>
+                                                                <span className="font-bold text-gray-900 text-right">{it.productName || '—'}</span>
+                                                            </div>
+                                                            {it.brand && (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Brand:</span>
+                                                                    <span className="font-semibold text-gray-800 text-right">{it.brand}</span>
+                                                                </div>
+                                                            )}
+                                                            {it.warehouseName && (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Warehouse:</span>
+                                                                    <span className="font-semibold text-gray-700 text-right">{it.warehouseName}</span>
+                                                                </div>
+                                                            )}
+                                                            {it.lcNo && (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">LC No:</span>
+                                                                    <span className="font-semibold text-gray-700 text-right">{it.lcNo}</span>
+                                                                </div>
+                                                            )}
+                                                            {hasBag && (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Bag:</span>
+                                                                    <span className="font-bold text-purple-700 text-right">
+                                                                        {Math.round(parseFloat(it.bag || 0)).toLocaleString('en-US')} Bag
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">Quantity:</span>
+                                                                <span className="font-bold text-orange-800 text-right">
+                                                                    {parseFloat(it.quantity || 0).toLocaleString('en-US')} kg
+                                                                </span>
+                                                            </div>
+                                                            {itPrice > 0 && (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">Rate:</span>
+                                                                    <span className="font-bold text-blue-600 text-right">
+                                                                        ৳{itPrice.toLocaleString('en-IN')}{it.uom === 'BAG' ? '/bag' : '/kg'}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                            {itTotal > 0 && (
+                                                                <div className="flex justify-between items-center pt-1 border-t border-gray-200/60">
+                                                                    <span className="text-gray-500 font-medium">Item Total:</span>
+                                                                    <span className="font-black text-gray-900 text-right">
+                                                                        ৳{itTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Financial Summary */}
+                                            <div className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-gray-500 font-medium">Total Amount:</span>
+                                                    <span className="font-black text-gray-900 text-right">
+                                                        ৳{parseFloat(sale.totalAmount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                                {parseFloat(sale.discount || 0) > 0 && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-red-500 font-medium">Discount:</span>
+                                                        <span className="font-bold text-red-600 text-right">
+                                                            -৳{parseFloat(sale.discount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {parseFloat(sale.paidAmount || 0) > 0 && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-emerald-600 font-medium">Truck Fare:</span>
+                                                        <span className="font-bold text-emerald-700 text-right">
+                                                            ৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between items-center pt-1 border-t border-gray-200/60">
+                                                    <span className="text-gray-700 font-bold">Total Balance:</span>
+                                                    <span className="font-black text-blue-600 text-right">
+                                                        ৳{parseFloat(sale.dueAmount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                                {getEntryByFirstName(sale) && (
+                                                    <div className="flex justify-between items-center pt-1">
+                                                        <span className="text-gray-400 text-[11px]">Entry By:</span>
+                                                        <span className="text-indigo-600 font-semibold text-[11px] text-right">
+                                                            {getEntryByFirstName(sale)}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Action Buttons Toolbar */}
+                                            <div className="pt-2.5 border-t border-gray-100 flex items-center justify-center gap-2.5 w-full" onClick={(e) => e.stopPropagation()}>
                                             {(sale.status === 'Requested' || sale.status === 'Edit_Requested') ? (
                                                 <>
-                                                    <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="flex-1 max-w-[80px] h-9 flex items-center justify-center text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-100 rounded-xl transition-colors shadow-2xs" title="View Details"><EyeIcon className="w-4.5 h-4.5" /></button>
                                                     {(canEditRequestedSale(sale) || canUserEditSale(sale)) && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
@@ -8133,10 +8316,10 @@ const SaleManagement = ({
                                                             data-total-amount={sale.grandTotal || sale.totalAmount || ''}
                                                             data-sale-type={saleType || ''}
                                                             data-status={sale.status || ''}
-                                                            className="p-2 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-colors"
+                                                            className="flex-1 max-w-[80px] h-9 flex items-center justify-center text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-100 rounded-xl transition-colors shadow-2xs"
                                                             title="Edit"
                                                         >
-                                                            <EditIcon className="w-5 h-5" />
+                                                            <EditIcon className="w-4.5 h-4.5" />
                                                         </button>
                                                     )}
                                                     {canApprove && (
@@ -8144,7 +8327,7 @@ const SaleManagement = ({
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }}
                                                                 data-action={`Accept ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
-                                                                className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1"
+                                                                className="flex-1 min-w-[85px] h-9 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-2xs"
                                                                 title="Accept"
                                                             >
                                                                 <CheckIcon className="w-4 h-4" /> Accept
@@ -8152,7 +8335,7 @@ const SaleManagement = ({
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }}
                                                                 data-action={`Reject ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
-                                                                className="px-2.5 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1"
+                                                                className="flex-1 min-w-[85px] h-9 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-2xs"
                                                                 title="Reject"
                                                             >
                                                                 <XIcon className="w-4 h-4" /> Reject
@@ -8163,7 +8346,7 @@ const SaleManagement = ({
                                             ) : (
                                                 <>
                                                     {canViewSale(sale) && (
-                                                        <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="flex-1 max-w-[80px] h-9 flex items-center justify-center text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-100 rounded-xl transition-colors shadow-2xs" title="View Details"><EyeIcon className="w-4.5 h-4.5" /></button>
                                                     )}
                                                     {canUserEditSale(sale) && (
                                                         <button
@@ -8175,23 +8358,23 @@ const SaleManagement = ({
                                                             data-total-amount={sale.grandTotal || sale.totalAmount || ''}
                                                             data-sale-type={saleType || ''}
                                                             data-status={sale.status || ''}
-                                                            className="p-2 text-blue-600 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-colors"
+                                                            className="flex-1 max-w-[80px] h-9 flex items-center justify-center text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-100 rounded-xl transition-colors shadow-2xs"
                                                             title="Edit"
                                                         >
-                                                            <EditIcon className="w-5 h-5" />
+                                                            <EditIcon className="w-4.5 h-4.5" />
                                                         </button>
                                                     )}
                                                     {saleType === 'General' ? (
-                                                        <div className="relative inline-block sale-pdf-dropdown-container">
+                                                        <div className="flex-1 max-w-[80px] relative inline-block sale-pdf-dropdown-container">
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     setActivePdfDropdown(activePdfDropdown === sale._id ? null : sale._id);
                                                                 }}
-                                                                className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors"
+                                                                className="w-full h-9 flex items-center justify-center bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors shadow-2xs"
                                                                 title="Download PDF"
                                                             >
-                                                                <FileTextIcon className="w-5 h-5" />
+                                                                <FileTextIcon className="w-4.5 h-4.5" />
                                                             </button>
                                                             {activePdfDropdown === sale._id && (
                                                                 <div
@@ -8224,15 +8407,16 @@ const SaleManagement = ({
                                                             )}
                                                         </div>
                                                     ) : (
-                                                        <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors"><FileTextIcon className="w-5 h-5" /></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="flex-1 max-w-[80px] h-9 flex items-center justify-center bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors shadow-2xs"><FileTextIcon className="w-4.5 h-4.5" /></button>
                                                     )}
                                                     {canUserDeleteSale(sale) && (
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="flex-1 max-w-[80px] h-9 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors shadow-2xs"><TrashIcon className="w-4.5 h-4.5" /></button>
                                                     )}
                                                 </>
                                             )}
-                                        </div>
-                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                 </div>
                             );
                         })
