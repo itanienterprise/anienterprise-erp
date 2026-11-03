@@ -16,6 +16,7 @@ import { generateLCManagementReportExcel, generateLCBillReportExcel } from '../.
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getCogNetBillBdt, isProductMatch, getLcMilestoneFinances } from '../../../utils/lcValueUtils';
 import { formatFirstName } from '../IPManagement/IPManagement';
@@ -5930,6 +5931,17 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const [editingId, setEditingId] = useState(null);
     const [editingRecord, setEditingRecord] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [pageSize, setPageSize] = useState(() => {
+        try {
+            const saved = localStorage.getItem('lc_management_page_size');
+            if (saved) {
+                const parsed = Number(saved);
+                if ([15, 30, 50, 100].includes(parsed)) return parsed;
+            }
+        } catch (_) {}
+        return 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [viewData, setViewData] = useState(null);
@@ -9250,23 +9262,44 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
         const isSearching = Boolean(searchQuery && searchQuery.trim());
         if (isSearching) {
-            const query = searchQuery.trim().toLowerCase();
-            const cleanQuery = query.replace(/[\s\-_/]/g, '');
-            const cleanLc = String(record.lcNo || '').toLowerCase().replace(/[\s\-_/]/g, '');
-            const cleanIp = String(record.ipNo || '').toLowerCase().replace(/[\s\-_/]/g, '');
+            const searchTokens = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+            const rawLc = String(record.lcNo || '').toLowerCase();
+            const cleanLc = rawLc.replace(/[^a-z0-9]/g, '');
+            const rawIp = String(record.ipNo || '').toLowerCase();
+            const cleanIp = rawIp.replace(/[^a-z0-9]/g, '');
+            const productListNames = (record.productsList || []).map(p => p.productName || '').join(' ');
+            const ipNumbersList = (record.ipNumbers || []).join(' ');
             const entryInfo = getLcEntryDetails(record);
-            const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
-                (record.productsList && record.productsList.some(p => (p.productName || '').toLowerCase().includes(query)));
-            const matchesSearch = (record.ipNo || '').toLowerCase().includes(query) ||
-                (cleanIp && cleanQuery && cleanIp.includes(cleanQuery)) ||
-                (record.lcNo || '').toLowerCase().includes(query) ||
-                (cleanLc && cleanQuery && cleanLc.includes(cleanQuery)) ||
-                (record.importerName || '').toLowerCase().includes(query) ||
-                (record.bankName || '').toLowerCase().includes(query) ||
-                (entryInfo.creator || '').toLowerCase().includes(query) ||
-                (entryInfo.editor || '').toLowerCase().includes(query) ||
-                (entryInfo.amended || '').toLowerCase().includes(query) ||
-                matchesProduct;
+            const datesStr = `${record.openingDate || ''} ${formatDate(record.openingDate)} ${record.expiryDate || ''} ${formatDate(record.expiryDate)}`;
+
+            const combinedBlob = [
+                rawLc,
+                cleanLc,
+                rawIp,
+                cleanIp,
+                ipNumbersList,
+                String(record.importerName || ''),
+                String(record.exporterName || ''),
+                String(record.bankName || ''),
+                String(record.port || ''),
+                String(record.productName || ''),
+                productListNames,
+                String(record.lcStatus || ''),
+                String(record.piNo || ''),
+                datesStr,
+                String(entryInfo.creator || ''),
+                String(entryInfo.editor || ''),
+                String(entryInfo.amended || '')
+            ].join(' ').toLowerCase();
+
+            const cleanBlob = combinedBlob.replace(/[^a-z0-9]/g, '');
+
+            const matchesSearch = searchTokens.every(token => {
+                const cleanToken = token.replace(/[^a-z0-9]/g, '');
+                if (combinedBlob.includes(token)) return true;
+                if (cleanToken && cleanBlob.includes(cleanToken)) return true;
+                return false;
+            });
 
             if (!matchesSearch) return false;
         }
@@ -9422,6 +9455,24 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         }
         return sortableRecords;
     }, [filteredRecords, sortConfig, allStockRecords, allSalesRecords, gpRecords, lcExpenses, insurancePayments, piRecordsRaw]);
+
+    const totalPages = Math.max(1, Math.ceil(sortedRecords.length / pageSize));
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [totalPages, currentPage]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, lcFilters, isRequestedOnly]);
+
+    const paginatedRecords = useMemo(() => {
+        if (pageSize >= sortedRecords.length) return sortedRecords;
+        const start = (currentPage - 1) * pageSize;
+        return sortedRecords.slice(start, start + pageSize);
+    }, [sortedRecords, currentPage, pageSize]);
 
     const renderSortHeader = (label, key, alignClass = '') => {
         return (
@@ -12401,7 +12452,8 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         </td>
                                     </tr>
                                 ) : sortedRecords.length > 0 ? (
-                                    sortedRecords.map((record, index) => {
+                                    paginatedRecords.map((record, index) => {
+                                        const sl = (currentPage - 1) * pageSize + index + 1;
                                         // Helper for sanitized numeric parsing
                                         const parseNum = (val) => {
                                             if (val === null || val === undefined) return 0;
@@ -12494,7 +12546,7 @@ ref={el => {
 style={
     isHighlighted(record) ? { borderLeft: '5px solid #f59e0b' } : undefined
 }>
-                                                    <td className="px-2 py-3 text-sm font-medium text-gray-400 whitespace-nowrap">{index + 1}</td>
+                                                    <td className="px-2 py-3 text-sm font-medium text-gray-400 whitespace-nowrap">{sl}</td>
                                                     <td className="px-2 py-3 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
                                                     <td className={`px-2 py-3 text-sm font-bold whitespace-nowrap ${getShipmentDateColorClass(record.latestShipmentDate)}`}>{formatDate(record.latestShipmentDate) || '—'}</td>
                                                     <td className="px-2 py-3 text-sm font-bold text-gray-900 whitespace-nowrap">
@@ -13212,7 +13264,8 @@ style={
                                 </div>
                             ))
                         ) : sortedRecords.length > 0 ? (
-                            sortedRecords.map((record, index) => {
+                            paginatedRecords.map((record, index) => {
+                                const sl = (currentPage - 1) * pageSize + index + 1;
                                 // Helper for sanitized numeric parsing
                                 const parseNum = (val) => {
                                     if (val === null || val === undefined) return 0;
@@ -13922,6 +13975,17 @@ style={
                             </div>
                         )}
                     </div>
+
+                    <PaginationBar
+                        currentPage={currentPage}
+                        pageSize={pageSize}
+                        totalItems={sortedRecords.length}
+                        totalUnfiltered={lcRecords.length}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={setPageSize}
+                        pageSizeOptions={[15, 30, 50, 100]}
+                        itemName="LCs"
+                    />
                 </>
             )}
             {viewData && (

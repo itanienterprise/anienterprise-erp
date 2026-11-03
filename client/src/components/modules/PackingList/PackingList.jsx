@@ -11,6 +11,7 @@ import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import './PackingList.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { PIDetailsModal } from '../PI/PIDetailsModal';
@@ -177,6 +178,17 @@ function PackingList({
         onConfirm: null
     });
     const [searchQuery, setSearchQuery] = useState('');
+    const [pageSize, setPageSize] = useState(() => {
+        try {
+            const saved = localStorage.getItem('packing_list_page_size');
+            if (saved) {
+                const parsed = Number(saved);
+                if ([15, 30, 50, 100].includes(parsed)) return parsed;
+            }
+        } catch (_) {}
+        return 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
     const [editingId, setEditingId] = useState(null);
     const [selectedPiRaw, setSelectedPiRaw] = useState(null);
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -1542,99 +1554,142 @@ function PackingList({
         }
     };
 
-    const filteredRecords = records.filter(record => {
-        const isSearching = Boolean(searchQuery && searchQuery.trim());
+    const filteredRecords = useMemo(() => {
+        return records.filter(record => {
+            const isSearching = Boolean(searchQuery && searchQuery.trim());
 
-        // Search Query Filter
-        if (isSearching) {
-            const query = searchQuery.trim().toLowerCase();
-            const cleanQuery = query.replace(/[\s\-_/]/g, '');
-            const cleanPl = String(record.packingListNumber || record.invoiceNo || '').toLowerCase().replace(/[\s\-_/]/g, '');
-            const cleanPi = String(record.piNumber || '').toLowerCase().replace(/[\s\-_/]/g, '');
+            // Best searching option: multi-term flexible search
+            if (isSearching) {
+                const searchTokens = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+                const rawPl = String(record.packingListNumber || record.invoiceNo || '').toLowerCase();
+                const cleanPl = rawPl.replace(/[^a-z0-9]/g, '');
+                const rawPi = String(record.piNumber || '').toLowerCase();
+                const cleanPi = rawPi.replace(/[^a-z0-9]/g, '');
+                
+                const productListNames = (record.productsList || []).map(p => p.productName || '').join(' ');
+                const portStr = `${record.port || ''} ${record.portOfLoading || ''} ${record.portOfDischarge || ''}`;
+                const datesStr = `${record.date || ''} ${formatDate(record.date)} ${formatDate(record.createdAt)}`;
+                const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
 
-            const matchesSearch = (record.packingListNumber || '').toLowerCase().includes(query) ||
-                (record.invoiceNo || '').toLowerCase().includes(query) ||
-                (cleanQuery && cleanPl && cleanPl.includes(cleanQuery)) ||
-                (record.partyName || '').toLowerCase().includes(query) ||
-                (record.exporterName || '').toLowerCase().includes(query) ||
-                (record.piNumber || '').toLowerCase().includes(query) ||
-                (cleanQuery && cleanPi && cleanPi.includes(cleanQuery));
-            if (!matchesSearch) return false;
-        }
+                const combinedBlob = [
+                    rawPl,
+                    cleanPl,
+                    rawPi,
+                    cleanPi,
+                    String(record.partyName || ''),
+                    String(record.exporterName || ''),
+                    String(record.productName || ''),
+                    productListNames,
+                    portStr,
+                    datesStr,
+                    String(record.entryBy || ''),
+                    String(entryByName || '')
+                ].join(' ').toLowerCase();
 
-        // Advanced Filters (Date range bypassed when searching)
-        if (!isSearching) {
-            if (plFilters.startDate && record.date && record.date < plFilters.startDate) return false;
-            if (plFilters.endDate && record.date && record.date > plFilters.endDate) return false;
+                const cleanBlob = combinedBlob.replace(/[^a-z0-9]/g, '');
 
-            // Quick range filtering
-            if (plFilters.quickRange && plFilters.quickRange !== 'all' && plFilters.quickRange !== 'custom') {
-                const parseLocalDate = (dVal) => {
-                    if (!dVal) return null;
-                    if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
-                    const str = String(dVal).trim();
-                    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-                        const [y, m, d] = str.split('T')[0].split('-').map(Number);
-                        return new Date(y, m - 1, d);
-                    }
-                    const d = new Date(str);
-                    return isNaN(d.getTime()) ? null : d;
-                };
+                const matchesSearch = searchTokens.every(token => {
+                    const cleanToken = token.replace(/[^a-z0-9]/g, '');
+                    if (combinedBlob.includes(token)) return true;
+                    if (cleanToken && cleanBlob.includes(cleanToken)) return true;
+                    return false;
+                });
 
-                const targetDate = parseLocalDate(record.date) || parseLocalDate(record.trDate) || parseLocalDate(record.createdAt);
-                if (!targetDate) return false;
+                if (!matchesSearch) return false;
+            }
 
-                const now = new Date();
-                if (plFilters.quickRange === 'weekly') {
-                    const dayOfWeek = now.getDay();
-                    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
-                    const weekStart = new Date(now);
-                    weekStart.setDate(now.getDate() + diffToMonday);
-                    weekStart.setHours(0, 0, 0, 0);
-                    const weekEnd = new Date(weekStart);
-                    weekEnd.setDate(weekStart.getDate() + 6);
-                    weekEnd.setHours(23, 59, 59, 999);
+            // Advanced Filters (Date range bypassed when searching)
+            if (!isSearching) {
+                if (plFilters.startDate && record.date && record.date < plFilters.startDate) return false;
+                if (plFilters.endDate && record.date && record.date > plFilters.endDate) return false;
 
-                    const rollingWeekStart = new Date(now);
-                    rollingWeekStart.setDate(now.getDate() - 7);
-                    rollingWeekStart.setHours(0, 0, 0, 0);
+                // Quick range filtering
+                if (plFilters.quickRange && plFilters.quickRange !== 'all' && plFilters.quickRange !== 'custom') {
+                    const parseLocalDate = (dVal) => {
+                        if (!dVal) return null;
+                        if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
+                        const str = String(dVal).trim();
+                        if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                            const [y, m, d] = str.split('T')[0].split('-').map(Number);
+                            return new Date(y, m - 1, d);
+                        }
+                        const d = new Date(str);
+                        return isNaN(d.getTime()) ? null : d;
+                    };
 
-                    const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
-                    if (!matchesWeekly) return false;
-                } else if (plFilters.quickRange === 'monthly') {
-                    const month = parseInt(plFilters.selectedMonth || (now.getMonth() + 1));
-                    const year = parseInt(plFilters.selectedYear || now.getFullYear());
-                    if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
-                        return false;
-                    }
-                } else if (plFilters.quickRange === 'yearly') {
-                    const year = parseInt(plFilters.selectedYear || now.getFullYear());
-                    if (targetDate.getFullYear() !== year) {
-                        return false;
+                    const targetDate = parseLocalDate(record.date) || parseLocalDate(record.trDate) || parseLocalDate(record.createdAt);
+                    if (!targetDate) return false;
+
+                    const now = new Date();
+                    if (plFilters.quickRange === 'weekly') {
+                        const dayOfWeek = now.getDay();
+                        const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                        const weekStart = new Date(now);
+                        weekStart.setDate(now.getDate() + diffToMonday);
+                        weekStart.setHours(0, 0, 0, 0);
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekStart.getDate() + 6);
+                        weekEnd.setHours(23, 59, 59, 999);
+
+                        const rollingWeekStart = new Date(now);
+                        rollingWeekStart.setDate(now.getDate() - 7);
+                        rollingWeekStart.setHours(0, 0, 0, 0);
+
+                        const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
+                        if (!matchesWeekly) return false;
+                    } else if (plFilters.quickRange === 'monthly') {
+                        const month = parseInt(plFilters.selectedMonth || (now.getMonth() + 1));
+                        const year = parseInt(plFilters.selectedYear || now.getFullYear());
+                        if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
+                            return false;
+                        }
+                    } else if (plFilters.quickRange === 'yearly') {
+                        const year = parseInt(plFilters.selectedYear || now.getFullYear());
+                        if (targetDate.getFullYear() !== year) {
+                            return false;
+                        }
                     }
                 }
             }
+
+            if (plFilters.port) {
+                const filterPort = plFilters.port.trim().toLowerCase();
+                const recordPort = (record.port || '').trim().toLowerCase();
+                const recordDischarge = (record.portOfDischarge || '').trim().toLowerCase();
+                const recordLoading = (record.portOfLoading || '').trim().toLowerCase();
+                if (recordPort !== filterPort && recordDischarge !== filterPort && recordLoading !== filterPort) return false;
+            }
+
+            if (plFilters.importerName && (record.partyName || '').trim().toLowerCase() !== plFilters.importerName.toLowerCase()) return false;
+            if (plFilters.exporterName && (record.exporterName || '').trim().toLowerCase() !== plFilters.exporterName.toLowerCase()) return false;
+
+            if (plFilters.productName) {
+                const matchesFilterProduct = (record.productName || '').trim().toLowerCase() === plFilters.productName.toLowerCase() ||
+                    (record.productsList && record.productsList.some(p => (p.productName || '').trim().toLowerCase() === plFilters.productName.toLowerCase()));
+                if (!matchesFilterProduct) return false;
+            }
+
+            return true;
+        });
+    }, [records, searchQuery, plFilters, getEntryByName]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
         }
+    }, [totalPages, currentPage]);
 
-        if (plFilters.port) {
-            const filterPort = plFilters.port.trim().toLowerCase();
-            const recordPort = (record.port || '').trim().toLowerCase();
-            const recordDischarge = (record.portOfDischarge || '').trim().toLowerCase();
-            const recordLoading = (record.portOfLoading || '').trim().toLowerCase();
-            if (recordPort !== filterPort && recordDischarge !== filterPort && recordLoading !== filterPort) return false;
-        }
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, plFilters]);
 
-        if (plFilters.importerName && (record.partyName || '').trim().toLowerCase() !== plFilters.importerName.toLowerCase()) return false;
-        if (plFilters.exporterName && (record.exporterName || '').trim().toLowerCase() !== plFilters.exporterName.toLowerCase()) return false;
-
-        if (plFilters.productName) {
-            const matchesFilterProduct = (record.productName || '').trim().toLowerCase() === plFilters.productName.toLowerCase() ||
-                (record.productsList && record.productsList.some(p => (p.productName || '').trim().toLowerCase() === plFilters.productName.toLowerCase()));
-            if (!matchesFilterProduct) return false;
-        }
-
-        return true;
-    });
+    const paginatedRecords = useMemo(() => {
+        if (pageSize >= filteredRecords.length) return filteredRecords;
+        const start = (currentPage - 1) * pageSize;
+        return filteredRecords.slice(start, start + pageSize);
+    }, [filteredRecords, currentPage, pageSize]);
 
     const existingInvoiceNumbers = useMemo(() => {
         const exp = (formData.exporterName || '').trim().toLowerCase();
@@ -3211,7 +3266,7 @@ function PackingList({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 text-sm">
-                                    {filteredRecords.map(rec => {
+                                    {paginatedRecords.map(rec => {
                                         let totalBags = 0;
                                         let totalNet = 0;
                                         let totalGross = 0;
@@ -3351,8 +3406,8 @@ function PackingList({
                             <TableScrollNav className="hidden md:flex" count={filteredRecords.length} />
 
                             {/* Mobile Card Layout */}
-                            <div className="block md:hidden space-y-4 px-2 pb-10">
-                                {filteredRecords.map((rec, index) => {
+                            <div className="block md:hidden space-y-4 px-2 pb-6">
+                                {paginatedRecords.map((rec, index) => {
                                     let totalBags = 0;
                                     let totalNet = 0;
                                     let totalGross = 0;
@@ -3604,6 +3659,23 @@ function PackingList({
                                     );
                                 })}
                             </div>
+
+                            {/* Pagination Footer */}
+                            <PaginationBar
+                                currentPage={currentPage}
+                                pageSize={pageSize}
+                                totalItems={filteredRecords.length}
+                                totalUnfiltered={records.length}
+                                onPageChange={setCurrentPage}
+                                onPageSizeChange={(newSize) => {
+                                    setPageSize(newSize);
+                                    setCurrentPage(1);
+                                    try {
+                                        localStorage.setItem('packing_list_page_size', String(newSize));
+                                    } catch (_) {}
+                                }}
+                                itemName="packing lists"
+                            />
                         </>
                     )}
                 </div>

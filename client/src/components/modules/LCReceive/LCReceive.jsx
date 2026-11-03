@@ -13,6 +13,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { generateLCReceiveReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import { getSocket } from '../../../utils/socket';
 import './LCReceive.css';
 
@@ -547,6 +548,19 @@ function LCReceive({
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [pageSize, setPageSize] = useState(() => {
+        const saved = localStorage.getItem('lc_receive_page_size');
+        return saved ? Number(saved) : 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+
+    useEffect(() => {
+        localStorage.setItem('lc_receive_page_size', pageSize);
+    }, [pageSize]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [lcSearchQuery, lcFilters, isRequestedOnly]);
 
     const recentStatusUpdatesRef = useRef(new Map());
 
@@ -750,23 +764,29 @@ function LCReceive({
 
             if (!isSearching) return true;
 
-            const matchesLcNo = (item.lcNo || '').toLowerCase().includes(searchLower);
-            const matchesPort = (item.port || '').toLowerCase().includes(searchLower);
-            const matchesWarehouse = (item.warehouse || '').toLowerCase().includes(searchLower);
-            const matchesImporter = (item.importer || '').toLowerCase().includes(searchLower);
-            const matchesExporter = (item.exporter || '').toLowerCase().includes(searchLower);
-            const matchesBillOfEntry = (item.billOfEntry || '').toLowerCase().includes(searchLower);
-            const matchesTruck = (item.truckNo || '').toLowerCase().includes(searchLower);
-            const matchesProduct = (item.productName || '').toLowerCase().includes(searchLower);
+            const searchTokens = searchLower.split(/\s+/).filter(Boolean);
+            if (searchTokens.length === 0) return true;
+
             const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
-            const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
+            const searchableText = [
+                item.lcNo,
+                item.port,
+                item.warehouse,
+                item.importer,
+                item.exporter,
+                item.billOfEntry,
+                item.truckNo,
+                item.productName,
+                ...brandList,
+                item.indianCnF,
+                item.bdCnF,
+                item.entryByName,
+                item.entryBy,
+                item.requestedBy,
+                item.requestedByUsername
+            ].filter(Boolean).join(' ').toLowerCase();
 
-            const matchesEntryBy = (item.entryByName || '').toLowerCase().includes(searchLower) ||
-                (item.entryBy || '').toLowerCase().includes(searchLower) ||
-                (item.requestedBy || '').toLowerCase().includes(searchLower) ||
-                (item.requestedByUsername || '').toLowerCase().includes(searchLower);
-
-            return matchesLcNo || matchesPort || matchesWarehouse || matchesImporter || matchesExporter || matchesBillOfEntry || matchesTruck || matchesProduct || matchesBrand || matchesEntryBy;
+            return searchTokens.every(token => searchableText.includes(token));
         }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
         return filtered.map(item => {
@@ -3340,6 +3360,8 @@ function LCReceive({
                     totalLcTruck: 0,
                     totalLcQuantity: 0,
                     totalQuantity: 0,
+                    totalShort: 0,
+                    totalInQty: 0,
                     truckEntries: new Set(),
                     products: new Set(),
                     ids: [],
@@ -3349,8 +3371,12 @@ function LCReceive({
             }
 
             const itemQty = parseFloat(item.quantity) || 0;
+            const swpQty = parseFloat(item.sweepedQuantity) || 0;
+            const inHouse = parseFloat(item.inHouseQuantity) || (itemQty - swpQty);
             acc[groupedKey].totalQuantity += itemQty;
             acc[groupedKey].totalLcQuantity += itemQty;
+            acc[groupedKey].totalShort += swpQty;
+            acc[groupedKey].totalInQty += inHouse;
 
             const truckEntryKey = `${item.date}-${item.productName}-${item.truckNo}`;
             if (!acc[groupedKey].truckEntries.has(truckEntryKey)) {
@@ -3402,6 +3428,11 @@ function LCReceive({
 
         return groups;
     }, [filteredRecords]);
+
+    const paginatedRecordsList = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return groupedRecordsList.slice(start, start + pageSize);
+    }, [groupedRecordsList, currentPage, pageSize]);
 
     return (
         <div className="space-y-6">
@@ -5181,7 +5212,7 @@ function LCReceive({
                                                 </td>
                                             </tr>
                                         ) : (
-                                            groupedRecordsList.map((entry) => {
+                                            paginatedRecordsList.map((entry) => {
                                                 const productGroups = entry.productGroups || [];
 
                                                 return (
@@ -5419,50 +5450,7 @@ function LCReceive({
                                     <p>No LC receive records found</p>
                                 </div>
                             ) : (
-                                Object.values(filteredRecords.reduce((acc, item) => {
-                                    const groupedKey = getLCReceiveGroupKey(item);
-
-                                    if (!acc[groupedKey]) {
-                                        acc[groupedKey] = {
-                                            groupedKey,
-                                            date: item.date,
-                                            lcNo: item.lcNo,
-                                            port: item.port,
-                                            importer: item.importer,
-                                            exporter: item.exporter,
-                                            indianCnF: item.indianCnF,
-                                            indCnFCost: item.indCnFCost,
-                                            bdCnF: item.bdCnF,
-                                            bdCnFCost: item.bdCnFCost,
-                                            billOfEntry: item.billOfEntry,
-                                            status: item.status,
-                                            warehouse: item.warehouse || '',
-                                            totalQuantity: 0,
-                                            totalLcQuantity: 0,
-                                            totalShort: 0,
-                                            totalInQty: 0,
-                                            totalLcTruck: 0,
-                                            truckEntries: new Set(),
-                                            allIds: [],
-                                            entries: []
-                                        };
-                                    }
-                                    const itemQty = parseFloat(item.quantity) || 0;
-                                    acc[groupedKey].totalQuantity += itemQty;
-                                    acc[groupedKey].totalLcQuantity += itemQty;
-                                    acc[groupedKey].totalShort += (parseFloat(item.sweepedQuantity) || 0);
-                                    acc[groupedKey].totalInQty += (itemQty - (parseFloat(item.sweepedQuantity) || 0));
-
-                                    const truckEntryKey = `${item.date}-${item.productName}-${item.truckNo}`;
-                                    if (!acc[groupedKey].truckEntries.has(truckEntryKey)) {
-                                        acc[groupedKey].truckEntries.add(truckEntryKey);
-                                        acc[groupedKey].totalLcTruck += (parseFloat(item.truckNo) || 0);
-                                    }
-
-                                    acc[groupedKey].allIds.push(item._id);
-                                    acc[groupedKey].entries.push(item);
-                                    return acc;
-                                }, {})).map((entry) => {
+                                paginatedRecordsList.map((entry) => {
                                     const isExpanded = expandedCard === entry.groupedKey;
                                     const uniqueEntriesMap = (entry.entries || []).reduce((acc, item) => {
                                         const brandName = (item.brand || '').trim();
@@ -5818,6 +5806,17 @@ function LCReceive({
                             )}
                         </div>
                     </div>
+
+                    <PaginationBar
+                        currentPage={currentPage}
+                        pageSize={pageSize}
+                        totalItems={groupedRecordsList.length}
+                        totalUnfiltered={effectiveStockRecords ? effectiveStockRecords.filter(item => !isPurchaseReceiveItem(item)).length : 0}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={setPageSize}
+                        pageSizeOptions={[15, 30, 50, 100]}
+                        itemName="LC Receives"
+                    />
                 </div>
             )
         }

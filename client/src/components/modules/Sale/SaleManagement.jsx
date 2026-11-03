@@ -7,6 +7,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
@@ -346,6 +347,19 @@ const SaleManagement = ({
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const deferredSearch = useDeferredValue(searchQuery);
+    const [pageSize, setPageSize] = useState(() => {
+        const saved = localStorage.getItem('sale_page_size');
+        return saved ? Number(saved) : 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+
+    useEffect(() => {
+        localStorage.setItem('sale_page_size', pageSize);
+    }, [pageSize]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, saleType, saleFilters, isRequestedOnly, isEditRequestedOnly]);
     const [editingId, setEditingId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -4509,10 +4523,11 @@ const SaleManagement = ({
     // High performance memoized filtered & sorted data
     const sortedFilteredData = useMemo(() => {
         let result = [];
-        if (!deferredSearch) {
+        const trimmedQuery = (deferredSearch || '').toLowerCase().trim();
+        if (!trimmedQuery) {
             result = displayedSales;
         } else {
-            const query = deferredSearch.toLowerCase();
+            const searchTokens = trimmedQuery.split(/\s+/).filter(Boolean);
             result = displayedSales.filter(s => {
                 if (saleType === 'Border') {
                     const date = (s.date || '').toLowerCase();
@@ -4526,63 +4541,49 @@ const SaleManagement = ({
                     const truck = String(s.truck || '').toLowerCase();
                     const total = String(s.totalAmount || '').toLowerCase();
 
-                    const itemsMatch = (s.items || []).some(item => {
-                        const pName = (item.productName || item.product || '').toLowerCase();
-                        const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
-                        const itemLcNo = (item.lcNo || item.lcNumber || item.lc_no || '').toLowerCase();
-                        const brandLcMatch = (item.brandEntries || []).some(e =>
-                            (e.lcNo || e.lcNumber || e.lc_no || '').toLowerCase().includes(query) ||
-                            String(e.quantity || '').includes(query) || String(e.truck || '').includes(query) ||
-                            String(e.unitPrice || '').includes(query) || String(e.totalAmount || '').includes(query)
-                        );
-                        return pName.includes(query) || resolvedPName.includes(query) || itemLcNo.includes(query) || brandLcMatch;
-                    });
+                    const itemsText = (s.items || []).map(item => {
+                        const pName = item.productName || item.product || '';
+                        const resolvedPName = resolveProductName(item.productName || item.product || '');
+                        const itemLcNo = item.lcNo || item.lcNumber || item.lc_no || '';
+                        const brandText = (item.brandEntries || []).map(e => `${e.lcNo || ''} ${e.quantity || ''} ${e.truck || ''} ${e.unitPrice || ''} ${e.totalAmount || ''}`).join(' ');
+                        return `${pName} ${resolvedPName} ${itemLcNo} ${brandText}`;
+                    }).join(' ').toLowerCase();
 
-                    return date.includes(query) || lcNo.includes(query) || invNo.includes(query) || importer.includes(query) ||
-                        port.includes(query) || indCnf.includes(query) || bdCnf.includes(query) ||
-                        party.includes(query) || truck.includes(query) || total.includes(query) || itemsMatch;
+                    const combined = `${date} ${lcNo} ${invNo} ${importer} ${port} ${indCnf} ${bdCnf} ${party} ${truck} ${total} ${itemsText}`;
+                    return searchTokens.every(tok => combined.includes(tok));
                 }
 
-                const matchesBasic =
-                    s.invoiceNo?.toLowerCase().includes(query) ||
-                    s.lcNo?.toLowerCase().includes(query) ||
-                    s.customerName?.toLowerCase().includes(query) ||
-                    s.companyName?.toLowerCase().includes(query) ||
-                    s.productName?.toLowerCase().includes(query) ||
-                    resolveProductName(s.productName)?.toLowerCase().includes(query) ||
-                    s.brand?.toLowerCase().includes(query) ||
-                    (s.remarks || '').toLowerCase().includes(query) ||
-                    (s.requestedBy || '').toLowerCase().includes(query) ||
-                    (s.createdByName || '').toLowerCase().includes(query) ||
-                    (s.createdBy || '').toLowerCase().includes(query) ||
-                    (s.entryBy || '').toLowerCase().includes(query) ||
-                    (s.entryByName || '').toLowerCase().includes(query) ||
-                    getEntryByFirstName(s).toLowerCase().includes(query) ||
-                    (s.acceptedBy || '').toLowerCase().includes(query) ||
-                    (s.approvedByName || '').toLowerCase().includes(query) ||
-                    getFirstNameFromIdentifier(s.acceptedBy || s.approvedByName || s.approvedBy).toLowerCase().includes(query);
+                const basicText = [
+                    s.invoiceNo,
+                    s.lcNo,
+                    s.customerName,
+                    s.companyName,
+                    s.productName,
+                    resolveProductName(s.productName),
+                    s.brand,
+                    s.remarks,
+                    s.requestedBy,
+                    s.createdByName,
+                    s.createdBy,
+                    s.entryBy,
+                    s.entryByName,
+                    getEntryByFirstName(s),
+                    s.acceptedBy,
+                    s.approvedByName,
+                    getFirstNameFromIdentifier(s.acceptedBy || s.approvedByName || s.approvedBy)
+                ].filter(Boolean).join(' ').toLowerCase();
 
-                if (matchesBasic) return true;
+                const itemsText = (s.items && Array.isArray(s.items)) ? s.items.map(item => {
+                    const pName = item.productName || item.product || '';
+                    const resolvedPName = resolveProductName(item.productName || item.product || '');
+                    const itemBrand = item.brand || item.brandName || '';
+                    const itemLc = item.lcNo || '';
+                    const brandEntriesText = (item.brandEntries || []).map(be => `${be.lcNo || ''} ${be.brand || be.brandName || ''} ${be.warehouseName || be.whName || ''}`).join(' ');
+                    return `${pName} ${resolvedPName} ${itemBrand} ${itemLc} ${brandEntriesText}`;
+                }).join(' ').toLowerCase() : '';
 
-                if (s.items && Array.isArray(s.items)) {
-                    return s.items.some(item => {
-                        const pName = (item.productName || item.product || '').toLowerCase();
-                        const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
-                        const itemBrand = (item.brand || item.brandName || '').toLowerCase();
-                        const itemLc = (item.lcNo || '').toLowerCase();
-                        const brandEntriesMatch = (item.brandEntries || []).some(be =>
-                            (be.lcNo || '').toLowerCase().includes(query) ||
-                            (be.brand || be.brandName || '').toLowerCase().includes(query) ||
-                            (be.warehouseName || be.whName || '').toLowerCase().includes(query)
-                        );
-                        return pName.includes(query) ||
-                            resolvedPName.includes(query) ||
-                            itemBrand.includes(query) ||
-                            itemLc.includes(query) ||
-                            brandEntriesMatch;
-                    });
-                }
-                return false;
+                const combined = `${basicText} ${itemsText}`;
+                return searchTokens.every(tok => combined.includes(tok));
             });
         }
 
@@ -4627,6 +4628,11 @@ const SaleManagement = ({
     }, [displayedSales, deferredSearch, sortConfig, saleType, resolveProductName]);
 
     const getFilteredData = useCallback(() => sortedFilteredData, [sortedFilteredData]);
+
+    const paginatedSales = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return sortedFilteredData.slice(start, start + pageSize);
+    }, [sortedFilteredData, currentPage, pageSize]);
 
     return (
         <div className="sale-management-container">
@@ -7305,7 +7311,8 @@ const SaleManagement = ({
                                     <tr><td colSpan="21" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
                                 ) : getFilteredData().length === 0 ? (
                                     <tr><td colSpan="21" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
-                                ) : getFilteredData().map((sale, index) => {
+                                ) : paginatedSales.map((sale, index) => {
+                                    const sl = (currentPage - 1) * pageSize + index + 1;
                                     const isExpanded = !collapsedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
                                         ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
@@ -7383,7 +7390,7 @@ const SaleManagement = ({
                                                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                         />
                                                     ) : (
-                                                        <span className="text-gray-400 font-medium">{index + 1}</span>
+                                                        <span className="text-gray-400 font-medium">{sl}</span>
                                                     )}
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
@@ -7618,7 +7625,7 @@ const SaleManagement = ({
                                                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                     />
                                                 ) : (
-                                                    <span className="text-gray-400 font-medium">{index + 1}</span>
+                                                    <span className="text-gray-400 font-medium">{sl}</span>
                                                 )}
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
@@ -8070,7 +8077,7 @@ const SaleManagement = ({
                                 </div>
                             ))
                         ) : getFilteredData().length > 0 ? (
-                            getFilteredData().map((sale, idx) => {
+                            paginatedSales.map((sale, idx) => {
                             const isExpanded = expandedMobileRows.includes(sale._id);
                             const isMultiple = (sale.items && sale.items.length > 0)
                                 ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
@@ -8427,6 +8434,17 @@ const SaleManagement = ({
                     )}
                     </div>
                 </div>
+
+                <PaginationBar
+                    currentPage={currentPage}
+                    pageSize={pageSize}
+                    totalItems={sortedFilteredData.length}
+                    totalUnfiltered={displayedSales.length}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={setPageSize}
+                    pageSizeOptions={[15, 30, 50, 100]}
+                    itemName={saleType === 'Border' ? 'Border Sales' : 'Sales'}
+                />
                 </div>
             )}
             {viewData && renderViewModal()}

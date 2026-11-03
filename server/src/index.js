@@ -1984,12 +1984,40 @@ apiRouter.get('/api/ip-records', async (req, res) => {
     const isLightweight = req.query.lightweight === 'true' || req.query.excludeAttachments === 'true';
     const noCache = req.query._nocache === 'true';
 
+    const sendFormattedResponse = (data) => {
+      let result = data;
+      if (req.query.search) {
+        const q = String(req.query.search).trim().toLowerCase();
+        result = result.filter(r => (
+          (r.ipNumber && r.ipNumber.toLowerCase().includes(q)) ||
+          (r.ipParty && r.ipParty.toLowerCase().includes(q)) ||
+          (r.productName && r.productName.toLowerCase().includes(q)) ||
+          (r.referenceNo && r.referenceNo.toLowerCase().includes(q)) ||
+          (r.port && r.port.toLowerCase().includes(q))
+        ));
+      }
+      if (req.query.page) {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.max(1, parseInt(req.query.limit) || 15);
+        const total = result.length;
+        const startIndex = (page - 1) * limit;
+        return res.json({
+          records: result.slice(startIndex, startIndex + limit),
+          totalRecords: total,
+          totalPages: Math.ceil(total / limit),
+          currentPage: page,
+          limit
+        });
+      }
+      return res.json(result);
+    };
+
     if (!noCache) {
       if (isLightweight && memoryCache.ipRecordsLightweight) {
-        return res.json(memoryCache.ipRecordsLightweight);
+        return sendFormattedResponse(memoryCache.ipRecordsLightweight);
       }
       if (!isLightweight && memoryCache.ipRecords) {
-        return res.json(memoryCache.ipRecords);
+        return sendFormattedResponse(memoryCache.ipRecords);
       }
     }
 
@@ -2025,7 +2053,7 @@ apiRouter.get('/api/ip-records', async (req, res) => {
     }
 
     const { fullDecrypted, lightDecrypted } = await inFlightIpFetch;
-    res.json(isLightweight ? lightDecrypted : fullDecrypted);
+    sendFormattedResponse(isLightweight ? lightDecrypted : fullDecrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -7,6 +7,7 @@ import { decryptData, encryptData } from '../../../utils/encryption';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import axios, { api } from '../../../utils/api';
 import PaymentCollectionReport from './PaymentCollectionReport';
 import './PaymentCollection.css';
@@ -28,6 +29,15 @@ const PaymentCollection = ({
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [pageSize, setPageSize] = useState(() => {
+        const saved = localStorage.getItem('payment_collection_page_size');
+        return saved ? Number(saved) : 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+
+    useEffect(() => {
+        localStorage.setItem('payment_collection_page_size', pageSize);
+    }, [pageSize]);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     const recentStatusUpdatesRef = useRef(new Map());
     const customerUpdateQueueRef = useRef(new Map());
@@ -296,6 +306,7 @@ const PaymentCollection = ({
 
     useEffect(() => {
         setSelectedItems(new Set());
+        setCurrentPage(1);
     }, [isRequestedOnly, isEditRequestedOnly, searchQuery, filters]);
 
     const filterPanelRef = useRef(null);
@@ -2156,11 +2167,28 @@ const PaymentCollection = ({
     });
 
     const filteredPayments = sortedPayments.filter(p => {
-        const matchSearch = !searchQuery ||
-            (p.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (p.companyName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (p.readableCustomerId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (p.method || '').toLowerCase().includes(searchQuery.toLowerCase());
+        let matchSearch = true;
+        if (searchQuery && searchQuery.trim()) {
+            const tokens = searchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+            const combined = [
+                p.customerName,
+                p.companyName,
+                p.readableCustomerId,
+                p.receiptNo,
+                p.method,
+                p.bankName,
+                p.branch,
+                p.chequeNo,
+                p.transactionId,
+                p.accountNo,
+                p.entryBy,
+                p.entryByName,
+                p.remarks,
+                p.amount
+            ].filter(Boolean).join(' ').toLowerCase();
+
+            matchSearch = tokens.every(tok => combined.includes(tok));
+        }
 
         let isDateMatch = true;
         if (filters.startDate && (!p.date || p.date < filters.startDate)) {
@@ -2287,6 +2315,11 @@ const PaymentCollection = ({
         });
         return groups;
     }, [filteredPayments]);
+
+    const paginatedGroups = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return displayedGroups.slice(start, start + pageSize);
+    }, [displayedGroups, currentPage, pageSize]);
 
     const selectableGroups = useMemo(() => {
         return displayedGroups.filter(canUserActOnGroup);
@@ -2802,7 +2835,8 @@ const PaymentCollection = ({
                                             </tr>
                                         ))
                                     ) : displayedGroups.length > 0 ? (
-                                        displayedGroups.map((group, index) => {
+                                        paginatedGroups.map((group, index) => {
+                                            const sl = (currentPage - 1) * pageSize + index + 1;
                                             const isMultiple = group.items.length > 1;
                                             const isExpanded = !collapsedRows.has(group.key);
                                             const paidAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
@@ -2864,7 +2898,7 @@ const PaymentCollection = ({
                                                         </td>
                                                     )}
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center whitespace-nowrap`}>
-                                                        <div className="text-xs font-bold text-gray-500">{index + 1}</div>
+                                                        <div className="text-xs font-bold text-gray-500">{sl}</div>
                                                     </td>
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
                                                         <div className="text-sm font-medium text-gray-600 leading-tight">{formatDate(group.date)}</div>
@@ -3120,7 +3154,7 @@ const PaymentCollection = ({
                                     </div>
                                 ))
                             ) : displayedGroups.length > 0 ? (
-                                displayedGroups.map((group) => {
+                                paginatedGroups.map((group) => {
                                     const isExpanded = expandedMobileCards === group.key;
                                     const paidAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
                                     const groupDiscount = group.items.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
@@ -3410,6 +3444,17 @@ const PaymentCollection = ({
                             )}
                         </div>
                     </div>
+
+                    <PaginationBar
+                        currentPage={currentPage}
+                        pageSize={pageSize}
+                        totalItems={displayedGroups.length}
+                        totalUnfiltered={payments.length}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={setPageSize}
+                        pageSizeOptions={[15, 30, 50, 100]}
+                        itemName="Collections"
+                    />
                 </div>
             )}
 

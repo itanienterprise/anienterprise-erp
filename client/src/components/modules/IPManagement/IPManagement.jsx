@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    FunnelIcon, XIcon, CheckIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon, EyeIcon, PDFIcon, PlusIcon, DownloadIcon, BarChartIcon
+    FunnelIcon, XIcon, CheckIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon, EyeIcon, PDFIcon, PlusIcon, DownloadIcon, BarChartIcon, ChevronLeftIcon, ChevronRightIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -14,6 +14,7 @@ import { generateIPManagementReportPDF } from '../../../utils/pdfGenerator';
 import { generateIPManagementReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import { getSocket } from '../../../utils/socket';
 
 import IPDetailsModal, { PDFViewerModal } from './IPDetailsModal';
@@ -46,6 +47,19 @@ const getSavedStatusFilter = () => {
     } catch (e) {
         return ['except_expired'];
     }
+};
+
+const getPageNumbers = (current, total) => {
+    if (total <= 7) {
+        return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 4) {
+        return [1, 2, 3, 4, 5, '...', total];
+    }
+    if (current >= total - 3) {
+        return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+    }
+    return [1, '...', current - 1, current, current + 1, '...', total];
 };
 
 
@@ -110,6 +124,17 @@ function IPManagement({
     const [highlightedIndex, setHighlightedIndex] = useState(0);
     const [expandedIpId, setExpandedIpId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [pageSize, setPageSize] = useState(() => {
+        try {
+            const saved = localStorage.getItem('ip_management_page_size');
+            if (saved) {
+                const parsed = Number(saved);
+                if ([15, 30, 50, 100].includes(parsed)) return parsed;
+            }
+        } catch (_) {}
+        return 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
     const [viewIpLcData, setViewIpLcData] = useState(null);
     const [viewingPdf, setViewingPdf] = useState(null);
     const [viewingPdfName, setViewingPdfName] = useState("");
@@ -546,8 +571,10 @@ function IPManagement({
 
             const rawPi = Array.isArray(piData) ? piData : [];
             const decryptedPi = rawPi.map(item => {
+                if (!item) return item;
+                if (!item.data) return item;
                 try {
-                    let d = item.data ? decryptData(item.data) : item;
+                    let d = decryptData(item.data);
                     if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
                     else if (d && d.data && typeof d.data === 'string' && !d.piNumber) { try { d = decryptData(d.data); } catch (e) { } }
                     return { ...d, _id: item._id };
@@ -557,8 +584,10 @@ function IPManagement({
 
             const rawStock = Array.isArray(stockData) ? stockData : (Array.isArray(stockData?.data) ? stockData.data : []);
             const decryptedStock = rawStock.map(item => {
+                if (!item) return item;
+                if (!item.data) return item;
                 try {
-                    let d = item.data ? decryptData(item.data) : item;
+                    let d = decryptData(item.data);
                     if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
                     else if (d && d.data && typeof d.data === 'string' && !d.lcNo) { try { d = decryptData(d.data); } catch (e) { } }
                     return d;
@@ -568,8 +597,10 @@ function IPManagement({
 
             const rawSales = Array.isArray(saleData) ? saleData : (Array.isArray(saleData?.data) ? saleData.data : []);
             const decryptedSales = rawSales.map(item => {
+                if (!item) return item;
+                if (!item.data) return item;
                 try {
-                    let d = item.data ? decryptData(item.data) : item;
+                    let d = decryptData(item.data);
                     if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
                     else if (d && d.data && typeof d.data === 'string' && !d.lcNo && !d.saleType) { try { d = decryptData(d.data); } catch (e) { } }
                     return d;
@@ -1486,21 +1517,59 @@ function IPManagement({
     };
 
     const filteredIpRecords = useMemo(() => {
-        return enrichedIpRecords.filter(record => {
-            const isSearching = Boolean(searchQuery && searchQuery.trim());
+        const isSearching = Boolean(searchQuery && searchQuery.trim());
+        const searchTokens = isSearching
+            ? searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+            : [];
 
-            // Apply text search
-            if (isSearching) {
-                const query = searchQuery.trim().toLowerCase();
+        return enrichedIpRecords.filter(record => {
+            // Best searching option: intelligent multi-term search across all fields
+            if (isSearching && searchTokens.length > 0) {
                 const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
-                const matchesText =
-                    (record.ipNumber || '').toLowerCase().includes(query) ||
-                    (record.ipParty || '').toLowerCase().includes(query) ||
-                    (record.productName || '').toLowerCase().includes(query) ||
-                    (record.referenceNo || '').toLowerCase().includes(query) ||
-                    (record.entryBy || '').toLowerCase().includes(query) ||
-                    (entryByName || '').toLowerCase().includes(query);
-                if (!matchesText) return false;
+                const openDateStr = record.openingDate ? formatDate(record.openingDate) : '';
+                const closeDateStr = record.closeDate ? formatDate(record.closeDate) : '';
+                
+                const rawIpNo = String(record.ipNumber || '').toLowerCase();
+                const cleanIpNo = rawIpNo.replace(/[^a-z0-9]/g, '');
+                const rawRefNo = String(record.referenceNo || '').toLowerCase();
+                const cleanRefNo = rawRefNo.replace(/[^a-z0-9]/g, '');
+
+                const qtyStr = String(record.quantity || '');
+                const remQtyStr = String(record.remainingQuantity || '');
+                const balStr = String(record.ipBalance || '');
+
+                const searchTargets = [
+                    rawIpNo,
+                    cleanIpNo,
+                    rawRefNo,
+                    cleanRefNo,
+                    String(record.ipParty || '').toLowerCase(),
+                    String(record.port || '').toLowerCase(),
+                    String(record.productName || '').toLowerCase(),
+                    String(record.computedStatus || '').toLowerCase(),
+                    String(record.status || '').toLowerCase(),
+                    openDateStr.toLowerCase(),
+                    closeDateStr.toLowerCase(),
+                    qtyStr,
+                    remQtyStr,
+                    balStr,
+                    String(record.totalLcCount || ''),
+                    String(record.entryBy || '').toLowerCase(),
+                    String(entryByName || '').toLowerCase()
+                ];
+
+                const combinedBlob = searchTargets.join(' ');
+                const cleanBlob = combinedBlob.replace(/[^a-z0-9]/g, '');
+
+                // Every token must match somewhere in this record
+                const matchesAllTokens = searchTokens.every(token => {
+                    const cleanToken = token.replace(/[^a-z0-9]/g, '');
+                    if (combinedBlob.includes(token)) return true;
+                    if (cleanToken && cleanBlob.includes(cleanToken)) return true;
+                    return false;
+                });
+
+                if (!matchesAllTokens) return false;
             }
 
             // Apply filters
@@ -1566,6 +1635,26 @@ function IPManagement({
     const sortedIpRecords = useMemo(() => {
         return sortData(filteredIpRecords);
     }, [filteredIpRecords, sortConfig.ip]);
+
+    const totalPages = Math.max(1, Math.ceil(sortedIpRecords.length / pageSize));
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [totalPages, currentPage]);
+
+    // Reset to page 1 whenever search query or filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, filters]);
+
+    // Only load and render the selected page's rows in the DOM
+    const paginatedIpRecords = useMemo(() => {
+        if (pageSize >= sortedIpRecords.length) return sortedIpRecords;
+        const startIndex = (currentPage - 1) * pageSize;
+        return sortedIpRecords.slice(startIndex, startIndex + pageSize);
+    }, [sortedIpRecords, currentPage, pageSize]);
 
     const generatePDFReport = () => {
         const totals = {
@@ -2333,9 +2422,21 @@ function IPManagement({
                                                 <th className="px-6 py-3.5 w-10 sticky top-0 bg-gray-50 z-10">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedItems.size === filteredIpRecords.length && filteredIpRecords.length > 0}
-                                                        onChange={() => toggleSelectAll(filteredIpRecords)}
-                                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        checked={paginatedIpRecords.length > 0 && paginatedIpRecords.every(r => selectedItems.has(r._id))}
+                                                        onChange={() => {
+                                                            const allPageSelected = paginatedIpRecords.length > 0 && paginatedIpRecords.every(r => selectedItems.has(r._id));
+                                                            setSelectedItems(prev => {
+                                                                const next = new Set(prev);
+                                                                if (allPageSelected) {
+                                                                    paginatedIpRecords.forEach(r => next.delete(r._id));
+                                                                } else {
+                                                                    paginatedIpRecords.forEach(r => next.add(r._id));
+                                                                }
+                                                                return next;
+                                                            });
+                                                        }}
+                                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        title={paginatedIpRecords.length > 0 && paginatedIpRecords.every(r => selectedItems.has(r._id)) ? "Deselect current page" : "Select all on current page"}
                                                     />
                                                 </th>
                                             )}
@@ -2385,7 +2486,9 @@ function IPManagement({
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {sortedIpRecords.map((record, idx) => (
+                                        {paginatedIpRecords.map((record, idx) => {
+                                            const sl = (currentPage - 1) * pageSize + idx + 1;
+                                            return (
                                             <tr
                                                 key={record._id}
                                                 className={`${selectedItems.has(record._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none ${highlightId && (String(record._id) === String(highlightId) || (record.ipNumber && String(record.ipNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
@@ -2414,7 +2517,7 @@ function IPManagement({
                                                         />
                                                     </td>
                                                 )}
-                                                <td className="px-3 py-3 text-sm font-semibold text-gray-500 whitespace-nowrap">{idx + 1}</td>
+                                                <td className="px-3 py-3 text-sm font-semibold text-gray-500 whitespace-nowrap">{sl}</td>
                                                 <td className="px-3 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
                                                 <td className={`px-3 py-3 text-sm font-semibold whitespace-nowrap ${record.computedStatus === 'Active' ? 'text-green-700' :
                                                     record.computedStatus === 'Expired' ? 'text-red-600' :
@@ -2494,15 +2597,17 @@ function IPManagement({
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))}
+                                        );
+                                    })}
                                     </tbody>
                                 </table>
                             </div>
-                            <TableScrollNav className="hidden md:flex" count={filteredIpRecords.length} />
+                            <TableScrollNav className="hidden md:flex" count={sortedIpRecords.length} />
 
                             {/* Mobile Card View */}
                             <div className="block md:hidden px-2 py-3 space-y-3">
-                                {sortedIpRecords.map((record) => {
+                                {paginatedIpRecords.map((record, idx) => {
+                                    const sl = (currentPage - 1) * pageSize + idx + 1;
                                     const isExpanded = expandedIpId === record._id;
                                     return (
                                         <div
@@ -2537,7 +2642,8 @@ function IPManagement({
                                                     <div className="min-w-0 flex-1 space-y-1.5 text-left">
                                                         {/* Line 1: IP No & Status Tag on the right */}
                                                         <div className="flex items-center justify-between gap-2">
-                                                            <div className="text-xs leading-snug min-w-0">
+                                                            <div className="text-xs leading-snug min-w-0 flex items-center gap-1.5">
+                                                                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-bold text-[10px]">#{sl}</span>
                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP No : </span>
                                                                 <span className="font-black text-gray-900 tracking-tight break-all font-mono text-sm">{record.ipNumber || '—'}</span>
                                                             </div>
@@ -2708,6 +2814,23 @@ function IPManagement({
                                     );
                                 })}
                             </div>
+
+                            {/* Pagination Footer */}
+                            <PaginationBar
+                                currentPage={currentPage}
+                                pageSize={pageSize}
+                                totalItems={sortedIpRecords.length}
+                                totalUnfiltered={enrichedIpRecords.length}
+                                onPageChange={setCurrentPage}
+                                onPageSizeChange={(newSize) => {
+                                    setPageSize(newSize);
+                                    setCurrentPage(1);
+                                    try {
+                                        localStorage.setItem('ip_management_page_size', String(newSize));
+                                    } catch (_) {}
+                                }}
+                                itemName="records"
+                            />
                         </>
                     ) : (
                         <div className="flex flex-col items-center justify-center p-12">

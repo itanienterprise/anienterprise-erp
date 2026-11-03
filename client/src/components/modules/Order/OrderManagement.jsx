@@ -11,6 +11,7 @@ import { getSocket } from '../../../utils/socket';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
@@ -247,6 +248,16 @@ const OrderManagement = ({
     const [viewRecord, setViewRecord] = useState(null);
     const [confirmModalConfig, setConfirmModalConfig] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [pageSize, setPageSize] = useState(() => {
+        const saved = localStorage.getItem('order_page_size');
+        return saved ? Number(saved) : 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+
+    useEffect(() => {
+        localStorage.setItem('order_page_size', pageSize);
+    }, [pageSize]);
+
     const [collapsedRows, setCollapsedRows] = useState([]);
     const [expandedMobileCardId, setExpandedMobileCardId] = useState(null);
 
@@ -2020,37 +2031,37 @@ const OrderManagement = ({
 
             // Search Query Filter (when searching, date range and status filters are bypassed)
             if (isSearching) {
-                const cust = (sale.companyName || '').toLowerCase();
-                const custName = (sale.customerName || '').toLowerCase();
-                const remarks = (sale.remarks || '').toLowerCase();
+                const searchTokens = q.split(/\s+/).filter(Boolean);
+                if (searchTokens.length > 0) {
+                    const cust = (sale.companyName || '').toLowerCase();
+                    const custName = (sale.customerName || '').toLowerCase();
+                    const remarks = (sale.remarks || '').toLowerCase();
 
-                const matchesItems = (sale.items || []).some(item => {
-                    const pName = (item.productName || item.product || item.name || '').toLowerCase();
-                    const itemBrand = (item.brand || item.brandName || '').toLowerCase();
-                    const itemWh = (item.warehouseName || item.whName || item.warehouse || '').toLowerCase();
-                    const brandEntriesMatch = (item.brandEntries || []).some(e => {
-                        const bName = (e.brand || e.brandName || '').toLowerCase();
-                        const whName = (e.warehouseName || e.whName || e.warehouse || '').toLowerCase();
-                        const lcNo = (e.lcNo || '').toLowerCase();
-                        return bName.includes(q) || whName.includes(q) || lcNo.includes(q);
-                    });
-                    return pName.includes(q) || itemBrand.includes(q) || itemWh.includes(q) || brandEntriesMatch;
-                });
+                    const itemsText = (sale.items || []).map(item => {
+                        const pName = item.productName || item.product || item.name || '';
+                        const itemBrand = item.brand || item.brandName || '';
+                        const itemWh = item.warehouseName || item.whName || item.warehouse || '';
+                        const brandEntriesText = (item.brandEntries || []).map(e => `${e.brand || ''} ${e.brandName || ''} ${e.warehouseName || ''} ${e.whName || ''} ${e.lcNo || ''}`).join(' ');
+                        return `${pName} ${itemBrand} ${itemWh} ${brandEntriesText}`;
+                    }).join(' ').toLowerCase();
 
-                const entry = (sale.entryByName || sale.entryBy || sale.requestedBy || sale.createdBy || sale.createdByName || sale.userName || sale.user || '').toLowerCase();
-                const entryFirst = (getEntryByFirstName(sale) || '').toLowerCase();
-                const approved = (sale.approvedByName || sale.approvedBy || sale.acceptedByName || sale.acceptedBy || '').toLowerCase();
-                const smApproved = (sale.smApprovedByName || sale.smApprovedBy || '').toLowerCase();
-                const edited = (sale.editedByName || sale.editedBy || '').toLowerCase();
-                const editedFirst = (getEditedByFirstName(sale) || '').toLowerCase();
-                const fulfillment = computeOrderFulfillment(sale, allSalesRecords, returnsList);
-                const orderStatus = (fulfillment.statusText || '').toLowerCase();
+                    const entry = (sale.entryByName || sale.entryBy || sale.requestedBy || sale.createdBy || sale.createdByName || sale.userName || sale.user || '').toLowerCase();
+                    const entryFirst = (getEntryByFirstName(sale) || '').toLowerCase();
+                    const approved = (sale.approvedByName || sale.approvedBy || sale.acceptedByName || sale.acceptedBy || '').toLowerCase();
+                    const smApproved = (sale.smApprovedByName || sale.smApprovedBy || '').toLowerCase();
+                    const edited = (sale.editedByName || sale.editedBy || '').toLowerCase();
+                    const editedFirst = (getEditedByFirstName(sale) || '').toLowerCase();
+                    const fulfillment = computeOrderFulfillment(sale, allSalesRecords, returnsList);
+                    const orderStatus = (fulfillment.statusText || '').toLowerCase();
 
-                const matchesSearch = inv.includes(q) || ordNo.includes(q) || cust.includes(q) || custName.includes(q) || remarks.includes(q) || matchesItems || entry.includes(q) || entryFirst.includes(q) || approved.includes(q) || smApproved.includes(q) || edited.includes(q) || editedFirst.includes(q) || orderStatus.includes(q);
-                if (!matchesSearch) return false;
+                    const combinedText = `${inv} ${ordNo} ${cust} ${custName} ${remarks} ${itemsText} ${entry} ${entryFirst} ${approved} ${smApproved} ${edited} ${editedFirst} ${orderStatus}`;
 
-                // When search matches, display it regardless of status or date range
-                return true;
+                    const matchesAllTokens = searchTokens.every(t => combinedText.includes(t));
+                    if (!matchesAllTokens) return false;
+
+                    // When search matches, display it regardless of status or date range
+                    return true;
+                }
             }
 
             // Status Filter (applied when NOT searching)
@@ -2188,6 +2199,15 @@ const OrderManagement = ({
             return 0;
         });
     }, [sales, allSalesRecords, returnsList, isRequestedOnly, isEditRequestedOnly, saleFilters, searchQuery, sortConfig]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, saleFilters, isRequestedOnly, isEditRequestedOnly]);
+
+    const paginatedOrders = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return getFilteredData.slice(start, start + pageSize);
+    }, [getFilteredData, currentPage, pageSize]);
 
     // Counters for Toggle Pills
     const requestedCount = useMemo(() => {
@@ -3285,7 +3305,8 @@ const OrderManagement = ({
                                     <tr><td colSpan={15 + (canShowEntryBy ? 1 : 0)} className="px-3 py-20 text-center text-gray-400 font-medium">Loading orders...</td></tr>
                                 ) : getFilteredData.length === 0 ? (
                                     <tr><td colSpan={15 + (canShowEntryBy ? 1 : 0)} className="px-3 py-20 text-center text-gray-400 font-medium">No order records found</td></tr>
-                                ) : getFilteredData.map((order, index) => {
+                                ) : paginatedOrders.map((order, index) => {
+                                    const sl = (currentPage - 1) * pageSize + index + 1;
                                     const { deliveryMap, totalOrderedQty, totalDeliveredQty, statusText, statusBadgeClass } = computeOrderFulfillment(order, allSalesRecords, returnsList);
                                     const totalAmt = calculateOrderTotal(order.items);
                                     const allEntriesCount = (order.items || []).reduce((acc, item) => acc + Math.max(1, (item.brandEntries || []).length), 0);
@@ -3320,7 +3341,7 @@ const OrderManagement = ({
                                                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                     />
                                                 ) : (
-                                                    <span className="text-gray-400 font-medium">{index + 1}</span>
+                                                    <span className="text-gray-400 font-medium">{sl}</span>
                                                 )}
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
@@ -3634,7 +3655,7 @@ const OrderManagement = ({
                                 </div>
                             ))
                         ) : getFilteredData.length > 0 ? (
-                            getFilteredData.map((order, idx) => {
+                            paginatedOrders.map((order, idx) => {
                                 const { deliveryMap, statusText, statusBadgeClass } = computeOrderFulfillment(order, allSalesRecords, returnsList);
                                 const totalAmt = calculateOrderTotal(order.items);
                                 const isRequested = (order.status || '').toLowerCase() === 'requested';
@@ -3928,6 +3949,22 @@ const OrderManagement = ({
                             </div>
                         )}
                     </div>
+
+                    <PaginationBar
+                        currentPage={currentPage}
+                        pageSize={pageSize}
+                        totalItems={getFilteredData.length}
+                        totalUnfiltered={sales.filter(s => {
+                            const sType = (s.saleType || '').toLowerCase();
+                            const inv = (s.invoiceNo || '').toLowerCase();
+                            const ordNo = (s.orderNo || '').toLowerCase();
+                            return sType === 'order' || inv.startsWith('ord') || ordNo.startsWith('ord') || s.isOrderEntry === true;
+                        }).length}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={setPageSize}
+                        pageSizeOptions={[15, 30, 50, 100]}
+                        itemName="Orders"
+                    />
                 </div>
             )}
 

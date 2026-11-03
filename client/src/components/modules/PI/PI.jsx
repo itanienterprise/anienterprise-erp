@@ -12,6 +12,7 @@ import { decryptData } from '../../../utils/encryption';
 import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import TableScrollNav from '../../shared/TableScrollNav';
+import PaginationBar from '../../shared/PaginationBar';
 import './PI.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { IPDetailsModal } from '../IPManagement/IPDetailsModal';
@@ -85,6 +86,17 @@ function PI({
 
     const [submitStatus, setSubmitStatus] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [pageSize, setPageSize] = useState(() => {
+        try {
+            const saved = localStorage.getItem('pi_page_size');
+            if (saved) {
+                const parsed = Number(saved);
+                if ([15, 30, 50, 100].includes(parsed)) return parsed;
+            }
+        } catch (_) {}
+        return 15;
+    });
+    const [currentPage, setCurrentPage] = useState(1);
     const [editingId, setEditingId] = useState(null);
     const [banks, setBanks] = useState(() => {
         const cached = queryClient.getQueryData(['banks']);
@@ -4007,31 +4019,52 @@ function PI({
         return records.filter(record => {
             const isSearching = Boolean(searchQuery && searchQuery.trim());
 
-            // Search Query Filter
+            // Intelligent Multi-term Flexible Search
             if (isSearching) {
-                const query = searchQuery.trim().toLowerCase();
-                const cleanQuery = query.replace(/[\s\-_/]/g, '');
-                const cleanPi = String(record.piNumber || '').toLowerCase().replace(/[\s\-_/]/g, '');
-                const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
-                    getStandardProductName(record.productName).toLowerCase().includes(query) ||
-                    (record.productsList && record.productsList.some(p =>
-                        (p.productName || '').toLowerCase().includes(query) ||
-                        getStandardProductName(p.productName).toLowerCase().includes(query)
-                    ));
+                const searchTokens = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
                 const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
                 const isLcDone = checkIsLcDone(record);
                 const computedStatus = isLcDone ? 'lc done' : ((!record.ipNumber && (!record.ipNumbers || record.ipNumbers.length === 0)) ? 'ip missing' : (record.status || '').toLowerCase());
-                const matchesSearch = (record.piNumber || '').toLowerCase().includes(query) ||
-                    (cleanQuery && cleanPi && cleanPi.includes(cleanQuery)) ||
-                    (record.piNumbers && record.piNumbers.some(p => String(p).toLowerCase().includes(query))) ||
-                    (record.ipNumber || '').toLowerCase().includes(query) ||
-                    (record.ipNumbers && record.ipNumbers.some(ip => String(ip).toLowerCase().includes(query))) ||
-                    (record.partyName || '').toLowerCase().includes(query) ||
-                    (record.exporterName || '').toLowerCase().includes(query) ||
-                    (record.entryBy || '').toLowerCase().includes(query) ||
-                    (entryByName || '').toLowerCase().includes(query) ||
-                    computedStatus.includes(query) ||
-                    matchesProduct;
+                
+                const rawPi = String(record.piNumber || '').toLowerCase();
+                const cleanPi = rawPi.replace(/[^a-z0-9]/g, '');
+                const rawIp = String(record.ipNumber || '').toLowerCase();
+                const cleanIp = rawIp.replace(/[^a-z0-9]/g, '');
+                
+                const productListNames = (record.productsList || []).map(p => `${p.productName || ''} ${getStandardProductName(p.productName) || ''}`).join(' ');
+                const piNumbersList = (record.piNumbers || []).join(' ');
+                const ipNumbersList = (record.ipNumbers || []).join(' ');
+                const portStr = `${record.port || ''} ${record.portOfLoading || ''} ${record.portOfDischarge || ''}`;
+                const datesStr = `${record.date || ''} ${formatDate(record.date)} ${formatDate(record.createdAt)}`;
+
+                const combinedBlob = [
+                    rawPi,
+                    cleanPi,
+                    piNumbersList,
+                    rawIp,
+                    cleanIp,
+                    ipNumbersList,
+                    String(record.partyName || ''),
+                    String(record.exporterName || ''),
+                    String(record.productName || ''),
+                    getStandardProductName(record.productName),
+                    productListNames,
+                    portStr,
+                    datesStr,
+                    computedStatus,
+                    String(record.entryBy || ''),
+                    String(entryByName || '')
+                ].join(' ').toLowerCase();
+
+                const cleanBlob = combinedBlob.replace(/[^a-z0-9]/g, '');
+
+                const matchesSearch = searchTokens.every(token => {
+                    const cleanToken = token.replace(/[^a-z0-9]/g, '');
+                    if (combinedBlob.includes(token)) return true;
+                    if (cleanToken && cleanBlob.includes(cleanToken)) return true;
+                    return false;
+                });
+
                 if (!matchesSearch) return false;
             }
 
@@ -4251,6 +4284,24 @@ function PI({
             return sortConfig.direction === 'asc' ? res : -res;
         });
     }, [filteredRecords, sortConfig, checkIsLcDone]);
+
+    const totalPages = Math.max(1, Math.ceil(sortedRecords.length / pageSize));
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [totalPages, currentPage]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, piFilters]);
+
+    const paginatedRecords = useMemo(() => {
+        if (pageSize >= sortedRecords.length) return sortedRecords;
+        const start = (currentPage - 1) * pageSize;
+        return sortedRecords.slice(start, start + pageSize);
+    }, [sortedRecords, currentPage, pageSize]);
 
     return (
         <div className="pi-management space-y-6">
@@ -7466,7 +7517,8 @@ function PI({
                                             </tr>
                                         ))
                                     ) : sortedRecords.length > 0 ? (
-                                        sortedRecords.map((record, index) => {
+                                        paginatedRecords.map((record, index) => {
+                                            const sl = (currentPage - 1) * pageSize + index + 1;
                                             const displayProducts = record.productsList && record.productsList.length > 0
                                                 ? record.productsList.map(p => getStandardProductName(p.productName)).filter(Boolean).join(', ')
                                                 : (getStandardProductName(record.productName) || 'N/A');
@@ -7501,7 +7553,7 @@ function PI({
                                                     piList.forEach(p => { rowRefs.current[p] = el; });
                                                 }}
                                                     style={highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}>
-                                                    <td className="px-2 py-3.5 text-sm text-gray-500 font-semibold whitespace-nowrap text-center">{index + 1}</td>
+                                                    <td className="px-2 py-3.5 text-sm text-gray-500 font-semibold whitespace-nowrap text-center">{sl}</td>
                                                     <td className="px-2 py-3.5 text-sm text-gray-600 font-medium whitespace-nowrap">{formatDate(getRecordEffectiveCreateDate(record))}</td>
                                                     <td className="px-2 py-3.5 text-sm text-gray-600 font-medium whitespace-nowrap">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</td>
                                                     <td className="px-2 py-3.5 text-sm font-bold text-blue-600 whitespace-nowrap">
@@ -7705,7 +7757,8 @@ function PI({
                                 </div>
                             ))
                         ) : sortedRecords.length > 0 ? (
-                            sortedRecords.map((record, index) => {
+                            paginatedRecords.map((record, index) => {
+                                const sl = (currentPage - 1) * pageSize + index + 1;
                                 const isExpanded = expandedCardId === record._id;
                                 const displayProducts = record.productsList && record.productsList.length > 0
                                     ? record.productsList.map(p => getStandardProductName(p.productName)).filter(Boolean).join(', ')
@@ -7749,7 +7802,7 @@ function PI({
                                                 <div className="flex items-center justify-between gap-2">
                                                     <div className="flex items-center gap-1.5 text-xs leading-snug min-w-0 flex-wrap">
                                                         <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md shrink-0">
-                                                            SL: {index + 1}
+                                                            SL: {sl}
                                                         </span>
                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">PI No : </span>
                                                         <div className="flex items-center gap-1 min-w-0 flex-wrap">
@@ -8013,6 +8066,23 @@ function PI({
                             </div>
                         )}
                     </div>
+
+                    {/* Pagination Footer */}
+                    <PaginationBar
+                        currentPage={currentPage}
+                        pageSize={pageSize}
+                        totalItems={sortedRecords.length}
+                        totalUnfiltered={records.length}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={(newSize) => {
+                            setPageSize(newSize);
+                            setCurrentPage(1);
+                            try {
+                                localStorage.setItem('pi_page_size', String(newSize));
+                            } catch (_) {}
+                        }}
+                        itemName="invoices"
+                    />
                 </div>
             )}
 
