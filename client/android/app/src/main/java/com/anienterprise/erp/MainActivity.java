@@ -23,6 +23,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        configureSystemBars();
         enableCookies();
         setupNativeBridge();
         requestAllRequiredPermissions();
@@ -31,9 +32,42 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        configureSystemBars();
         enableCookies();
         setupNativeBridge();
         checkAndStartMdmService();
+    }
+
+    private void configureSystemBars() {
+        try {
+            // 1. Force the system navigation bar to pure white
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                getWindow().setNavigationBarColor(android.graphics.Color.WHITE);
+            }
+
+            // 2. Disable Android 10+ (API 29+) dark scrim/contrast enforcement over navigation bar
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                getWindow().setNavigationBarContrastEnforced(false);
+            }
+
+            // 3. Make navigation bar icons & gesture pill dark so they are visible on the white bar
+            androidx.core.view.WindowInsetsControllerCompat insetsController =
+                androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+            if (insetsController != null) {
+                insetsController.setAppearanceLightNavigationBars(true);
+                insetsController.setAppearanceLightStatusBars(true);
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                int flags = getWindow().getDecorView().getSystemUiVisibility();
+                flags |= android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                flags |= android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                getWindow().getDecorView().setSystemUiVisibility(flags);
+            }
+
+            // 4. Ensure WebView background is solid white
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().setBackgroundColor(android.graphics.Color.WHITE);
+            }
+        } catch (Exception ignored) {}
     }
 
     private void enableCookies() {
