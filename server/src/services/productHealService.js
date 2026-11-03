@@ -3,7 +3,7 @@ const PackingList = require('../models/PackingList');
 const Stock = require('../models/Stock');
 const PI = require('../models/PI');
 const Product = require('../models/Product');
-const { decryptData, encryptData } = require('../utils/encryption');
+const { decryptData, encryptData, decryptRecordWithUnwrap } = require('../utils/encryption');
 const path = require('path');
 const fs = require('fs');
 
@@ -341,7 +341,7 @@ async function repairCorruptedGarlicProducts() {
         for (const doc of stockDocs) {
             try {
                 if (!doc.data) continue;
-                const stock = decryptData(doc.data);
+                const stock = decryptRecordWithUnwrap(doc.data);
                 if (!stock) continue;
 
                 const docIdStr = String(doc._id);

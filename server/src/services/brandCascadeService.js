@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { encryptData, decryptData } = require('../utils/encryption');
+const { encryptData, decryptData, decryptRecordWithUnwrap } = require('../utils/encryption');
 const Stock = require('../models/Stock');
 const Warehouse = require('../models/Warehouse');
 const Sale = require('../models/Sale');
@@ -45,7 +45,7 @@ async function updateBrandAcrossAllCollections(productName, oldBrand, newBrand) 
     const getDecrypted = (doc) => {
         if (!doc) return null;
         if (doc.data) {
-            const dec = decryptData(doc.data);
+            const dec = decryptRecordWithUnwrap(doc.data);
             if (dec) return { ...dec, _id: doc._id };
         }
         return doc.toObject ? doc.toObject() : doc;

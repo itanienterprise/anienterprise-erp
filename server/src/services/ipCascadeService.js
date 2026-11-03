@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { encryptData, decryptData } = require('../utils/encryption');
+const { encryptData, decryptData, decryptRecordWithUnwrap } = require('../utils/encryption');
 const IpRecord = require('../models/IpRecord');
 const PI = require('../models/PI');
 const LCManagement = require('../models/LCManagement');
@@ -16,7 +16,7 @@ const cleanLc = (str) => (str || '').toString().replace(/[^a-zA-Z0-9]/g, '').toL
 const getDecrypted = (doc) => {
     if (!doc) return null;
     if (doc.data) {
-        const dec = decryptData(doc.data);
+        const dec = decryptRecordWithUnwrap(doc.data);
         if (dec) return { ...dec, _id: doc._id };
     }
     return doc.toObject ? doc.toObject() : doc;

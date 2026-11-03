@@ -493,7 +493,7 @@ const MetaData = require('./models/MetaData');
 const CnFPayment = require('./models/CnFPayment');
 const InsurancePayment = require('./models/InsurancePayment');
 const StockBaseline = require('./models/StockBaseline');
-const { encryptData, decryptData } = require('./utils/encryption');
+const { encryptData, decryptData, decryptRecordWithUnwrap } = require('./utils/encryption');
 const { updateBrandAcrossAllCollections } = require('./services/brandCascadeService');
 const { cascadeIpUpdate, cascadeProductUpdate, cascadeProductIpNameUpdate } = require('./services/ipCascadeService');
 const { syncSaleOnSave, syncSaleOnDelete, repairAllCustomerSalesHistory } = require('./services/customerSyncService');
@@ -1173,10 +1173,7 @@ apiRouter.get('/api/pending-indicators', async (req, res) => {
       if (memoryCache[cacheKey]) return memoryCache[cacheKey];
       const records = await Model.find().sort({ createdAt: -1 });
       const decrypted = records.map(r => {
-        let d = decryptData(r.data);
-        if (d && d.data && typeof d.data === 'string' && !d.invoiceNo && !d.productName) {
-          try { d = decryptData(d.data); } catch (e) { }
-        }
+        let d = decryptRecordWithUnwrap(r.data);
         return { ...d, _id: r._id, createdAt: d?.createdAt || r.createdAt, ...(decryptFn ? decryptFn(r, d) : {}) };
       });
       memoryCache[cacheKey] = decrypted;
@@ -2499,10 +2496,7 @@ apiRouter.post('/api/stock', async (req, res) => {
     if (resolvedBody && resolvedBody.purchaseReceiveId) {
       const allStockDocs = await Stock.find();
       const existingDoc = allStockDocs.find(s => {
-        let dec = decryptData(s.data);
-        if (dec && dec.data && typeof dec.data === 'string' && !dec.productName) {
-          try { dec = decryptData(dec.data); } catch (e) { }
-        }
+        let dec = decryptRecordWithUnwrap(s.data);
         return dec &&
           String(dec.purchaseReceiveId) === String(resolvedBody.purchaseReceiveId) &&
           (dec.productName || '').trim().toLowerCase() === (resolvedBody.productName || '').trim().toLowerCase() &&
@@ -2555,10 +2549,7 @@ apiRouter.delete('/api/stock/:id', async (req, res) => {
     const existingStock = await Stock.findById(req.params.id);
     if (!existingStock) return res.status(404).json({ message: 'Item not found' });
 
-    let existingData = decryptData(existingStock.data);
-    if (existingData && existingData.data && typeof existingData.data === 'string' && !existingData.productName) {
-      try { existingData = decryptData(existingData.data); } catch (e) { }
-    }
+    let existingData = decryptRecordWithUnwrap(existingStock.data);
 
     if (existingData && existingData.status === 'Requested') {
       const ownerUser = (existingData.requestedByUsername || '').trim().toLowerCase();
@@ -2604,10 +2595,7 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
     const existingStock = await Stock.findById(req.params.id);
     if (!existingStock) return res.status(404).json({ message: 'Item not found' });
 
-    let existingData = decryptData(existingStock.data);
-    if (existingData && existingData.data && typeof existingData.data === 'string' && !existingData.productName) {
-      try { existingData = decryptData(existingData.data); } catch (e) { }
-    }
+    let existingData = decryptRecordWithUnwrap(existingStock.data);
 
     if (existingData && existingData.status === 'Requested') {
       const isStatusChange = req.body.status !== existingData.status;
@@ -2676,11 +2664,7 @@ apiRouter.get('/api/stock', async (req, res) => {
     }
     const stock = await Stock.find().sort({ createdAt: -1 });
     const decrypted = stock.map(r => {
-      let d = decryptData(r.data);
-      // Auto-fallback for testing records that were double-encrypted by the bug
-      if (d && d.data && typeof d.data === 'string' && !d.productName) {
-        try { d = decryptData(d.data); } catch (e) { /* ignore */ }
-      }
+      let d = decryptRecordWithUnwrap(r.data);
       return { ...d, _id: r._id, createdAt: d?.createdAt || r.createdAt };
     });
     memoryCache.stock = decrypted;
