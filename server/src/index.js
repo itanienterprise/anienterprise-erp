@@ -1299,7 +1299,7 @@ const isUserAdmin = async (user) => {
   const usernameLower = (user.username || '').toLowerCase().trim();
   if (usernameLower === 'admin' || usernameLower === 'superadmin') return true;
   const roleLower = (user.role || '').toLowerCase().trim();
-  if (roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'incharge') return true;
+  if (roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'incharge' || roleLower === 'administrator') return true;
 
   // Check if role is an ID that resolves to Admin in MetaData
   if (/^[0-9a-fA-F]{24}$/.test(user.role)) {
@@ -1309,7 +1309,7 @@ const isUserAdmin = async (user) => {
       if (rec) {
         const d = decryptData(rec.data);
         const name = (d?.name || '').toLowerCase().trim();
-        if (['admin', 'superadmin', 'incharge'].includes(name)) return true;
+        if (['admin', 'superadmin', 'incharge', 'administrator'].includes(name)) return true;
       }
     } catch (e) { }
   }
@@ -1351,7 +1351,7 @@ const adminOrSalesManager = async (req, res, next) => {
 };
 
 const getDefaultPermissionsForRole = (role) => {
-  const roleLower = (role || '').toLowerCase();
+  const roleLower = (role || '').toLowerCase().trim();
   const defaults = {};
 
   const modules = [
@@ -1372,7 +1372,7 @@ const getDefaultPermissionsForRole = (role) => {
     };
   });
 
-  if (roleLower === 'admin') {
+  if (roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator') {
     modules.forEach(m => {
       defaults[m] = {
         view: true, add: true, edit: true, delete: true, special: true, showRate: true, lcPriceReport: true,
@@ -1393,7 +1393,8 @@ const getDefaultPermissionsForRole = (role) => {
           editLog: true,
           addShift: true, editShift: true, deleteShift: true,
           deviceMapping: true,
-          addMapping: true, editMapping: true, deleteMapping: true
+          addMapping: true, editMapping: true, deleteMapping: true,
+          openingBalance: false
         };
       }
     });
@@ -1401,6 +1402,12 @@ const getDefaultPermissionsForRole = (role) => {
     const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods', 'purchase', 'purchaseReceive'];
     lcModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false, lcPriceReport: false };
+    });
+  } else if (roleLower === 'head of sales') {
+    modules.forEach(m => {
+      if (m !== 'backupRestore' && m !== 'log') {
+        defaults[m] = { view: true, add: true, edit: true, delete: false, special: true, showRate: false, lcPriceReport: false };
+      }
     });
   } else if (roleLower === 'sales manager') {
     const salesModules = ['product', 'customer', 'sales', 'borderSale', 'purchase', 'purchaseReceive', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
@@ -1474,8 +1481,12 @@ const resolveRoleToDisplay = async (roleVal) => {
 };
 
 const resolveUserPermissions = async (role, customPermissions) => {
+  let effectiveRole = role;
+  if (role && /^[0-9a-fA-F]{24}$/.test(role)) {
+    effectiveRole = await resolveRoleToDisplay(role);
+  }
   // Build full role defaults (includes all known modules)
-  const roleDefaults = getDefaultPermissionsForRole(role);
+  const roleDefaults = getDefaultPermissionsForRole(effectiveRole || role);
 
   // Check for a role-level override stored in MetaData (from RoleCreation)
   let roleOverridePermissions = null;
@@ -1485,10 +1496,11 @@ const resolveUserPermissions = async (role, customPermissions) => {
     const match = records.find(r => {
       try {
         const d = decryptData(r.data);
-        const roleStr = (role || '').toString().toLowerCase();
+        const roleStr = (role || '').toString().toLowerCase().trim();
+        const effRoleStr = (effectiveRole || '').toString().toLowerCase().trim();
         return d && (
           (r._id.toString() === role) ||
-          (d.name && d.name.toLowerCase() === roleStr)
+          (d.name && (d.name.toLowerCase().trim() === roleStr || d.name.toLowerCase().trim() === effRoleStr))
         );
       } catch (e) {
         return false;
@@ -1504,16 +1516,23 @@ const resolveUserPermissions = async (role, customPermissions) => {
     console.error('Error resolving role override:', e);
   }
 
+  const base = { ...roleDefaults, ...(roleOverridePermissions || {}) };
+
   if (customPermissions && Object.keys(customPermissions).length > 0) {
-    // Merge: start with role defaults as base, overlay role-override, then apply custom permissions on top.
-    // This ensures any newly added modules get their role-default values even if the
-    // custom permissions object was saved before that module was added.
-    const base = { ...roleDefaults, ...(roleOverridePermissions || {}) };
-    return { ...base, ...customPermissions };
+    // Deep merge each module: ensure defaults and role overrides supply missing actions
+    const merged = { ...base };
+    for (const modKey of Object.keys(customPermissions)) {
+      if (customPermissions[modKey] && typeof customPermissions[modKey] === 'object' && !Array.isArray(customPermissions[modKey])) {
+        merged[modKey] = { ...(base[modKey] || {}), ...customPermissions[modKey] };
+      } else {
+        merged[modKey] = customPermissions[modKey];
+      }
+    }
+    return merged;
   }
 
-  // No custom permissions — use role override if available, else role defaults
-  return roleOverridePermissions || roleDefaults;
+  // No custom permissions — use role override merged with role defaults, else role defaults
+  return roleOverridePermissions ? { ...roleDefaults, ...roleOverridePermissions } : roleDefaults;
 };
 
 const verifyPermission = (moduleName, action = 'view') => {
@@ -1521,7 +1540,9 @@ const verifyPermission = (moduleName, action = 'view') => {
     const user = req.session.user;
     if (!user) return res.status(401).json({ message: 'Unauthorized' });
 
-    if (user.username === 'admin' || (user.role || '').toLowerCase() === 'admin') {
+    // 1. Comprehensive Admin check (handles admin, superadmin, incharge, administrator, admin role IDs, and backup/log privileges)
+    const isAdmin = await isUserAdmin(user);
+    if (isAdmin) {
       return next();
     }
 
@@ -1549,6 +1570,13 @@ const verifyPermission = (moduleName, action = 'view') => {
     // Fallback: If checking attendance, allow if user has employees permission for backwards compatibility
     if (moduleName === 'attendance' && resolvedPerms && resolvedPerms['employees'] && resolvedPerms['employees'][action]) {
       return next();
+    }
+
+    // Granular fallbacks for importerExporter
+    if (moduleName === 'importerExporter' && resolvedPerms) {
+      if (resolvedPerms['lcManagement'] && resolvedPerms['lcManagement'][action]) return next();
+      if (resolvedPerms['borderSale'] && resolvedPerms['borderSale'][action]) return next();
+      if (resolvedPerms['port'] && resolvedPerms['port'][action]) return next();
     }
 
     return res.status(403).json({ message: `Forbidden: You do not have permission to ${action} in ${moduleName}` });
@@ -2075,7 +2103,7 @@ apiRouter.get('/api/ip-records/:id/attachment', async (req, res) => {
 });
 
 // Importer APIs
-apiRouter.post('/api/importers', async (req, res) => {
+apiRouter.post('/api/importers', verifyPermission('importerExporter', 'add'), async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const newImporter = new Importer({ data: encryptedData });
@@ -2090,7 +2118,7 @@ apiRouter.post('/api/importers', async (req, res) => {
 });
 
 // Delete Importer
-apiRouter.delete('/api/importers/:id', adminOnly, async (req, res) => {
+apiRouter.delete('/api/importers/:id', verifyPermission('importerExporter', 'delete'), async (req, res) => {
   try {
     const deletedImporter = await Importer.findByIdAndDelete(req.params.id);
     if (!deletedImporter) return res.status(404).json({ message: 'Importer not found' });
@@ -2131,7 +2159,7 @@ apiRouter.get('/api/importers', async (req, res) => {
 });
 
 // Exporter APIs
-apiRouter.post('/api/exporters', async (req, res) => {
+apiRouter.post('/api/exporters', verifyPermission('importerExporter', 'add'), async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const newExporter = new Exporter({ data: encryptedData });
@@ -2146,7 +2174,7 @@ apiRouter.post('/api/exporters', async (req, res) => {
 });
 
 // Delete Exporter
-apiRouter.delete('/api/exporters/:id', adminOnly, async (req, res) => {
+apiRouter.delete('/api/exporters/:id', verifyPermission('importerExporter', 'delete'), async (req, res) => {
   try {
     const deletedExporter = await Exporter.findByIdAndDelete(req.params.id);
     if (!deletedExporter) return res.status(404).json({ message: 'Exporter not found' });
@@ -2187,7 +2215,7 @@ apiRouter.get('/api/exporters', async (req, res) => {
 });
 
 // Supplier APIs
-apiRouter.post('/api/suppliers', async (req, res) => {
+apiRouter.post('/api/suppliers', verifyPermission('importerExporter', 'add'), async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const newSupplier = new Supplier({ data: encryptedData });
@@ -2202,7 +2230,7 @@ apiRouter.post('/api/suppliers', async (req, res) => {
 });
 
 // Delete Supplier
-apiRouter.delete('/api/suppliers/:id', adminOnly, async (req, res) => {
+apiRouter.delete('/api/suppliers/:id', verifyPermission('importerExporter', 'delete'), async (req, res) => {
   try {
     const deletedSupplier = await Supplier.findByIdAndDelete(req.params.id);
     if (!deletedSupplier) return res.status(404).json({ message: 'Supplier not found' });

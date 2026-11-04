@@ -39,6 +39,7 @@ const Importer = ({
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
+    const [submitErrorMsg, setSubmitErrorMsg] = useState('');
     const [importers, setImporters] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [viewData, setViewData] = useState(null);
@@ -233,6 +234,7 @@ const Importer = ({
             fetchImporters(true);
         } catch (error) {
             console.error('Error saving importer:', error);
+            setSubmitErrorMsg(error.response?.data?.message || 'Failed to save importer.');
             setSubmitStatus('error');
         } finally {
             setIsSubmitting(false);
@@ -254,6 +256,7 @@ const Importer = ({
         });
         setEditingId(null);
         setSubmitStatus(null);
+        setSubmitErrorMsg('');
     };
 
     const handleEdit = (importer) => {
@@ -505,8 +508,8 @@ const Importer = ({
                             )}
                             {submitStatus === 'error' && (
                                 <p className="importer-form-error">
-                                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                    Failed to save importer.
+                                    <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    <span>{submitErrorMsg || 'Failed to save importer.'}</span>
                                 </p>
                             )}
                             <div className="importer-form-spacer"></div>
