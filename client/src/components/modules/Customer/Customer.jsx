@@ -285,7 +285,7 @@ const Customer = ({
 
         const pollTimer = setInterval(() => {
             fetchCustomers(true);
-        }, 30000);
+        }, 60000);
 
         return () => {
             if (socket) {
@@ -355,43 +355,39 @@ const Customer = ({
             setIsLoading(true);
         }
         try {
-            const cacheBuster = `_t=${Date.now()}`;
+            const queryFetch = (key, url) => {
+                if (silent) {
+                    return queryClient.ensureQueryData({
+                        queryKey: [key],
+                        queryFn: () => api.get(url).then(r => Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : [])).catch(() => [])
+                    });
+                }
+                return queryClient.fetchQuery({
+                    queryKey: [key],
+                    queryFn: () => api.get(url).then(r => Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : [])).catch(() => [])
+                });
+            };
+
             const fetchSalesPromise = typeof fetchSalesGlobal === 'function'
                 ? fetchSalesGlobal()
-                : queryClient.fetchQuery({
-                    queryKey: ['sales'],
-                    queryFn: () => api.get(`/api/sales?${cacheBuster}`).then(r => Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : [])).catch(() => [])
-                });
+                : queryFetch('sales', '/api/sales');
 
             const [decryptedCustomers, gpRecords, lcData, purchasesData, stockData, prData, returnsData] = await Promise.all([
-                queryClient.fetchQuery({
-                    queryKey: ['customers'],
-                    queryFn: () => api.get(`/api/customers?${cacheBuster}`)
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['lc-gp'],
-                    queryFn: () => api.get(`/api/lc-gp?${cacheBuster}`)
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['lc-management'],
-                    queryFn: () => api.get(`/api/lc-management?${cacheBuster}`)
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['purchases'],
-                    queryFn: () => api.get(`/api/purchases?${cacheBuster}`).catch(() => [])
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['stock'],
-                    queryFn: () => api.get(`/api/stock?${cacheBuster}`).catch(() => [])
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['purchase-receives'],
-                    queryFn: () => api.get(`/api/purchase-receives?${cacheBuster}`).catch(() => [])
-                }),
-                queryClient.fetchQuery({
-                    queryKey: ['returns'],
-                    queryFn: () => api.get(`/api/returns?${cacheBuster}`).catch(() => [])
-                }),
+                silent
+                    ? queryClient.ensureQueryData({
+                        queryKey: ['customers'],
+                        queryFn: () => api.get('/api/customers').then(r => Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : []))
+                    })
+                    : queryClient.fetchQuery({
+                        queryKey: ['customers'],
+                        queryFn: () => api.get('/api/customers').then(r => Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : []))
+                    }),
+                queryFetch('lc-gp', '/api/lc-gp'),
+                queryFetch('lc-management', '/api/lc-management'),
+                queryFetch('purchases', '/api/purchases'),
+                queryFetch('stock', '/api/stock'),
+                queryFetch('purchase-receives', '/api/purchase-receives'),
+                queryFetch('returns', '/api/returns'),
                 fetchSalesPromise
             ]);
 

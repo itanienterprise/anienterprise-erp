@@ -679,15 +679,21 @@ export const initActivityTracker = (userGetter, viewGetter) => {
                 'next', 'prev', 'previous'
             ]);
 
-            const row = clickable.closest('tr, [data-row], [role="row"], li, .sale-mgmt-mobile-card');
-            const rowDetails = extractRowDetails(clickable, row);
-
-            const modal = clickable.closest('.modal, [role="dialog"], form, .fixed, .drawer, .card');
-            const modalDetails = extractModalDetails(clickable, modal);
-            const combinedDetails = { ...rowDetails, ...modalDetails };
-
             // Extract explicit data-action if set
             let label = clickable.getAttribute('data-action');
+            let row = null;
+            let modal = null;
+            let combinedDetails = null;
+
+            const getCombinedDetails = () => {
+                if (combinedDetails !== null) return combinedDetails;
+                row = row || clickable.closest('tr, [data-row], [role="row"], li, .sale-mgmt-mobile-card');
+                modal = modal || clickable.closest('.modal, [role="dialog"], form, .fixed, .drawer, .card');
+                const rowDetails = row ? extractRowDetails(clickable, row) : {};
+                const modalDetails = modal ? extractModalDetails(clickable, modal) : {};
+                combinedDetails = { ...rowDetails, ...modalDetails };
+                return combinedDetails;
+            };
 
             // If not explicit, identify canonical verb & context
             if (!label) {
@@ -705,16 +711,19 @@ export const initActivityTracker = (userGetter, viewGetter) => {
                 const verb = detectButtonVerb(clickable, rawLabel);
 
                 if (verb === 'Edit' || verb === 'Delete' || verb === 'View' || verb === 'Accept' || verb === 'Reject') {
+                    row = row || clickable.closest('tr, [data-row], [role="row"], li, .sale-mgmt-mobile-card');
                     const context = extractContextFromRow(clickable, row);
                     label = context ? `${verb} ${modName} (${context})` : `${verb} ${modName}`;
                 } else if (verb === 'Create New') {
                     label = `Create New ${modName}`;
                 } else if (verb === 'Save' || verb === 'Update' || verb === 'Submit') {
+                    modal = modal || clickable.closest('.modal, [role="dialog"], form, .fixed, .drawer, .card');
                     const context = extractContextFromModal(modal);
                     let prefix = context ? `${verb} ${modName} (${context})` : `${verb} ${modName}`;
-                    if (combinedDetails.totalAmount && !prefix.includes('৳')) {
-                        const custPart = combinedDetails.customerName && !prefix.includes(combinedDetails.customerName) ? ` ("${combinedDetails.customerName}")` : '';
-                        prefix = `${prefix}${custPart} • ৳${Number(combinedDetails.totalAmount).toLocaleString('en-IN')}`;
+                    const details = getCombinedDetails();
+                    if (details.totalAmount && !prefix.includes('৳')) {
+                        const custPart = details.customerName && !prefix.includes(details.customerName) ? ` ("${details.customerName}")` : '';
+                        prefix = `${prefix}${custPart} • ৳${Number(details.totalAmount).toLocaleString('en-IN')}`;
                     }
                     label = prefix;
                 } else if (rawLabel) {
@@ -801,7 +810,7 @@ export const initActivityTracker = (userGetter, viewGetter) => {
             }
 
             trackUserAction(label, modName, {
-                ...combinedDetails,
+                ...(combinedDetails || (isSaveButton ? getCombinedDetails() : {})),
                 tag: clickable.tagName.toLowerCase(),
                 targetId: clickable.id || undefined,
                 targetName: clickable.name || undefined

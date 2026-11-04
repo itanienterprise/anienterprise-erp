@@ -12,6 +12,8 @@ import android.provider.Settings;
 import android.view.View;
 import android.view.WindowInsets;
 import android.webkit.CookieManager;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
@@ -26,6 +28,7 @@ public class MainActivity extends BridgeActivity implements View.OnApplyWindowIn
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         configureSystemBars();
+        configureWebViewPerformance();
         enableCookies();
         setupNativeBridge();
         requestAllRequiredPermissions();
@@ -35,6 +38,7 @@ public class MainActivity extends BridgeActivity implements View.OnApplyWindowIn
     public void onResume() {
         super.onResume();
         configureSystemBars();
+        configureWebViewPerformance();
         enableCookies();
         setupNativeBridge();
         checkAndStartMdmService();
@@ -95,6 +99,26 @@ public class MainActivity extends BridgeActivity implements View.OnApplyWindowIn
             // 5. Ensure WebView background is solid white
             if (getBridge() != null && getBridge().getWebView() != null) {
                 getBridge().getWebView().setBackgroundColor(android.graphics.Color.WHITE);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void configureWebViewPerformance() {
+        try {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                WebView webView = getBridge().getWebView();
+                webView.setBackgroundColor(android.graphics.Color.WHITE);
+                webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
+                WebSettings settings = webView.getSettings();
+                settings.setDomStorageEnabled(true);
+                settings.setDatabaseEnabled(true);
+                settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+                // Smooth 60fps scrolling by pre-rasterizing offscreen content
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    settings.setOffscreenPreRaster(true);
+                }
             }
         } catch (Exception ignored) {}
     }

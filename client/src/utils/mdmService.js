@@ -286,7 +286,8 @@ class MdmService {
     }
 
     // Configure native Android Foreground Service for 24/7 background tracking (works when screen is off / phone sleeping)
-    if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.updateConfig === 'function') {
+    const hasNativeBridge = typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.updateConfig === 'function';
+    if (hasNativeBridge) {
       try {
         const serverUrl = localStorage.getItem('erp_server_url') || 'http://192.168.0.27:5000';
         window.AndroidBridge.updateConfig(
@@ -299,9 +300,12 @@ class MdmService {
       } catch (err) {
         console.warn('[MDM] AndroidBridge.updateConfig error:', err);
       }
+      // When native Android service is handling 24/7 background telemetry, avoid running duplicate
+      // high-accuracy GPS watch loops in the WebView to keep the UI smooth and responsive.
+      return;
     }
 
-    // Register on start with active user, then send initial ping
+    // Web / non-bridge environment fallback:
     this.registerDevice(this.currentUser).finally(() => {
       if (this.isTracking) {
         this.sendPing();

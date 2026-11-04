@@ -84,8 +84,17 @@ public class MdmLocationService extends Service {
         createNotificationChannel();
         startForegroundNotification();
         acquireWakeLock();
+        initBackgroundThread();
         setupLocationTracking();
         startTelemetryLoop();
+    }
+
+    private void initBackgroundThread() {
+        if (handlerThread == null) {
+            handlerThread = new HandlerThread("MdmTelemetryThread");
+            handlerThread.start();
+            backgroundHandler = new Handler(handlerThread.getLooper());
+        }
     }
 
     @Override
@@ -163,6 +172,8 @@ public class MdmLocationService extends Service {
     private void setupLocationTracking() {
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         if (locationManager == null) return;
+        initBackgroundThread();
+        Looper bgLooper = handlerThread != null ? handlerThread.getLooper() : Looper.getMainLooper();
 
         locationListener = new LocationListener() {
             @Override
@@ -183,10 +194,10 @@ public class MdmLocationService extends Service {
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    5000L,
-                    0.0f,
+                    15000L,
+                    5.0f,
                     locationListener,
-                    Looper.getMainLooper()
+                    bgLooper
                 );
                 Location loc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
                 if (isBetterLocation(loc, lastLocation)) lastLocation = loc;
@@ -195,26 +206,14 @@ public class MdmLocationService extends Service {
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                     LocationManager.NETWORK_PROVIDER,
-                    15000L,
-                    5.0f,
+                    25000L,
+                    15.0f,
                     locationListener,
-                    Looper.getMainLooper()
+                    bgLooper
                 );
                 Location loc = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
                 if (isBetterLocation(loc, lastLocation)) lastLocation = loc;
             }
-
-            try {
-                if (locationManager.getAllProviders().contains(LocationManager.PASSIVE_PROVIDER)) {
-                    locationManager.requestLocationUpdates(
-                        LocationManager.PASSIVE_PROVIDER,
-                        5000L,
-                        0.0f,
-                        locationListener,
-                        Looper.getMainLooper()
-                    );
-                }
-            } catch (Exception ignored) {}
         } catch (SecurityException ignored) {
         } catch (Exception ignored) {}
     }
@@ -267,11 +266,7 @@ public class MdmLocationService extends Service {
 
     private void startTelemetryLoop() {
         isRunning = true;
-        if (handlerThread == null) {
-            handlerThread = new HandlerThread("MdmTelemetryThread");
-            handlerThread.start();
-            backgroundHandler = new Handler(handlerThread.getLooper());
-        }
+        initBackgroundThread();
 
         pingRunnable = new Runnable() {
             @Override
@@ -355,10 +350,11 @@ public class MdmLocationService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && locationManager != null) {
             try {
                 if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    java.util.concurrent.Executor bgExecutor = backgroundHandler != null ? backgroundHandler::post : getMainExecutor();
                     locationManager.getCurrentLocation(
                         LocationManager.GPS_PROVIDER,
                         null,
-                        getMainExecutor(),
+                        bgExecutor,
                         new java.util.function.Consumer<Location>() {
                             @Override
                             public void accept(Location location) {

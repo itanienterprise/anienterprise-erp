@@ -46,6 +46,11 @@ if (API_BASE_URL) {
  * Request Interceptor: Automatically encrypts the body and adds security headers.
  */
 axios.interceptors.request.use((config) => {
+    const currentBase = getBaseServerUrl();
+    if (currentBase && !config.baseURL) {
+        config.baseURL = currentBase;
+    }
+
     // Attach anti-hijacking session token & session ID if available
     const sessionToken = (typeof window !== 'undefined')
         ? (sessionStorage.getItem('erp_session_token') || localStorage.getItem('erp_session_token'))

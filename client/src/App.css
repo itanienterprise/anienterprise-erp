@@ -29,6 +29,19 @@ body {
     color: var(--color-gray-900, #111827);
 }
 
+/* Eliminate 300ms mobile touch delay across all interactive elements */
+html,
+body,
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
 /* Hide spin buttons for all number inputs globally */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
