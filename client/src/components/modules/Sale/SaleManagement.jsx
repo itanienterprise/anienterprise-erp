@@ -357,9 +357,6 @@ const SaleManagement = ({
         localStorage.setItem('sale_page_size', pageSize);
     }, [pageSize]);
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchQuery, saleType, saleFilters, isRequestedOnly, isEditRequestedOnly]);
     const [editingId, setEditingId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -428,6 +425,10 @@ const SaleManagement = ({
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
     const isEditRequestedOnlyRef = useRef(false);
     useEffect(() => { isEditRequestedOnlyRef.current = isEditRequestedOnly; }, [isEditRequestedOnly]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, saleType, saleFilters, isRequestedOnly, isEditRequestedOnly]);
 
     const deduplicateSales = (list) => {
         const seen = new Set();

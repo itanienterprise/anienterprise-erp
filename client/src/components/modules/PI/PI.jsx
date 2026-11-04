@@ -20,6 +20,1115 @@ import { formatFirstName } from '../IPManagement/IPManagement';
 import { trackUserAction } from '../../../utils/activityTracker';
 import { getSocket } from '../../../utils/socket';
 
+// Memoized Mobile PI Card for high performance on Android APK and mobile devices
+const PiMobileCard = React.memo(({
+    record,
+    sl,
+    isExpanded,
+    onToggleExpand,
+    onView,
+    onPdf,
+    onEdit,
+    onDelete,
+    onOpenIpDetails,
+    canEdit,
+    canDelete,
+    canShowEntryBy,
+    isLcDone,
+    getStandardProductName,
+    getRecordEffectiveCreateDate,
+    getPiEntryDetails
+}) => {
+    const displayProducts = useMemo(() => {
+        if (record.productsList && record.productsList.length > 0) {
+            return record.productsList.map(p => getStandardProductName(p.productName)).filter(Boolean).join(', ');
+        }
+        return getStandardProductName(record.productName) || 'N/A';
+    }, [record.productsList, record.productName, getStandardProductName]);
+
+    const totalQty = useMemo(() => {
+        if (record.productsList && record.productsList.length > 0) {
+            return record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+        }
+        return parseFloat(record.grandTotalQuantity || record.quantity) || 0;
+    }, [record.productsList, record.grandTotalQuantity, record.quantity]);
+
+    const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
+    const hasMultipleProducts = record.productsList && record.productsList.length > 1;
+
+    // Only compute entry details when card is expanded AND user has permission
+    const entryInfo = (isExpanded && canShowEntryBy) ? getPiEntryDetails(record) : null;
+
+    const ipList = useMemo(() => {
+        const rawIps = (record.revisions && record.revisions.length > 0 && record.revisions[record.revisions.length - 1].ipNumbers && record.revisions[record.revisions.length - 1].ipNumbers.length > 0)
+            ? record.revisions[record.revisions.length - 1].ipNumbers
+            : (record.ipNumbers && record.ipNumbers.length > 0 ? record.ipNumbers : (record.ipNumber ? String(record.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : []));
+        return (rawIps || []).map(s => String(s).trim()).filter(Boolean);
+    }, [record.revisions, record.ipNumbers, record.ipNumber]);
+
+    const piList = useMemo(() => {
+        if (record.piNumbers && Array.isArray(record.piNumbers) && record.piNumbers.length > 0) {
+            return record.piNumbers.map(s => String(s).trim()).filter(Boolean);
+        }
+        if (record.piNumber) {
+            return String(record.piNumber).split(',').map(s => s.trim()).filter(Boolean);
+        }
+        return [];
+    }, [record.piNumbers, record.piNumber]);
+
+    return (
+        <div
+            className={`bg-white rounded-2xl border transition-[border-color,box-shadow] duration-150 ${isExpanded ? 'border-blue-200 shadow-lg ring-1 ring-blue-50' : 'border-gray-100 shadow-sm'}`}
+            onClick={() => onToggleExpand(record._id)}
+        >
+            <div className="p-5 space-y-4">
+                {/* Header: PI No & Status Badges, then Importer & Product */}
+                <div className="min-w-0 flex-1 space-y-1.5 text-left">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-xs leading-snug min-w-0 flex-wrap">
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md shrink-0">
+                                SL: {sl}
+                            </span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">PI No : </span>
+                            <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                                {piList.length > 1 ? (
+                                    piList.map((pNum, idx) => (
+                                        <span key={idx} className="font-black text-gray-900 tracking-tight break-all font-mono text-sm">
+                                            {pNum}
+                                        </span>
+                                    ))
+                                ) : (
+                                    <span className="font-black text-gray-900 tracking-tight break-all font-mono text-sm">
+                                        {record.piNumber || '—'}
+                                    </span>
+                                )}
+                                {record.revisions && record.revisions.length > 0 && (
+                                    <span className="text-[9px] font-black uppercase text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                        REVISED
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                            {isLcDone && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 bg-blue-50 text-blue-700 border-blue-200">
+                                    LC Done
+                                </span>
+                            )}
+                            {ipList.length === 0 && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 bg-red-50 text-red-700 border-red-200">
+                                    IP MISSING
+                                </span>
+                            )}
+                            {!isLcDone && ipList.length > 0 && (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' : record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+                                    {record.status}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="text-xs leading-snug">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer : </span>
+                        <span className="font-bold text-gray-800 break-words">{record.partyName || '—'}</span>
+                    </div>
+
+                    <div className="text-xs leading-snug">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product : </span>
+                        <span className="font-semibold text-gray-700 break-words">{displayProducts || '—'}</span>
+                    </div>
+                </div>
+
+                {/* Expandable Details */}
+                {isExpanded && (
+                    <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                        <div className="flex items-start">
+                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0 mt-0.5">IP Number</span>
+                            <span className="text-gray-400 font-bold mx-2 mt-0.5">-</span>
+                            <div className="flex-1 text-sm font-bold text-gray-800">
+                                {ipList.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {ipList.map((ip, idx) => (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onOpenIpDetails(ip, record);
+                                                }}
+                                                className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                title={`View IP Details (${ip})`}
+                                            >
+                                                {ip}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border bg-red-50 text-red-700 border-red-200">
+                                        IP MISSING
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex items-center">
+                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Create Date</span>
+                            <span className="text-gray-400 font-bold mx-2">-</span>
+                            <span className="text-sm font-bold text-gray-700">{formatDate(getRecordEffectiveCreateDate(record))}</span>
+                        </div>
+                        <div className="flex items-center">
+                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Date</span>
+                            <span className="text-gray-400 font-bold mx-2">-</span>
+                            <span className="text-sm font-bold text-gray-700">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</span>
+                        </div>
+                        <div className="flex items-center">
+                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Expire Date</span>
+                            <span className="text-gray-400 font-bold mx-2">-</span>
+                            <span className="text-sm font-bold text-red-600">{formatDate(record.validityDate)}</span>
+                        </div>
+                        <div className="flex items-center">
+                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Importer</span>
+                            <span className="text-gray-400 font-bold mx-2">-</span>
+                            <span className="text-sm font-bold text-gray-800 truncate">{record.partyName}</span>
+                        </div>
+                        <div className="flex items-center">
+                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Exporter</span>
+                            <span className="text-gray-400 font-bold mx-2">-</span>
+                            <span className="text-sm font-bold text-gray-800 truncate">{record.exporterName}</span>
+                        </div>
+                        <div className="flex items-center">
+                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Port</span>
+                            <span className="text-gray-400 font-bold mx-2">-</span>
+                            <span className="text-sm font-bold text-gray-800 truncate">{displayPort}</span>
+                        </div>
+                        <div className="flex items-start">
+                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0 mt-0.5">Product</span>
+                            <span className="text-gray-400 font-bold mx-2 mt-0.5">-</span>
+                            <div className="flex-1 text-sm font-bold text-gray-700">
+                                {hasMultipleProducts ? (
+                                    <div className="flex flex-col gap-1">
+                                        {record.productsList.map((p, idx) => {
+                                            const itemQty = parseFloat(p.quantity) || 0;
+                                            const stdName = getStandardProductName(p.productName);
+                                            return (
+                                                <div key={idx} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded-lg text-xs">
+                                                    <span>{stdName}</span>
+                                                    <span className="text-blue-600 font-extrabold">{itemQty > 0 ? `${itemQty.toLocaleString('en-US')} kg` : ''}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <span className="truncate block" title={displayProducts}>{displayProducts}</span>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex items-center">
+                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Total Qty</span>
+                            <span className="text-gray-400 font-bold mx-2">-</span>
+                            <span className="text-sm font-bold text-gray-700">{totalQty.toLocaleString('en-US')} kg</span>
+                        </div>
+                        <div className="flex items-center">
+                            <span className="w-[100px] text-[11px] font-black text-indigo-500 uppercase tracking-widest shrink-0">Grand Total</span>
+                            <span className="text-indigo-500 font-bold mx-2">-</span>
+                            <span className="text-sm font-black text-indigo-700 tracking-tight">${parseFloat(record.grandTotal || 0).toLocaleString()}</span>
+                        </div>
+                        {canShowEntryBy && entryInfo && (
+                            <div className="flex items-center">
+                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Entry By</span>
+                                <span className="text-gray-400 font-bold mx-2">-</span>
+                                <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                                    <span className="font-semibold text-gray-800">
+                                        {entryInfo.creator}
+                                    </span>
+                                    {entryInfo.reviser && (
+                                        <span className="text-[10px] text-purple-600 font-semibold bg-purple-50 px-1.5 py-0.5 rounded" title="Revised By">
+                                            ⟳ {entryInfo.reviser}
+                                        </span>
+                                    )}
+                                    {entryInfo.editor && (
+                                        <span className="text-[10px] text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded" title="Edited By">
+                                            ✎ {entryInfo.editor}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Expandable Actions */}
+            {isExpanded && (
+                <div className="px-5 pb-5">
+                    <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1">
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onView(record);
+                            }}
+                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                            title="View PI History"
+                        >
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                <EyeIcon className="w-5 h-5 transition-transform duration-150" />
+                            </div>
+                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                View
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onPdf(record);
+                            }}
+                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                            title="Generate PDF"
+                        >
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                <PDFIcon className="w-5 h-5 transition-transform duration-150" />
+                            </div>
+                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                PDF
+                            </span>
+                        </button>
+
+                        {canEdit && (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onEdit(record); }}
+                                className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                title="Edit Original PI"
+                                data-action="Edit Original PI"
+                                aria-label="Edit Original PI"
+                            >
+                                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                    <EditIcon className="w-5 h-5 transition-transform duration-150" />
+                                </div>
+                                <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
+                                    Edit Original
+                                </span>
+                            </button>
+                        )}
+
+                        {canDelete && (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onDelete(record._id); }}
+                                className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                title="Delete Record"
+                            >
+                                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-red-50 group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                    <TrashIcon className="w-5 h-5 transition-transform duration-150" />
+                                </div>
+                                <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                    Delete
+                                </span>
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+});
+
+// Dedicated History Explorer Modal for PI (zero-lag, no backdrop-blur, safe fallbacks)
+const PiHistoryExplorerModal = ({
+    viewHistoryRecord,
+    activeHistoryIndex,
+    setActiveHistoryIndex,
+    onClose,
+    lcRecords = [],
+    ipRecords = [],
+    exporters = [],
+    importers = [],
+    canManage = false,
+    canDeleteRevision = false,
+    handleEdit,
+    handleSelectPiForTenPercent,
+    setShowReviseForm,
+    setShowTenPercentForm,
+    setShowForm,
+    setReviseFormData,
+    setSelectedRevisePiId,
+    setEditingRevisionOriginalNo,
+    setReviseSearchQuery,
+    setReviseIpSearch,
+    setActiveDropdown,
+    setHighlightedIndex,
+    recalcReviseProducts,
+    handleDeleteRevision,
+    handleDeleteTenPercentRecord,
+    handleOpenIpDetails,
+    getHistoryTimeline,
+    getPiProductsList
+}) => {
+    const [showDeleteRevisionConfirm, setShowDeleteRevisionConfirm] = useState(false);
+    const [deleteRevisionStatus, setDeleteRevisionStatus] = useState(null);
+
+    const timeline = useMemo(() => {
+        return getHistoryTimeline ? getHistoryTimeline(viewHistoryRecord) : [];
+    }, [viewHistoryRecord, getHistoryTimeline]);
+
+    const activeRevision = timeline[activeHistoryIndex] || timeline[0] || {};
+
+    const activeCertifications = useMemo(() => {
+        if (!activeRevision.certification || activeRevision.certification === 'N/A') return [];
+        if (Array.isArray(activeRevision.certification)) return activeRevision.certification;
+        return String(activeRevision.certification).split(',').map(s => s.trim()).filter(Boolean);
+    }, [activeRevision.certification]);
+
+    const hasPackingCert = useMemo(() => {
+        return activeCertifications.some(c => String(c).toLowerCase().includes('packing'));
+    }, [activeCertifications]);
+
+    const activePackingTypes = useMemo(() => {
+        if (!activeRevision.packingType || activeRevision.packingType === 'N/A') return [];
+        if (Array.isArray(activeRevision.packingType)) return activeRevision.packingType;
+        return String(activeRevision.packingType).split(',').map(s => s.trim()).filter(Boolean);
+    }, [activeRevision.packingType]);
+
+    const activeIps = useMemo(() => {
+        if (Array.isArray(activeRevision.ipNumbers)) return activeRevision.ipNumbers.filter(Boolean);
+        if (activeRevision.ipNumber) return String(activeRevision.ipNumber).split(',').map(s => s.trim()).filter(Boolean);
+        return [];
+    }, [activeRevision.ipNumbers, activeRevision.ipNumber]);
+
+    const activeProducts = useMemo(() => {
+        if (Array.isArray(activeRevision.productsList)) return activeRevision.productsList;
+        return [];
+    }, [activeRevision.productsList]);
+
+    // Look up linked LC number for this PI
+    const cleanPiNum = String(viewHistoryRecord?.piNumber || '').trim();
+    const linkedLc = useMemo(() => {
+        if (!cleanPiNum) return null;
+        return (lcRecords || []).find(lc => {
+            const lcPi = String(lc.piNo || '').replace(' (REVISED)', '').trim();
+            return lcPi === cleanPiNum;
+        });
+    }, [cleanPiNum, lcRecords]);
+
+    const linkedLcNo = linkedLc ? linkedLc.lcNo : null;
+
+    const handlePrintCurrentPIPDF = () => {
+        const origRev = timeline.find(t => t.isOriginal || t.reviseNo === 'Original PI') || timeline[0] || viewHistoryRecord;
+        const prevRev = activeHistoryIndex > 0 ? timeline[activeHistoryIndex - 1] : origRev;
+
+        const enriched = {
+            ...viewHistoryRecord,
+            ...activeRevision,
+            piNumber: activeRevision.isTenPercent
+                ? (activeRevision.piNumber || viewHistoryRecord.piNumber)
+                : `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
+            originalPiNumber: viewHistoryRecord.piNumber,
+            originalGrandTotal: activeRevision.originalGrandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
+            originalGrandTotalQuantity: activeRevision.originalGrandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
+            previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
+            previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
+            linkedLc,
+            lcNo: linkedLc?.lcNo || viewHistoryRecord.lcNo || viewHistoryRecord.lcNumber || activeRevision.lcNo || '',
+            lcDate: linkedLc?.openingDate || linkedLc?.lcDate || viewHistoryRecord.lcDate || activeRevision.lcDate || '',
+            originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (viewHistoryRecord.productsList || [])),
+            originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (viewHistoryRecord.ipNumbers || [])),
+            amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
+            extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
+            extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
+            isTenPercent: !!activeRevision.isTenPercent,
+            ipRecords: ipRecords || []
+        };
+
+        if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature || !enriched.exporterSeal) {
+            const exp = exporters?.find(e => e.name === enriched.exporterName);
+            if (exp) {
+                enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                enriched.exporterContact = enriched.exporterContact || exp.phone;
+                enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                enriched.exporterSeal = enriched.exporterSeal || exp.seal;
+            }
+        }
+
+        if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+            const imp = importers?.find(i => i.name === enriched.partyName);
+            if (imp) {
+                enriched.partyAddress = enriched.partyAddress || imp.address;
+                enriched.partyContact = enriched.partyContact || imp.phone;
+                enriched.partyEmail = enriched.partyEmail || imp.email;
+                enriched.partySignature = enriched.partySignature || imp.signature;
+            }
+        }
+
+        if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
+            generatePI2PDF(enriched);
+        } else {
+            generatePIPDF(enriched);
+        }
+    };
+
+    const handlePrintCurrentBankApp = () => {
+        const origRev = timeline.find(t => t.isOriginal || t.reviseNo === 'Original PI') || timeline[0] || viewHistoryRecord;
+        const prevRev = activeHistoryIndex > 0 ? timeline[activeHistoryIndex - 1] : origRev;
+
+        const enriched = {
+            ...viewHistoryRecord,
+            ...activeRevision,
+            piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
+            originalPiNumber: viewHistoryRecord.piNumber,
+            originalGrandTotal: activeRevision.originalGrandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
+            originalGrandTotalQuantity: activeRevision.originalGrandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
+            previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
+            previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
+            linkedLc,
+            lcNo: linkedLc?.lcNo || viewHistoryRecord.lcNo || viewHistoryRecord.lcNumber || activeRevision.lcNo || '',
+            lcDate: linkedLc?.openingDate || linkedLc?.lcDate || viewHistoryRecord.lcDate || activeRevision.lcDate || '',
+            originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (viewHistoryRecord.productsList || [])),
+            originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (viewHistoryRecord.ipNumbers || [])),
+            amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
+            extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
+            extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
+            ipRecords: ipRecords || []
+        };
+        if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature || !enriched.exporterSeal) {
+            const exp = exporters?.find(e => e.name === enriched.exporterName);
+            if (exp) {
+                enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                enriched.exporterContact = enriched.exporterContact || exp.phone;
+                enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                enriched.exporterSeal = enriched.exporterSeal || exp.seal;
+            }
+        }
+        if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+            const imp = importers?.find(i => i.name === enriched.partyName);
+            if (imp) {
+                enriched.partyAddress = enriched.partyAddress || imp.address;
+                enriched.partyContact = enriched.partyContact || imp.phone;
+                enriched.partyEmail = enriched.partyEmail || imp.email;
+                enriched.partySignature = enriched.partySignature || imp.signature;
+            }
+        }
+        generateBankApplicationPDF(enriched);
+    };
+
+    const handleEditCurrentRevision = () => {
+        onClose();
+        if (activeRevision.reviseNo === 'Original PI') {
+            handleEdit(viewHistoryRecord);
+        } else {
+            setSelectedRevisePiId(viewHistoryRecord._id);
+            setEditingRevisionOriginalNo(activeRevision.reviseNo);
+            setReviseSearchQuery(viewHistoryRecord.piNumber || '');
+            setReviseIpSearch('');
+            setActiveDropdown(null);
+            setHighlightedIndex(-1);
+
+            const initialProducts = (activeRevision.productsList && activeRevision.productsList.length > 0)
+                ? activeRevision.productsList
+                : (getPiProductsList ? getPiProductsList(viewHistoryRecord) : []);
+            const ipNumbers = activeRevision.ipNumbers || [];
+            const mappedProducts = initialProducts.map(prod => {
+                if (prod._fromIp) return prod;
+                const matchingIp = ipNumbers.find(ipNum => {
+                    const ipRec = ipRecords.find(r => r.ipNumber === ipNum);
+                    return ipRec && ipRec.productName === prod.productName;
+                });
+                if (matchingIp) {
+                    return { ...prod, _fromIp: matchingIp };
+                }
+                return prod;
+            });
+            const { list, grandTotal, grandTotalQuantity } = recalcReviseProducts(mappedProducts);
+
+            setReviseFormData({
+                reviseNo: activeRevision.reviseNo,
+                reviseDate: activeRevision.reviseDate ? String(activeRevision.reviseDate).split('T')[0] : new Date().toISOString().split('T')[0],
+                validityDate: activeRevision.validityDate && activeRevision.validityDate !== 'N/A (Historical)' ? String(activeRevision.validityDate).split('T')[0] : '',
+                placeOfReceipt: activeRevision.placeOfReceipt && activeRevision.placeOfReceipt !== 'N/A (Historical)' ? activeRevision.placeOfReceipt : '',
+                portOfLoading: activeRevision.portOfLoading && activeRevision.portOfLoading !== 'N/A (Historical)' ? activeRevision.portOfLoading : '',
+                portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
+                certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
+                packingType: activeRevision.packingType && activeRevision.packingType !== 'N/A (Historical)' ? activeRevision.packingType : '',
+                productsList: list,
+                grandTotal: grandTotal || (activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0),
+                grandTotalQuantity: grandTotalQuantity || (activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0),
+                remarks: activeRevision.remarks && activeRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? activeRevision.remarks : '',
+                ipNumbers: activeRevision.ipNumbers || [],
+                amendmentType: activeRevision.amendmentType || '',
+                extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
+                extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || ''
+            });
+            setShowReviseForm(true);
+        }
+    };
+
+    const handleTenPercentCurrentRevision = () => {
+        setShowForm(false);
+        setShowReviseForm(false);
+        setShowTenPercentForm(true);
+        const targetRev = activeRevision.isTenPercent ? (activeRevision.sourceRevisionNo || 'Original PI') : activeRevision.reviseNo;
+        handleSelectPiForTenPercent(viewHistoryRecord, targetRev);
+    };
+
+    if (typeof document === 'undefined' || !document.body) return null;
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-black/60 animate-in fade-in duration-150"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
+            <div
+                className="bg-white w-full max-w-[95vw] 2xl:max-w-[1550px] xl:max-w-[1450px] h-[92vh] sm:h-[85vh] rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-150"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Modal Header */}
+                <div className="px-4 sm:px-8 py-3.5 sm:py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                        <div className="p-2 sm:p-2.5 bg-blue-100 text-blue-600 rounded-xl sm:rounded-2xl shrink-0">
+                            <EyeIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                        </div>
+                        <div className="min-w-0">
+                            <h3 className="text-base sm:text-lg font-black text-gray-900 tracking-tight truncate">Proforma Invoice History Explorer</h3>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-gray-500 font-medium mt-0.5">
+                                <span>
+                                    PI Number: <span className="font-bold text-blue-600 font-mono">{activeRevision.isTenPercent ? (activeRevision.piNumber || `${viewHistoryRecord.piNumber} (10% VALUE ADDED)`) : `${viewHistoryRecord.piNumber}${viewHistoryRecord.revisions && viewHistoryRecord.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`}</span>
+                                </span>
+                                <span className="text-gray-300">•</span>
+                                <span>
+                                    Date: <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate || viewHistoryRecord.date)}</span>
+                                </span>
+                                {linkedLcNo && (
+                                    <>
+                                        <span className="text-gray-300">•</span>
+                                        <span>
+                                            LC: <span className="font-bold text-emerald-600 font-mono">{linkedLcNo}</span>
+                                        </span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 sm:p-2 rounded-xl hover:bg-gray-200 text-gray-400 hover:text-gray-600 active:scale-95 transition-all shrink-0 ml-2 cursor-pointer"
+                        title="Close"
+                    >
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Mobile Action Buttons */}
+                <div className="md:hidden border-b border-gray-100 bg-gray-50/50 px-4 py-3 shrink-0">
+                    <div className="flex items-center justify-around gap-2 max-w-sm mx-auto">
+                        <button
+                            type="button"
+                            onClick={handlePrintCurrentPIPDF}
+                            className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none select-none min-w-[50px]"
+                            title={activeRevision.isTenPercent ? 'Print 10% PI PDF' : 'Print PI PDF'}
+                        >
+                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-blue-50 text-blue-600 border border-blue-200/90 shadow-2xs group-hover:bg-blue-100 transition-colors shrink-0">
+                                <PDFIcon className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-700 leading-tight">
+                                {activeRevision.isTenPercent ? '10% PDF' : 'Print PDF'}
+                            </span>
+                        </button>
+
+                        {!activeRevision.isTenPercent && (
+                            <button
+                                type="button"
+                                onClick={handlePrintCurrentBankApp}
+                                className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none select-none min-w-[50px]"
+                                title="Bank Application"
+                            >
+                                <div className="w-11 h-11 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200/90 shadow-2xs group-hover:bg-emerald-100 transition-colors shrink-0">
+                                    <FileTextIcon className="w-5 h-5 text-emerald-600" />
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-700 leading-tight">
+                                    Bank App
+                                </span>
+                            </button>
+                        )}
+
+                        {canManage && (
+                            <button
+                                type="button"
+                                onClick={handleTenPercentCurrentRevision}
+                                className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none select-none min-w-[50px]"
+                                title={activeRevision.isTenPercent ? 'Edit 10% PI' : '10% PI'}
+                            >
+                                <div className="w-11 h-11 rounded-full flex items-center justify-center bg-purple-50 text-purple-700 border border-purple-200/90 shadow-2xs group-hover:bg-purple-100 transition-colors shrink-0">
+                                    <FileTextIcon className="w-5 h-5 text-purple-600" />
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-700 leading-tight">
+                                    {activeRevision.isTenPercent ? 'Edit 10%' : '10% PI'}
+                                </span>
+                            </button>
+                        )}
+
+                        {!activeRevision.isTenPercent && canManage && (
+                            <button
+                                type="button"
+                                onClick={handleEditCurrentRevision}
+                                className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                title={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
+                            >
+                                <div className="w-11 h-11 rounded-full flex items-center justify-center bg-gray-100 text-gray-700 border border-gray-200 shadow-2xs group-hover:bg-gray-200 transition-colors shrink-0">
+                                    <EditIcon className="w-5 h-5 text-gray-600" />
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-700 leading-tight">
+                                    Edit
+                                </span>
+                            </button>
+                        )}
+
+                        {!activeRevision.isOriginal && canDeleteRevision && (
+                            <button
+                                type="button"
+                                onClick={() => setShowDeleteRevisionConfirm(true)}
+                                className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none select-none min-w-[50px]"
+                                title={activeRevision.isTenPercent ? 'Delete 10% PI' : 'Delete Revised PI'}
+                            >
+                                <div className="w-11 h-11 rounded-full flex items-center justify-center bg-red-50 text-red-600 border border-red-200 shadow-2xs group-hover:bg-red-100 transition-colors shrink-0">
+                                    <TrashIcon className="w-5 h-5 text-red-500" />
+                                </div>
+                                <span className="text-[10px] font-bold text-red-600 leading-tight">
+                                    Delete
+                                </span>
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Modal Body */}
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+                    {/* Revision Timeline */}
+                    {timeline.length > 1 && (
+                        <div className="w-full md:w-72 border-b md:border-b-0 md:border-r border-gray-100 p-5 md:p-6 bg-gray-50/30 overflow-y-auto max-h-[35vh] md:max-h-full flex-shrink-0 text-left custom-scrollbar">
+                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Revision Timeline</h4>
+                            <div className="relative border-l border-gray-200 pl-6 ml-3 space-y-6">
+                                {timeline.map((rev, idx) => {
+                                    const isActive = activeHistoryIndex === idx;
+                                    return (
+                                        <div
+                                            key={idx}
+                                            onClick={() => setActiveHistoryIndex(idx)}
+                                            className="relative cursor-pointer group"
+                                        >
+                                            <div className={`absolute -left-[31px] top-1.5 w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${isActive
+                                                ? rev.isTenPercent
+                                                    ? 'bg-purple-600 border-purple-600 ring-4 ring-purple-100 scale-110 shadow-sm'
+                                                    : 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
+                                                : rev.isTenPercent
+                                                    ? 'bg-white border-purple-300 group-hover:border-purple-400 group-hover:scale-105'
+                                                    : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
+                                                }`} />
+
+                                            <div className={`p-4 rounded-2xl border transition-all ${isActive
+                                                ? rev.isTenPercent
+                                                    ? 'bg-white border-purple-200 shadow-md shadow-purple-500/5 ring-1 ring-purple-100'
+                                                    : 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
+                                                : 'bg-white/50 border-gray-100 hover:border-gray-200 hover:bg-white hover:shadow-sm'
+                                                }`}>
+                                                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isTenPercent
+                                                    ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                                    : rev.isOriginal
+                                                        ? 'bg-blue-50 text-blue-700'
+                                                        : 'bg-amber-50 text-amber-700'
+                                                    }`}>
+                                                    {rev.reviseNo}
+                                                </span>
+                                                <p className="text-sm font-bold text-gray-800 mt-2">
+                                                    {rev.isTenPercent
+                                                        ? '10% Value Added State'
+                                                        : rev.isOriginal ? 'Initial Creation' : 'Revised State'}
+                                                </p>
+                                                <p className="text-[11px] font-medium text-gray-500 mt-1 font-mono">
+                                                    {formatDate(rev.reviseDate)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Right Pane: Details */}
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 sm:space-y-8 min-w-0">
+                        {activeRevision.isPlaceholder ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-gray-50/50 rounded-3xl border border-gray-100">
+                                <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-4">
+                                    <span className="text-2xl">⚠️</span>
+                                </div>
+                                <h4 className="text-base font-bold text-gray-800">Original PI Data</h4>
+                                <p className="text-sm text-gray-500 mt-2 max-w-md">
+                                    This PI was revised prior to the deployment of the detailed history tracking system. Historical initial values were overwritten and are not fully accessible.
+                                </p>
+                                <p className="text-xs text-gray-400 mt-4">
+                                    All subsequent revisions and updates are saved and fully trackable.
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                {/* Details Section */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+                                    {/* Card 1: Logistics */}
+                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 space-y-3">
+                                        <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Logistics & Route</h5>
+                                        <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Place of Receipt</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-gray-800 break-words">{activeRevision.placeOfReceipt || 'N/A'}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port of Loading</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-gray-800 break-words">{activeRevision.portOfLoading || 'N/A'}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port of Discharge</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-gray-800 break-words">{activeRevision.portOfDischarge || 'N/A'}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 2: Dates & Certifications */}
+                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 space-y-3">
+                                        <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Dates & Certification</h5>
+                                        <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Revise / PI Date</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate)}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Validity Date</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-rose-500 font-mono">{formatDate(activeRevision.validityDate)}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Certification</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <div className="space-y-0.5 min-w-0">
+                                                {activeCertifications.length > 0 ? (
+                                                    activeCertifications.map((cert, cIdx) => (
+                                                        <span key={cIdx} className="font-bold text-gray-800 block text-xs">{cert}</span>
+                                                    ))
+                                                ) : (
+                                                    <span className="font-bold text-gray-800 block text-xs">N/A</span>
+                                                )}
+                                            </div>
+
+                                            {hasPackingCert && (
+                                                <>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Packing Type</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <div className="space-y-0.5 min-w-0">
+                                                        {activePackingTypes.length > 0 ? (
+                                                            activePackingTypes.map((pack, pIdx) => (
+                                                                <span key={pIdx} className="font-bold text-gray-800 block text-xs">{pack}</span>
+                                                            ))
+                                                        ) : (
+                                                            <span className="font-bold text-gray-800 block text-xs">N/A</span>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Card 3: IP Records, LC & Reference */}
+                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 space-y-3">
+                                        <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">IP Records, LC & Remarks</h5>
+                                        <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Number</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <div>
+                                                {linkedLcNo ? (
+                                                    <span className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-100 font-mono inline-block">
+                                                        {linkedLcNo}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-500 font-bold text-xs">No LC Linked</span>
+                                                )}
+                                            </div>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Import Permission</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <div className="flex flex-wrap gap-1.5 min-w-0">
+                                                {activeIps.length > 0 ? (
+                                                    activeIps.map((ip, i) => (
+                                                        <button
+                                                            key={i}
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleOpenIpDetails(ip, viewHistoryRecord);
+                                                            }}
+                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                            title={`View IP Details (${ip})`}
+                                                        >
+                                                            {ip}
+                                                        </button>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-gray-500 font-bold text-xs">N/A</span>
+                                                )}
+                                            </div>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <p className="text-xs font-bold text-gray-800 break-words">{activeRevision.remarks || 'No remarks provided.'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Products Breakdown on Mobile Cards */}
+                                <div className="md:hidden space-y-3">
+                                    <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Products Breakdown</h5>
+                                    <div className="space-y-3">
+                                        {activeProducts.map((prod, pIdx) => (
+                                            <div key={pIdx} className="bg-gray-50/60 p-4 rounded-2xl border border-gray-100 text-left">
+                                                {activeProducts.length > 1 && (
+                                                    <div className="text-[10px] font-black text-blue-600 uppercase tracking-wider mb-2">
+                                                        Product #{pIdx + 1}
+                                                    </div>
+                                                )}
+                                                <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRODUCT NAME</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-bold text-gray-900 break-words">{prod.productName || 'N/A'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS CODE</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-mono font-semibold text-gray-700">{prod.hsCode || 'N/A'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QUANTITY</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-bold text-gray-900">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} kg</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">RATE</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-semibold text-gray-800">${parseFloat(prod.rate || 0).toFixed(3)}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">FREIGHT</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-semibold text-gray-800">${parseFloat(prod.freight || 0).toFixed(3)}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL AMOUNT</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="text-xs font-black text-blue-600">${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Products Breakdown on Desktop Table */}
+                                <div className="hidden md:block space-y-3">
+                                    <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Products Breakdown</h5>
+                                    <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                                                    <th className="px-6 py-3">Product Name</th>
+                                                    <th className="px-6 py-3">HS Code</th>
+                                                    <th className="px-6 py-3 text-right">Quantity (kg)</th>
+                                                    <th className="px-6 py-3 text-right">Rate ($)</th>
+                                                    <th className="px-6 py-3 text-right">Freight</th>
+                                                    <th className="px-6 py-3 text-right">Total Amount</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50 text-sm">
+                                                {activeProducts.map((prod, pIdx) => (
+                                                    <tr key={pIdx} className="hover:bg-gray-50/30">
+                                                        <td className="px-6 py-3.5 font-bold text-gray-800">{prod.productName || 'N/A'}</td>
+                                                        <td className="px-6 py-3.5 font-mono font-medium text-gray-500">{prod.hsCode || 'N/A'}</td>
+                                                        <td className="px-6 py-3.5 text-right font-semibold text-gray-700">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} kg</td>
+                                                        <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.rate || 0).toFixed(3)}</td>
+                                                        <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.freight || 0).toFixed(3)}</td>
+                                                        <td className="px-6 py-3.5 text-right font-black text-blue-600">${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Totals Summary Cards */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 max-w-lg mx-auto pt-4 sm:pt-6">
+                                    <div className="bg-blue-50/40 border border-blue-100 rounded-2xl p-4 sm:p-5 text-center shadow-sm">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Total Quantity</span>
+                                        <span className="text-lg sm:text-xl font-black text-gray-900 mt-1 block">
+                                            {parseFloat(activeRevision.grandTotalQuantity || 0).toLocaleString('en-US')} kg
+                                        </span>
+                                    </div>
+                                    <div className="bg-blue-600 text-white rounded-2xl p-4 sm:p-5 text-center shadow-lg shadow-blue-500/20">
+                                        <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest block">Grand Total Value</span>
+                                        <span className="text-lg sm:text-xl font-black text-white mt-1 block">
+                                            ${parseFloat(activeRevision.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Desktop Action Buttons */}
+                                <div className="hidden md:block space-y-3 pt-6 pb-2">
+                                    <div className="flex flex-wrap items-center justify-center gap-2.5">
+                                        <button
+                                            type="button"
+                                            onClick={handlePrintCurrentPIPDF}
+                                            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                        >
+                                            <PDFIcon className="w-4 h-4 text-white shrink-0" />
+                                            <span>{activeRevision.isTenPercent ? 'Print 10% PI PDF' : 'Print PI PDF'}</span>
+                                        </button>
+                                        {!activeRevision.isTenPercent && (
+                                            <button
+                                                type="button"
+                                                onClick={handlePrintCurrentBankApp}
+                                                className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                            >
+                                                <FileTextIcon className="w-4 h-4 text-white shrink-0" />
+                                                <span>Bank Application</span>
+                                            </button>
+                                        )}
+                                        {canManage && (
+                                            <button
+                                                type="button"
+                                                onClick={handleTenPercentCurrentRevision}
+                                                className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 border border-blue-200 shadow-sm whitespace-nowrap"
+                                            >
+                                                <FileTextIcon className="w-4 h-4 text-blue-600 shrink-0" />
+                                                <span>{activeRevision.isTenPercent ? 'Edit 10% PI' : '10% PI'}</span>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {(canManage || (!activeRevision.isOriginal && canDeleteRevision)) && (
+                                        <div className="flex flex-wrap items-center justify-center gap-2.5">
+                                            {!activeRevision.isTenPercent && canManage && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleEditCurrentRevision}
+                                                    data-action={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
+                                                    title={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
+                                                    aria-label={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
+                                                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                                >
+                                                    <EditIcon className="w-4 h-4 text-gray-500 shrink-0" />
+                                                    <span>{activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}</span>
+                                                </button>
+                                            )}
+                                            {!activeRevision.isOriginal && canDeleteRevision && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowDeleteRevisionConfirm(true)}
+                                                    className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 border border-red-200 shadow-sm whitespace-nowrap"
+                                                >
+                                                    <TrashIcon className="w-4 h-4 text-red-500 shrink-0" />
+                                                    <span>{activeRevision.isTenPercent ? 'Delete 10% PI' : 'Delete Revised PI'}</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Delete Revision Confirmation Modal Card */}
+            {showDeleteRevisionConfirm && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-gray-900/60 transition-opacity animate-in fade-in duration-200"
+                        onClick={() => {
+                            if (deleteRevisionStatus !== 'loading') {
+                                setShowDeleteRevisionConfirm(false);
+                                setDeleteRevisionStatus(null);
+                            }
+                        }}
+                    />
+                    <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 z-10">
+                        {deleteRevisionStatus === 'success' ? (
+                            <div className="p-12 text-center">
+                                <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 animate-in zoom-in duration-300">
+                                    <CheckIcon className="w-10 h-10 text-emerald-500" />
+                                </div>
+                                <h3 className="text-xl font-black text-gray-900 mb-2">Deleted!</h3>
+                                <p className="text-sm text-gray-500">The PI revision has been removed.</p>
+                            </div>
+                        ) : (
+                            <div className="p-8 text-center">
+                                <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-3">
+                                    <TrashIcon className="w-8 h-8 text-red-500" />
+                                </div>
+                                <h3 className="text-xl font-black text-gray-900 mb-2">
+                                    {activeRevision.isTenPercent ? 'Delete 10% PI Record?' : 'Delete Revised PI?'}
+                                </h3>
+                                <p className="text-sm text-gray-500 mb-8 leading-relaxed">
+                                    Are you sure you want to delete <span className="font-bold text-gray-800">{activeRevision.reviseNo || (activeRevision.isTenPercent ? '10% PI Record' : 'this revision')}</span> for PI <span className="font-bold text-blue-600">{viewHistoryRecord.piNumber}</span>? This action cannot be undone.
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowDeleteRevisionConfirm(false);
+                                            setDeleteRevisionStatus(null);
+                                        }}
+                                        className="py-3.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-2xl transition-all active:scale-95"
+                                        disabled={deleteRevisionStatus === 'loading'}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            setDeleteRevisionStatus('loading');
+                                            try {
+                                                const deleted = activeRevision.isTenPercent
+                                                    ? await handleDeleteTenPercentRecord(viewHistoryRecord, activeRevision)
+                                                    : await handleDeleteRevision(viewHistoryRecord, activeRevision);
+                                                if (deleted) {
+                                                    setShowDeleteRevisionConfirm(false);
+                                                    setDeleteRevisionStatus(null);
+                                                    setActiveHistoryIndex(0);
+                                                } else {
+                                                    setDeleteRevisionStatus('error');
+                                                    setTimeout(() => setDeleteRevisionStatus(null), 3000);
+                                                }
+                                            } catch (err) {
+                                                setDeleteRevisionStatus('error');
+                                                setTimeout(() => setDeleteRevisionStatus(null), 3000);
+                                            }
+                                        }}
+                                        className="py-3.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl shadow-lg shadow-red-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                        disabled={deleteRevisionStatus === 'loading'}
+                                    >
+                                        {deleteRevisionStatus === 'loading' ? (
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        ) : (
+                                            'Delete Now'
+                                        )}
+                                    </button>
+                                </div>
+                                {deleteRevisionStatus === 'error' && (
+                                    <p className="text-center text-xs font-bold text-red-500 mt-4 animate-bounce">Failed to delete revision. Please try again.</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>,
+        document.body
+    );
+};
+
 function PI({
     importers,
     exporters,
@@ -541,7 +1650,7 @@ function PI({
         }
     };
 
-    const getFirstNameFromIdentifier = (identifier) => {
+    const getFirstNameFromIdentifier = useCallback((identifier) => {
         if (!identifier || identifier === '-' || identifier === '—') return '';
         const rawStr = String(identifier).trim();
         const key = rawStr.toLowerCase();
@@ -574,9 +1683,9 @@ function PI({
             candidate = `${parts[0]} ${parts[1]}`;
         }
         return formatFirstName(candidate || rawStr);
-    };
+    }, [employeesMap]);
 
-    const getEntryByName = (entryByCode, entryByName) => {
+    const getEntryByName = useCallback((entryByCode, entryByName) => {
         if (entryByCode && entryByCode !== '-' && entryByCode !== '—') {
             const res = getFirstNameFromIdentifier(entryByCode);
             if (res && res.toLowerCase() !== String(entryByCode).toLowerCase().trim()) {
@@ -591,10 +1700,17 @@ function PI({
             return getFirstNameFromIdentifier(entryByCode) || entryByCode;
         }
         return entryByName || entryByCode || '—';
-    };
+    }, [getFirstNameFromIdentifier]);
 
-    const getPiEntryDetails = (record) => {
+    const piEntryDetailsCacheRef = useRef(new Map());
+
+    const getPiEntryDetails = useCallback((record) => {
         if (!record) return { creator: '—', reviser: null, editor: null };
+
+        const cacheKey = record._id ? `${record._id}_${record.updatedAt || record.lastRevisedAt || (record.revisions?.length || 0)}` : null;
+        if (cacheKey && piEntryDetailsCacheRef.current.has(cacheKey)) {
+            return piEntryDetailsCacheRef.current.get(cacheKey);
+        }
 
         let created = record.entryByName || record.createdByName || record.entryBy || record.createdBy || record.userId || record.username || record.user || record.author || record.addedBy;
         let revised = record.revisedByName || record.revisedBy;
@@ -655,12 +1771,18 @@ function PI({
         const resolvedReviser = revised ? getEntryByName(revised, revised) : null;
         const resolvedEditor = edited ? getEntryByName(edited, edited) : null;
 
-        return {
+        const result = {
             creator: (resolvedCreator && resolvedCreator !== '—') ? resolvedCreator : (created || '—'),
             reviser: (resolvedReviser && resolvedReviser !== '—') ? resolvedReviser : (revised || null),
             editor: (resolvedEditor && resolvedEditor !== '—') ? resolvedEditor : (edited || null)
         };
-    };
+
+        if (cacheKey) {
+            piEntryDetailsCacheRef.current.set(cacheKey, result);
+        }
+
+        return result;
+    }, [notificationsMap, ipRecords, lcRecords, getEntryByName]);
 
     // Pre-indexed set of LC PI numbers for O(1) instantaneous lookup
     const lcDonePiSet = useMemo(() => {
@@ -2707,7 +3829,7 @@ function PI({
         });
     };
 
-    const getHistoryTimeline = (record) => {
+    const getHistoryTimeline = useCallback((record) => {
         if (!record) return [];
         const list = [];
         const revisions = record.revisions || [];
@@ -2728,7 +3850,7 @@ function PI({
                 grandTotal: record.grandTotal,
                 grandTotalQuantity: record.grandTotalQuantity,
                 remarks: record.remarks || '',
-                ipNumbers: record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []),
+                ipNumbers: record.ipNumbers || (record.ipNumber ? String(record.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : []),
                 isOriginal: true
             });
         } else {
@@ -2768,7 +3890,7 @@ function PI({
                     const latestRev = seenNos.get(key);
                     list.push({
                         ...latestRev,
-                        ipNumbers: latestRev.ipNumbers || (latestRev.ipNumber ? latestRev.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []))),
+                        ipNumbers: latestRev.ipNumbers || (latestRev.ipNumber ? String(latestRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || (record.ipNumber ? String(record.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : []))),
                         isOriginal: latestRev.reviseNo === 'Original PI'
                     });
                 }
@@ -2794,7 +3916,7 @@ function PI({
         }
 
         return list;
-    };
+    }, []);
 
     const [selectedVersionBaseInfo, setSelectedVersionBaseInfo] = useState({
         grandTotalQuantity: 0,
@@ -4302,6 +5424,34 @@ function PI({
         const start = (currentPage - 1) * pageSize;
         return sortedRecords.slice(start, start + pageSize);
     }, [sortedRecords, currentPage, pageSize]);
+
+    const handleToggleCardExpand = useCallback((id) => {
+        setExpandedCardId(prev => (prev === id ? null : id));
+    }, []);
+
+    const handleViewRecord = useCallback((record) => {
+        setViewHistoryRecord(record);
+        const tl = getHistoryTimeline(record);
+        setActiveHistoryIndex(tl.length > 1 ? tl.length - 1 : 0);
+    }, [getHistoryTimeline]);
+
+    const handlePdfRecord = useCallback((record) => {
+        const enriched = getEnrichedPiForPdf(record);
+        if (!enriched) return;
+        if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
+            generatePI2PDF(enriched);
+        } else {
+            generatePIPDF(enriched);
+        }
+    }, [getEnrichedPiForPdf]);
+
+    const handleEditRecord = useCallback((record) => {
+        handleEdit(record);
+    }, [handleEdit]);
+
+    const handleDeleteRecord = useCallback((id) => {
+        handleDelete(id);
+    }, [handleDelete]);
 
     return (
         <div className="pi-management space-y-6">
@@ -7685,26 +8835,14 @@ function PI({
                                                     <td className="px-2 py-3.5 whitespace-nowrap">
                                                         <div className="flex items-center justify-center gap-1.5">
                                                             <button
-                                                                onClick={() => {
-                                                                    setViewHistoryRecord(record);
-                                                                    const tl = getHistoryTimeline(record);
-                                                                    setActiveHistoryIndex(tl.length > 1 ? tl.length - 1 : 0);
-                                                                }}
+                                                                onClick={() => handleViewRecord(record)}
                                                                 className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
                                                                 title="View History"
                                                             >
                                                                 <EyeIcon className="w-5 h-5" />
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    const enriched = getEnrichedPiForPdf(record);
-                                                                    if (!enriched) return;
-                                                                    if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
-                                                                        generatePI2PDF(enriched);
-                                                                    } else {
-                                                                        generatePIPDF(enriched);
-                                                                    }
-                                                                }}
+                                                                onClick={() => handlePdfRecord(record)}
                                                                 className="p-1.5 text-gray-400 hover:text-blue-600 transition-all active:scale-90"
                                                                 title="Download PDF"
                                                             >
@@ -7760,304 +8898,27 @@ function PI({
                             paginatedRecords.map((record, index) => {
                                 const sl = (currentPage - 1) * pageSize + index + 1;
                                 const isExpanded = expandedCardId === record._id;
-                                const displayProducts = record.productsList && record.productsList.length > 0
-                                    ? record.productsList.map(p => getStandardProductName(p.productName)).filter(Boolean).join(', ')
-                                    : (getStandardProductName(record.productName) || 'N/A');
-
-                                const totalQty = record.productsList && record.productsList.length > 0
-                                    ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
-                                    : (parseFloat(record.grandTotalQuantity || record.quantity) || 0);
-
-                                const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
-                                const hasMultipleProducts = record.productsList && record.productsList.length > 1;
-                                const entryInfo = getPiEntryDetails(record);
                                 const isLcDone = checkIsLcDone(record);
-                                const ipList = (() => {
-                                    const rawIps = (record.revisions && record.revisions.length > 0 && record.revisions[record.revisions.length - 1].ipNumbers && record.revisions[record.revisions.length - 1].ipNumbers.length > 0)
-                                        ? record.revisions[record.revisions.length - 1].ipNumbers
-                                        : (record.ipNumbers && record.ipNumbers.length > 0 ? record.ipNumbers : (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []));
-                                    return (rawIps || []).map(s => String(s).trim()).filter(Boolean);
-                                })();
-
-                                const piList = (() => {
-                                    if (record.piNumbers && Array.isArray(record.piNumbers) && record.piNumbers.length > 0) {
-                                        return record.piNumbers.map(s => String(s).trim()).filter(Boolean);
-                                    }
-                                    if (record.piNumber && typeof record.piNumber === 'string') {
-                                        return record.piNumber.split(',').map(s => s.trim()).filter(Boolean);
-                                    }
-                                    return [];
-                                })();
-
                                 return (
-                                    <div
+                                    <PiMobileCard
                                         key={record._id}
-                                        className={`bg-white rounded-2xl border transition-all duration-300 ${isExpanded ? 'border-blue-200 shadow-lg ring-1 ring-blue-50' : 'border-gray-100 shadow-sm'}`}
-                                        onClick={() => setExpandedCardId(isExpanded ? null : record._id)}
-                                    >
-                                        <div className="p-5 space-y-4">
-                                            {/* Header: PI No & Status Badges, then Importer & Product */}
-                                            <div className="min-w-0 flex-1 space-y-1.5 text-left">
-                                                {/* Line 1: SL, PI No & Status Badges on the right */}
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <div className="flex items-center gap-1.5 text-xs leading-snug min-w-0 flex-wrap">
-                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md shrink-0">
-                                                            SL: {sl}
-                                                        </span>
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">PI No : </span>
-                                                        <div className="flex items-center gap-1 min-w-0 flex-wrap">
-                                                            {piList.length > 1 ? (
-                                                                piList.map((pNum, idx) => (
-                                                                    <span key={idx} className="font-black text-gray-900 tracking-tight break-all font-mono text-sm">
-                                                                        {pNum}
-                                                                    </span>
-                                                                ))
-                                                            ) : (
-                                                                <span className="font-black text-gray-900 tracking-tight break-all font-mono text-sm">
-                                                                    {record.piNumber || '—'}
-                                                                </span>
-                                                            )}
-                                                            {record.revisions && record.revisions.length > 0 && (
-                                                                <span className="text-[9px] font-black uppercase text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
-                                                                    REVISED
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-                                                        {isLcDone && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 bg-blue-50 text-blue-700 border-blue-200">
-                                                                LC Done
-                                                            </span>
-                                                        )}
-                                                        {ipList.length === 0 && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 bg-red-50 text-red-700 border-red-200">
-                                                                IP MISSING
-                                                            </span>
-                                                        )}
-                                                        {!isLcDone && ipList.length > 0 && (
-                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' : record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
-                                                                {record.status}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Line 2: Importer */}
-                                                <div className="text-xs leading-snug">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer : </span>
-                                                    <span className="font-bold text-gray-800 break-words">{record.partyName || '—'}</span>
-                                                </div>
-
-                                                {/* Line 3: Product */}
-                                                <div className="text-xs leading-snug">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product : </span>
-                                                    <span className="font-semibold text-gray-700 break-words">{displayProducts || '—'}</span>
-                                                </div>
-                                            </div>
-
-                                            {/* Expandable Details */}
-                                            {isExpanded && (
-                                                <div className="space-y-2.5 pt-3 border-t border-gray-100 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                    <div className="flex items-start">
-                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0 mt-0.5">IP Number</span>
-                                                        <span className="text-gray-400 font-bold mx-2 mt-0.5">-</span>
-                                                        <div className="flex-1 text-sm font-bold text-gray-800">
-                                                            {ipList.length > 0 ? (
-                                                                <div className="flex flex-wrap gap-1.5">
-                                                                    {ipList.map((ip, idx) => (
-                                                                        <button
-                                                                            key={idx}
-                                                                            type="button"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleOpenIpDetails(ip, record);
-                                                                            }}
-                                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
-                                                                            title={`View IP Details (${ip})`}
-                                                                        >
-                                                                            {ip}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            ) : (
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border bg-red-50 text-red-700 border-red-200">
-                                                                    IP MISSING
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Create Date</span>
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-gray-700">{formatDate(getRecordEffectiveCreateDate(record))}</span>
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Date</span>
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-gray-700">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</span>
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Expire Date</span>
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-red-600">{formatDate(record.validityDate)}</span>
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Importer</span>
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-gray-800 truncate">{record.partyName}</span>
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Exporter</span>
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-gray-800 truncate">{record.exporterName}</span>
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Port</span>
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-gray-800 truncate">{displayPort}</span>
-                                                    </div>
-                                                    <div className="flex items-start">
-                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0 mt-0.5">Product</span>
-                                                        <span className="text-gray-400 font-bold mx-2 mt-0.5">-</span>
-                                                        <div className="flex-1 text-sm font-bold text-gray-700">
-                                                            {hasMultipleProducts ? (
-                                                                <div className="flex flex-col gap-1">
-                                                                    {record.productsList.map((p, idx) => {
-                                                                        const itemQty = parseFloat(p.quantity) || 0;
-                                                                        const stdName = getStandardProductName(p.productName);
-                                                                        return (
-                                                                            <div key={idx} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded-lg text-xs">
-                                                                                <span>{stdName}</span>
-                                                                                <span className="text-blue-600 font-extrabold">{itemQty > 0 ? `${itemQty.toLocaleString('en-US')} kg` : ''}</span>
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            ) : (
-                                                                <span className="truncate block" title={displayProducts}>{displayProducts}</span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Total Qty</span>
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-gray-700">{totalQty.toLocaleString('en-US')} kg</span>
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <span className="w-[100px] text-[11px] font-black text-indigo-500 uppercase tracking-widest shrink-0">Grand Total</span>
-                                                        <span className="text-indigo-500 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-black text-indigo-700 tracking-tight">${parseFloat(record.grandTotal).toLocaleString()}</span>
-                                                    </div>
-                                                    {canShowEntryBy && (
-                                                        <div className="flex items-center">
-                                                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Entry By</span>
-                                                            <span className="text-gray-400 font-bold mx-2">-</span>
-                                                            <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                                                                <span className="font-semibold text-gray-800">
-                                                                    {entryInfo.creator}
-                                                                </span>
-                                                                {entryInfo.reviser && (
-                                                                    <span className="text-[10px] text-purple-600 font-semibold bg-purple-50 px-1.5 py-0.5 rounded" title="Revised By">
-                                                                        ⟳ {entryInfo.reviser}
-                                                                    </span>
-                                                                )}
-                                                                {entryInfo.editor && (
-                                                                    <span className="text-[10px] text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded" title="Edited By">
-                                                                        ✎ {entryInfo.editor}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Expandable Actions */}
-                                        {isExpanded && (
-                                            <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-300">
-                                                <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setViewHistoryRecord(record);
-                                                            const tl = getHistoryTimeline(record);
-                                                            setActiveHistoryIndex(tl.length > 1 ? tl.length - 1 : 0);
-                                                        }}
-                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
-                                                        title="View PI History"
-                                                    >
-                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
-                                                            <EyeIcon className="w-5 h-5 transition-transform duration-150" />
-                                                        </div>
-                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
-                                                            View
-                                                        </span>
-                                                    </button>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            const enriched = getEnrichedPiForPdf(record);
-                                                            if (!enriched) return;
-                                                            if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
-                                                                generatePI2PDF(enriched);
-                                                            } else {
-                                                                generatePIPDF(enriched);
-                                                            }
-                                                        }}
-                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
-                                                        title="Generate PDF"
-                                                    >
-                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
-                                                            <PDFIcon className="w-5 h-5 transition-transform duration-150" />
-                                                        </div>
-                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
-                                                            PDF
-                                                        </span>
-                                                    </button>
-
-                                                    {canEdit && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
-                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
-                                                            title="Edit Original PI"
-                                                            data-action="Edit Original PI"
-                                                            aria-label="Edit Original PI"
-                                                        >
-                                                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
-                                                                <EditIcon className="w-5 h-5 transition-transform duration-150" />
-                                                            </div>
-                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
-                                                                Edit Original
-                                                            </span>
-                                                        </button>
-                                                    )}
-
-                                                    {canDelete && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
-                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
-                                                            title="Delete Record"
-                                                        >
-                                                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-red-50 group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
-                                                                <TrashIcon className="w-5 h-5 transition-transform duration-150" />
-                                                            </div>
-                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
-                                                                Delete
-                                                            </span>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                        record={record}
+                                        sl={sl}
+                                        isExpanded={isExpanded}
+                                        onToggleExpand={handleToggleCardExpand}
+                                        onView={handleViewRecord}
+                                        onPdf={handlePdfRecord}
+                                        onEdit={handleEditRecord}
+                                        onDelete={handleDeleteRecord}
+                                        onOpenIpDetails={handleOpenIpDetails}
+                                        canEdit={canEdit}
+                                        canDelete={canDelete}
+                                        canShowEntryBy={canShowEntryBy}
+                                        isLcDone={isLcDone}
+                                        getStandardProductName={getStandardProductName}
+                                        getRecordEffectiveCreateDate={getRecordEffectiveCreateDate}
+                                        getPiEntryDetails={getPiEntryDetails}
+                                    />
                                 );
                             })
                         ) : (
@@ -8115,733 +8976,38 @@ function PI({
             )}
 
             {/* History Explorer Modal */}
-            {viewHistoryRecord && (() => {
-                const timeline = getHistoryTimeline(viewHistoryRecord);
-                const activeRevision = timeline[activeHistoryIndex] || timeline[0] || {};
-                const activeProducts = activeRevision.productsList || [];
-                const activeIps = activeRevision.ipNumbers || [];
-
-                // Look up linked LC number for this PI
-                const cleanPiNum = viewHistoryRecord.piNumber || '';
-                const linkedLc = lcRecords.find(lc => {
-                    const lcPi = (lc.piNo || '').replace(' (REVISED)', '');
-                    return lcPi === cleanPiNum;
-                });
-                const linkedLcNo = linkedLc ? linkedLc.lcNo : null;
-
-                const handlePrintCurrentPIPDF = () => {
-                    const origRev = timeline.find(t => t.isOriginal || t.reviseNo === 'Original PI') || timeline[0] || viewHistoryRecord;
-                    const prevRev = activeHistoryIndex > 0 ? timeline[activeHistoryIndex - 1] : origRev;
-
-                    const enriched = {
-                        ...viewHistoryRecord,
-                        ...activeRevision,
-                        piNumber: activeRevision.isTenPercent
-                            ? (activeRevision.piNumber || viewHistoryRecord.piNumber)
-                            : `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
-                        originalPiNumber: viewHistoryRecord.piNumber,
-                        originalGrandTotal: activeRevision.originalGrandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
-                        originalGrandTotalQuantity: activeRevision.originalGrandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
-                        previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
-                        previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
-                        linkedLc,
-                        lcNo: linkedLc?.lcNo || viewHistoryRecord.lcNo || viewHistoryRecord.lcNumber || activeRevision.lcNo || '',
-                        lcDate: linkedLc?.openingDate || linkedLc?.lcDate || viewHistoryRecord.lcDate || activeRevision.lcDate || '',
-                        originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (viewHistoryRecord.productsList || [])),
-                        originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (viewHistoryRecord.ipNumbers || [])),
-                        amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
-                        extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
-                        extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
-                        isTenPercent: !!activeRevision.isTenPercent,
-                        ipRecords: ipRecords || []
-                    };
-
-                    if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature || !enriched.exporterSeal) {
-                        const exp = exporters?.find(e => e.name === enriched.exporterName);
-                        if (exp) {
-                            enriched.exporterAddress = enriched.exporterAddress || exp.address;
-                            enriched.exporterContact = enriched.exporterContact || exp.phone;
-                            enriched.exporterEmail = enriched.exporterEmail || exp.email;
-                            enriched.exporterSignature = enriched.exporterSignature || exp.signature;
-                            enriched.exporterSeal = enriched.exporterSeal || exp.seal;
-                        }
-                    }
-
-                    if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
-                        const imp = importers?.find(i => i.name === enriched.partyName);
-                        if (imp) {
-                            enriched.partyAddress = enriched.partyAddress || imp.address;
-                            enriched.partyContact = enriched.partyContact || imp.phone;
-                            enriched.partyEmail = enriched.partyEmail || imp.email;
-                            enriched.partySignature = enriched.partySignature || imp.signature;
-                        }
-                    }
-
-                    if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
-                        generatePI2PDF(enriched);
-                    } else {
-                        generatePIPDF(enriched);
-                    }
-                };
-
-                const handlePrintCurrentBankApp = () => {
-                    const origRev = timeline.find(t => t.isOriginal || t.reviseNo === 'Original PI') || timeline[0] || viewHistoryRecord;
-                    const prevRev = activeHistoryIndex > 0 ? timeline[activeHistoryIndex - 1] : origRev;
-
-                    const enriched = {
-                        ...viewHistoryRecord,
-                        ...activeRevision,
-                        piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
-                        originalPiNumber: viewHistoryRecord.piNumber,
-                        originalGrandTotal: activeRevision.originalGrandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
-                        originalGrandTotalQuantity: activeRevision.originalGrandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
-                        previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
-                        previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
-                        linkedLc,
-                        lcNo: linkedLc?.lcNo || viewHistoryRecord.lcNo || viewHistoryRecord.lcNumber || activeRevision.lcNo || '',
-                        lcDate: linkedLc?.openingDate || linkedLc?.lcDate || viewHistoryRecord.lcDate || activeRevision.lcDate || '',
-                        originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (viewHistoryRecord.productsList || [])),
-                        originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (viewHistoryRecord.ipNumbers || [])),
-                        amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
-                        extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
-                        extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
-                        ipRecords: ipRecords || []
-                    };
-                    if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature || !enriched.exporterSeal) {
-                        const exp = exporters?.find(e => e.name === enriched.exporterName);
-                        if (exp) {
-                            enriched.exporterAddress = enriched.exporterAddress || exp.address;
-                            enriched.exporterContact = enriched.exporterContact || exp.phone;
-                            enriched.exporterEmail = enriched.exporterEmail || exp.email;
-                            enriched.exporterSignature = enriched.exporterSignature || exp.signature;
-                            enriched.exporterSeal = enriched.exporterSeal || exp.seal;
-                        }
-                    }
-                    if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
-                        const imp = importers?.find(i => i.name === enriched.partyName);
-                        if (imp) {
-                            enriched.partyAddress = enriched.partyAddress || imp.address;
-                            enriched.partyContact = enriched.partyContact || imp.phone;
-                            enriched.partyEmail = enriched.partyEmail || imp.email;
-                            enriched.partySignature = enriched.partySignature || imp.signature;
-                        }
-                    }
-                    generateBankApplicationPDF(enriched);
-                };
-
-                const handleEditCurrentRevision = () => {
-                    setViewHistoryRecord(null);
-                    if (activeRevision.reviseNo === 'Original PI') {
-                        handleEdit(viewHistoryRecord);
-                    } else {
-                        setSelectedRevisePiId(viewHistoryRecord._id);
-                        setEditingRevisionOriginalNo(activeRevision.reviseNo);
-                        setReviseSearchQuery(viewHistoryRecord.piNumber || '');
-                        setReviseIpSearch('');
-                        setActiveDropdown(null);
-                        setHighlightedIndex(-1);
-
-                        const initialProducts = (activeRevision.productsList && activeRevision.productsList.length > 0)
-                            ? activeRevision.productsList
-                            : getPiProductsList(viewHistoryRecord);
-                        const ipNumbers = activeRevision.ipNumbers || [];
-                        const mappedProducts = initialProducts.map(prod => {
-                            if (prod._fromIp) return prod;
-                            const matchingIp = ipNumbers.find(ipNum => {
-                                const ipRec = ipRecords.find(r => r.ipNumber === ipNum);
-                                return ipRec && ipRec.productName === prod.productName;
-                            });
-                            if (matchingIp) {
-                                return { ...prod, _fromIp: matchingIp };
-                            }
-                            return prod;
-                        });
-                        const { list, grandTotal, grandTotalQuantity } = recalcReviseProducts(mappedProducts);
-
-                        setReviseFormData({
-                            reviseNo: activeRevision.reviseNo,
-                            reviseDate: activeRevision.reviseDate ? activeRevision.reviseDate.split('T')[0] : new Date().toISOString().split('T')[0],
-                            validityDate: activeRevision.validityDate && activeRevision.validityDate !== 'N/A (Historical)' ? activeRevision.validityDate.split('T')[0] : '',
-                            placeOfReceipt: activeRevision.placeOfReceipt && activeRevision.placeOfReceipt !== 'N/A (Historical)' ? activeRevision.placeOfReceipt : '',
-                            portOfLoading: activeRevision.portOfLoading && activeRevision.portOfLoading !== 'N/A (Historical)' ? activeRevision.portOfLoading : '',
-                            portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
-                            certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
-                            packingType: activeRevision.packingType && activeRevision.packingType !== 'N/A (Historical)' ? activeRevision.packingType : '',
-                            productsList: list,
-                            grandTotal: grandTotal || (activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0),
-                            grandTotalQuantity: grandTotalQuantity || (activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0),
-                            remarks: activeRevision.remarks && activeRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? activeRevision.remarks : '',
-                            ipNumbers: activeRevision.ipNumbers || [],
-                            amendmentType: activeRevision.amendmentType || '',
-                            extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
-                            extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || ''
-                        });
-                        setShowReviseForm(true);
-                    }
-                };
-
-                const handleTenPercentCurrentRevision = () => {
-                    setShowForm(false);
-                    setShowReviseForm(false);
-                    setShowTenPercentForm(true);
-                    const targetRev = activeRevision.isTenPercent ? (activeRevision.sourceRevisionNo || 'Original PI') : activeRevision.reviseNo;
-                    handleSelectPiForTenPercent(viewHistoryRecord, targetRev);
-                };
-
-                if (typeof document === 'undefined' || !document.body) return null;
-                return createPortal(
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                        <div className="bg-white w-full max-w-[95vw] 2xl:max-w-[1550px] xl:max-w-[1450px] h-[92vh] sm:h-[85vh] rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
-                            {/* Modal Header */}
-                            <div className="px-4 sm:px-8 py-3.5 sm:py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
-                                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                                    <div className="p-2 sm:p-2.5 bg-blue-100 text-blue-600 rounded-xl sm:rounded-2xl shrink-0">
-                                        <EyeIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <h3 className="text-base sm:text-lg font-black text-gray-900 tracking-tight truncate">Proforma Invoice History Explorer</h3>
-                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-gray-500 font-medium mt-0.5">
-                                            <span>
-                                                PI Number: <span className="font-bold text-blue-600 font-mono">{activeRevision.isTenPercent ? (activeRevision.piNumber || `${viewHistoryRecord.piNumber} (10% VALUE ADDED)`) : `${viewHistoryRecord.piNumber}${viewHistoryRecord.revisions && viewHistoryRecord.revisions.length > 0 && activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`}</span>
-                                            </span>
-                                            <span className="text-gray-300">•</span>
-                                            <span>
-                                                Date: <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate || viewHistoryRecord.date)}</span>
-                                            </span>
-                                            {linkedLcNo && (
-                                                <>
-                                                    <span className="text-gray-300">•</span>
-                                                    <span>
-                                                        LC: <span className="font-bold text-emerald-600 font-mono">{linkedLcNo}</span>
-                                                    </span>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setViewHistoryRecord(null)}
-                                    className="p-1.5 sm:p-2 rounded-xl hover:bg-gray-200 text-gray-400 hover:text-gray-600 active:scale-95 transition-all shrink-0 ml-2"
-                                    title="Close"
-                                >
-                                    <XIcon className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* Mobile Action Buttons: Circular Buttons Before Timeline */}
-                            <div className="md:hidden border-b border-gray-100 bg-gray-50/50 px-4 py-3 shrink-0">
-                                <div className="flex items-center justify-around gap-2 max-w-sm mx-auto">
-                                    {/* 1. Print PI PDF */}
-                                    <button
-                                        type="button"
-                                        onClick={handlePrintCurrentPIPDF}
-                                        className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none select-none min-w-[50px]"
-                                        title={activeRevision.isTenPercent ? 'Print 10% PI PDF' : 'Print PI PDF'}
-                                    >
-                                        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-blue-50 text-blue-600 border border-blue-200/90 shadow-2xs group-hover:bg-blue-100 transition-colors shrink-0">
-                                            <PDFIcon className="w-5 h-5 text-blue-600" />
-                                        </div>
-                                        <span className="text-[10px] font-bold text-gray-700 leading-tight">
-                                            {activeRevision.isTenPercent ? '10% PDF' : 'Print PDF'}
-                                        </span>
-                                    </button>
-
-                                    {/* 2. Bank Application */}
-                                    {!activeRevision.isTenPercent && (
-                                        <button
-                                            type="button"
-                                            onClick={handlePrintCurrentBankApp}
-                                            className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none select-none min-w-[50px]"
-                                            title="Bank Application"
-                                        >
-                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200/90 shadow-2xs group-hover:bg-emerald-100 transition-colors shrink-0">
-                                                <FileTextIcon className="w-5 h-5 text-emerald-600" />
-                                            </div>
-                                            <span className="text-[10px] font-bold text-gray-700 leading-tight">
-                                                Bank App
-                                            </span>
-                                        </button>
-                                    )}
-
-                                    {/* 3. 10% PI */}
-                                    {canManage && (
-                                        <button
-                                            type="button"
-                                            onClick={handleTenPercentCurrentRevision}
-                                            className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none select-none min-w-[50px]"
-                                            title={activeRevision.isTenPercent ? 'Edit 10% PI' : '10% PI'}
-                                        >
-                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-purple-50 text-purple-700 border border-purple-200/90 shadow-2xs group-hover:bg-purple-100 transition-colors shrink-0">
-                                                <FileTextIcon className="w-5 h-5 text-purple-600" />
-                                            </div>
-                                            <span className="text-[10px] font-bold text-gray-700 leading-tight">
-                                                {activeRevision.isTenPercent ? 'Edit 10%' : '10% PI'}
-                                            </span>
-                                        </button>
-                                    )}
-
-                                    {/* 4. Edit */}
-                                    {!activeRevision.isTenPercent && canManage && (
-                                        <button
-                                            type="button"
-                                            onClick={handleEditCurrentRevision}
-                                            className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none select-none min-w-[50px]"
-                                            title={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
-                                        >
-                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-gray-100 text-gray-700 border border-gray-200 shadow-2xs group-hover:bg-gray-200 transition-colors shrink-0">
-                                                <EditIcon className="w-5 h-5 text-gray-600" />
-                                            </div>
-                                            <span className="text-[10px] font-bold text-gray-700 leading-tight">
-                                                Edit
-                                            </span>
-                                        </button>
-                                    )}
-
-                                    {/* 5. Delete */}
-                                    {!activeRevision.isOriginal && canDeleteRevision && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowDeleteRevisionConfirm(true)}
-                                            className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none select-none min-w-[50px]"
-                                            title={activeRevision.isTenPercent ? 'Delete 10% PI' : 'Delete Revised PI'}
-                                        >
-                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-red-50 text-red-600 border border-red-200 shadow-2xs group-hover:bg-red-100 transition-colors shrink-0">
-                                                <TrashIcon className="w-5 h-5 text-red-500" />
-                                            </div>
-                                            <span className="text-[10px] font-bold text-red-600 leading-tight">
-                                                Delete
-                                            </span>
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Modal Body */}
-                            <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
-                                {/* Revision Timeline: Top scrollable section on mobile, sidebar on desktop (matching LC Record Details) */}
-                                {timeline.length > 1 && (
-                                    <div className="w-full md:w-72 border-b md:border-b-0 md:border-r border-gray-100 p-5 md:p-6 bg-gray-50/30 overflow-y-auto max-h-[35vh] md:max-h-full flex-shrink-0 text-left custom-scrollbar">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Revision Timeline</h4>
-                                        <div className="relative border-l border-gray-200 pl-6 ml-3 space-y-6">
-                                            {timeline.map((rev, idx) => {
-                                                const isActive = activeHistoryIndex === idx;
-                                                return (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => setActiveHistoryIndex(idx)}
-                                                        className="relative cursor-pointer group"
-                                                    >
-                                                        {/* Timeline Bullet */}
-                                                        <div className={`absolute -left-[31px] top-1.5 w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${isActive
-                                                            ? rev.isTenPercent
-                                                                ? 'bg-purple-600 border-purple-600 ring-4 ring-purple-100 scale-110 shadow-sm'
-                                                                : 'bg-blue-600 border-blue-600 ring-4 ring-blue-100 scale-110 shadow-sm'
-                                                            : rev.isTenPercent
-                                                                ? 'bg-white border-purple-300 group-hover:border-purple-400 group-hover:scale-105'
-                                                                : 'bg-white border-gray-300 group-hover:border-blue-400 group-hover:scale-105'
-                                                            }`} />
-
-                                                        {/* Timeline Content Card */}
-                                                        <div className={`p-4 rounded-2xl border transition-all ${isActive
-                                                            ? rev.isTenPercent
-                                                                ? 'bg-white border-purple-200 shadow-md shadow-purple-500/5 ring-1 ring-purple-100'
-                                                                : 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
-                                                            : 'bg-white/50 border-gray-100 hover:border-gray-200 hover:bg-white hover:shadow-sm'
-                                                            }`}>
-                                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${rev.isTenPercent
-                                                                ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                                                                : rev.isOriginal
-                                                                    ? 'bg-blue-50 text-blue-700'
-                                                                    : 'bg-amber-50 text-amber-700'
-                                                                }`}>
-                                                                {rev.reviseNo}
-                                                            </span>
-                                                            <p className="text-sm font-bold text-gray-800 mt-2">
-                                                                {rev.isTenPercent
-                                                                    ? '10% Value Added State'
-                                                                    : rev.isOriginal ? 'Initial Creation' : 'Revised State'}
-                                                            </p>
-                                                            <p className="text-[11px] font-medium text-gray-500 mt-1 font-mono">
-                                                                {formatDate(rev.reviseDate)}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Right Pane: Details */}
-                                <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 sm:space-y-8 min-w-0">
-                                    {activeRevision.isPlaceholder ? (
-                                        <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-gray-50/50 rounded-3xl border border-gray-100">
-                                            <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-4">
-                                                <span className="text-2xl">⚠️</span>
-                                            </div>
-                                            <h4 className="text-base font-bold text-gray-800">Original PI Data</h4>
-                                            <p className="text-sm text-gray-500 mt-2 max-w-md">
-                                                This PI was revised prior to the deployment of the detailed history tracking system. Historical initial values were overwritten and are not fully accessible.
-                                            </p>
-                                            <p className="text-xs text-gray-400 mt-4">
-                                                All subsequent revisions and updates are saved and fully trackable.
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {/* Details Section */}
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-                                                {/* Card 1: Logistics */}
-                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 space-y-3">
-                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Logistics & Route</h5>
-                                                    <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Place of Receipt</span>
-                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                        <span className="font-bold text-gray-800 break-words">{activeRevision.placeOfReceipt || 'N/A'}</span>
-
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port of Loading</span>
-                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                        <span className="font-bold text-gray-800 break-words">{activeRevision.portOfLoading || 'N/A'}</span>
-
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port of Discharge</span>
-                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                        <span className="font-bold text-gray-800 break-words">{activeRevision.portOfDischarge || 'N/A'}</span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Card 2: Dates & Certifications */}
-                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 space-y-3">
-                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Dates & Certification</h5>
-                                                    <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Revise / PI Date</span>
-                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                        <span className="font-bold text-gray-800 font-mono">{formatDate(activeRevision.reviseDate)}</span>
-
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Validity Date</span>
-                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                        <span className="font-bold text-rose-500 font-mono">{formatDate(activeRevision.validityDate)}</span>
-
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Certification</span>
-                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                        <div className="space-y-0.5 min-w-0">
-                                                            {activeRevision.certification
-                                                                ? activeRevision.certification.split(',').map((cert, cIdx) => (
-                                                                    <span key={cIdx} className="font-bold text-gray-800 block text-xs">{cert.trim()}</span>
-                                                                ))
-                                                                : <span className="font-bold text-gray-800 block text-xs">N/A</span>
-                                                            }
-                                                        </div>
-
-                                                        {activeRevision.certification && activeRevision.certification.split(',').map(s => s.trim().toLowerCase()).includes('packing') && (
-                                                            <>
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Packing Type</span>
-                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                <div className="space-y-0.5 min-w-0">
-                                                                    {activeRevision.packingType
-                                                                        ? activeRevision.packingType.split(',').map((pack, pIdx) => (
-                                                                            <span key={pIdx} className="font-bold text-gray-800 block text-xs">{pack.trim()}</span>
-                                                                        ))
-                                                                        : <span className="font-bold text-gray-800 block text-xs">N/A</span>
-                                                                    }
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Card 3: IP Records, LC & Reference */}
-                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4 sm:p-5 space-y-3">
-                                                    <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">IP Records, LC & Remarks</h5>
-                                                    <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Number</span>
-                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                        <div>
-                                                            {linkedLcNo ? (
-                                                                <span className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-100 font-mono inline-block">
-                                                                    {linkedLcNo}
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-gray-500 font-bold text-xs">No LC Linked</span>
-                                                            )}
-                                                        </div>
-
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Import Permission</span>
-                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                        <div className="flex flex-wrap gap-1.5 min-w-0">
-                                                            {activeIps.length > 0 ? (
-                                                                activeIps.map((ip, i) => (
-                                                                    <button
-                                                                        key={i}
-                                                                        type="button"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleOpenIpDetails(ip, viewHistoryRecord);
-                                                                        }}
-                                                                        className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
-                                                                        title={`View IP Details (${ip})`}
-                                                                    >
-                                                                        {ip}
-                                                                    </button>
-                                                                ))
-                                                            ) : (
-                                                                <span className="text-gray-500 font-bold text-xs">N/A</span>
-                                                            )}
-                                                        </div>
-
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
-                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                        <p className="text-xs font-bold text-gray-800 break-words">{activeRevision.remarks || 'No remarks provided.'}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Products Breakdown on Mobile Cards */}
-                                            <div className="md:hidden space-y-3">
-                                                <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Products Breakdown</h5>
-                                                <div className="space-y-3">
-                                                    {activeProducts.map((prod, pIdx) => (
-                                                        <div key={pIdx} className="bg-gray-50/60 p-4 rounded-2xl border border-gray-100 text-left">
-                                                            {activeProducts.length > 1 && (
-                                                                <div className="text-[10px] font-black text-blue-600 uppercase tracking-wider mb-2">
-                                                                    Product #{pIdx + 1}
-                                                                </div>
-                                                            )}
-                                                            <div className="grid grid-cols-[105px_8px_1fr] sm:grid-cols-[115px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRODUCT NAME</span>
-                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                <span className="text-xs font-bold text-gray-900 break-words">{prod.productName || 'N/A'}</span>
-
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS CODE</span>
-                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                <span className="text-xs font-mono font-semibold text-gray-700">{prod.hsCode || 'N/A'}</span>
-
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QUANTITY</span>
-                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                <span className="text-xs font-bold text-gray-900">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} kg</span>
-
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">RATE</span>
-                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                <span className="text-xs font-semibold text-gray-800">${parseFloat(prod.rate || 0).toFixed(3)}</span>
-
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">FREIGHT</span>
-                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                <span className="text-xs font-semibold text-gray-800">${parseFloat(prod.freight || 0).toFixed(3)}</span>
-
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL AMOUNT</span>
-                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                <span className="text-xs font-black text-blue-600">${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Products Breakdown on Desktop Table */}
-                                            <div className="hidden md:block space-y-3">
-                                                <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Products Breakdown</h5>
-                                                <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white">
-                                                    <table className="w-full text-left border-collapse">
-                                                        <thead>
-                                                            <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">
-                                                                <th className="px-6 py-3">Product Name</th>
-                                                                <th className="px-6 py-3">HS Code</th>
-                                                                <th className="px-6 py-3 text-right">Quantity (kg)</th>
-                                                                <th className="px-6 py-3 text-right">Rate ($)</th>
-                                                                <th className="px-6 py-3 text-right">Freight</th>
-                                                                <th className="px-6 py-3 text-right">Total Amount</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-gray-50 text-sm">
-                                                            {activeProducts.map((prod, pIdx) => (
-                                                                <tr key={pIdx} className="hover:bg-gray-50/30">
-                                                                    <td className="px-6 py-3.5 font-bold text-gray-800">{prod.productName || 'N/A'}</td>
-                                                                    <td className="px-6 py-3.5 font-mono font-medium text-gray-500">{prod.hsCode || 'N/A'}</td>
-                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} kg</td>
-                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.rate || 0).toFixed(3)}</td>
-                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.freight || 0).toFixed(3)}</td>
-                                                                    <td className="px-6 py-3.5 text-right font-black text-blue-600">${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-
-                                            {/* Totals Summary Cards */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 max-w-lg mx-auto pt-4 sm:pt-6">
-                                                {/* Total Quantity Card */}
-                                                <div className="bg-blue-50/40 border border-blue-100 rounded-2xl p-4 sm:p-5 text-center shadow-sm">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Total Quantity</span>
-                                                    <span className="text-lg sm:text-xl font-black text-gray-900 mt-1 block">
-                                                        {parseFloat(activeRevision.grandTotalQuantity || 0).toLocaleString('en-US')} kg
-                                                    </span>
-                                                </div>
-                                                {/* Grand Total Card */}
-                                                <div className="bg-blue-600 text-white rounded-2xl p-4 sm:p-5 text-center shadow-lg shadow-blue-500/20">
-                                                    <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest block">Grand Total Value</span>
-                                                    <span className="text-lg sm:text-xl font-black text-white mt-1 block">
-                                                        ${parseFloat(activeRevision.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                                {/* Action Buttons under Cards (Desktop only - mobile has circular buttons above timeline) */}
-                                                <div className="hidden md:block space-y-3 pt-6 pb-2">
-                                                    {/* Row 1: Document & PDF actions */}
-                                                    <div className="flex flex-wrap items-center justify-center gap-2.5">
-                                                        <button
-                                                            type="button"
-                                                            onClick={handlePrintCurrentPIPDF}
-                                                            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
-                                                        >
-                                                            <PDFIcon className="w-4 h-4 text-white shrink-0" />
-                                                            <span>{activeRevision.isTenPercent ? 'Print 10% PI PDF' : 'Print PI PDF'}</span>
-                                                        </button>
-                                                        {!activeRevision.isTenPercent && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={handlePrintCurrentBankApp}
-                                                                className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
-                                                            >
-                                                                <FileTextIcon className="w-4 h-4 text-white shrink-0" />
-                                                                <span>Bank Application</span>
-                                                            </button>
-                                                        )}
-                                                        {canManage && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={handleTenPercentCurrentRevision}
-                                                                className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 border border-blue-200 shadow-sm whitespace-nowrap"
-                                                            >
-                                                                <FileTextIcon className="w-4 h-4 text-blue-600 shrink-0" />
-                                                                <span>{activeRevision.isTenPercent ? 'Edit 10% PI' : '10% PI'}</span>
-                                                            </button>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Row 2: Edit then Delete */}
-                                                    {(canManage || (!activeRevision.isOriginal && canDeleteRevision)) && (
-                                                        <div className="flex flex-wrap items-center justify-center gap-2.5">
-                                                            {!activeRevision.isTenPercent && canManage && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={handleEditCurrentRevision}
-                                                                    data-action={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
-                                                                    title={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
-                                                                    aria-label={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
-                                                                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
-                                                                >
-                                                                    <EditIcon className="w-4 h-4 text-gray-500 shrink-0" />
-                                                                    <span>{activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}</span>
-                                                                </button>
-                                                            )}
-                                                            {!activeRevision.isOriginal && canDeleteRevision && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setShowDeleteRevisionConfirm(true)}
-                                                                    className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs sm:text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 border border-red-200 shadow-sm whitespace-nowrap"
-                                                                >
-                                                                    <TrashIcon className="w-4 h-4 text-red-500 shrink-0" />
-                                                                    <span>{activeRevision.isTenPercent ? 'Delete 10% PI' : 'Delete Revised PI'}</span>
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Delete Revision Confirmation Modal Card */}
-                        {showDeleteRevisionConfirm && (
-                            <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
-                                <div
-                                    className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
-                                    onClick={() => {
-                                        if (deleteRevisionStatus !== 'loading') {
-                                            setShowDeleteRevisionConfirm(false);
-                                            setDeleteRevisionStatus(null);
-                                        }
-                                    }}
-                                />
-                                <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-300 z-10">
-                                    {deleteRevisionStatus === 'success' ? (
-                                        <div className="p-12 text-center">
-                                            <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 animate-in zoom-in duration-500">
-                                                <CheckIcon className="w-10 h-10 text-emerald-500" />
-                                            </div>
-                                            <h3 className="text-xl font-black text-gray-900 mb-2">Deleted!</h3>
-                                            <p className="text-sm text-gray-500">The PI revision has been removed.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="p-8 text-center">
-                                            <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-3">
-                                                <TrashIcon className="w-8 h-8 text-red-500" />
-                                            </div>
-                                            <h3 className="text-xl font-black text-gray-900 mb-2">
-                                                {activeRevision.isTenPercent ? 'Delete 10% PI Record?' : 'Delete Revised PI?'}
-                                            </h3>
-                                            <p className="text-sm text-gray-500 mb-8 leading-relaxed">
-                                                Are you sure you want to delete <span className="font-bold text-gray-800">{activeRevision.reviseNo || (activeRevision.isTenPercent ? '10% PI Record' : 'this revision')}</span> for PI <span className="font-bold text-blue-600">{viewHistoryRecord.piNumber}</span>? This action cannot be undone.
-                                            </p>
-
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setShowDeleteRevisionConfirm(false);
-                                                        setDeleteRevisionStatus(null);
-                                                    }}
-                                                    className="py-3.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-2xl transition-all active:scale-95"
-                                                    disabled={deleteRevisionStatus === 'loading'}
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={async () => {
-                                                        setDeleteRevisionStatus('loading');
-                                                        try {
-                                                            const deleted = activeRevision.isTenPercent
-                                                                ? await handleDeleteTenPercentRecord(viewHistoryRecord, activeRevision)
-                                                                : await handleDeleteRevision(viewHistoryRecord, activeRevision);
-                                                            if (deleted) {
-                                                                setShowDeleteRevisionConfirm(false);
-                                                                setDeleteRevisionStatus(null);
-                                                                setActiveHistoryIndex(0);
-                                                            } else {
-                                                                setDeleteRevisionStatus('error');
-                                                                setTimeout(() => setDeleteRevisionStatus(null), 3000);
-                                                            }
-                                                        } catch (err) {
-                                                            setDeleteRevisionStatus('error');
-                                                            setTimeout(() => setDeleteRevisionStatus(null), 3000);
-                                                        }
-                                                    }}
-                                                    className="py-3.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl shadow-lg shadow-red-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                                    disabled={deleteRevisionStatus === 'loading'}
-                                                >
-                                                    {deleteRevisionStatus === 'loading' ? (
-                                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                    ) : (
-                                                        'Delete Now'
-                                                    )}
-                                                </button>
-                                            </div>
-                                            {deleteRevisionStatus === 'error' && (
-                                                <p className="text-center text-xs font-bold text-red-500 mt-4 animate-bounce">Failed to delete revision. Please try again.</p>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>,
-                    document.body
-                );
-            })()}
+            {viewHistoryRecord && (
+                <PiHistoryExplorerModal
+                    viewHistoryRecord={viewHistoryRecord}
+                    activeHistoryIndex={activeHistoryIndex}
+                    setActiveHistoryIndex={setActiveHistoryIndex}
+                    onClose={() => setViewHistoryRecord(null)}
+                    lcRecords={lcRecords}
+                    ipRecords={ipRecords}
+                    exporters={exporters}
+                    importers={importers}
+                    canManage={canManage}
+                    canDeleteRevision={canDeleteRevision}
+                    handleEdit={handleEdit}
+                    handleSelectPiForTenPercent={handleSelectPiForTenPercent}
+                    setShowReviseForm={setShowReviseForm}
+                    setShowTenPercentForm={setShowTenPercentForm}
+                    setShowForm={setShowForm}
+                    setReviseFormData={setReviseFormData}
+                    setSelectedRevisePiId={setSelectedRevisePiId}
+                    setEditingRevisionOriginalNo={setEditingRevisionOriginalNo}
+                    setReviseSearchQuery={setReviseSearchQuery}
+                    setReviseIpSearch={setReviseIpSearch}
+                    setActiveDropdown={setActiveDropdown}
+                    setHighlightedIndex={setHighlightedIndex}
+                    recalcReviseProducts={recalcReviseProducts}
+                    handleDeleteRevision={handleDeleteRevision}
+                    handleDeleteTenPercentRecord={handleDeleteTenPercentRecord}
+                    handleOpenIpDetails={handleOpenIpDetails}
+                    getHistoryTimeline={getHistoryTimeline}
+                    getPiProductsList={getPiProductsList}
+                />
+            )}
 
             {/* IP Details Card Modal */}
             {selectedIpForDetails && (
@@ -8863,7 +9029,7 @@ function PI({
             {/* Empty Fields Alert Modal */}
             {emptyFieldsModal.isOpen && createPortal(
                 <div
-                    className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+                    className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/60 animate-in fade-in duration-200"
                 >
                     <div
                         className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200 text-left"

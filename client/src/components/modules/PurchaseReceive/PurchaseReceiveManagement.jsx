@@ -753,7 +753,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, filters, isRequestedOnly]);
+    }, [searchQuery, filters, isRequestedOnly]);
 
     const paginatedPurchaseReceives = useMemo(() => {
         const start = (currentPage - 1) * pageSize;
