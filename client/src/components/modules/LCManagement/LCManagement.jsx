@@ -10254,6 +10254,21 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                 <h3 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">LC Details</h3>
                             </div>
                         </div>
+
+                        <div className="space-y-1.5 text-left">
+                            <label className="text-sm font-semibold text-gray-600 ml-1">LC Number</label>
+                            <input
+                                type="text"
+                                name="lcNo"
+                                value={formData.lcNo}
+                                onChange={handleInputChange}
+                                required
+                                autoComplete="off"
+                                placeholder="Enter LC Number"
+                                className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                            />
+                        </div>
+
                         <div className="space-y-1.5">
                             <CustomDatePicker
                                 label="Opening Date"
@@ -10291,20 +10306,6 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                 value={formData.latestShipmentDate}
                                 onChange={(e) => setFormData(prev => ({ ...prev, latestShipmentDate: e.target.value }))}
                                 compact={true}
-                            />
-                        </div>
-
-                        <div className="space-y-1.5 text-left">
-                            <label className="text-sm font-semibold text-gray-600 ml-1">LC Number</label>
-                            <input
-                                type="text"
-                                name="lcNo"
-                                value={formData.lcNo}
-                                onChange={handleInputChange}
-                                required
-                                autoComplete="off"
-                                placeholder="Enter LC Number"
-                                className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                             />
                         </div>
 
