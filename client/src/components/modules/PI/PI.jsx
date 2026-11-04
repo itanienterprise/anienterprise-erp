@@ -336,11 +336,9 @@ const PiMobileCard = React.memo(({
     );
 });
 
-// Dedicated History Explorer Modal for PI (zero-lag, no backdrop-blur, safe fallbacks)
-const PiHistoryExplorerModal = ({
+// Dedicated History Explorer Modal for PI (zero-lag, no backdrop-blur, safe fallbacks, memoized)
+const PiHistoryExplorerModal = React.memo(({
     viewHistoryRecord,
-    activeHistoryIndex,
-    setActiveHistoryIndex,
     onClose,
     lcRecords = [],
     ipRecords = [],
@@ -374,6 +372,13 @@ const PiHistoryExplorerModal = ({
         return getHistoryTimeline ? getHistoryTimeline(viewHistoryRecord) : [];
     }, [viewHistoryRecord, getHistoryTimeline]);
 
+    // Local active revision state so switching revisions within timeline is instantaneous and never re-renders parent module
+    const [activeHistoryIndex, setActiveHistoryIndex] = useState(() => (timeline.length > 1 ? timeline.length - 1 : 0));
+
+    useEffect(() => {
+        setActiveHistoryIndex(timeline.length > 1 ? timeline.length - 1 : 0);
+    }, [viewHistoryRecord?._id, timeline.length]);
+
     const activeRevision = timeline[activeHistoryIndex] || timeline[0] || {};
 
     const activeCertifications = useMemo(() => {
@@ -404,11 +409,11 @@ const PiHistoryExplorerModal = ({
     }, [activeRevision.productsList]);
 
     // Look up linked LC number for this PI
-    const cleanPiNum = String(viewHistoryRecord?.piNumber || '').trim();
+    const cleanPiNum = String(viewHistoryRecord?.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
     const linkedLc = useMemo(() => {
         if (!cleanPiNum) return null;
         return (lcRecords || []).find(lc => {
-            const lcPi = String(lc.piNo || '').replace(' (REVISED)', '').trim();
+            const lcPi = String(lc.piNo || lc.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
             return lcPi === cleanPiNum;
         });
     }, [cleanPiNum, lcRecords]);
@@ -1127,7 +1132,7 @@ const PiHistoryExplorerModal = ({
         </div>,
         document.body
     );
-};
+});
 
 function PI({
     importers,
@@ -1155,7 +1160,10 @@ function PI({
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const [showForm, setShowForm] = useState(false);
-    const [records, setRecords] = useState([]);
+    const [records, setRecords] = useState(() => {
+        const cached = queryClient.getQueryData(['pi']);
+        return Array.isArray(cached) ? cached : [];
+    });
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showDeleteRevisionConfirm, setShowDeleteRevisionConfirm] = useState(false);
@@ -1216,9 +1224,18 @@ function PI({
         return Array.isArray(cached) ? cached : [];
     });
     const [isLoadingIpRecords, setIsLoadingIpRecords] = useState(false);
-    const [lcRecords, setLcRecords] = useState([]);
-    const [allStockRecords, setAllStockRecords] = useState([]);
-    const [allSalesRecords, setAllSalesRecords] = useState([]);
+    const [lcRecords, setLcRecords] = useState(() => {
+        const cached = queryClient.getQueryData(['lc-management']);
+        return Array.isArray(cached) ? cached : [];
+    });
+    const [allStockRecords, setAllStockRecords] = useState(() => {
+        const cached = queryClient.getQueryData(['stock']);
+        return Array.isArray(cached) ? cached : [];
+    });
+    const [allSalesRecords, setAllSalesRecords] = useState(() => {
+        const cached = queryClient.getQueryData(['sales']);
+        return Array.isArray(cached) ? cached : [];
+    });
     const [preCarriages, setPreCarriages] = useState([]);
     const [receiptPlaces, setReceiptPlaces] = useState([]);
     const [vessels, setVessels] = useState([]);
@@ -1276,51 +1293,6 @@ function PI({
         grandTotalQuantity: ''
     });
     const [selectedIpForDetails, setSelectedIpForDetails] = useState(null);
-
-    const handleOpenIpDetails = (ipNumber, piRecord) => {
-        if (!ipNumber) return;
-        const cleanNum = String(ipNumber).trim().toLowerCase();
-        const cleanDigits = String(ipNumber).replace(/\D/g, '');
-
-        let targetIp = (ipRecords || []).find(ip => {
-            const ipNo = String(ip.ipNumber || '').trim().toLowerCase();
-            const ipDigits = ipNo.replace(/\D/g, '');
-            return ipNo === cleanNum || (cleanDigits && ipDigits && ipDigits === cleanDigits);
-        });
-
-        if (!targetIp) {
-            targetIp = {
-                ipNumber: ipNumber,
-                ipParty: piRecord?.partyName || 'M/S. ANI ENTERPRISE',
-                productName: piRecord?.productName || (piRecord?.productsList?.[0]?.productName) || '',
-                port: piRecord?.port || piRecord?.portOfLoading || piRecord?.portOfDischarge || '',
-                openingDate: piRecord?.date || '',
-                closeDate: piRecord?.validityDate || '',
-                referenceNo: piRecord?.buyerOrderNo || piRecord?.piNumber || '',
-                quantity: piRecord?.grandTotalQuantity || piRecord?.quantity || 0,
-                status: 'Active',
-                isPlaceholder: true
-            };
-        }
-
-        const resolvedEntryByName = targetIp.entryByName || (targetIp.entryBy && employeesMap[targetIp.entryBy]) || piRecord?.entryByName || (piRecord?.entryBy && employeesMap[piRecord?.entryBy]) || '';
-
-        const enrichedIp = {
-            ...targetIp,
-            exporterName: targetIp.exporterName || targetIp.exporter || piRecord?.exporterName || '',
-            ipParty: targetIp.ipParty || piRecord?.partyName || '',
-            productName: targetIp.productName || piRecord?.productName || (piRecord?.productsList?.[0]?.productName) || '',
-            port: targetIp.port || piRecord?.port || piRecord?.portOfLoading || piRecord?.portOfDischarge || '',
-            openingDate: targetIp.openingDate || piRecord?.date || '',
-            closeDate: targetIp.closeDate || piRecord?.validityDate || '',
-            referenceNo: targetIp.referenceNo || piRecord?.buyerOrderNo || piRecord?.piNumber || '',
-            entryBy: targetIp.entryBy || piRecord?.entryBy || '',
-            entryByName: resolvedEntryByName,
-            currentPi: piRecord || null,
-        };
-
-        setSelectedIpForDetails(enrichedIp);
-    };
     const [selectedRevisePiId, setSelectedRevisePiId] = useState('');
     const [editingRevisionOriginalNo, setEditingRevisionOriginalNo] = useState(null);
     const [reviseSearchQuery, setReviseSearchQuery] = useState('');
@@ -1344,7 +1316,6 @@ function PI({
         extendedExpiryDate: ''
     });
     const [viewHistoryRecord, setViewHistoryRecord] = useState(null);
-    const [activeHistoryIndex, setActiveHistoryIndex] = useState(0);
     const toastTimerRef = useRef(null);
 
     const showToast = (message, type = 'success', duration = 3000) => {
@@ -1810,52 +1781,6 @@ function PI({
     }, [lcDonePiSet]);
 
     useEffect(() => {
-        fetchRecords();
-        fetchEmployees();
-        Promise.all([
-            fetchMetaData('preCarriage', setPreCarriages),
-            fetchMetaData('receiptPlace', setReceiptPlaces),
-            fetchMetaData('vessel', setVessels),
-            fetchMetaData('country', setCountries),
-            fetchMetaData('certification', setCertifications),
-            fetchMetaData('packingType', setPackingTypes)
-        ]);
-
-        const socket = getSocket();
-        const handleRealtimeUpdate = (data) => {
-            const mod = (data?.module || '').toLowerCase().trim();
-            console.log('[PI] Real-time event received:', data);
-            if (!mod || mod === 'pi' || mod === 'ip-records' || mod === 'ip' || mod === 'lc-management' || mod === 'stock' || mod === 'sales' || mod === 'banks' || mod === 'bank' || mod === 'all') {
-                if (mod === 'ip-records' || mod === 'ip' || mod === 'all') {
-                    queryClient.invalidateQueries({ queryKey: ['ip-records'] });
-                }
-                if (mod === 'pi' || mod === 'all') {
-                    queryClient.invalidateQueries({ queryKey: ['pi'] });
-                }
-                fetchRecords(false);
-            }
-        };
-
-        if (socket) {
-            socket.on('data_updated', handleRealtimeUpdate);
-        }
-        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
-        window.addEventListener('erp_data_updated', onCustomEvent);
-
-        const pollTimer = setInterval(() => {
-            fetchRecords(false);
-        }, 30000);
-
-        return () => {
-            if (socket) {
-                socket.off('data_updated', handleRealtimeUpdate);
-            }
-            window.removeEventListener('erp_data_updated', onCustomEvent);
-            clearInterval(pollTimer);
-        };
-    }, []);
-
-    useEffect(() => {
         const handleClickOutside = (event) => {
             if (activeDropdown && !event.target.closest('.dropdown-container')) {
                 setActiveDropdown(null);
@@ -1978,115 +1903,24 @@ function PI({
         return [];
     };
 
-    const fetchRecords = async (showFullLoading = true) => {
-        // Fast instant cache initialization
-        const cachedPi = queryClient.getQueryData(['pi']);
-        if (cachedPi && Array.isArray(cachedPi) && cachedPi.length > 0) {
-            setRecords(cachedPi);
-        } else if (showFullLoading) {
-            setIsLoading(true);
-        }
+    const hasFetchedSupportingRef = useRef(false);
 
-        const cachedIp = queryClient.getQueryData(['ip-records']);
-        if (cachedIp && Array.isArray(cachedIp) && cachedIp.length > 0) {
-            setIpRecords(cachedIp);
-        }
-
-        const cachedBanks = queryClient.getQueryData(['banks']);
-        if (cachedBanks && Array.isArray(cachedBanks) && cachedBanks.length > 0) {
-            setBanks(cachedBanks);
-        }
-
-        // Kick off IP records immediately in parallel (no waiting for PI, sales, stock, etc.)
-        const ipFetchPromise = queryClient.fetchQuery({
-            queryKey: ['ip-records'],
-            queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records?excludeAttachments=true`).then(r => Array.isArray(r.data) ? r.data : [])
-        }).then(ipData => {
-            if (Array.isArray(ipData)) {
-                setIpRecords(ipData);
-            }
-            return ipData;
-        }).catch(err => {
-            console.error('Error fetching IP records:', err);
-            return [];
-        });
-
-        // Kick off Banks immediately in parallel
-        const bankFetchPromise = queryClient.fetchQuery({
-            queryKey: ['banks'],
-            queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
-        }).then(bData => {
-            if (Array.isArray(bData)) {
-                setBanks(bData);
-            }
-            return bData;
-        }).catch(() => []);
+    const fetchSupportingData = useCallback(async (force = false) => {
+        if (hasFetchedSupportingRef.current && !force) return;
+        hasFetchedSupportingRef.current = true;
 
         try {
-            // 1. Fetch PI records first and render list table immediately!
-            const res = await axios.get(`${API_BASE_URL}/api/pi?_t=${Date.now()}`);
-            const piData = Array.isArray(res.data) ? res.data : [];
-            setRecords(piData);
-            queryClient.setQueryData(['pi'], piData);
-            if (showFullLoading) setIsLoading(false);
-
-            // 2. Fetch remainder supporting data asynchronously in background
-            const [lcData, stockData, saleData, notifRes] = await Promise.all([
-                queryClient.fetchQuery({
-                    queryKey: ['lc-management'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
-                }),
+            const [stockData, saleData, notifRes] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['stock'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : [])
-                }),
+                }).catch(() => []),
                 queryClient.fetchQuery({
                     queryKey: ['sales'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/sales`).then(r => Array.isArray(r.data) ? r.data : [])
-                }),
-                axios.get(`${API_BASE_URL}/api/notifications`).catch(() => ({ data: [] }))
+                }).catch(() => []),
+                canShowEntryBy ? axios.get(`${API_BASE_URL}/api/notifications`).catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
             ]);
-            setLcRecords(Array.isArray(lcData) ? lcData : []);
-
-            const rawNotifs = Array.isArray(notifRes?.data) ? notifRes.data : [];
-            const notifsMap = {};
-            rawNotifs.forEach(n => {
-                let d = n;
-                if (n && n.data) {
-                    if (typeof n.data === 'string') {
-                        try { d = { ...decryptData(n.data), _id: n._id }; } catch (e) { }
-                    } else if (typeof n.data === 'object') {
-                        d = { ...n.data, _id: n._id };
-                    }
-                }
-                const msg = d.message || '';
-                const piMatch = msg.match(/(?:PI\s*(?:No\.?|Number)?:\s*|PI\s*\(\s*(?:No\.?|Number)?:\s*)([A-Za-z0-9\/\-_]+)/i);
-                if (piMatch && piMatch[1]) {
-                    const piNum = piMatch[1].trim();
-                    let byName = '';
-                    const byIdx = msg.lastIndexOf(' by ');
-                    if (byIdx !== -1) {
-                        byName = msg.substring(byIdx + 4).trim().replace(/\.+$/, '');
-                    } else {
-                        const byMatch = msg.match(/by\s+([^,\n]+)/i);
-                        if (byMatch) byName = byMatch[1].trim().replace(/\.+$/, '');
-                    }
-                    if (byName) {
-                        const cleanPi = piNum.toLowerCase();
-                        if (!notifsMap[cleanPi]) notifsMap[cleanPi] = {};
-                        const title = (d.title || '').toLowerCase();
-                        const msgLower = msg.toLowerCase();
-                        if (title.includes('created') || msgLower.includes('created') || msgLower.includes('new pi') || msgLower.includes('added')) {
-                            if (!notifsMap[cleanPi].createdByName) notifsMap[cleanPi].createdByName = byName;
-                        } else if (title.includes('revised') || msgLower.includes('revised')) {
-                            notifsMap[cleanPi].revisedByName = byName;
-                        } else if (title.includes('updated') || msgLower.includes('updated') || msgLower.includes('edited')) {
-                            notifsMap[cleanPi].editedByName = byName;
-                        }
-                    }
-                }
-            });
-            setNotificationsMap(notifsMap);
 
             const rawStock = Array.isArray(stockData) ? stockData : (Array.isArray(stockData?.data) ? stockData.data : []);
             const decryptedStock = rawStock.map(item => {
@@ -2109,12 +1943,230 @@ function PI({
                 } catch { return item; }
             });
             setAllSalesRecords(decryptedSales);
+
+            if (canShowEntryBy && notifRes?.data) {
+                const rawNotifs = Array.isArray(notifRes.data) ? notifRes.data : [];
+                const notifsMap = {};
+                rawNotifs.forEach(n => {
+                    let d = n;
+                    if (n && n.data) {
+                        if (typeof n.data === 'string') {
+                            try { d = { ...decryptData(n.data), _id: n._id }; } catch (e) { }
+                        } else if (typeof n.data === 'object') {
+                            d = { ...n.data, _id: n._id };
+                        }
+                    }
+                    const msg = d.message || '';
+                    const piMatch = msg.match(/(?:PI\s*(?:No\.?|Number)?:\s*|PI\s*\(\s*(?:No\.?|Number)?:\s*)([A-Za-z0-9\/\-_]+)/i);
+                    if (piMatch && piMatch[1]) {
+                        const piNum = piMatch[1].trim();
+                        let byName = '';
+                        const byIdx = msg.lastIndexOf(' by ');
+                        if (byIdx !== -1) {
+                            byName = msg.substring(byIdx + 4).trim().replace(/\.+$/, '');
+                        } else {
+                            const byMatch = msg.match(/by\s+([^,\n]+)/i);
+                            if (byMatch) byName = byMatch[1].trim().replace(/\.+$/, '');
+                        }
+                        if (byName) {
+                            const cleanPi = piNum.toLowerCase();
+                            if (!notifsMap[cleanPi]) notifsMap[cleanPi] = {};
+                            const title = (d.title || '').toLowerCase();
+                            const msgLower = msg.toLowerCase();
+                            if (title.includes('created') || msgLower.includes('created') || msgLower.includes('new pi') || msgLower.includes('added')) {
+                                if (!notifsMap[cleanPi].createdByName) notifsMap[cleanPi].createdByName = byName;
+                            } else if (title.includes('revised') || msgLower.includes('revised')) {
+                                notifsMap[cleanPi].revisedByName = byName;
+                            } else if (title.includes('updated') || msgLower.includes('updated') || msgLower.includes('edited')) {
+                                notifsMap[cleanPi].editedByName = byName;
+                            }
+                        }
+                    }
+                });
+                setNotificationsMap(notifsMap);
+            }
         } catch (error) {
-            console.error('Error fetching data:', error);
+            console.error('Error fetching supporting data:', error);
+        }
+    }, [canShowEntryBy]);
+
+    const handleOpenIpDetails = useCallback((ipNumber, piRecord) => {
+        if (!ipNumber) return;
+        if (!hasFetchedSupportingRef.current) {
+            fetchSupportingData(true);
+        }
+        const cleanNum = String(ipNumber).trim().toLowerCase();
+        const cleanDigits = String(ipNumber).replace(/\D/g, '');
+
+        let targetIp = (ipRecords || []).find(ip => {
+            const ipNo = String(ip.ipNumber || '').trim().toLowerCase();
+            const ipDigits = ipNo.replace(/\D/g, '');
+            return ipNo === cleanNum || (cleanDigits && ipDigits && ipDigits === cleanDigits);
+        });
+
+        if (!targetIp) {
+            targetIp = {
+                ipNumber: ipNumber,
+                ipParty: piRecord?.partyName || 'M/S. ANI ENTERPRISE',
+                productName: piRecord?.productName || (piRecord?.productsList?.[0]?.productName) || '',
+                port: piRecord?.port || piRecord?.portOfLoading || piRecord?.portOfDischarge || '',
+                openingDate: piRecord?.date || '',
+                closeDate: piRecord?.validityDate || '',
+                referenceNo: piRecord?.buyerOrderNo || piRecord?.piNumber || '',
+                quantity: piRecord?.grandTotalQuantity || piRecord?.quantity || 0,
+                status: 'Active',
+                isPlaceholder: true
+            };
+        }
+
+        const resolvedEntryByName = targetIp.entryByName || (targetIp.entryBy && employeesMap[targetIp.entryBy]) || piRecord?.entryByName || (piRecord?.entryBy && employeesMap[piRecord?.entryBy]) || '';
+
+        const enrichedIp = {
+            ...targetIp,
+            exporterName: targetIp.exporterName || targetIp.exporter || piRecord?.exporterName || '',
+            ipParty: targetIp.ipParty || piRecord?.partyName || '',
+            productName: targetIp.productName || piRecord?.productName || (piRecord?.productsList?.[0]?.productName) || '',
+            port: targetIp.port || piRecord?.port || piRecord?.portOfLoading || piRecord?.portOfDischarge || '',
+            openingDate: targetIp.openingDate || piRecord?.date || '',
+            closeDate: targetIp.closeDate || piRecord?.validityDate || '',
+            referenceNo: targetIp.referenceNo || piRecord?.buyerOrderNo || piRecord?.piNumber || '',
+            entryBy: targetIp.entryBy || piRecord?.entryBy || '',
+            entryByName: resolvedEntryByName,
+            currentPi: piRecord || null,
+        };
+
+        setSelectedIpForDetails(enrichedIp);
+    }, [ipRecords, employeesMap, fetchSupportingData]);
+
+    const fetchRecords = async (showFullLoading = true) => {
+        // Fast instant cache initialization
+        const cachedPi = queryClient.getQueryData(['pi']);
+        if (cachedPi && Array.isArray(cachedPi) && cachedPi.length > 0) {
+            setRecords(cachedPi);
+        } else if (showFullLoading) {
+            setIsLoading(true);
+        }
+
+        const cachedIp = queryClient.getQueryData(['ip-records']);
+        if (cachedIp && Array.isArray(cachedIp) && cachedIp.length > 0) {
+            setIpRecords(cachedIp);
+        }
+
+        const cachedBanks = queryClient.getQueryData(['banks']);
+        if (cachedBanks && Array.isArray(cachedBanks) && cachedBanks.length > 0) {
+            setBanks(cachedBanks);
+        }
+
+        const cachedLc = queryClient.getQueryData(['lc-management']);
+        if (cachedLc && Array.isArray(cachedLc) && cachedLc.length > 0) {
+            setLcRecords(cachedLc);
+        }
+
+        // Kick off IP records immediately in parallel
+        queryClient.fetchQuery({
+            queryKey: ['ip-records'],
+            queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records?excludeAttachments=true`).then(r => Array.isArray(r.data) ? r.data : [])
+        }).then(ipData => {
+            if (Array.isArray(ipData)) {
+                setIpRecords(ipData);
+            }
+            return ipData;
+        }).catch(err => {
+            console.error('Error fetching IP records:', err);
+            return [];
+        });
+
+        // Kick off Banks immediately in parallel
+        queryClient.fetchQuery({
+            queryKey: ['banks'],
+            queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
+        }).then(bData => {
+            if (Array.isArray(bData)) {
+                setBanks(bData);
+            }
+            return bData;
+        }).catch(() => []);
+
+        try {
+            // Concurrently fetch PI records and LC records (lightweight and critical for LC Done check)
+            const [piRes, lcData] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/pi?_t=${Date.now()}`),
+                queryClient.fetchQuery({
+                    queryKey: ['lc-management'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
+                }).catch(() => [])
+            ]);
+
+            const piData = Array.isArray(piRes.data) ? piRes.data : [];
+            setRecords(piData);
+            queryClient.setQueryData(['pi'], piData);
+            if (Array.isArray(lcData)) {
+                setLcRecords(lcData);
+            }
+        } catch (error) {
+            console.error('Error fetching PI records:', error);
         } finally {
             if (showFullLoading) setIsLoading(false);
         }
     };
+
+    useEffect(() => {
+        fetchRecords();
+        fetchEmployees();
+        Promise.all([
+            fetchMetaData('preCarriage', setPreCarriages),
+            fetchMetaData('receiptPlace', setReceiptPlaces),
+            fetchMetaData('vessel', setVessels),
+            fetchMetaData('country', setCountries),
+            fetchMetaData('certification', setCertifications),
+            fetchMetaData('packingType', setPackingTypes)
+        ]);
+
+        // Deferred loading of heavy stock, sales, and notifications so initial PI load is instant and non-blocking
+        const idleTimer = setTimeout(() => {
+            fetchSupportingData();
+        }, 2500);
+
+        const socket = getSocket();
+        const handleRealtimeUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            console.log('[PI] Real-time event received:', data);
+            if (!mod || mod === 'pi' || mod === 'ip-records' || mod === 'ip' || mod === 'lc-management' || mod === 'stock' || mod === 'sales' || mod === 'banks' || mod === 'bank' || mod === 'all') {
+                if (mod === 'ip-records' || mod === 'ip' || mod === 'all') {
+                    queryClient.invalidateQueries({ queryKey: ['ip-records'] });
+                }
+                if (mod === 'pi' || mod === 'all') {
+                    queryClient.invalidateQueries({ queryKey: ['pi'] });
+                }
+                fetchRecords(false);
+            }
+        };
+
+        if (socket) {
+            socket.on('data_updated', handleRealtimeUpdate);
+        }
+        const onCustomEvent = (e) => handleRealtimeUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        const pollTimer = setInterval(() => {
+            fetchRecords(false);
+        }, 30000);
+
+        return () => {
+            clearTimeout(idleTimer);
+            if (socket) {
+                socket.off('data_updated', handleRealtimeUpdate);
+            }
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+            clearInterval(pollTimer);
+        };
+    }, [fetchSupportingData]);
+
+    useEffect(() => {
+        if ((showForm || showReviseForm || selectedIpForDetails) && !hasFetchedSupportingRef.current) {
+            fetchSupportingData(true);
+        }
+    }, [showForm, showReviseForm, selectedIpForDetails, fetchSupportingData]);
 
     // Helpers for IP balance calculation
     const cleanLc = (val) => String(val || '').replace(/\D/g, '');
@@ -2127,6 +2179,7 @@ function PI({
     // Compute IP Balance using sequential group consumption per product:
     // IPs with the same product share a pool of actual receipts/sales — fill first IP completely before next.
     const computeIpBalance = useMemo(() => {
+        if (!showForm && !showReviseForm) return {};
         const balanceMap = {};
 
         // Helper: match product names with local name and ipName support
@@ -2274,7 +2327,7 @@ function PI({
         });
 
         return balanceMap;
-    }, [ipRecords, lcRecords, allStockRecords, allSalesRecords, products]);
+    }, [showForm, showReviseForm, ipRecords, lcRecords, allStockRecords, allSalesRecords, products]);
 
 
     // Compute LC REM (LC Remaining) using sequential IP consumption per product group:
@@ -2282,6 +2335,7 @@ function PI({
     // LCs are deduplicated across the group, total LC qty summed, then consumed
     // sequentially — first IP filled completely, then second, and so on.
     const computeLcBalance = useMemo(() => {
+        if (!showForm && !showReviseForm) return {};
         const balanceMap = {};
 
         // Helper: match product names with local name and ipName support
@@ -2379,7 +2433,7 @@ function PI({
         });
 
         return balanceMap;
-    }, [ipRecords, lcRecords, products]);
+    }, [showForm, showReviseForm, ipRecords, lcRecords, products]);
 
 
     const calculatedGrandTotalQuantity = useMemo(() => {
@@ -3471,7 +3525,10 @@ function PI({
         setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null });
     };
 
-    const handleEdit = (record) => {
+    const handleEdit = useCallback((record) => {
+        if (!hasFetchedSupportingRef.current) {
+            fetchSupportingData(true);
+        }
         const loadedList = record.productsList && record.productsList.length > 0
             ? record.productsList.map(p => ({ ...p, showIndHsCode: p.showIndHsCode !== undefined ? p.showIndHsCode === true : false }))
             : [{
@@ -3573,9 +3630,9 @@ function PI({
         setShowForm(true);
         setCertSearch('');
         setIpSearch('');
-    };
+    }, [fetchSupportingData]);
 
-    const handleDelete = (id) => {
+    const handleDelete = useCallback((id) => {
         if (!canDelete) {
             alert('Forbidden: You do not have permission to delete PI records');
             return;
@@ -3592,9 +3649,9 @@ function PI({
                 });
             }
         }
-    };
+    }, [canDelete, onDeleteConfirm]);
 
-    const recalcReviseProducts = (list) => {
+    const recalcReviseProducts = useCallback((list) => {
         let grandTotalVal = 0;
         let grandTotalQuantityVal = 0;
         const updatedList = (list || []).map(item => {
@@ -3616,7 +3673,7 @@ function PI({
             grandTotal: grandTotalVal > 0 ? grandTotalVal.toFixed(2) : '',
             grandTotalQuantity: grandTotalQuantityVal > 0 ? grandTotalQuantityVal.toFixed(2) : ''
         };
-    };
+    }, []);
 
     function getPiProductsList(pi) {
         if (pi.productsList && pi.productsList.length > 0) {
@@ -3985,7 +4042,7 @@ function PI({
         });
     };
 
-    const handleSelectPiForTenPercent = (pi, revisionNo = 'Original PI', forceReset = false) => {
+    const handleSelectPiForTenPercent = useCallback((pi, revisionNo = 'Original PI', forceReset = false) => {
         if (!pi) return;
         setSelectedTenPercentPiId(pi._id);
         setSelectedTenPercentRevisionNo(revisionNo);
@@ -4157,7 +4214,7 @@ function PI({
             grandTotal: calculatedGrandTotal > 0 ? calculatedGrandTotal.toFixed(2) : '',
             grandTotalQuantity: calculatedGrandTotalQty > 0 ? calculatedGrandTotalQty.toFixed(2) : ''
         });
-    };
+    }, [getHistoryTimeline]);
 
     const handleSwitchTenPercentRevision = (revNo) => {
         if (!selectedPiForTenPercent) return;
@@ -4637,7 +4694,7 @@ function PI({
         generateBankApplicationPDF(enriched);
     };
 
-    const getEnrichedPiForPdf = (record) => {
+    const getEnrichedPiForPdf = useCallback((record) => {
         if (!record) return null;
 
         const revisions = record.revisions || [];
@@ -4721,7 +4778,7 @@ function PI({
         }
 
         return enriched;
-    };
+    }, [lcRecords, exporters, importers, banks, ipRecords]);
 
     const handleReviseSubmit = async (e) => {
         e.preventDefault();
@@ -4976,7 +5033,7 @@ function PI({
         }
     };
 
-    const handleDeleteRevision = async (record, revision) => {
+    const handleDeleteRevision = useCallback(async (record, revision) => {
         if (!canDeleteRevision) {
             showToast('Forbidden: You do not have permission to delete PI revisions', 'error');
             return false;
@@ -5068,9 +5125,9 @@ function PI({
             showToast(`Failed to delete PI revision: ${error.response?.data?.message || error.message}`, 'error');
             return false;
         }
-    };
+    }, [canDeleteRevision, currentUser, addNotification, viewHistoryRecord]);
 
-    const handleDeleteTenPercentRecord = async (record, revision) => {
+    const handleDeleteTenPercentRecord = useCallback(async (record, revision) => {
         if (!canDeleteRevision) {
             showToast('Forbidden: You do not have permission to delete PI records', 'error');
             return false;
@@ -5113,7 +5170,7 @@ function PI({
             showToast(error.response?.data?.message || 'Failed to delete 10% PI record', 'error');
             return false;
         }
-    };
+    }, [canDeleteRevision, currentUser, addNotification, viewHistoryRecord]);
 
     // High-performance product name lookup map (O(1))
     const productNameMap = useMemo(() => {
@@ -5281,7 +5338,7 @@ function PI({
         });
     };
 
-    const getRecordEffectiveCreateDate = (record) => {
+    const getRecordEffectiveCreateDate = useCallback((record) => {
         if (!record) return '';
         const revisions = record.revisions || [];
         const actualRevisions = revisions.filter(r => r.reviseNo !== 'Original PI');
@@ -5296,7 +5353,7 @@ function PI({
             }
         }
         return record.createdAt || record.date || '';
-    };
+    }, []);
 
     const getRecordCreateDateTime = (record) => {
         const dVal = getRecordEffectiveCreateDate(record);
@@ -5431,9 +5488,7 @@ function PI({
 
     const handleViewRecord = useCallback((record) => {
         setViewHistoryRecord(record);
-        const tl = getHistoryTimeline(record);
-        setActiveHistoryIndex(tl.length > 1 ? tl.length - 1 : 0);
-    }, [getHistoryTimeline]);
+    }, []);
 
     const handlePdfRecord = useCallback((record) => {
         const enriched = getEnrichedPiForPdf(record);
@@ -8679,7 +8734,7 @@ function PI({
 
                                             const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
                                             const hasMultipleProducts = record.productsList && record.productsList.length > 1;
-                                            const entryInfo = getPiEntryDetails(record);
+                                            const entryInfo = canShowEntryBy ? getPiEntryDetails(record) : null;
                                             const isLcDone = checkIsLcDone(record);
                                             const ipList = (() => {
                                                 const rawIps = (record.revisions && record.revisions.length > 0 && record.revisions[record.revisions.length - 1].ipNumbers && record.revisions[record.revisions.length - 1].ipNumbers.length > 0)
@@ -8979,8 +9034,6 @@ function PI({
             {viewHistoryRecord && (
                 <PiHistoryExplorerModal
                     viewHistoryRecord={viewHistoryRecord}
-                    activeHistoryIndex={activeHistoryIndex}
-                    setActiveHistoryIndex={setActiveHistoryIndex}
                     onClose={() => setViewHistoryRecord(null)}
                     lcRecords={lcRecords}
                     ipRecords={ipRecords}

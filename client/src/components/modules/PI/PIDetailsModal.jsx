@@ -356,7 +356,7 @@ export const PIDetailsModal = ({
     if (!resolvedPi || typeof document === 'undefined' || !document.body) return null;
 
     return createPortal(
-        <div className={`fixed inset-0 ${modalZIndex} flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200`}>
+        <div className={`fixed inset-0 ${modalZIndex} flex items-center justify-center p-2 sm:p-4 bg-black/60 animate-in fade-in duration-150`}>
             <div className="bg-white w-full max-w-[95vw] 2xl:max-w-[1550px] xl:max-w-[1450px] h-[92vh] sm:h-[85vh] rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
                 {/* Modal Header */}
                 <div className="px-4 sm:px-8 py-3.5 sm:py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
