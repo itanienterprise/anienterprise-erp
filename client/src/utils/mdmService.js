@@ -47,9 +47,49 @@ class MdmService {
     this.lastLocation = null;
     this.batteryInfo = { level: null, isCharging: false };
     this.currentUser = null;
+    this.shiftInfo = null;
+
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const cached = localStorage.getItem('erp_mdm_shift_info');
+        if (cached) this.shiftInfo = JSON.parse(cached);
+      }
+    } catch (_) {}
 
     // Attach socket listener for on-demand ping requests from dashboard
     this.setupSocketListener();
+  }
+
+  isWithinShiftNow() {
+    if (!this.shiftInfo || this.shiftInfo.trackingMode === 'always') return true;
+    const now = new Date();
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const currentDay = dayNames[now.getDay()];
+
+    if (this.shiftInfo.isHoliday) return false;
+    if (this.shiftInfo.workDays && Array.isArray(this.shiftInfo.workDays) && !this.shiftInfo.workDays.includes(currentDay)) {
+      return false;
+    }
+
+    const startTime = this.shiftInfo.startTime || '09:00';
+    const endTime = this.shiftInfo.endTime || '18:00';
+    const graceMinutes = this.shiftInfo.graceMinutes !== undefined ? Number(this.shiftInfo.graceMinutes) : 15;
+
+    const [sH, sM] = startTime.split(':').map(Number);
+    const [eH, eM] = endTime.split(':').map(Number);
+    const startMin = (isNaN(sH) ? 9 : sH) * 60 + (isNaN(sM) ? 0 : sM);
+    const endMin = (isNaN(eH) ? 18 : eH) * 60 + (isNaN(eM) ? 0 : eM);
+
+    const currentMin = now.getHours() * 60 + now.getMinutes();
+    const s = (startMin - graceMinutes + 1440) % 1440;
+    const e = (endMin + graceMinutes) % 1440;
+
+    if (startMin <= endMin) {
+      if (s <= e) return currentMin >= s && currentMin <= e;
+      return currentMin >= s || currentMin <= e;
+    } else {
+      return currentMin >= s || currentMin <= e;
+    }
   }
 
   get isNative() {
@@ -243,21 +283,46 @@ class MdmService {
         this.getNetworkType()
       ]);
 
-      // Acquire fresh location snapshot
-      await this.acquireCurrentLocation();
+      const withinShift = this.isWithinShiftNow();
+
+      // Acquire fresh location snapshot only if shift allows or 24/7
+      if (withinShift) {
+        await this.acquireCurrentLocation();
+      }
 
       const payload = {
         deviceId: this.deviceId,
         batteryLevel: battery.level,
         isCharging: battery.isCharging,
         networkType,
-        isGpsEnabled: !!this.lastLocation,
+        isGpsEnabled: withinShift && !!this.lastLocation,
         trackingPermission: 'granted',
-        location: this.lastLocation
+        location: withinShift ? this.lastLocation : null
       };
 
-      console.log('[MDM] Sending ping for device:', this.deviceId, 'battery:', battery.level, 'hasLocation:', !!this.lastLocation);
+      console.log('[MDM] Sending ping for device:', this.deviceId, 'battery:', battery.level, 'hasLocation:', !!this.lastLocation, 'withinShift:', withinShift);
       const res = await axios.post('/api/mdm/ping', payload);
+
+      if (res?.data?.shift) {
+        this.shiftInfo = res.data.shift;
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('erp_mdm_shift_info', JSON.stringify(res.data.shift));
+          }
+        } catch (_) {}
+
+        if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.updateShiftConfig === 'function') {
+          try {
+            window.AndroidBridge.updateShiftConfig(
+              this.shiftInfo.trackingMode || 'shift',
+              this.shiftInfo.startTime || '09:00',
+              this.shiftInfo.endTime || '18:00',
+              this.shiftInfo.graceMinutes !== undefined ? Number(this.shiftInfo.graceMinutes) : 15
+            );
+          } catch (_) {}
+        }
+      }
+
       return res.data;
     } catch (err) {
       console.warn('[MDM] Ping error:', err.message);
@@ -285,7 +350,7 @@ class MdmService {
       this.pingInterval = null;
     }
 
-    // Configure native Android Foreground Service for 24/7 background tracking (works when screen is off / phone sleeping)
+    // Configure native Android Foreground Service for background tracking
     const hasNativeBridge = typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.updateConfig === 'function';
     if (hasNativeBridge) {
       try {
@@ -297,10 +362,19 @@ class MdmService {
           String(this.currentUser?.name || ''),
           String(this.currentUser?.username || '')
         );
+
+        if (this.shiftInfo && typeof window.AndroidBridge.updateShiftConfig === 'function') {
+          window.AndroidBridge.updateShiftConfig(
+            this.shiftInfo.trackingMode || 'shift',
+            this.shiftInfo.startTime || '09:00',
+            this.shiftInfo.endTime || '18:00',
+            this.shiftInfo.graceMinutes !== undefined ? Number(this.shiftInfo.graceMinutes) : 15
+          );
+        }
       } catch (err) {
         console.warn('[MDM] AndroidBridge.updateConfig error:', err);
       }
-      // When native Android service is handling 24/7 background telemetry, avoid running duplicate
+      // When native Android service is handling background telemetry, avoid running duplicate
       // high-accuracy GPS watch loops in the WebView to keep the UI smooth and responsive.
       return;
     }

@@ -11,7 +11,6 @@ import {
   ShieldIcon,
   CalendarIcon,
   PhoneIcon,
-  ChevronDownIcon,
   TrashIcon,
   ArrowUpRightIcon,
   PlusIcon,
@@ -111,22 +110,14 @@ const MdmManagement = ({ currentUser }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDevice, setSelectedDevice] = useState(null);
 
-  // Mobile Card View: Expand / Collapse Devices
-  const [expandedDeviceIds, setExpandedDeviceIds] = useState(new Set());
 
-  const toggleExpandDevice = (id) => {
-    setExpandedDeviceIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  // Employees List for Enrollment & Reassignment
+  // Employees & Shifts List for Enrollment & Reassignment
   const [employees, setEmployees] = useState([]);
+  const [shifts, setShifts] = useState([]);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null);
+  const [liveMapShiftFilter, setLiveMapShiftFilter] = useState('all'); // 'all' | 'on_shift' | 'off_shift'
+
   const [enrollForm, setEnrollForm] = useState({
     employeeId: '',
     deviceId: '',
@@ -134,7 +125,14 @@ const MdmManagement = ({ currentUser }) => {
     imei: '',
     macAddress: '',
     platform: 'android',
-    notes: ''
+    notes: '',
+    trackingMode: 'shift', // 'shift' | 'always'
+    shiftId: '',
+    customShiftEnabled: false,
+    customStartTime: '09:00',
+    customEndTime: '18:00',
+    customGraceMinutes: 15,
+    customWorkDays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Saturday']
   });
   const [enrollError, setEnrollError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -215,12 +213,24 @@ const MdmManagement = ({ currentUser }) => {
     }
   }, []);
 
+  // ─── Fetch Shifts List ───────────────────────────────────────────────────────
+  const fetchShifts = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/mdm/shifts');
+      if (res.data?.success && Array.isArray(res.data.shifts)) {
+        setShifts(res.data.shifts);
+      }
+    } catch (err) {
+      console.warn('[MDM] Could not load shifts:', err.message);
+    }
+  }, []);
+
   const handleManualRefresh = async () => {
     if (isManualRefreshing) return;
     setIsManualRefreshing(true);
     try {
-      await Promise.all([fetchDevices(), fetchLiveLocations()]);
-      showToast('Device inventory and live telemetry refreshed!', 'success');
+      await Promise.all([fetchDevices(), fetchLiveLocations(), fetchShifts()]);
+      showToast('Device inventory, shifts, and live telemetry refreshed!', 'success');
     } catch (err) {
       showToast('Refresh failed: ' + (err.message || 'Error'), 'error');
     } finally {
@@ -237,6 +247,7 @@ const MdmManagement = ({ currentUser }) => {
     setEnrollError(null);
     if (deviceToEdit) {
       setEditingDevice(deviceToEdit);
+      const isCustom = Boolean(deviceToEdit.customShift?.enabled);
       setEnrollForm({
         employeeId: deviceToEdit.employeeId || '',
         deviceId: deviceToEdit.deviceId || '',
@@ -244,7 +255,14 @@ const MdmManagement = ({ currentUser }) => {
         imei: deviceToEdit.imei || '',
         macAddress: deviceToEdit.macAddress || '',
         platform: deviceToEdit.platform || 'android',
-        notes: deviceToEdit.notes || ''
+        notes: deviceToEdit.notes || '',
+        trackingMode: deviceToEdit.trackingMode || 'shift',
+        shiftId: deviceToEdit.shiftId || '',
+        customShiftEnabled: isCustom,
+        customStartTime: deviceToEdit.customShift?.startTime || '09:00',
+        customEndTime: deviceToEdit.customShift?.endTime || '18:00',
+        customGraceMinutes: deviceToEdit.customShift?.graceMinutes !== undefined ? deviceToEdit.customShift.graceMinutes : 15,
+        customWorkDays: deviceToEdit.customShift?.workDays || ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Saturday']
       });
     } else {
       setEditingDevice(null);
@@ -255,7 +273,14 @@ const MdmManagement = ({ currentUser }) => {
         imei: '',
         macAddress: '',
         platform: 'android',
-        notes: ''
+        notes: '',
+        trackingMode: 'shift',
+        shiftId: '',
+        customShiftEnabled: false,
+        customStartTime: '09:00',
+        customEndTime: '18:00',
+        customGraceMinutes: 15,
+        customWorkDays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Saturday']
       });
     }
     setShowEnrollModal(true);
@@ -271,6 +296,18 @@ const MdmManagement = ({ currentUser }) => {
 
     try {
       setIsSubmitting(true);
+      const shiftPayload = {
+        trackingMode: enrollForm.trackingMode,
+        shiftId: enrollForm.shiftId || null,
+        customShift: {
+          enabled: enrollForm.customShiftEnabled,
+          startTime: enrollForm.customStartTime,
+          endTime: enrollForm.customEndTime,
+          graceMinutes: Number(enrollForm.customGraceMinutes) || 15,
+          workDays: enrollForm.customWorkDays
+        }
+      };
+
       if (editingDevice) {
         const res = await axios.put(`/api/mdm/devices/${editingDevice._id}`, {
           employeeId: enrollForm.employeeId || null,
@@ -278,12 +315,14 @@ const MdmManagement = ({ currentUser }) => {
           imei: enrollForm.imei,
           macAddress: enrollForm.macAddress,
           platform: enrollForm.platform,
-          notes: enrollForm.notes
+          notes: enrollForm.notes,
+          ...shiftPayload
         });
         if (res.data?.success) {
           setShowEnrollModal(false);
           await fetchDevices();
           await fetchLiveLocations();
+          showToast('Device shift & settings updated successfully!', 'success');
         }
       } else {
         const res = await axios.post('/api/mdm/devices/enroll', {
@@ -294,11 +333,13 @@ const MdmManagement = ({ currentUser }) => {
           macAddress: enrollForm.macAddress,
           platform: enrollForm.platform,
           notes: enrollForm.notes,
-          status: 'approved'
+          status: 'approved',
+          ...shiftPayload
         });
         if (res.data?.success) {
           setShowEnrollModal(false);
           await fetchDevices();
+          showToast('Device enrolled with shift schedule successfully!', 'success');
         }
       }
     } catch (err) {
@@ -313,6 +354,7 @@ const MdmManagement = ({ currentUser }) => {
     fetchDevices();
     fetchLiveLocations();
     fetchEmployeesList();
+    fetchShifts();
 
     const socket = getSocket();
     if (!socket) return;
@@ -338,7 +380,9 @@ const MdmManagement = ({ currentUser }) => {
           speed: data.location?.speed,
           heading: data.location?.heading,
           address: data.location?.address,
-          updatedAt: data.lastSeen
+          updatedAt: data.lastSeen,
+          shift: data.shift,
+          isWithinShift: data.isWithinShift
         };
 
         if (idx >= 0) {
@@ -362,7 +406,8 @@ const MdmManagement = ({ currentUser }) => {
               networkType: data.networkType,
               isOnline: true,
               lastSeen: data.lastSeen,
-              lastLocation: data.location || d.lastLocation
+              lastLocation: data.location || d.lastLocation,
+              shift: data.shift || d.shift
             };
           }
           return d;
@@ -498,6 +543,19 @@ const MdmManagement = ({ currentUser }) => {
     return result;
   }, [liveLocations]);
 
+  // Filter live locations by shift status
+  const filteredLiveLocations = useMemo(() => {
+    return dedupedLiveLocations.filter(loc => {
+      if (liveMapShiftFilter === 'on_shift') {
+        return loc.shift?.trackingMode === 'always' || loc.isWithinShift;
+      }
+      if (liveMapShiftFilter === 'off_shift') {
+        return loc.shift?.trackingMode !== 'always' && !loc.isWithinShift;
+      }
+      return true;
+    });
+  }, [dedupedLiveLocations, liveMapShiftFilter]);
+
   // ─── Render Live Map Markers ────────────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== 'live-map' || !mapInstanceRef.current || !markersGroupRef.current) return;
@@ -505,7 +563,7 @@ const MdmManagement = ({ currentUser }) => {
     markersGroupRef.current.clearLayers();
     const bounds = [];
 
-    dedupedLiveLocations.forEach(loc => {
+    filteredLiveLocations.forEach(loc => {
       if (!loc.lat || !loc.lng) return;
 
       const initials = (loc.employeeName || 'EM')
@@ -545,10 +603,23 @@ const MdmManagement = ({ currentUser }) => {
       const accuracyText = loc.accuracy ? `±${Math.round(loc.accuracy)}m ${loc.accuracy <= 25 ? '🎯 (Pinpoint GPS)' : '(Approximate)'}` : 'GPS Active';
       const googleMapsUrl = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
 
+      const shiftTitle = loc.shift?.shiftName || 'General Shift';
+      const shiftTiming = (loc.shift?.startTime && loc.shift?.endTime) ? `${loc.shift.startTime} - ${loc.shift.endTime}` : '';
+      const isShiftActive = loc.shift?.trackingMode === 'always' || loc.isWithinShift;
+
       marker.bindPopup(`
-        <div style="font-family: inherit; min-width: 190px;">
+        <div style="font-family: inherit; min-width: 210px;">
           <h3 style="margin: 0 0 4px; font-size: 14px; font-weight: 700; color: #0f172a;">${loc.employeeName || 'Unknown Employee'}</h3>
           <p style="margin: 0 0 6px; font-size: 11px; color: #64748b;">ID: ${loc.employeeEmpId || 'N/A'} • ${loc.deviceModel || 'Mobile'}</p>
+          
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; padding: 4px 6px; background: #f8fafc; border-radius: 6px; margin-bottom: 6px; border: 1px solid #e2e8f0;">
+            <span style="color: #475569; font-weight: 600;">⏱️ Shift: ${shiftTitle}</span>
+            <span style="font-weight: 700; color: ${isShiftActive ? '#059669' : '#d97706'};">
+              ${loc.shift?.trackingMode === 'always' ? '24/7' : isShiftActive ? '● On Shift' : '○ Off Shift'}
+            </span>
+          </div>
+          ${shiftTiming ? `<div style="font-size: 10px; color: #64748b; margin-top: -4px; margin-bottom: 6px; text-align: right; font-family: monospace;">Working Hours: ${shiftTiming}</div>` : ''}
+
           <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0;">
             <span>Battery:</span>
             <strong>${loc.batteryLevel !== null ? `${loc.batteryLevel}%` : 'N/A'} ${loc.isCharging ? '⚡' : ''}</strong>
@@ -597,7 +668,7 @@ const MdmManagement = ({ currentUser }) => {
         mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
       } catch (_) {}
     }
-  }, [dedupedLiveLocations, activeTab, selectedDevice]);
+  }, [filteredLiveLocations, activeTab, selectedDevice]);
 
   // Center on selected employee in live map
   const handleSelectEmployeeMap = (loc) => {
@@ -1110,19 +1181,60 @@ const MdmManagement = ({ currentUser }) => {
                   className="w-full pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
+
+              {/* Shift Filter Pills */}
+              <div className="flex items-center gap-1 mt-2 pt-2 border-t border-gray-100 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setLiveMapShiftFilter('all')}
+                  className={`px-2 py-0.5 rounded-full font-medium transition-colors ${
+                    liveMapShiftFilter === 'all'
+                      ? 'bg-blue-600 text-white font-semibold'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  All ({dedupedLiveLocations.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLiveMapShiftFilter('on_shift')}
+                  className={`px-2 py-0.5 rounded-full font-medium transition-colors flex items-center gap-1 ${
+                    liveMapShiftFilter === 'on_shift'
+                      ? 'bg-emerald-600 text-white font-semibold'
+                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  On Shift
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLiveMapShiftFilter('off_shift')}
+                  className={`px-2 py-0.5 rounded-full font-medium transition-colors ${
+                    liveMapShiftFilter === 'off_shift'
+                      ? 'bg-slate-700 text-white font-semibold'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Off Shift
+                </button>
+              </div>
             </div>
 
             <div className="mdm-sidebar-list">
-              {dedupedLiveLocations.length === 0 ? (
+              {filteredLiveLocations.length === 0 ? (
                 <div className="text-center py-8 text-gray-400 text-xs">
-                  No active device telemetry received yet.<br />
+                  {liveMapShiftFilter === 'all'
+                    ? 'No active device telemetry received yet.'
+                    : `No active staff found in "${liveMapShiftFilter === 'on_shift' ? 'On Shift' : 'Off Shift'}" filter.`}<br />
                   Use the <strong>APK Bridge & Test</strong> tab to send a test ping.
                 </div>
               ) : (
-                dedupedLiveLocations
+                filteredLiveLocations
                   .filter(loc => !searchQuery || (loc.employeeName || '').toLowerCase().includes(searchQuery.toLowerCase()))
                   .map((loc) => {
                     const isSelected = selectedDevice?.deviceId === loc.deviceId;
+                    const isShiftActive = loc.shift?.trackingMode === 'always' || loc.isWithinShift;
                     return (
                       <div
                         key={loc.deviceId}
@@ -1136,7 +1248,12 @@ const MdmManagement = ({ currentUser }) => {
                           <div className="overflow-hidden">
                             <p className="text-xs font-semibold text-gray-900 truncate m-0">{loc.employeeName || 'Unknown Employee'}</p>
                             <p className="text-[10px] text-gray-500 truncate m-0">
-                              {loc.deviceModel || 'Mobile'} • {loc.speed ? `${Math.round(loc.speed)} km/h` : 'Stopped'}{loc.accuracy ? ` • ±${Math.round(loc.accuracy)}m` : ''}
+                              {loc.deviceModel || 'Mobile'} • {loc.shift?.shiftName || 'General'}
+                              {loc.shift?.trackingMode === 'always' ? ' (24/7)' : ` (${loc.shift?.startTime || '09:00'}-${loc.shift?.endTime || '18:00'})`}
+                              {' • '}
+                              <span className={isShiftActive ? 'text-emerald-600 font-semibold' : 'text-slate-400 font-medium'}>
+                                {isShiftActive ? 'On Shift' : 'Off Shift'}
+                              </span>
                             </p>
                           </div>
                         </div>
@@ -1261,6 +1378,7 @@ const MdmManagement = ({ currentUser }) => {
                   <tr>
                     <th>Employee</th>
                     <th>Device & Model</th>
+                    <th>Shift & Schedule</th>
                     <th>IMEI</th>
                     <th>MAC Address</th>
                     <th>OS & App Version</th>
@@ -1274,7 +1392,7 @@ const MdmManagement = ({ currentUser }) => {
                 <tbody>
                   {filteredDevices.length === 0 ? (
                     <tr>
-                      <td colSpan="10" className="text-center py-10 text-gray-400">
+                      <td colSpan="11" className="text-center py-10 text-gray-400">
                         No registered devices found.
                       </td>
                     </tr>
@@ -1290,6 +1408,34 @@ const MdmManagement = ({ currentUser }) => {
                           <td>
                             <div className="font-medium text-gray-800">{device.deviceModel || 'Unknown Device'}</div>
                             <div className="text-[10px] text-gray-400 font-mono">{device.deviceId}</div>
+                          </td>
+                          <td>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold text-xs text-gray-900">
+                                  {device.shift?.shiftName || 'General'}
+                                </span>
+                                {device.shift?.trackingMode === 'always' ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                    24/7 Active
+                                  </span>
+                                ) : device.shift?.isWithinShift ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    On Shift
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                    Off Shift
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-gray-500 font-mono">
+                                {device.shift?.trackingMode === 'always'
+                                  ? 'Continuous 24/7'
+                                  : `${device.shift?.startTime || '09:00'} - ${device.shift?.endTime || '18:00'}${device.shift?.graceMinutes ? ` (±${device.shift.graceMinutes}m)` : ''}`}
+                              </div>
+                            </div>
                           </td>
                           <td>
                             <div className="font-mono text-xs text-gray-800">
@@ -1387,6 +1533,16 @@ const MdmManagement = ({ currentUser }) => {
                               </button>
                               <button
                                 onClick={() => openEnrollModal(device)}
+                                title={`Shift: ${device.shift?.shiftName || 'General'} (${device.shift?.trackingMode === 'always' ? '24/7' : `${device.shift?.startTime || '09:00'} - ${device.shift?.endTime || '18:00'}`}) • Configure Shift`}
+                                className="p-1 text-indigo-600 hover:bg-indigo-50 rounded"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                                  <circle cx="12" cy="12" r="10" />
+                                  <polyline points="12 6 12 12 16 14" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => openEnrollModal(device)}
                                 title="Edit / Reassign Device"
                                 className="p-1 text-blue-600 hover:bg-blue-50 rounded"
                               >
@@ -1429,23 +1585,8 @@ const MdmManagement = ({ currentUser }) => {
             {/* Mobile Card View (< 768px) */}
             <div className="md:hidden flex flex-col p-2.5 sm:p-3 space-y-2.5">
               {filteredDevices.length > 0 && (
-                <div className="flex items-center justify-between px-1 text-[11px] text-slate-500">
-                  <span className="font-medium">
-                    Showing {filteredDevices.length} {filteredDevices.length === 1 ? 'device' : 'devices'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (expandedDeviceIds.size === filteredDevices.length) {
-                        setExpandedDeviceIds(new Set());
-                      } else {
-                        setExpandedDeviceIds(new Set(filteredDevices.map(d => d._id)));
-                      }
-                    }}
-                    className="text-blue-600 font-bold hover:text-blue-800 transition-colors"
-                  >
-                    {expandedDeviceIds.size === filteredDevices.length ? 'Collapse All' : 'Expand All'}
-                  </button>
+                <div className="px-1 text-[11px] text-slate-500 font-medium">
+                  Showing {filteredDevices.length} {filteredDevices.length === 1 ? 'device' : 'devices'}
                 </div>
               )}
 
@@ -1457,19 +1598,13 @@ const MdmManagement = ({ currentUser }) => {
                 filteredDevices.map(device => {
                   const isOnline = device.isOnline;
                   const hasGps = device.lastLocation?.lat && device.lastLocation?.lng;
-                  const isExpanded = expandedDeviceIds.has(device._id);
                   return (
                     <div
                       key={device._id}
-                      className={`bg-white rounded-xl p-3.5 border border-slate-200/90 shadow-2xs transition-all duration-200 ${
-                        isExpanded ? 'space-y-3 ring-1 ring-blue-100 shadow-sm' : 'hover:border-slate-300'
-                      }`}
+                      className="bg-white rounded-xl p-3.5 border border-slate-200/90 shadow-2xs space-y-3 hover:border-slate-300 transition-colors"
                     >
-                      {/* Top Header Row: Clickable to Toggle Expand/Collapse */}
-                      <div
-                        onClick={() => toggleExpandDevice(device._id)}
-                        className="flex items-center justify-between gap-2 cursor-pointer select-none"
-                      >
+                      {/* Top Header Row */}
+                      <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
                             {(device.employeeName || 'E').charAt(0).toUpperCase()}
@@ -1484,187 +1619,206 @@ const MdmManagement = ({ currentUser }) => {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="flex flex-col items-end gap-1">
-                            {isExpanded ? (
-                              <>
-                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                  device.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                                  device.status === 'suspended' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                                  'bg-rose-50 text-rose-700 border border-rose-200'
-                                }`}>
-                                  {device.status}
-                                </span>
-                                <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-xs shadow-emerald-400' : 'bg-slate-400'}`} />
-                                  <span>{isOnline ? 'Online' : 'Offline'}</span>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <BatteryIndicator level={device.batteryLevel} isCharging={device.isCharging} />
-                                <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-xs shadow-emerald-400' : 'bg-slate-400'}`} />
-                                  <span>{isOnline ? 'Online' : 'Offline'}</span>
-                                </div>
-                              </>
-                            )}
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                              device.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                              device.status === 'suspended' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                              'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              {device.status}
+                            </span>
+                            <BatteryIndicator level={device.batteryLevel} isCharging={device.isCharging} />
                           </div>
-                          <div className={`p-1 text-slate-400 hover:text-slate-600 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-blue-600' : ''}`}>
-                            <ChevronDownIcon className="w-4 h-4" />
+                          <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-xs shadow-emerald-400' : 'bg-slate-400'}`} />
+                            <span>{isOnline ? 'Online' : 'Offline'}</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Expandable Details Section */}
-                      {isExpanded && (
-                        <div className="space-y-3 pt-2 border-t border-slate-100 animate-in fade-in duration-200">
-                          {/* Device Model & Hardware Tag */}
-                          <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 space-y-1.5 text-xs">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold text-slate-700 text-xs truncate">
-                                {device.deviceModel || 'Unknown Device'}
-                              </span>
-                              <span className="font-mono text-[10px] bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 truncate max-w-[150px]">
-                                {device.deviceId}
-                              </span>
-                            </div>
+                      {/* Shift Schedule Row on Mobile Card */}
+                      <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-100">
+                        <span className="text-slate-600 flex items-center gap-1 font-medium truncate">
+                          <span>⏱️</span>
+                          <span className="font-semibold text-slate-800">{device.shift?.shiftName || 'General Shift'}</span>
+                          <span className="text-slate-400 font-mono text-[10px]">
+                            {device.shift?.trackingMode === 'always'
+                              ? '(24/7)'
+                              : `(${device.shift?.startTime || '09:00'} - ${device.shift?.endTime || '18:00'})`}
+                          </span>
+                        </span>
+                        {device.shift?.trackingMode === 'always' ? (
+                          <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">24/7</span>
+                        ) : device.shift?.isWithinShift ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> On Shift
+                          </span>
+                        ) : (
+                          <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">Off Shift</span>
+                        )}
+                      </div>
 
-                            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
-                              <div>
-                                <span className="text-slate-400 block text-[10px] uppercase font-semibold">IMEI</span>
-                                <span className="font-mono text-slate-700 truncate block">
-                                  {device.imei || '—'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-slate-400 block text-[10px] uppercase font-semibold">MAC</span>
-                                <span className="font-mono text-slate-700 truncate block uppercase">
-                                  {device.macAddress || '—'}
-                                </span>
-                              </div>
-                            </div>
+                      {/* Details Section */}
+                      <div className="space-y-3 pt-2 border-t border-slate-100">
+                        {/* Device Model & Hardware Tag */}
+                        <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-slate-700 text-xs truncate">
+                              {device.deviceModel || 'Unknown Device'}
+                            </span>
+                            <span className="font-mono text-[10px] bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 truncate max-w-[150px]">
+                              {device.deviceId}
+                            </span>
                           </div>
 
-                          {/* Telemetry Snapshot Row: Battery, GPS, Last Ping */}
-                          <div className="grid grid-cols-3 gap-2 text-center bg-slate-50/70 p-2 rounded-lg border border-slate-100">
+                          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
                             <div>
-                              <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Battery</span>
-                              <BatteryIndicator level={device.batteryLevel} isCharging={device.isCharging} />
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">GPS</span>
-                              <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${device.isGpsEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                                {device.isGpsEnabled ? 'GPS ON' : 'GPS OFF'}
+                              <span className="text-slate-400 block text-[10px] uppercase font-semibold">IMEI</span>
+                              <span className="font-mono text-slate-700 truncate block">
+                                {device.imei || '—'}
                               </span>
                             </div>
                             <div>
-                              <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Last Ping</span>
-                              <span className="text-[11px] font-medium text-slate-700 block truncate">
-                                {device.lastSeen ? new Date(device.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                              <span className="text-slate-400 block text-[10px] uppercase font-semibold">MAC</span>
+                              <span className="font-mono text-slate-700 truncate block uppercase">
+                                {device.macAddress || '—'}
                               </span>
-                            </div>
-                          </div>
-
-                          {/* Mobile Actions Toolbar */}
-                          <div className="pt-2.5 mt-2 border-t border-slate-100 flex items-center justify-between gap-1.5 flex-wrap">
-                            {/* Telemetry Actions (Left) */}
-                            <div className="flex items-center gap-1.5">
-                              {/* 1. Open Google Maps */}
-                              {hasGps ? (
-                                <a
-                                  href={`https://www.google.com/maps?q=${device.lastLocation.lat},${device.lastLocation.lng}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="h-8 px-2.5 inline-flex items-center justify-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors shadow-2xs"
-                                  title="Open in Google Maps"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
-                                    <line x1="9" y1="3" x2="9" y2="18" />
-                                    <line x1="15" y1="6" x2="15" y2="21" />
-                                  </svg>
-                                  <span>Map</span>
-                                </a>
-                              ) : (
-                                <span className="h-8 px-2.5 inline-flex items-center justify-center gap-1 text-xs font-medium text-slate-400 bg-slate-100 border border-slate-200 rounded-lg cursor-not-allowed" title="No GPS location available">
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-40 shrink-0">
-                                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
-                                    <line x1="9" y1="3" x2="9" y2="18" />
-                                    <line x1="15" y1="6" x2="15" y2="21" />
-                                  </svg>
-                                  <span>Map</span>
-                                </span>
-                              )}
-
-                              {/* 2. Request Instant Ping from Phone (Socket) */}
-                              <button
-                                type="button"
-                                onClick={() => handleTriggerDevicePing(device)}
-                                title="Request Instant Ping from Phone (Socket)"
-                                className="h-8 px-2.5 inline-flex items-center justify-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors shadow-2xs"
-                              >
-                                <MapPinIcon className="w-3.5 h-3.5 shrink-0" />
-                                <span>Ping</span>
-                              </button>
-
-                              {/* 3. Force Ping with Browser GPS */}
-                              <button
-                                type="button"
-                                onClick={() => handleForcePingWithBrowserGps(device)}
-                                title="Update Device Telemetry with Current GPS"
-                                className="w-8 h-8 inline-flex items-center justify-center text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors shadow-2xs"
-                              >
-                                <RefreshIcon className="w-4 h-4 shrink-0" />
-                              </button>
-                            </div>
-
-                            {/* Device Management Actions (Right) */}
-                            <div className="flex items-center gap-1.5">
-                              {/* 4. Edit / Reassign */}
-                              <button
-                                type="button"
-                                onClick={() => openEnrollModal(device)}
-                                className="w-8 h-8 inline-flex items-center justify-center text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors shadow-2xs"
-                                title="Edit / Reassign"
-                              >
-                                <EditIcon className="w-4 h-4 shrink-0" />
-                              </button>
-
-                              {/* 5. Approve / Suspend */}
-                              {device.status === 'approved' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateDeviceStatus(device._id, 'suspended')}
-                                  className="w-8 h-8 inline-flex items-center justify-center text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors shadow-2xs"
-                                  title="Suspend Tracking"
-                                >
-                                  <ShieldIcon className="w-4 h-4 shrink-0" />
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateDeviceStatus(device._id, 'approved')}
-                                  className="w-8 h-8 inline-flex items-center justify-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors shadow-2xs"
-                                  title="Approve Device"
-                                >
-                                  <CheckIcon className="w-4 h-4 shrink-0" />
-                                </button>
-                              )}
-
-                              {/* 6. Unbind Device */}
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteDevice(device._id)}
-                                className="w-8 h-8 inline-flex items-center justify-center text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors shadow-2xs"
-                                title="Unbind Device"
-                              >
-                                <TrashIcon className="w-4 h-4 shrink-0" />
-                              </button>
                             </div>
                           </div>
                         </div>
-                      )}
+
+                        {/* Telemetry Snapshot Row: Battery, GPS, Last Ping */}
+                        <div className="grid grid-cols-3 gap-2 text-center bg-slate-50/70 p-2 rounded-lg border border-slate-100">
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Battery</span>
+                            <BatteryIndicator level={device.batteryLevel} isCharging={device.isCharging} />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">GPS</span>
+                            <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${device.isGpsEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                              {device.isGpsEnabled ? 'GPS ON' : 'GPS OFF'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">Last Ping</span>
+                            <span className="text-[11px] font-medium text-slate-700 block truncate">
+                              {device.lastSeen ? new Date(device.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Mobile Actions Toolbar */}
+                        <div className="pt-2.5 mt-2 border-t border-slate-100 flex items-center justify-between gap-1.5 flex-wrap">
+                          {/* Telemetry Actions (Left) */}
+                          <div className="flex items-center gap-1.5">
+                            {/* 1. Open Google Maps */}
+                            {hasGps ? (
+                              <a
+                                href={`https://www.google.com/maps?q=${device.lastLocation.lat},${device.lastLocation.lng}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="h-8 px-2.5 inline-flex items-center justify-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors shadow-2xs"
+                                title="Open in Google Maps"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                                  <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+                                  <line x1="9" y1="3" x2="9" y2="18" />
+                                  <line x1="15" y1="6" x2="15" y2="21" />
+                                </svg>
+                                <span>Map</span>
+                              </a>
+                            ) : (
+                              <span className="h-8 px-2.5 inline-flex items-center justify-center gap-1 text-xs font-medium text-slate-400 bg-slate-100 border border-slate-200 rounded-lg cursor-not-allowed" title="No GPS location available">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-40 shrink-0">
+                                  <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+                                  <line x1="9" y1="3" x2="9" y2="18" />
+                                  <line x1="15" y1="6" x2="15" y2="21" />
+                                </svg>
+                                <span>Map</span>
+                              </span>
+                            )}
+
+                            {/* 2. Request Instant Ping from Phone (Socket) */}
+                            <button
+                              type="button"
+                              onClick={() => handleTriggerDevicePing(device)}
+                              title="Request Instant Ping from Phone (Socket)"
+                              className="h-8 px-2.5 inline-flex items-center justify-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors shadow-2xs"
+                            >
+                              <MapPinIcon className="w-3.5 h-3.5 shrink-0" />
+                              <span>Ping</span>
+                            </button>
+
+                            {/* 3. Force Ping with Browser GPS */}
+                            <button
+                              type="button"
+                              onClick={() => handleForcePingWithBrowserGps(device)}
+                              title="Update Device Telemetry with Current GPS"
+                              className="w-8 h-8 inline-flex items-center justify-center text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors shadow-2xs"
+                            >
+                              <RefreshIcon className="w-4 h-4 shrink-0" />
+                            </button>
+                          </div>
+
+                          {/* Device Management Actions (Right) */}
+                          <div className="flex items-center gap-1.5">
+                            {/* Shift Schedule Button */}
+                            <button
+                              type="button"
+                              onClick={() => openEnrollModal(device)}
+                              className="w-8 h-8 inline-flex items-center justify-center text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors shadow-2xs"
+                              title="Configure Shift"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                              </svg>
+                            </button>
+
+                            {/* 4. Edit / Reassign */}
+                            <button
+                              type="button"
+                              onClick={() => openEnrollModal(device)}
+                              className="w-8 h-8 inline-flex items-center justify-center text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors shadow-2xs"
+                              title="Edit / Reassign"
+                            >
+                              <EditIcon className="w-4 h-4 shrink-0" />
+                            </button>
+
+                            {/* 5. Approve / Suspend */}
+                            {device.status === 'approved' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateDeviceStatus(device._id, 'suspended')}
+                                className="w-8 h-8 inline-flex items-center justify-center text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors shadow-2xs"
+                                title="Suspend Tracking"
+                              >
+                                <ShieldIcon className="w-4 h-4 shrink-0" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateDeviceStatus(device._id, 'approved')}
+                                className="w-8 h-8 inline-flex items-center justify-center text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors shadow-2xs"
+                                title="Approve Device"
+                              >
+                                <CheckIcon className="w-4 h-4 shrink-0" />
+                              </button>
+                            )}
+
+                            {/* 6. Unbind Device */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDevice(device._id)}
+                              className="w-8 h-8 inline-flex items-center justify-center text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors shadow-2xs"
+                              title="Unbind Device"
+                            >
+                              <TrashIcon className="w-4 h-4 shrink-0" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
                 })
@@ -2088,6 +2242,181 @@ const MdmManagement = ({ currentUser }) => {
                     className="w-full text-xs py-2 px-3 border border-gray-200 rounded-md font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              {/* Location Tracking Schedule & Shift Configuration */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-gray-800">
+                    Location Tracking Schedule & Shift
+                  </label>
+                  <span className="text-[10px] text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full font-semibold border border-blue-200">
+                    {enrollForm.trackingMode === 'shift' ? '⏱️ Shift Hours Only' : '🌐 24/7 Always Active'}
+                  </span>
+                </div>
+
+                {/* Tracking Mode Options: Shift-Based vs 24/7 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                    enrollForm.trackingMode === 'shift'
+                      ? 'bg-blue-50/70 border-blue-400 ring-1 ring-blue-400'
+                      : 'bg-white border-gray-200 hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="trackingMode"
+                      value="shift"
+                      checked={enrollForm.trackingMode === 'shift'}
+                      onChange={() => setEnrollForm({ ...enrollForm, trackingMode: 'shift' })}
+                      className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-gray-800 flex items-center gap-1">
+                        <span>⏱️ Shift Timing</span>
+                        <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded font-semibold">Recommended</span>
+                      </div>
+                      <div className="text-[10px] text-gray-500 mt-0.5 leading-snug">
+                        Tracks location only during shift hours. Automatically pauses tracking when employee is off-shift.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                    enrollForm.trackingMode === 'always'
+                      ? 'bg-blue-50/70 border-blue-400 ring-1 ring-blue-400'
+                      : 'bg-white border-gray-200 hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="trackingMode"
+                      value="always"
+                      checked={enrollForm.trackingMode === 'always'}
+                      onChange={() => setEnrollForm({ ...enrollForm, trackingMode: 'always' })}
+                      className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-gray-800">
+                        🌐 24/7 Continuous
+                      </div>
+                      <div className="text-[10px] text-gray-500 mt-0.5 leading-snug">
+                        Continuous tracking round-the-clock without any shift schedule restriction.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* If Shift Mode selected, show Shift Settings */}
+                {enrollForm.trackingMode === 'shift' && (
+                  <div className="space-y-3 pt-2 border-t border-slate-200/80">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Assigned Working Shift
+                      </label>
+                      <select
+                        value={enrollForm.customShiftEnabled ? 'custom' : (enrollForm.shiftId || 'auto')}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'custom') {
+                            setEnrollForm({ ...enrollForm, customShiftEnabled: true, shiftId: '' });
+                          } else if (val === 'auto') {
+                            setEnrollForm({ ...enrollForm, customShiftEnabled: false, shiftId: '' });
+                          } else {
+                            setEnrollForm({ ...enrollForm, customShiftEnabled: false, shiftId: val });
+                          }
+                        }}
+                        className="w-full text-xs py-2 px-3 border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                      >
+                        <option value="auto">⚡ Auto-assign (Use Employee's Assigned Shift in ERP)</option>
+                        {shifts.map(s => (
+                          <option key={s._id} value={s._id}>
+                            {s.shiftName} ({s.startTime} - {s.endTime}) {s.isDefault ? '• Default' : ''}
+                          </option>
+                        ))}
+                        <option value="custom">✏️ Custom Shift Time for this Device...</option>
+                      </select>
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        GPS location acquisition will be limited to these working hours.
+                      </p>
+                    </div>
+
+                    {/* Custom Shift Times (if custom selected) */}
+                    {enrollForm.customShiftEnabled && (
+                      <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-3 animate-in fade-in duration-150">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              Shift Start Time
+                            </label>
+                            <input
+                              type="time"
+                              value={enrollForm.customStartTime}
+                              onChange={(e) => setEnrollForm({ ...enrollForm, customStartTime: e.target.value })}
+                              className="w-full text-xs py-1.5 px-2 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              Shift End Time
+                            </label>
+                            <input
+                              type="time"
+                              value={enrollForm.customEndTime}
+                              onChange={(e) => setEnrollForm({ ...enrollForm, customEndTime: e.target.value })}
+                              className="w-full text-xs py-1.5 px-2 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <div className="col-span-2 sm:col-span-1">
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1" title="Buffer before shift start and after shift end">
+                              Grace Buffer <span className="text-gray-400 font-normal">(mins)</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="120"
+                              value={enrollForm.customGraceMinutes}
+                              onChange={(e) => setEnrollForm({ ...enrollForm, customGraceMinutes: e.target.value })}
+                              className="w-full text-xs py-1.5 px-2 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1.5">
+                            Working Days
+                          </label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
+                              const isChecked = enrollForm.customWorkDays.includes(day);
+                              return (
+                                <button
+                                  type="button"
+                                  key={day}
+                                  onClick={() => {
+                                    setEnrollForm(prev => {
+                                      const nextDays = isChecked
+                                        ? prev.customWorkDays.filter(d => d !== day)
+                                        : [...prev.customWorkDays, day];
+                                      return { ...prev, customWorkDays: nextDays };
+                                    });
+                                  }}
+                                  className={`px-2 py-1 text-[11px] rounded font-medium transition-colors ${
+                                    isChecked
+                                      ? 'bg-blue-600 text-white font-semibold'
+                                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  {day.slice(0, 3)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Notes / Assignment Details */}

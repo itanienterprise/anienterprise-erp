@@ -3,7 +3,128 @@ const router = express.Router();
 const DeviceRegistry = require('../models/DeviceRegistry');
 const DeviceLocationLog = require('../models/DeviceLocationLog');
 const Employee = require('../models/Employee');
+const ShiftConfig = require('../models/ShiftConfig');
 const { decryptData } = require('../utils/encryption');
+
+// Helper to evaluate if device is currently within its active shift window
+async function evaluateDeviceShift(device, targetDate = new Date()) {
+  const trackingMode = device?.trackingMode || 'shift';
+  if (trackingMode === 'always') {
+    return {
+      trackingMode: 'always',
+      isWithinShift: true,
+      shiftName: '24/7 Continuous',
+      startTime: null,
+      endTime: null,
+      graceMinutes: 0,
+      isHoliday: false,
+      status: 'always',
+      statusText: '24/7 Continuous Tracking'
+    };
+  }
+
+  let startTime = '09:00';
+  let endTime = '18:00';
+  let graceMinutes = 15;
+  let shiftName = 'General Shift';
+  let holidays = ['Friday'];
+  let workDays = null;
+  let shiftId = null;
+
+  if (device?.customShift?.enabled) {
+    shiftName = 'Custom Shift';
+    startTime = device.customShift.startTime || '09:00';
+    endTime = device.customShift.endTime || '18:00';
+    graceMinutes = device.customShift.graceMinutes !== undefined ? Number(device.customShift.graceMinutes) : 15;
+    if (Array.isArray(device.customShift.workDays) && device.customShift.workDays.length > 0) {
+      workDays = device.customShift.workDays;
+    }
+  } else {
+    let resolvedShift = null;
+    if (device?.shiftId) {
+      try {
+        resolvedShift = await ShiftConfig.findById(device.shiftId).lean();
+      } catch (_) {}
+    }
+    if (!resolvedShift && device?.employeeId) {
+      try {
+        resolvedShift = await ShiftConfig.findOne({
+          $or: [
+            { applicableTo: device.employeeId },
+            { applicableTo: String(device.employeeId) }
+          ]
+        }).lean();
+      } catch (_) {}
+    }
+    if (!resolvedShift) {
+      try {
+        resolvedShift = (await ShiftConfig.findOne({ isDefault: true }).lean()) || (await ShiftConfig.findOne().lean());
+      } catch (_) {}
+    }
+
+    if (resolvedShift) {
+      shiftId = resolvedShift._id;
+      shiftName = resolvedShift.shiftName || 'General';
+      startTime = resolvedShift.startTime || '09:00';
+      endTime = resolvedShift.endTime || '18:00';
+      graceMinutes = resolvedShift.graceMinutes !== undefined ? Number(resolvedShift.graceMinutes) : 15;
+      holidays = Array.isArray(resolvedShift.holidays) ? resolvedShift.holidays : ['Friday'];
+    }
+  }
+
+  // Parse hours & minutes
+  const [sH, sM] = (startTime || '09:00').split(':').map(Number);
+  const [eH, eM] = (endTime || '18:00').split(':').map(Number);
+  const startMin = (isNaN(sH) ? 9 : sH) * 60 + (isNaN(sM) ? 0 : sM);
+  const endMin = (isNaN(eH) ? 18 : eH) * 60 + (isNaN(eM) ? 0 : eM);
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const currentDay = dayNames[targetDate.getDay()];
+
+  let isHoliday = false;
+  if (workDays && Array.isArray(workDays)) {
+    isHoliday = !workDays.includes(currentDay);
+  } else if (holidays && Array.isArray(holidays)) {
+    isHoliday = holidays.includes(currentDay);
+  }
+
+  const currentMin = targetDate.getHours() * 60 + targetDate.getMinutes();
+
+  // Shift window check with grace buffer
+  let isTimeWithin = false;
+  const s = (startMin - graceMinutes + 1440) % 1440;
+  const e = (endMin + graceMinutes) % 1440;
+
+  if (startMin <= endMin) {
+    if (s <= e) {
+      isTimeWithin = currentMin >= s && currentMin <= e;
+    } else {
+      isTimeWithin = currentMin >= s || currentMin <= e;
+    }
+  } else {
+    // Overnight shift (e.g. 22:00 to 06:00)
+    isTimeWithin = currentMin >= s || currentMin <= e;
+  }
+
+  const isWithinShift = isTimeWithin && !isHoliday;
+
+  return {
+    trackingMode: 'shift',
+    isWithinShift,
+    shiftId,
+    shiftName,
+    startTime,
+    endTime,
+    graceMinutes,
+    isHoliday,
+    status: isWithinShift ? 'on_shift' : 'off_shift',
+    statusText: isHoliday
+      ? `Off-Duty (Holiday: ${currentDay})`
+      : isWithinShift
+        ? `On Shift (${startTime} - ${endTime})`
+        : `Off Shift (${startTime} - ${endTime})`
+  };
+}
 
 // Helper to safely decrypt employee data
 const decryptEmployee = (empDoc) => {
@@ -85,6 +206,17 @@ module.exports = function createMdmRouter(io) {
     next();
   };
 
+  // 0. Get all available shifts for MDM assignment
+  router.get('/shifts', requireAdminAuth, async (req, res) => {
+    try {
+      const shifts = await ShiftConfig.find().sort({ shiftName: 1 }).lean();
+      return res.json({ success: true, count: shifts.length, shifts });
+    } catch (err) {
+      console.error('[MDM] Fetch Shifts Error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   // 1. Register or update a mobile device
   router.post('/register', async (req, res) => {
     try {
@@ -98,7 +230,10 @@ module.exports = function createMdmRouter(io) {
         batteryLevel,
         isCharging,
         networkType,
-        employeeId: explicitEmployeeId
+        employeeId: explicitEmployeeId,
+        trackingMode,
+        shiftId,
+        customShift
       } = req.body;
 
       if (!deviceId) {
@@ -191,12 +326,23 @@ module.exports = function createMdmRouter(io) {
       if (networkType) {
         updateData.networkType = networkType;
       }
+      if (trackingMode !== undefined) {
+        updateData.trackingMode = trackingMode;
+      }
+      if (shiftId !== undefined) {
+        updateData.shiftId = shiftId || null;
+      }
+      if (customShift !== undefined) {
+        updateData.customShift = customShift;
+      }
 
       const device = await DeviceRegistry.findOneAndUpdate(
         { deviceId },
         { $set: updateData },
         { new: true, upsert: true, setDefaultsOnInsert: true }
       );
+
+      const shiftInfo = await evaluateDeviceShift(device);
 
       if (io) {
         io.emit('mdm_device_registered', {
@@ -205,14 +351,16 @@ module.exports = function createMdmRouter(io) {
           employeeName: device.employeeName,
           deviceModel: device.deviceModel,
           status: device.status,
-          isOnline: true
+          isOnline: true,
+          shift: shiftInfo
         });
       }
 
       return res.json({
         success: true,
         message: 'Device registered successfully',
-        device
+        device,
+        shift: shiftInfo
       });
     } catch (err) {
       console.error('[MDM] Register Error:', err);
@@ -297,6 +445,45 @@ module.exports = function createMdmRouter(io) {
         device.trackingPermission = trackingPermission;
       }
 
+      // ── Shift Timing Verification ──────────────────────────
+      const shiftInfo = await evaluateDeviceShift(device, now);
+      const isWithinShift = shiftInfo.isWithinShift;
+
+      // If device has shift-based tracking and current time is outside shift hours,
+      // update device connectivity & battery telemetry, but do NOT log location breadcrumbs
+      if (device.trackingMode === 'shift' && !isWithinShift) {
+        await device.save();
+
+        if (io) {
+          io.emit('mdm_telemetry', {
+            deviceId: device.deviceId,
+            employeeId: device.employeeId,
+            employeeName: device.employeeName,
+            employeeEmpId: device.employeeEmpId,
+            deviceModel: device.deviceModel,
+            batteryLevel: device.batteryLevel,
+            isCharging: device.isCharging,
+            networkType: device.networkType,
+            isGpsEnabled: device.isGpsEnabled,
+            isOnline: true,
+            lastSeen: now,
+            isWithinShift: false,
+            shift: shiftInfo,
+            location: device.lastLocation
+          });
+        }
+
+        return res.json({
+          success: true,
+          recorded: false,
+          isWithinShift: false,
+          status: device.status,
+          message: 'Off-shift: location telemetry paused',
+          shift: shiftInfo,
+          timestamp: now
+        });
+      }
+
       let hasValidCoords = false;
       if (
         location &&
@@ -353,14 +540,18 @@ module.exports = function createMdmRouter(io) {
           isGpsEnabled: device.isGpsEnabled,
           isOnline: true,
           lastSeen: now,
+          isWithinShift: true,
+          shift: shiftInfo,
           location: hasValidCoords ? device.lastLocation : null
         });
       }
 
       return res.json({
         success: true,
-        recorded: true,
+        recorded: hasValidCoords,
+        isWithinShift: true,
         status: device.status,
+        shift: shiftInfo,
         timestamp: now
       });
     } catch (err) {
@@ -375,10 +566,14 @@ module.exports = function createMdmRouter(io) {
       const devices = await DeviceRegistry.find().sort({ lastSeen: -1 }).lean();
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
-      // Enhance with dynamic online flag
-      const enhanced = devices.map(d => ({
-        ...d,
-        isOnline: d.lastSeen ? new Date(d.lastSeen) >= fiveMinutesAgo : false
+      // Enhance with dynamic online flag and evaluated shift
+      const enhanced = await Promise.all(devices.map(async (d) => {
+        const shift = await evaluateDeviceShift(d);
+        return {
+          ...d,
+          isOnline: d.lastSeen ? new Date(d.lastSeen) >= fiveMinutesAgo : false,
+          shift
+        };
       }));
 
       const deduped = deduplicateDeviceList(enhanced);
@@ -398,24 +593,29 @@ module.exports = function createMdmRouter(io) {
         'lastLocation.lat': { $ne: null }
       }).lean();
 
-      const liveLocations = devices.map(d => ({
-        deviceId: d.deviceId,
-        employeeId: d.employeeId,
-        employeeName: d.employeeName,
-        employeeEmpId: d.employeeEmpId,
-        deviceModel: d.deviceModel,
-        batteryLevel: d.batteryLevel,
-        isCharging: d.isCharging,
-        networkType: d.networkType,
-        isOnline: d.lastSeen ? new Date(d.lastSeen) >= fiveMinutesAgo : false,
-        lastSeen: d.lastSeen,
-        lat: d.lastLocation.lat,
-        lng: d.lastLocation.lng,
-        accuracy: d.lastLocation.accuracy,
-        speed: d.lastLocation.speed,
-        heading: d.lastLocation.heading,
-        address: d.lastLocation.address,
-        updatedAt: d.lastLocation.updatedAt
+      const liveLocations = await Promise.all(devices.map(async (d) => {
+        const shift = await evaluateDeviceShift(d);
+        return {
+          deviceId: d.deviceId,
+          employeeId: d.employeeId,
+          employeeName: d.employeeName,
+          employeeEmpId: d.employeeEmpId,
+          deviceModel: d.deviceModel,
+          batteryLevel: d.batteryLevel,
+          isCharging: d.isCharging,
+          networkType: d.networkType,
+          isOnline: d.lastSeen ? new Date(d.lastSeen) >= fiveMinutesAgo : false,
+          lastSeen: d.lastSeen,
+          lat: d.lastLocation.lat,
+          lng: d.lastLocation.lng,
+          accuracy: d.lastLocation.accuracy,
+          speed: d.lastLocation.speed,
+          heading: d.lastLocation.heading,
+          address: d.lastLocation.address,
+          updatedAt: d.lastLocation.updatedAt,
+          shift,
+          isWithinShift: shift.isWithinShift
+        };
       }));
 
       const dedupedLocations = deduplicateDeviceList(liveLocations);
@@ -487,7 +687,10 @@ module.exports = function createMdmRouter(io) {
         macAddress = '',
         platform = 'android',
         notes = '',
-        status = 'approved'
+        status = 'approved',
+        trackingMode = 'shift',
+        shiftId = null,
+        customShift = null
       } = req.body;
 
       if (!deviceId || !deviceId.trim()) {
@@ -519,7 +722,7 @@ module.exports = function createMdmRouter(io) {
         }
       }
 
-      const newDevice = await DeviceRegistry.create({
+      const deviceData = {
         deviceId: cleanDeviceId,
         employeeId: employeeId || null,
         employeeName,
@@ -530,10 +733,19 @@ module.exports = function createMdmRouter(io) {
         macAddress: macAddress ? String(macAddress).trim() : '',
         platform: platform || 'android',
         status: status || 'approved',
+        trackingMode: trackingMode || 'shift',
+        shiftId: shiftId || null,
         notes: notes || '',
         lastSeen: null,
         isOnline: false
-      });
+      };
+
+      if (customShift && typeof customShift === 'object') {
+        deviceData.customShift = customShift;
+      }
+
+      const newDevice = await DeviceRegistry.create(deviceData);
+      const shiftInfo = await evaluateDeviceShift(newDevice);
 
       if (io) {
         io.emit('mdm_device_registered', {
@@ -544,14 +756,18 @@ module.exports = function createMdmRouter(io) {
           imei: newDevice.imei,
           macAddress: newDevice.macAddress,
           status: newDevice.status,
-          isOnline: false
+          isOnline: false,
+          shift: shiftInfo
         });
       }
 
       return res.json({
         success: true,
         message: 'Device enrolled successfully',
-        device: newDevice
+        device: {
+          ...newDevice.toObject(),
+          shift: shiftInfo
+        }
       });
     } catch (err) {
       console.error('[MDM] Enroll Error:', err);
@@ -562,7 +778,20 @@ module.exports = function createMdmRouter(io) {
   // 7. Update / Reassign device
   router.put('/devices/:id', requireAdminAuth, async (req, res) => {
     try {
-      const { employeeId, deviceModel, manufacturer, imei, macAddress, platform, notes, status } = req.body;
+      const {
+        employeeId,
+        deviceModel,
+        manufacturer,
+        imei,
+        macAddress,
+        platform,
+        notes,
+        status,
+        trackingMode,
+        shiftId,
+        customShift
+      } = req.body;
+
       const device = await DeviceRegistry.findById(req.params.id);
       if (!device) {
         return res.status(404).json({ success: false, message: 'Device not found' });
@@ -591,20 +820,32 @@ module.exports = function createMdmRouter(io) {
       if (platform !== undefined) device.platform = platform;
       if (notes !== undefined) device.notes = notes;
       if (status !== undefined) device.status = status;
+      if (trackingMode !== undefined) device.trackingMode = trackingMode;
+      if (shiftId !== undefined) device.shiftId = shiftId || null;
+      if (customShift !== undefined) device.customShift = customShift;
 
       await device.save();
+      const shiftInfo = await evaluateDeviceShift(device);
 
       if (io) {
         io.emit('mdm_device_status_changed', {
           deviceId: device.deviceId,
-          status: device.status
+          status: device.status,
+          shift: shiftInfo
+        });
+        io.emit('mdm_device_updated', {
+          ...device.toObject(),
+          shift: shiftInfo
         });
       }
 
       return res.json({
         success: true,
         message: 'Device updated successfully',
-        device
+        device: {
+          ...device.toObject(),
+          shift: shiftInfo
+        }
       });
     } catch (err) {
       console.error('[MDM] Update Device Error:', err);

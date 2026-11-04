@@ -185,7 +185,7 @@ function PackingList({
                 const parsed = Number(saved);
                 if ([15, 30, 50, 100].includes(parsed)) return parsed;
             }
-        } catch (_) {}
+        } catch (_) { }
         return 15;
     });
     const [currentPage, setCurrentPage] = useState(1);
@@ -491,7 +491,7 @@ function PackingList({
                 let d = emp;
                 if (emp && emp.data) {
                     if (typeof emp.data === 'string') {
-                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) { }
                     } else if (typeof emp.data === 'object') {
                         d = { ...emp.data, _id: emp._id };
                     }
@@ -1565,7 +1565,7 @@ function PackingList({
                 const cleanPl = rawPl.replace(/[^a-z0-9]/g, '');
                 const rawPi = String(record.piNumber || '').toLowerCase();
                 const cleanPi = rawPi.replace(/[^a-z0-9]/g, '');
-                
+
                 const productListNames = (record.productsList || []).map(p => p.productName || '').join(' ');
                 const portStr = `${record.port || ''} ${record.portOfLoading || ''} ${record.portOfDischarge || ''}`;
                 const datesStr = `${record.date || ''} ${formatDate(record.date)} ${formatDate(record.createdAt)}`;
@@ -2283,11 +2283,10 @@ function PackingList({
                                                                     loadPiRevision(selectedPiRaw, rev.reviseNo);
                                                                     setActiveDropdown(null);
                                                                 }}
-                                                                className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center transition-colors whitespace-nowrap ${
-                                                                    isSelected
-                                                                        ? is10 ? 'bg-purple-50 text-purple-700 font-semibold' : 'bg-blue-50 text-blue-700 font-semibold'
-                                                                        : is10 ? 'text-purple-700 hover:bg-purple-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                                                                }`}
+                                                                className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center transition-colors whitespace-nowrap ${isSelected
+                                                                    ? is10 ? 'bg-purple-50 text-purple-700 font-semibold' : 'bg-blue-50 text-blue-700 font-semibold'
+                                                                    : is10 ? 'text-purple-700 hover:bg-purple-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                                                                    }`}
                                                             >
                                                                 <span className="flex items-center gap-2 whitespace-nowrap">
                                                                     <span className="whitespace-nowrap font-medium">{getRevName(rev.reviseNo)}</span>
@@ -2381,11 +2380,10 @@ function PackingList({
                                 <div className="flex items-center justify-between">
                                     <label className="text-sm font-medium text-gray-700">PI Number</label>
                                     {formData.selectedRevisionNo && formData.selectedRevisionNo !== 'Original PI' && (
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                            formData.selectedRevisionNo.includes('10%')
-                                                ? 'text-purple-700 bg-purple-50 border-purple-200'
-                                                : 'text-amber-700 bg-amber-50 border-amber-200'
-                                        }`}>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${formData.selectedRevisionNo.includes('10%')
+                                            ? 'text-purple-700 bg-purple-50 border-purple-200'
+                                            : 'text-amber-700 bg-amber-50 border-amber-200'
+                                            }`}>
                                             {getRevName(formData.selectedRevisionNo)}
                                         </span>
                                     )}
@@ -2442,23 +2440,21 @@ function PackingList({
                                                         handleFormPiSelect(pi);
                                                     }}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full px-3.5 py-2.5 text-left text-sm flex items-center justify-between transition-colors ${
-                                                        isHighlighted || isSelected
-                                                            ? 'bg-blue-50 text-blue-700'
-                                                            : 'text-gray-700 hover:bg-blue-50/60'
-                                                    }`}
+                                                    className={`w-full px-3.5 py-2.5 text-left text-sm flex items-center justify-between transition-colors ${isHighlighted || isSelected
+                                                        ? 'bg-blue-50 text-blue-700'
+                                                        : 'text-gray-700 hover:bg-blue-50/60'
+                                                        }`}
                                                 >
                                                     <div className="flex flex-col min-w-0 pr-2">
                                                         <div className="flex items-center gap-1.5 flex-wrap">
                                                             <span className="font-semibold text-gray-900">{pi.displayPiNumber}</span>
                                                             {pi.revisionLabel && (
-                                                                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
-                                                                    pi.isTenPercent
-                                                                        ? 'text-purple-700 bg-purple-50 border-purple-200'
-                                                                        : pi.isRevisedOption
-                                                                            ? 'text-amber-700 bg-amber-50 border-amber-200'
-                                                                            : 'text-blue-700 bg-blue-50 border-blue-200'
-                                                                }`}>
+                                                                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${pi.isTenPercent
+                                                                    ? 'text-purple-700 bg-purple-50 border-purple-200'
+                                                                    : pi.isRevisedOption
+                                                                        ? 'text-amber-700 bg-amber-50 border-amber-200'
+                                                                        : 'text-blue-700 bg-blue-50 border-blue-200'
+                                                                    }`}>
                                                                     {getRevName(pi.revisionLabel)}
                                                                 </span>
                                                             )}
@@ -3248,160 +3244,160 @@ function PackingList({
                             {/* Desktop Table View */}
                             <div className="overflow-x-auto">
                                 <table className="hidden md:table w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                                        <th className="px-6 py-4">Invoice No</th>
-                                        <th className="px-6 py-4">Invoice Date</th>
-                                        <th className="px-6 py-4">PI Ref Number</th>
-                                        <th className="px-6 py-4">Importer / Buyer</th>
-                                        <th className="px-6 py-4">Product</th>
-                                        <th className="px-6 py-4 text-center">Bags</th>
-                                        <th className="px-6 py-4 text-center">Net Wt (KG)</th>
-                                        <th className="px-6 py-4 text-center">Gross Wt (KG)</th>
-                                        <th className="px-6 py-4 text-center">TR No.</th>
-                                        {canShowEntryBy && (
-                                            <th className="px-6 py-4 text-center whitespace-nowrap">Entry By</th>
-                                        )}
-                                        <th className="px-6 py-4 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 text-sm">
-                                    {paginatedRecords.map(rec => {
-                                        let totalBags = 0;
-                                        let totalNet = 0;
-                                        let totalGross = 0;
-                                        if (Array.isArray(rec.productsList)) {
-                                            rec.productsList.forEach(p => {
-                                                totalBags += parseInt(p.bagCount) || 0;
-                                                totalNet += parseFloat(p.netWeight) || 0;
-                                                totalGross += parseFloat(p.grossWeight) || 0;
-                                            });
-                                        }
+                                    <thead>
+                                        <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                            <th className="px-6 py-4">Invoice No</th>
+                                            <th className="px-6 py-4">Invoice Date</th>
+                                            <th className="px-6 py-4">PI Ref Number</th>
+                                            <th className="px-6 py-4">Importer / Buyer</th>
+                                            <th className="px-6 py-4">Product</th>
+                                            <th className="px-6 py-4 text-center">Bags</th>
+                                            <th className="px-6 py-4 text-center">Net Wt (KG)</th>
+                                            <th className="px-6 py-4 text-center">Gross Wt (KG)</th>
+                                            <th className="px-6 py-4 text-center">TR No.</th>
+                                            {canShowEntryBy && (
+                                                <th className="px-6 py-4 text-center whitespace-nowrap">Entry By</th>
+                                            )}
+                                            <th className="px-6 py-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 text-sm">
+                                        {paginatedRecords.map(rec => {
+                                            let totalBags = 0;
+                                            let totalNet = 0;
+                                            let totalGross = 0;
+                                            if (Array.isArray(rec.productsList)) {
+                                                rec.productsList.forEach(p => {
+                                                    totalBags += parseInt(p.bagCount) || 0;
+                                                    totalNet += parseFloat(p.netWeight) || 0;
+                                                    totalGross += parseFloat(p.grossWeight) || 0;
+                                                });
+                                            }
 
-                                        const entryInfo = getPlEntryDetails(rec);
-                                        return (
-                                            <tr key={rec._id}
-                                                className={`hover:bg-gray-50/50 ${highlightId && (
-                                                    String(rec._id) === String(highlightId) ||
-                                                    (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
-                                                    (rec.invoiceNo && String(rec.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
-                                                    (rec.piNumber && String(rec.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
-                                                ) ? "notif-row-highlight" : ""}`}
-                                                ref={el => {
-                                                    if (rec.packingListNumber) rowRefs.current[rec.packingListNumber] = el;
-                                                    if (rec.invoiceNo) rowRefs.current[rec.invoiceNo] = el;
-                                                    if (rec.piNumber) rowRefs.current[rec.piNumber] = el;
-                                                    if (rec._id) rowRefs.current[rec._id] = el;
-                                                }}
-                                                style={highlightId && (
-                                                    String(rec._id) === String(highlightId) ||
-                                                    (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
-                                                    (rec.invoiceNo && String(rec.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
-                                                    (rec.piNumber && String(rec.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
-                                                ) ? { borderLeft: '5px solid #f59e0b' } : undefined}
-                                            >
-                                                <td className="px-6 py-4 font-bold text-gray-800">{rec.packingListNumber}</td>
-                                                <td className="px-6 py-4 text-gray-600">{formatDate(rec.date)}</td>
-                                                <td className="px-6 py-4 text-sm font-semibold text-gray-700 whitespace-nowrap">
-                                                    {rec.piNumber ? (
-                                                        (() => {
-                                                            const piList = String(rec.piNumber).split(',').map(s => s.trim()).filter(Boolean);
-                                                            if (piList.length === 0) return <span className="text-gray-400 font-medium">N/A</span>;
-                                                            return (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleOpenPiDetails(rec.piNumber, rec);
-                                                                    }}
-                                                                    className="inline-flex flex-col items-start px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none text-left"
-                                                                    title={`View PI Details (${rec.piNumber})`}
-                                                                >
-                                                                    {piList.map((piNo, idx) => (
-                                                                        <span key={idx} className="whitespace-nowrap leading-tight">
-                                                                            {piNo}
-                                                                        </span>
-                                                                    ))}
-                                                                </button>
-                                                            );
-                                                        })()
-                                                    ) : (
-                                                        <span className="text-gray-400 font-medium">N/A</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 font-semibold text-gray-800 truncate max-w-[180px]">{rec.partyName}</td>
-                                                <td className="px-6 py-4 text-gray-600 truncate max-w-[150px]" title={
-                                                    Array.isArray(rec.productsList)
-                                                        ? rec.productsList.map(p => p.productName).filter(Boolean).join(', ')
-                                                        : ''
-                                                }>
-                                                    {Array.isArray(rec.productsList)
-                                                        ? rec.productsList.map(p => p.productName).filter(Boolean).join(', ')
-                                                        : '-'}
-                                                </td>
-                                                <td className="px-6 py-4 text-center font-semibold text-gray-800">{totalBags.toLocaleString('en-US')}</td>
-                                                <td className="px-6 py-4 text-center font-bold text-blue-600">{totalNet.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                                                <td className="px-6 py-4 text-center font-bold text-indigo-600">{totalGross.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className="text-gray-700 font-medium">
-                                                        {rec.trNumber || 'N/A'}
-                                                    </span>
-                                                </td>
-                                                {canShowEntryBy && (
-                                                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                        <div className="flex flex-col items-center gap-0.5">
-                                                            <span className="text-xs font-semibold text-gray-800">
-                                                                {entryInfo.creator}
-                                                            </span>
-                                                            {entryInfo.editor && (
-                                                                <span className="text-[10px] text-amber-600 font-semibold" title="Edited By">
-                                                                    ✎ {entryInfo.editor}
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                            const entryInfo = getPlEntryDetails(rec);
+                                            return (
+                                                <tr key={rec._id}
+                                                    className={`hover:bg-gray-50/50 ${highlightId && (
+                                                        String(rec._id) === String(highlightId) ||
+                                                        (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                                        (rec.invoiceNo && String(rec.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                                        (rec.piNumber && String(rec.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+                                                    ) ? "notif-row-highlight" : ""}`}
+                                                    ref={el => {
+                                                        if (rec.packingListNumber) rowRefs.current[rec.packingListNumber] = el;
+                                                        if (rec.invoiceNo) rowRefs.current[rec.invoiceNo] = el;
+                                                        if (rec.piNumber) rowRefs.current[rec.piNumber] = el;
+                                                        if (rec._id) rowRefs.current[rec._id] = el;
+                                                    }}
+                                                    style={highlightId && (
+                                                        String(rec._id) === String(highlightId) ||
+                                                        (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                                        (rec.invoiceNo && String(rec.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                                        (rec.piNumber && String(rec.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+                                                    ) ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                                >
+                                                    <td className="px-6 py-4 font-bold text-gray-800">{rec.packingListNumber}</td>
+                                                    <td className="px-6 py-4 text-gray-600">{formatDate(rec.date)}</td>
+                                                    <td className="px-6 py-4 text-sm font-semibold text-gray-700 whitespace-nowrap">
+                                                        {rec.piNumber ? (
+                                                            (() => {
+                                                                const piList = String(rec.piNumber).split(',').map(s => s.trim()).filter(Boolean);
+                                                                if (piList.length === 0) return <span className="text-gray-400 font-medium">N/A</span>;
+                                                                return (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleOpenPiDetails(rec.piNumber, rec);
+                                                                        }}
+                                                                        className="inline-flex flex-col items-start px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none text-left"
+                                                                        title={`View PI Details (${rec.piNumber})`}
+                                                                    >
+                                                                        {piList.map((piNo, idx) => (
+                                                                            <span key={idx} className="whitespace-nowrap leading-tight">
+                                                                                {piNo}
+                                                                            </span>
+                                                                        ))}
+                                                                    </button>
+                                                                );
+                                                            })()
+                                                        ) : (
+                                                            <span className="text-gray-400 font-medium">N/A</span>
+                                                        )}
                                                     </td>
-                                                )}
-                                                <td className="px-6 py-4 text-right space-x-2">
-                                                    <button
-                                                        onClick={async () => {
-                                                            try {
-                                                                await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups, products);
-                                                            } catch (err) {
-                                                                console.error('PDF generation failed:', err);
-                                                                showToast('Failed to generate PDF.', 'error');
-                                                            }
-                                                        }}
-                                                        title="Download PDF"
-                                                        className="p-1.5 text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 rounded-lg transition-all"
-                                                    >
-                                                        <PDFIcon className="w-4 h-4" />
-                                                    </button>
-                                                    {canManage && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleEditClick(rec)}
-                                                                title="Edit"
-                                                                className="p-1.5 text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-200 rounded-lg transition-all"
-                                                            >
-                                                                <EditIcon className="w-4 h-4" />
-                                                            </button>
-                                                            {canDelete && (
-                                                                <button
-                                                                    onClick={() => handleDeleteClick(rec._id)}
-                                                                    title="Delete"
-                                                                    className="p-1.5 text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-all"
-                                                                >
-                                                                    <TrashIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                        </>
+                                                    <td className="px-6 py-4 font-semibold text-gray-800 truncate max-w-[180px]">{rec.partyName}</td>
+                                                    <td className="px-6 py-4 text-gray-600 truncate max-w-[150px]" title={
+                                                        Array.isArray(rec.productsList)
+                                                            ? rec.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                                            : ''
+                                                    }>
+                                                        {Array.isArray(rec.productsList)
+                                                            ? rec.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                                            : '-'}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center font-semibold text-gray-800">{totalBags.toLocaleString('en-US')}</td>
+                                                    <td className="px-6 py-4 text-center font-bold text-blue-600">{totalNet.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                                                    <td className="px-6 py-4 text-center font-bold text-indigo-600">{totalGross.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className="text-gray-700 font-medium">
+                                                            {rec.trNumber || 'N/A'}
+                                                        </span>
+                                                    </td>
+                                                    {canShowEntryBy && (
+                                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                <span className="text-xs font-semibold text-gray-800">
+                                                                    {entryInfo.creator}
+                                                                </span>
+                                                                {entryInfo.editor && (
+                                                                    <span className="text-[10px] text-amber-600 font-semibold" title="Edited By">
+                                                                        ✎ {entryInfo.editor}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
                                                     )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                                                    <td className="px-6 py-4 text-right space-x-2">
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups, products);
+                                                                } catch (err) {
+                                                                    console.error('PDF generation failed:', err);
+                                                                    showToast('Failed to generate PDF.', 'error');
+                                                                }
+                                                            }}
+                                                            title="Download PDF"
+                                                            className="p-1.5 text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 rounded-lg transition-all"
+                                                        >
+                                                            <PDFIcon className="w-4 h-4" />
+                                                        </button>
+                                                        {canManage && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleEditClick(rec)}
+                                                                    title="Edit"
+                                                                    className="p-1.5 text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-200 rounded-lg transition-all"
+                                                                >
+                                                                    <EditIcon className="w-4 h-4" />
+                                                                </button>
+                                                                {canDelete && (
+                                                                    <button
+                                                                        onClick={() => handleDeleteClick(rec._id)}
+                                                                        title="Delete"
+                                                                        className="p-1.5 text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-all"
+                                                                    >
+                                                                        <TrashIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
                             <TableScrollNav className="hidden md:flex" count={filteredRecords.length} />
 
@@ -3439,11 +3435,9 @@ function PackingList({
                                                 if (rec.piNumber) rowRefs.current[rec.piNumber] = el;
                                                 if (rec._id) rowRefs.current[rec._id] = el;
                                             }}
-                                            className={`bg-white rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer ${
-                                                isHighlighted ? 'notif-row-highlight' : ''
-                                            } ${
-                                                isExpanded ? 'border-blue-200 shadow-lg ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'
-                                            }`}
+                                            className={`bg-white rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer ${isHighlighted ? 'notif-row-highlight' : ''
+                                                } ${isExpanded ? 'border-blue-200 shadow-lg ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'
+                                                }`}
                                             style={isHighlighted ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                             onClick={() => setExpandedCardId(isExpanded ? null : rec._id)}
                                         >
@@ -3459,10 +3453,9 @@ function PackingList({
                                                             {rec.packingListNumber || rec.invoiceNo || '—'}
                                                         </span>
                                                     </div>
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${
-                                                        (rec.status || 'Active') === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${(rec.status || 'Active') === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
                                                         'bg-red-50 text-red-600 border-red-100'
-                                                    }`}>
+                                                        }`}>
                                                         {rec.status || 'Active'}
                                                     </span>
                                                 </div>
@@ -3672,7 +3665,7 @@ function PackingList({
                                     setCurrentPage(1);
                                     try {
                                         localStorage.setItem('packing_list_page_size', String(newSize));
-                                    } catch (_) {}
+                                    } catch (_) { }
                                 }}
                                 itemName="packing lists"
                             />
@@ -3699,10 +3692,10 @@ function PackingList({
 
             {/* Empty Fields Alert Modal */}
             {emptyFieldsModal.isOpen && createPortal(
-                <div 
+                <div
                     className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
                 >
-                    <div 
+                    <div
                         className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200 text-left"
                         role="dialog"
                         aria-modal="true"
@@ -3745,7 +3738,7 @@ function PackingList({
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 {emptyFieldsModal.emptyFields.map((field, idx) => (
-                                    <div 
+                                    <div
                                         key={idx}
                                         className="flex items-center gap-2 px-3 py-2 bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 transition-colors"
                                     >

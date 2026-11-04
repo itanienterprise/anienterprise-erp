@@ -104,6 +104,27 @@ const deviceRegistrySchema = new mongoose.Schema({
   notes: {
     type: String,
     default: ''
+  },
+  // Shift & Tracking Schedule Configuration
+  trackingMode: {
+    type: String,
+    enum: ['shift', 'always'],
+    default: 'shift'
+  },
+  shiftId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ShiftConfig',
+    default: null
+  },
+  customShift: {
+    enabled: { type: Boolean, default: false },
+    startTime: { type: String, default: '09:00' }, // "HH:mm"
+    endTime: { type: String, default: '18:00' },   // "HH:mm"
+    workDays: {
+      type: [String],
+      default: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Saturday']
+    },
+    graceMinutes: { type: Number, default: 15 }
   }
 }, { timestamps: true });
 

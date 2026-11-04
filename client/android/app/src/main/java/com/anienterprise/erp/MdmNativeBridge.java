@@ -43,6 +43,28 @@ public class MdmNativeBridge {
     }
 
     @JavascriptInterface
+    public void updateShiftConfig(String trackingMode, String startTime, String endTime, int graceMinutes) {
+        if (context == null) return;
+        SharedPreferences prefs = context.getSharedPreferences("mdm_prefs", Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        if (trackingMode != null && !trackingMode.trim().isEmpty()) {
+            editor.putString("tracking_mode", trackingMode.trim());
+        }
+        if (startTime != null && !startTime.trim().isEmpty()) {
+            editor.putString("shift_start", startTime.trim());
+        }
+        if (endTime != null && !endTime.trim().isEmpty()) {
+            editor.putString("shift_end", endTime.trim());
+        }
+        if (graceMinutes >= 0) {
+            editor.putInt("grace_minutes", graceMinutes);
+        }
+        editor.apply();
+
+        MdmLocationService.startService(context);
+    }
+
+    @JavascriptInterface
     public String getDeviceId() {
         if (context == null) return "";
         SharedPreferences prefs = context.getSharedPreferences("mdm_prefs", Context.MODE_PRIVATE);
