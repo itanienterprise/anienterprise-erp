@@ -5,7 +5,7 @@ import {
 } from '../../Icons';
 import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
-import { generateBankApplicationPDF } from '../../../utils/islbankApplicationGenerator';
+import { generateBankApplicationPDF, calculateAmendmentIncreaseValues } from '../../../utils/islbankApplicationGenerator';
 import { formatDate } from '../../../utils/helpers';
 import { IPDetailsModal } from '../IPManagement/IPDetailsModal';
 
@@ -309,10 +309,12 @@ export const PIDetailsModal = ({
             ...activeRevision,
             piNumber: `${resolvedPi.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
             originalPiNumber: resolvedPi.piNumber,
-            originalGrandTotal: activeRevision.originalGrandTotal || origRev?.grandTotal || resolvedPi.grandTotal,
-            originalGrandTotalQuantity: activeRevision.originalGrandTotalQuantity || origRev?.grandTotalQuantity || resolvedPi.grandTotalQuantity,
+            originalGrandTotal: origRev?.grandTotal || activeRevision.originalGrandTotal || resolvedPi.originalGrandTotal || resolvedPi.grandTotal,
+            originalGrandTotalQuantity: origRev?.grandTotalQuantity || activeRevision.originalGrandTotalQuantity || resolvedPi.originalGrandTotalQuantity || resolvedPi.grandTotalQuantity,
             previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || resolvedPi.grandTotal,
             previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || resolvedPi.grandTotalQuantity,
+            increaseValue: activeRevision.increaseValue !== undefined ? activeRevision.increaseValue : resolvedPi.increaseValue,
+            increaseQuantity: activeRevision.increaseQuantity !== undefined ? activeRevision.increaseQuantity : resolvedPi.increaseQuantity,
             linkedLc: linkedLcRecord,
             lcNo: linkedLcRecord?.lcNo || resolvedPi.lcNo || resolvedPi.lcNumber || activeRevision.lcNo || '',
             lcDate: linkedLcRecord?.openingDate || linkedLcRecord?.lcDate || resolvedPi.lcDate || activeRevision.lcDate || '',

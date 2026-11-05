@@ -5,7 +5,7 @@ import {
 } from '../../Icons';
 import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
-import { generateBankApplicationPDF } from '../../../utils/islbankApplicationGenerator';
+import { generateBankApplicationPDF, calculateAmendmentIncreaseValues } from '../../../utils/islbankApplicationGenerator';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
@@ -484,10 +484,12 @@ const PiHistoryExplorerModal = React.memo(({
             ...activeRevision,
             piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`,
             originalPiNumber: viewHistoryRecord.piNumber,
-            originalGrandTotal: activeRevision.originalGrandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
-            originalGrandTotalQuantity: activeRevision.originalGrandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
+            originalGrandTotal: origRev?.grandTotal || activeRevision.originalGrandTotal || viewHistoryRecord.originalGrandTotal || viewHistoryRecord.grandTotal,
+            originalGrandTotalQuantity: origRev?.grandTotalQuantity || activeRevision.originalGrandTotalQuantity || viewHistoryRecord.originalGrandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
             previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || viewHistoryRecord.grandTotal,
             previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || viewHistoryRecord.grandTotalQuantity,
+            increaseValue: activeRevision.increaseValue !== undefined ? activeRevision.increaseValue : viewHistoryRecord.increaseValue,
+            increaseQuantity: activeRevision.increaseQuantity !== undefined ? activeRevision.increaseQuantity : viewHistoryRecord.increaseQuantity,
             linkedLc,
             lcNo: linkedLc?.lcNo || viewHistoryRecord.lcNo || viewHistoryRecord.lcNumber || activeRevision.lcNo || '',
             lcDate: linkedLc?.openingDate || linkedLc?.lcDate || viewHistoryRecord.lcDate || activeRevision.lcDate || '',
@@ -565,7 +567,9 @@ const PiHistoryExplorerModal = React.memo(({
                 ipNumbers: activeRevision.ipNumbers || [],
                 amendmentType: activeRevision.amendmentType || '',
                 extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
-                extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || ''
+                extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
+                increaseValue: activeRevision.increaseValue !== undefined ? activeRevision.increaseValue : '',
+                increaseQuantity: activeRevision.increaseQuantity !== undefined ? activeRevision.increaseQuantity : ''
             });
             setShowReviseForm(true);
         }
@@ -1313,7 +1317,9 @@ function PI({
         ipNumbers: [],
         amendmentType: '',
         extendedShipmentDate: '',
-        extendedExpiryDate: ''
+        extendedExpiryDate: '',
+        increaseValue: '',
+        increaseQuantity: ''
     });
     const [viewHistoryRecord, setViewHistoryRecord] = useState(null);
     const toastTimerRef = useRef(null);
@@ -2164,7 +2170,11 @@ function PI({
 
     useEffect(() => {
         if ((showForm || showReviseForm || selectedIpForDetails) && !hasFetchedSupportingRef.current) {
-            fetchSupportingData(true);
+            // Non-blocking trigger so UI card opens instantly without blocking the render loop
+            const timer = setTimeout(() => {
+                fetchSupportingData(false);
+            }, 60);
+            return () => clearTimeout(timer);
         }
     }, [showForm, showReviseForm, selectedIpForDetails, fetchSupportingData]);
 
@@ -2175,44 +2185,145 @@ function PI({
         return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
     };
 
+    // Pre-indexed memoized lookups for ultra-fast (sub-millisecond) balance computations
+    const productCanonicalMap = useMemo(() => {
+        const map = new Map();
+        (products || []).forEach(p => {
+            const cleanName = (p.name || '').toLowerCase().trim();
+            const cleanIp = (p.ipName || '').toLowerCase().trim();
+            const canonical = cleanName || cleanIp;
+            if (cleanName) map.set(cleanName, canonical);
+            if (cleanIp) map.set(cleanIp, canonical);
+        });
+        return map;
+    }, [products]);
+
+    const getCanonicalProduct = useCallback((name) => {
+        if (!name) return '';
+        const clean = String(name).toLowerCase().trim();
+        return productCanonicalMap.get(clean) || clean;
+    }, [productCanonicalMap]);
+
+    // Pre-group stock receipts by cleaned LC number (O(N) single pass)
+    const stockByLcClean = useMemo(() => {
+        const map = new Map();
+        (allStockRecords || []).forEach(s => {
+            const sLcClean = cleanLc(s.lcNo);
+            const status = (s.status || '').toLowerCase();
+            if (sLcClean && (status === 'accepted' || status === 'in stock')) {
+                let list = map.get(sLcClean);
+                if (!list) {
+                    list = [];
+                    map.set(sLcClean, list);
+                }
+                list.push(s);
+            }
+        });
+        return map;
+    }, [allStockRecords]);
+
+    // Pre-group border sales by cleaned LC numbers (O(N) single pass)
+    const salesByLcClean = useMemo(() => {
+        const map = new Map();
+        (allSalesRecords || []).forEach(s => {
+            const status = (s.status || '').toLowerCase();
+            const isValidStatus = !status.includes('rejected') && status !== 'requested';
+            const sTypeLow = (s.saleType || '').toLowerCase().trim();
+            const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
+            if (!isValidStatus || !isBorder) return;
+
+            const lcs = new Set();
+            if (s.lcNo) lcs.add(cleanLc(s.lcNo));
+            if (s.lcNumber) lcs.add(cleanLc(s.lcNumber));
+            if (s.lc_no) lcs.add(cleanLc(s.lc_no));
+            if (Array.isArray(s.items)) {
+                s.items.forEach(i => {
+                    if (i.lcNo) lcs.add(cleanLc(i.lcNo));
+                    if (Array.isArray(i.brandEntries)) {
+                        i.brandEntries.forEach(b => {
+                            if (b.lcNo) lcs.add(cleanLc(b.lcNo));
+                        });
+                    }
+                });
+            }
+
+            lcs.forEach(lcClean => {
+                if (!lcClean) return;
+                let list = map.get(lcClean);
+                if (!list) {
+                    list = [];
+                    map.set(lcClean, list);
+                }
+                list.push(s);
+            });
+        });
+        return map;
+    }, [allSalesRecords]);
+
+    // Pre-calculate parsed LC records and their linked clean IPs for fast O(1) set lookups
+    const preparedLcs = useMemo(() => {
+        return (lcRecords || []).map(lc => {
+            const lcId = lc.lcNo || String(lc._id);
+            const lcNoClean = cleanLc(lc.lcNo);
+            const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+            return {
+                lc,
+                lcId,
+                lcNoClean,
+                ipSet: new Set(lcIps)
+            };
+        });
+    }, [lcRecords]);
+
+    // Identify active IPs currently selected in either creation form or revise form
+    const activeIpNumbers = useMemo(() => {
+        const set = new Set();
+        if (showForm && Array.isArray(formData.ipNumbers)) {
+            formData.ipNumbers.forEach(n => { if (n) set.add(String(n).trim()); });
+        }
+        if (showReviseForm && Array.isArray(reviseFormData.ipNumbers)) {
+            reviseFormData.ipNumbers.forEach(n => { if (n) set.add(String(n).trim()); });
+        }
+        return set;
+    }, [showForm, showReviseForm, formData.ipNumbers, reviseFormData.ipNumbers]);
+
     // Compute IP Balance: IP Qty - actual consumption (stock receipts + border sales)
     // Compute IP Balance using sequential group consumption per product:
     // IPs with the same product share a pool of actual receipts/sales — fill first IP completely before next.
     const computeIpBalance = useMemo(() => {
         if (!showForm && !showReviseForm) return {};
+        if (activeIpNumbers.size === 0) return {};
         const balanceMap = {};
 
-        // Helper: match product names with local name and ipName support
-        const matchProduct = (nameA, nameB) => {
-            const cleanA = (nameA || '').toLowerCase().trim();
-            const cleanB = (nameB || '').toLowerCase().trim();
-            if (!cleanA || !cleanB) return false;
-            if (cleanA === cleanB) return true;
-
-            const prod = products.find(p => {
-                const pName = (p.name || '').toLowerCase().trim();
-                const pIpName = (p.ipName || '').toLowerCase().trim();
-                return (pName === cleanA && pIpName === cleanB) || (pName === cleanB && pIpName === cleanA);
-            });
-            return !!prod;
-        };
-
-        // Group IPs by product name
+        // Group IPs by product name and track which product groups are needed
         const ipsByProduct = {};
-        ipRecords.forEach(ip => {
+        const neededProductKeys = new Set();
+
+        (ipRecords || []).forEach(ip => {
             const productKey = (ip.productName || '').toLowerCase().trim();
             if (!productKey) {
-                balanceMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+                if (activeIpNumbers.has(ip.ipNumber)) {
+                    balanceMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+                }
                 return;
             }
             if (!ipsByProduct[productKey]) ipsByProduct[productKey] = [];
             ipsByProduct[productKey].push(ip);
+            if (activeIpNumbers.has(ip.ipNumber)) {
+                neededProductKeys.add(productKey);
+            }
         });
 
-        // Initialize lcRemainingConsumptionMap for each LC
+        if (neededProductKeys.size === 0) return balanceMap;
+
         const lcRemainingConsumptionMap = {};
 
         Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
+            if (!neededProductKeys.has(productKey)) return;
+            const canonicalKey = getCanonicalProduct(productKey);
+
             // Sort IPs ascending by numeric IP number: lowest consumed first
             const sortedIps = [...ipsGroup].sort((a, b) => {
                 const aNum = parseFloat(cleanLc(a.ipNumber)) || 0;
@@ -2221,77 +2332,59 @@ function PI({
                 return (a.ipNumber || '').localeCompare(b.ipNumber || '');
             });
 
-            // Initialize total consumption for each LC under this product key
-            lcRecords.forEach(lc => {
-                const lcId = lc.lcNo || String(lc._id);
+            // Initialize total consumption for each LC under this product key using pre-indexed collections
+            preparedLcs.forEach(({ lcId, lcNoClean }) => {
                 if (!lcRemainingConsumptionMap[lcId]) lcRemainingConsumptionMap[lcId] = {};
-
-                const lcNoClean = cleanLc(lc.lcNo);
                 if (!lcNoClean) {
                     lcRemainingConsumptionMap[lcId][productKey] = 0;
                     return;
                 }
 
-                // Sum unique stock receipts for this LC matching the product name
+                // Sum unique stock receipts for this LC matching the product name (fast lookup)
                 const groupReceiptsMap = {};
-                allStockRecords.forEach(s => {
-                    const sLcClean = cleanLc(s.lcNo);
-                    const status = (s.status || '').toLowerCase();
-                    if (sLcClean === lcNoClean && (status === 'accepted' || status === 'in stock')) {
-                        const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                        const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                        const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                        const key = `${sLcClean}_${dateStr}_${groupVal}`;
+                const stockList = stockByLcClean.get(lcNoClean) || [];
+                stockList.forEach(s => {
+                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                    const key = `${lcNoClean}_${dateStr}_${groupVal}`;
 
-                        // Filter entries matching the product name
-                        let productQty = 0;
-                        if (s.entries && s.entries.length > 0) {
-                            productQty = s.entries
-                                .filter(item => matchProduct(item.productName, productKey))
-                                .reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                        } else if (matchProduct(s.productName, productKey)) {
-                            productQty = parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                        }
+                    let productQty = 0;
+                    if (s.entries && s.entries.length > 0) {
+                        productQty = s.entries
+                            .filter(item => getCanonicalProduct(item.productName) === canonicalKey)
+                            .reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    } else if (getCanonicalProduct(s.productName) === canonicalKey) {
+                        productQty = parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    }
 
-                        if (productQty > 0) {
-                            if (!groupReceiptsMap[key]) {
-                                groupReceiptsMap[key] = productQty;
-                            } else {
-                                groupReceiptsMap[key] += productQty;
-                            }
+                    if (productQty > 0) {
+                        if (!groupReceiptsMap[key]) {
+                            groupReceiptsMap[key] = productQty;
+                        } else {
+                            groupReceiptsMap[key] += productQty;
                         }
                     }
                 });
                 let totalConsumption = Object.values(groupReceiptsMap).reduce((sum, qty) => sum + qty, 0);
 
-                // Sum unique border sales for this LC matching the product name
-                allSalesRecords.forEach(s => {
-                    const matchesLc = !!lcNoClean && (
-                        (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
-                        (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
-                        (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
-                        (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
-                    );
-                    const status = (s.status || '').toLowerCase();
-                    const isValidStatus = !status.includes('rejected') && status !== 'requested';
-                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                    const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
-                    if (matchesLc && isValidStatus && isBorder) {
-                        let productSaleQty = 0;
-                        if (s.items && s.items.length > 0) {
-                            productSaleQty = s.items
-                                .filter(item => matchProduct(item.productName, productKey))
-                                .reduce((iSum, item) => {
-                                    const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                                    return iSum + (brandSubtotal || parseNum(item.quantity));
-                                }, 0);
-                        } else if (matchProduct(s.productName, productKey)) {
-                            productSaleQty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total);
-                        }
+                // Sum unique border sales for this LC matching the product name (fast lookup)
+                const salesList = salesByLcClean.get(lcNoClean) || [];
+                salesList.forEach(s => {
+                    let productSaleQty = 0;
+                    if (s.items && s.items.length > 0) {
+                        productSaleQty = s.items
+                            .filter(item => getCanonicalProduct(item.productName) === canonicalKey)
+                            .reduce((iSum, item) => {
+                                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                                return iSum + (brandSubtotal || parseNum(item.quantity));
+                            }, 0);
+                    } else if (getCanonicalProduct(s.productName) === canonicalKey) {
+                        productSaleQty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total);
+                    }
 
-                        if (productSaleQty > 0) {
-                            totalConsumption += productSaleQty;
-                        }
+                    if (productSaleQty > 0) {
+                        totalConsumption += productSaleQty;
                     }
                 });
 
@@ -2302,18 +2395,10 @@ function PI({
             sortedIps.forEach(ip => {
                 const ipQty = parseNum(ip.quantity) || 0;
                 const ipNoClean = cleanLc(ip.ipNumber);
-
-                // Find LCs linked to this IP
-                const relatedLcsForIp = lcRecords.filter(lc => {
-                    const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
-                        ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
-                        : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
-                    return lcIps.includes(ipNoClean);
-                });
+                const relatedLcs = preparedLcs.filter(l => l.ipSet.has(ipNoClean));
 
                 let consumed = 0;
-                relatedLcsForIp.forEach(lc => {
-                    const lcId = lc.lcNo || String(lc._id);
+                relatedLcs.forEach(({ lcId }) => {
                     const available = lcRemainingConsumptionMap[lcId]?.[productKey] || 0;
                     const toConsume = Math.min(available, ipQty - consumed);
                     consumed += toConsume;
@@ -2327,43 +2412,25 @@ function PI({
         });
 
         return balanceMap;
-    }, [showForm, showReviseForm, ipRecords, lcRecords, allStockRecords, allSalesRecords, products]);
+    }, [showForm, showReviseForm, activeIpNumbers, ipRecords, preparedLcs, stockByLcClean, salesByLcClean, getCanonicalProduct]);
 
-
-    // Compute LC REM (LC Remaining) using sequential IP consumption per product group:
-    // IPs with the same product name share a pool of LC consumption.
-    // LCs are deduplicated across the group, total LC qty summed, then consumed
-    // sequentially — first IP filled completely, then second, and so on.
+    // Compute LC REM (LC Remaining) using sequential IP consumption per product group
     const computeLcBalance = useMemo(() => {
         if (!showForm && !showReviseForm) return {};
+        if (activeIpNumbers.size === 0) return {};
         const balanceMap = {};
 
-        // Helper: match product names with local name and ipName support
-        const matchProduct = (nameA, nameB) => {
-            const cleanA = (nameA || '').toLowerCase().trim();
-            const cleanB = (nameB || '').toLowerCase().trim();
-            if (!cleanA || !cleanB) return false;
-            if (cleanA === cleanB) return true;
-
-            const prod = products.find(p => {
-                const pName = (p.name || '').toLowerCase().trim();
-                const pIpName = (p.ipName || '').toLowerCase().trim();
-                return (pName === cleanA && pIpName === cleanB) || (pName === cleanB && pIpName === cleanA);
-            });
-            return !!prod;
-        };
-
-        // Helper: get LC quantity for a given product name (in Kg)
-        const getLcProductQtyInKg = (lc, productKey) => {
+        // Helper: get LC quantity for a given canonical product key (in Kg)
+        const getLcProductQtyInKg = (lc, canonicalKey) => {
             if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
                 const matched = lc.productsList.filter(p =>
-                    matchProduct(p.productName, productKey)
+                    getCanonicalProduct(p.productName) === canonicalKey
                 );
                 if (matched.length > 0) {
                     return matched.reduce((sum, p) => sum + (parseNum(p.quantity) * 1000), 0);
                 }
             }
-            if (matchProduct(lc.productName, productKey)) {
+            if (getCanonicalProduct(lc.productName) === canonicalKey) {
                 return parseNum(lc.quantity) * 1000;
             }
             return 0;
@@ -2371,25 +2438,34 @@ function PI({
 
         // Group IPs by product name
         const ipsByProduct = {};
-        ipRecords.forEach(ip => {
+        const neededProductKeys = new Set();
+
+        (ipRecords || []).forEach(ip => {
             const productKey = (ip.productName || '').toLowerCase().trim();
             if (!productKey) {
-                // No product — independent balance = full quantity (no LC links expected)
-                balanceMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+                if (activeIpNumbers.has(ip.ipNumber)) {
+                    balanceMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+                }
                 return;
             }
             if (!ipsByProduct[productKey]) ipsByProduct[productKey] = [];
             ipsByProduct[productKey].push(ip);
+            if (activeIpNumbers.has(ip.ipNumber)) {
+                neededProductKeys.add(productKey);
+            }
         });
 
-        // Initialize lcRemainingQtyMap for each LC
+        if (neededProductKeys.size === 0) return balanceMap;
+
         const lcRemainingQtyMap = {};
-        lcRecords.forEach(lc => {
-            const lcId = lc.lcNo || String(lc._id);
+        preparedLcs.forEach(({ lcId }) => {
             lcRemainingQtyMap[lcId] = {};
         });
 
         Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
+            if (!neededProductKeys.has(productKey)) return;
+            const canonicalKey = getCanonicalProduct(productKey);
+
             // Sort IPs ascending by numeric IP number so first IP is consumed first
             const sortedIps = [...ipsGroup].sort((a, b) => {
                 const aNum = parseFloat(cleanLc(a.ipNumber)) || 0;
@@ -2399,27 +2475,18 @@ function PI({
             });
 
             // Populate initial LC remaining quantities for this product key
-            lcRecords.forEach(lc => {
-                const lcId = lc.lcNo || String(lc._id);
-                lcRemainingQtyMap[lcId][productKey] = getLcProductQtyInKg(lc, productKey);
+            preparedLcs.forEach(({ lc, lcId }) => {
+                lcRemainingQtyMap[lcId][productKey] = getLcProductQtyInKg(lc, canonicalKey);
             });
 
             // Distribute sequentially, but ONLY from LCs that are linked to the specific IP
             sortedIps.forEach(ip => {
                 const ipQty = parseNum(ip.quantity) || 0;
                 const ipNoClean = cleanLc(ip.ipNumber);
-
-                // Find LCs linked to this IP
-                const relatedLcsForIp = lcRecords.filter(lc => {
-                    const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
-                        ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
-                        : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
-                    return lcIps.includes(ipNoClean);
-                });
+                const relatedLcs = preparedLcs.filter(l => l.ipSet.has(ipNoClean));
 
                 let consumed = 0;
-                relatedLcsForIp.forEach(lc => {
-                    const lcId = lc.lcNo || String(lc._id);
+                relatedLcs.forEach(({ lcId }) => {
                     const available = lcRemainingQtyMap[lcId]?.[productKey] || 0;
                     const toConsume = Math.min(available, ipQty - consumed);
                     consumed += toConsume;
@@ -2433,7 +2500,7 @@ function PI({
         });
 
         return balanceMap;
-    }, [showForm, showReviseForm, ipRecords, lcRecords, products]);
+    }, [showForm, showReviseForm, activeIpNumbers, ipRecords, preparedLcs, getCanonicalProduct]);
 
 
     const calculatedGrandTotalQuantity = useMemo(() => {
@@ -3882,7 +3949,9 @@ function PI({
             ipNumbers: [],
             amendmentType: '',
             extendedShipmentDate: '',
-            extendedExpiryDate: ''
+            extendedExpiryDate: '',
+            increaseValue: '',
+            increaseQuantity: ''
         });
     };
 
@@ -4525,7 +4594,9 @@ function PI({
             ipNumbers,
             amendmentType: '',
             extendedShipmentDate: '',
-            extendedExpiryDate: ''
+            extendedExpiryDate: '',
+            increaseValue: '',
+            increaseQuantity: ''
         });
         setReviseSearchQuery(pi.piNumber || '');
         setReviseIpSearch('');
@@ -4651,17 +4722,23 @@ function PI({
             return lcPi === cleanPiNum;
         });
 
+        const origRev = (selectedPiForRevise.revisions && Array.isArray(selectedPiForRevise.revisions))
+            ? (selectedPiForRevise.revisions.find(r => r.isOriginal || r.reviseNo === 'Original PI') || selectedPiForRevise.revisions[0])
+            : null;
+
         const enriched = {
             ...selectedPiForRevise,
             ...reviseFormData,
             piNumber: `${selectedPiForRevise.piNumber} (REVISED)`,
             originalPiNumber: selectedPiForRevise.piNumber,
-            originalGrandTotal: selectedPiForRevise.grandTotal,
-            originalGrandTotalQuantity: selectedPiForRevise.grandTotalQuantity,
-            originalProductsList: selectedPiForRevise.productsList || (selectedPiForRevise.productName ? [{ productName: selectedPiForRevise.productName, quantity: selectedPiForRevise.grandTotalQuantity }] : []),
-            originalIpNumbers: selectedPiForRevise.ipNumbers || (selectedPiForRevise.ipNumber ? String(selectedPiForRevise.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : []),
+            originalGrandTotal: origRev?.grandTotal || selectedPiForRevise.originalGrandTotal || selectedPiForRevise.grandTotal,
+            originalGrandTotalQuantity: origRev?.grandTotalQuantity || selectedPiForRevise.originalGrandTotalQuantity || selectedPiForRevise.grandTotalQuantity,
+            originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName, quantity: origRev.grandTotalQuantity }] : (selectedPiForRevise.productsList || [])),
+            originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (selectedPiForRevise.ipNumbers || [])),
             previousGrandTotal: selectedPiForRevise.grandTotal,
             previousGrandTotalQuantity: selectedPiForRevise.grandTotalQuantity,
+            increaseValue: reviseFormData.increaseValue,
+            increaseQuantity: reviseFormData.increaseQuantity,
             linkedLc,
             lcNo: linkedLc?.lcNo || selectedPiForRevise.lcNo || selectedPiForRevise.lcNumber || '',
             lcDate: linkedLc?.openingDate || linkedLc?.lcDate || selectedPiForRevise.lcDate || '',
@@ -4739,6 +4816,8 @@ function PI({
                 ipNumbers: latestRev.ipNumbers || record.ipNumbers || [],
                 grandTotal: latestRev.grandTotal !== undefined && latestRev.grandTotal !== '' ? latestRev.grandTotal : record.grandTotal,
                 grandTotalQuantity: latestRev.grandTotalQuantity !== undefined && latestRev.grandTotalQuantity !== '' ? latestRev.grandTotalQuantity : record.grandTotalQuantity,
+                increaseValue: latestRev.increaseValue !== undefined ? latestRev.increaseValue : record.increaseValue,
+                increaseQuantity: latestRev.increaseQuantity !== undefined ? latestRev.increaseQuantity : record.increaseQuantity,
                 ipRecords: ipRecords || record.ipRecords || []
             };
         } else {
@@ -4921,6 +5000,25 @@ function PI({
                 return lcPi === cleanPiNum;
             });
 
+            const origRevObj = currentRevisions.find(r => r.reviseNo === 'Original PI') || currentRevisions[0];
+            const trueOriginalGrandTotal = origRevObj?.grandTotal || pi.originalGrandTotal || pi.grandTotal || '';
+            const trueOriginalGrandTotalQuantity = origRevObj?.grandTotalQuantity || pi.originalGrandTotalQuantity || pi.grandTotalQuantity || '';
+
+            const tempRecordForCalc = {
+                ...pi,
+                ...reviseFormData,
+                revisions: currentRevisions,
+                originalGrandTotal: trueOriginalGrandTotal,
+                originalGrandTotalQuantity: trueOriginalGrandTotalQuantity
+            };
+            const calcIncreases = calculateAmendmentIncreaseValues(tempRecordForCalc);
+            const finalIncreaseValue = (reviseFormData.increaseValue !== undefined && reviseFormData.increaseValue !== null && reviseFormData.increaseValue !== '' && !isNaN(parseFloat(reviseFormData.increaseValue)))
+                ? String(parseFloat(reviseFormData.increaseValue).toFixed(2))
+                : String(calcIncreases.increaseVal.toFixed(2));
+            const finalIncreaseQuantity = (reviseFormData.increaseQuantity !== undefined && reviseFormData.increaseQuantity !== null && reviseFormData.increaseQuantity !== '' && !isNaN(parseFloat(reviseFormData.increaseQuantity)))
+                ? String(parseFloat(reviseFormData.increaseQuantity).toFixed(2))
+                : String(calcIncreases.increaseQty.toFixed(2));
+
             const newRevision = {
                 reviseNo: reviseFormData.reviseNo,
                 reviseDate: reviseFormData.reviseDate,
@@ -4938,8 +5036,10 @@ function PI({
                 amendmentType: reviseFormData.amendmentType || 'Increase of L/C Value and Quantity',
                 extendedShipmentDate: reviseFormData.extendedShipmentDate || '',
                 extendedExpiryDate: reviseFormData.extendedExpiryDate || '',
-                originalGrandTotal: pi.grandTotal || '',
-                originalGrandTotalQuantity: pi.grandTotalQuantity || '',
+                originalGrandTotal: trueOriginalGrandTotal,
+                originalGrandTotalQuantity: trueOriginalGrandTotalQuantity,
+                increaseValue: finalIncreaseValue,
+                increaseQuantity: finalIncreaseQuantity,
                 lcNo: matchedLc?.lcNo || pi.lcNo || pi.lcNumber || '',
                 lcDate: matchedLc?.openingDate || matchedLc?.lcDate || pi.lcDate || '',
                 revisedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
@@ -4996,8 +5096,10 @@ function PI({
                     amendmentType: reviseFormData.amendmentType || 'Increase of L/C Value and Quantity',
                     extendedShipmentDate: reviseFormData.extendedShipmentDate || '',
                     extendedExpiryDate: reviseFormData.extendedExpiryDate || '',
-                    originalGrandTotal: pi.grandTotal || '',
-                    originalGrandTotalQuantity: pi.grandTotalQuantity || '',
+                    originalGrandTotal: trueOriginalGrandTotal,
+                    originalGrandTotalQuantity: trueOriginalGrandTotalQuantity,
+                    increaseValue: finalIncreaseValue,
+                    increaseQuantity: finalIncreaseQuantity,
                     lcNo: matchedLc?.lcNo || pi.lcNo || pi.lcNumber || '',
                     lcDate: matchedLc?.openingDate || matchedLc?.lcDate || pi.lcDate || '',
                     piRevision: `${newRevision.reviseNo} DATE: ${formatDate(newRevision.reviseDate)}`,
@@ -5831,19 +5933,24 @@ function PI({
             </div>
 
             {showForm && (
-                <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
+                <div className="pi-form relative rounded-2xl bg-white/95 md:bg-white/70 backdrop-blur-md md:backdrop-blur-xl border border-white/50 shadow-2xl p-4 sm:p-6 md:p-8 transition-all duration-300 w-full min-w-0 max-w-full">
 
-                    <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
-                        <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit PI Record' : 'New PI Creation'}</h3>
-                        <button onClick={() => { setShowForm(false); resetForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
-                            <XIcon className="w-6 h-6" />
+                    <div className="flex items-center justify-between mb-4 md:mb-6 border-b border-gray-200/50 pb-3 md:pb-4 relative z-10">
+                        <h3 className="text-lg md:text-xl font-semibold text-gray-800">{editingId ? 'Edit PI Record' : 'New PI Creation'}</h3>
+                        <button 
+                            type="button"
+                            onClick={() => { setShowForm(false); resetForm(); }} 
+                            className="p-1.5 md:p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 active:scale-95 transition-all"
+                            title="Close Form"
+                        >
+                            <XIcon className="w-5 h-5 md:w-6 md:h-6" />
                         </button>
                     </div>
 
                     <form
                         onSubmit={handleSubmit}
                         noValidate
-                        className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10"
+                        className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 relative z-10"
                     >
                         {/* --- IP Section --- */}
                         <div className="col-span-full space-y-4">
@@ -7345,7 +7452,7 @@ function PI({
             )}
 
             {showReviseForm && (
-                <div className="pi-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-3 sm:p-6 md:p-8 transition-all duration-300 w-full min-w-0 max-w-full">
+                <div className="pi-form relative rounded-2xl bg-white/95 md:bg-white/60 backdrop-blur-md md:backdrop-blur-xl border border-white/50 shadow-2xl p-3 sm:p-6 md:p-8 transition-all duration-300 w-full min-w-0 max-w-full">
 
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
                         <div className="flex items-center justify-between gap-3 w-full md:w-auto">
@@ -7624,6 +7731,62 @@ function PI({
                                             </div>
                                         </div>
                                     )}
+
+                                    {((reviseFormData.amendmentType || '').toLowerCase().includes('increase') || !reviseFormData.amendmentType) && (() => {
+                                        const origRevObj = (selectedPiForRevise?.revisions && Array.isArray(selectedPiForRevise.revisions))
+                                            ? (selectedPiForRevise.revisions.find(r => r.isOriginal || r.reviseNo === 'Original PI') || selectedPiForRevise.revisions[0])
+                                            : null;
+                                        const trueOrigGt = origRevObj?.grandTotal || selectedPiForRevise?.originalGrandTotal || selectedPiForRevise?.grandTotal || 0;
+                                        const trueOrigQty = origRevObj?.grandTotalQuantity || selectedPiForRevise?.originalGrandTotalQuantity || selectedPiForRevise?.grandTotalQuantity || 0;
+
+                                        const calc = calculateAmendmentIncreaseValues({
+                                            ...selectedPiForRevise,
+                                            ...reviseFormData,
+                                            originalGrandTotal: trueOrigGt,
+                                            originalGrandTotalQuantity: trueOrigQty,
+                                            originalProductsList: origRevObj?.productsList || (origRevObj?.productName ? [{ productName: origRevObj.productName, quantity: trueOrigQty }] : (selectedPiForRevise?.productsList || []))
+                                        });
+
+                                        const displayVal = (reviseFormData.increaseValue !== undefined && reviseFormData.increaseValue !== null && reviseFormData.increaseValue !== '')
+                                            ? reviseFormData.increaseValue
+                                            : (calc.increaseVal > 0 ? String(calc.increaseVal) : '');
+                                        const displayQty = (reviseFormData.increaseQuantity !== undefined && reviseFormData.increaseQuantity !== null && reviseFormData.increaseQuantity !== '')
+                                            ? reviseFormData.increaseQuantity
+                                            : (calc.increaseQty > 0 ? String(calc.increaseQty) : '');
+
+                                        return (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 p-3.5 sm:p-4 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl animate-in fade-in duration-200 min-w-0">
+                                                <div className="space-y-1.5 min-w-0">
+                                                    <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider flex items-center justify-between">
+                                                        <span>Increase in L/C Value (USD) *</span>
+                                                        <span className="text-[10px] text-emerald-600 font-semibold lowercase">auto-calculated / editable</span>
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={displayVal}
+                                                        onChange={(e) => setReviseFormData(prev => ({ ...prev, increaseValue: e.target.value }))}
+                                                        placeholder="0.00"
+                                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all font-mono font-bold text-sm text-emerald-700"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5 min-w-0">
+                                                    <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider flex items-center justify-between">
+                                                        <span>Increase in Quantity (KGS) *</span>
+                                                        <span className="text-[10px] text-emerald-600 font-semibold lowercase">auto-calculated / editable</span>
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={displayQty}
+                                                        onChange={(e) => setReviseFormData(prev => ({ ...prev, increaseQuantity: e.target.value }))}
+                                                        placeholder="0"
+                                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all font-mono font-bold text-sm text-emerald-700"
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* First Line: Place of Receipt, Port of Loading, Port of Discharge */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 min-w-0">

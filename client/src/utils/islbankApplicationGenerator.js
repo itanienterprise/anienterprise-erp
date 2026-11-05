@@ -426,6 +426,111 @@ export const getAllPiProductsText = (record) => {
 };
 
 /**
+ * Helper to calculate robust increase values and quantities for amendments
+ * @param {Object} record - PI Record or revision data
+ */
+export const calculateAmendmentIncreaseValues = (record) => {
+    if (!record) {
+        return {
+            increaseVal: 0,
+            revisedTotalVal: 0,
+            increaseQty: 0,
+            revisedTotalQty: 0,
+            origTotalVal: 0,
+            origTotalQty: 0
+        };
+    }
+
+    const actualRevs = (record.revisions && Array.isArray(record.revisions))
+        ? record.revisions.filter(r => !r.isOriginal && r.reviseNo !== 'Original PI' && !r.isTenPercent)
+        : [];
+    const origRev = (record.revisions && Array.isArray(record.revisions))
+        ? (record.revisions.find(r => r.isOriginal || r.reviseNo === 'Original PI') || record.revisions[0])
+        : null;
+
+    const revisedTotalVal = parseFloat(record.grandTotal || (actualRevs.length > 0 ? actualRevs[actualRevs.length - 1].grandTotal : 0) || 0);
+    const origTotalVal = parseFloat(record.originalGrandTotal || record.previousGrandTotal || origRev?.grandTotal || (actualRevs.length > 0 ? origRev?.grandTotal : record.grandTotal) || 0);
+
+    const revisedTotalQty = parseFloat(record.grandTotalQuantity || (actualRevs.length > 0 ? actualRevs[actualRevs.length - 1].grandTotalQuantity : 0) || 0);
+    const origTotalQty = parseFloat(record.originalGrandTotalQuantity || record.previousGrandTotalQuantity || origRev?.grandTotalQuantity || (actualRevs.length > 0 ? origRev?.grandTotalQuantity : record.grandTotalQuantity) || 0);
+
+    // Product-by-product comparison to capture newly added or individually increased items
+    const origProdsList = (record.originalProductsList && record.originalProductsList.length > 0)
+        ? record.originalProductsList
+        : ((origRev?.productsList && origRev.productsList.length > 0)
+            ? origRev.productsList
+            : (origRev?.productName ? [{ productName: origRev.productName, quantity: origRev.grandTotalQuantity, amount: origRev.grandTotal }] : []));
+
+    const currentProds = (record.productsList && record.productsList.length > 0)
+        ? record.productsList
+        : (actualRevs.length > 0 && actualRevs[actualRevs.length - 1].productsList
+            ? actualRevs[actualRevs.length - 1].productsList
+            : (record.productName ? [{ productName: record.productName, quantity: record.grandTotalQuantity, amount: record.grandTotal }] : []));
+
+    let prodSumQtyIncrease = 0;
+    let prodSumValIncrease = 0;
+
+    currentProds.forEach(curItem => {
+        const curName = (curItem.productName || curItem.product || '').toLowerCase().trim();
+        const curQty = parseFloat(curItem.quantity) || 0;
+        const curVal = (parseFloat(curItem.amount) || 0) + (parseFloat(curItem.totalFreight) || 0);
+
+        const matchedOrig = origProdsList.find(o => (o.productName || o.product || '').toLowerCase().trim() === curName);
+        if (!matchedOrig) {
+            // Newly added product line entirely constitutes an increase
+            prodSumQtyIncrease += curQty;
+            prodSumValIncrease += curVal;
+        } else {
+            const origQty = parseFloat(matchedOrig.quantity) || 0;
+            const origVal = (parseFloat(matchedOrig.amount) || 0) + (parseFloat(matchedOrig.totalFreight) || 0);
+            if (curQty > origQty) prodSumQtyIncrease += (curQty - origQty);
+            if (curVal > origVal) prodSumValIncrease += (curVal - origVal);
+        }
+    });
+
+    let increaseVal = record.increaseValue !== undefined && record.increaseValue !== null && record.increaseValue !== '' && !isNaN(parseFloat(record.increaseValue))
+        ? parseFloat(record.increaseValue)
+        : NaN;
+    if (isNaN(increaseVal) || increaseVal <= 0) {
+        if (revisedTotalVal > origTotalVal) {
+            increaseVal = revisedTotalVal - origTotalVal;
+        } else if (prodSumValIncrease > 0) {
+            increaseVal = prodSumValIncrease;
+        } else if (Math.abs(revisedTotalVal - origTotalVal) > 0) {
+            increaseVal = Math.abs(revisedTotalVal - origTotalVal);
+        } else {
+            increaseVal = revisedTotalVal;
+        }
+    }
+
+    let increaseQty = record.increaseQuantity !== undefined && record.increaseQuantity !== null && record.increaseQuantity !== '' && !isNaN(parseFloat(record.increaseQuantity))
+        ? parseFloat(record.increaseQuantity)
+        : NaN;
+    if (isNaN(increaseQty) || increaseQty <= 0) {
+        if (revisedTotalQty > origTotalQty) {
+            increaseQty = revisedTotalQty - origTotalQty;
+        } else if (prodSumQtyIncrease > 0) {
+            increaseQty = prodSumQtyIncrease;
+        } else if (Math.abs(revisedTotalQty - origTotalQty) > 0) {
+            increaseQty = Math.abs(revisedTotalQty - origTotalQty);
+        } else {
+            increaseQty = revisedTotalQty;
+        }
+    }
+
+    return {
+        increaseVal: Math.max(0, increaseVal),
+        revisedTotalVal,
+        increaseQty: Math.max(0, increaseQty),
+        revisedTotalQty,
+        prodSumValIncrease,
+        prodSumQtyIncrease,
+        origTotalVal,
+        origTotalQty
+    };
+};
+
+/**
  * Render Format: Amendment of L/C Value and Quantity Application Letter (Option 1)
  * @param {jsPDF} doc - jsPDF instance
  * @param {Object} record - PI Record / Revision data
@@ -506,18 +611,13 @@ export const renderIncreaseLcValueQtyAmendmentApplication = (doc, record) => {
     const rawReviseDate = record.reviseDate || (actualRevs.length > 0 ? actualRevs[actualRevs.length - 1].reviseDate : null) || record.date;
     const reviseDateFormatted = formatDate(rawReviseDate);
 
-    // Value and Quantity Calculations
-    const revisedTotalVal = parseFloat(record.grandTotal || (actualRevs.length > 0 ? actualRevs[actualRevs.length - 1].grandTotal : 0) || 0);
-    const origTotalVal = parseFloat(record.originalGrandTotal || record.previousGrandTotal || origRev?.grandTotal || (actualRevs.length > 0 ? origRev?.grandTotal : record.grandTotal) || 0);
-    const increaseVal = record.increaseValue !== undefined
-        ? parseFloat(record.increaseValue)
-        : (origTotalVal > 0 ? Math.max(0, revisedTotalVal - origTotalVal) : revisedTotalVal);
-
-    const revisedTotalQty = parseFloat(record.grandTotalQuantity || (actualRevs.length > 0 ? actualRevs[actualRevs.length - 1].grandTotalQuantity : 0) || 0);
-    const origTotalQty = parseFloat(record.originalGrandTotalQuantity || record.previousGrandTotalQuantity || origRev?.grandTotalQuantity || (actualRevs.length > 0 ? origRev?.grandTotalQuantity : record.grandTotalQuantity) || 0);
-    const increaseQty = record.increaseQuantity !== undefined
-        ? parseFloat(record.increaseQuantity)
-        : (origTotalQty > 0 ? Math.max(0, revisedTotalQty - origTotalQty) : revisedTotalQty);
+    // Value and Quantity Calculations using robust calculator
+    const {
+        increaseVal,
+        revisedTotalVal,
+        increaseQty,
+        revisedTotalQty
+    } = calculateAmendmentIncreaseValues(record);
 
     const formattedIncreaseValue = (increaseVal > 0 ? increaseVal : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formattedRevisedTotalValue = (revisedTotalVal > 0 ? revisedTotalVal : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1076,16 +1176,20 @@ export const renderMergedAmendmentApplication = (doc, record, selections) => {
     doc.text(p2Text, marginLeft, currentY, { maxWidth: contentWidth, align: 'justify', lineHeightFactor: 1.35 });
     currentY += (p2Lines.length * 5.6) + 4.5;
 
-    // Value and Quantity Calculations
-    const revisedTotalVal = parseFloat(record.grandTotal || (actualRevs.length > 0 ? actualRevs[actualRevs.length - 1].grandTotal : 0) || 0);
-    const origTotalVal = parseFloat(record.originalGrandTotal || record.previousGrandTotal || origRev?.grandTotal || (actualRevs.length > 0 ? origRev?.grandTotal : record.grandTotal) || 0);
+    // Value and Quantity Calculations using robust calculator
+    const {
+        increaseVal,
+        revisedTotalVal,
+        increaseQty,
+        revisedTotalQty,
+        origTotalVal,
+        origTotalQty
+    } = calculateAmendmentIncreaseValues(record);
     const isValIncrease = revisedTotalVal >= origTotalVal;
-    const diffVal = Math.abs(revisedTotalVal - origTotalVal);
+    const diffVal = increaseVal;
 
-    const revisedTotalQty = parseFloat(record.grandTotalQuantity || (actualRevs.length > 0 ? actualRevs[actualRevs.length - 1].grandTotalQuantity : 0) || 0);
-    const origTotalQty = parseFloat(record.originalGrandTotalQuantity || record.previousGrandTotalQuantity || origRev?.grandTotalQuantity || (actualRevs.length > 0 ? origRev?.grandTotalQuantity : record.grandTotalQuantity) || 0);
     const isQtyIncrease = revisedTotalQty >= origTotalQty;
-    const diffQty = Math.abs(revisedTotalQty - origTotalQty);
+    const diffQty = increaseQty;
 
     const formattedDiffValue = (diffVal > 0 ? diffVal : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formattedRevisedTotalValue = (revisedTotalVal > 0 ? revisedTotalVal : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
