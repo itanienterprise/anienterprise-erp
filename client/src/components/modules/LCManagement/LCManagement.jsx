@@ -91,14 +91,102 @@ const isAcceptedStock = (s) => {
     return !status.includes('requested') && !status.includes('rejected') && !status.includes('pending');
 };
 
-const isSaleLcMatch = (s, targetLc) => {
+const isSaleLcMatch = (s, targetLc, lcRecord) => {
     const targetClean = String(targetLc || '').replace(/\D/g, '');
     if (!targetClean) return false;
     const sLcs = [
         s.lcNo, s.lcNumber, s.lc_no,
         ...(s.items || []).flatMap(i => [i.lcNo, ...(i.brandEntries || []).map(b => b.lcNo)])
     ].filter(Boolean);
-    return sLcs.some(slc => isLcMatch(slc, targetClean));
+
+    // Exact cleaned digits match (ignoring leading zeros)
+    const targetNorm = targetClean.replace(/^0+/, '');
+    const hasExact = sLcs.some(slc => {
+        const c = String(slc || '').replace(/\D/g, '').replace(/^0+/, '');
+        return c && c === targetNorm;
+    });
+    if (hasExact) return true;
+
+    // Loose match check
+    const hasLoose = sLcs.some(slc => isLcMatch(slc, targetClean));
+    if (!hasLoose) return false;
+
+    // Guard partial matches with date and product compatibility
+    if (lcRecord) {
+        if (s.date && lcRecord.openingDate) {
+            const sTime = new Date(s.date).getTime();
+            const lcTime = new Date(lcRecord.openingDate).getTime();
+            if (!isNaN(sTime) && !isNaN(lcTime) && sTime < lcTime - (30 * 24 * 3600 * 1000)) {
+                return false;
+            }
+        }
+
+        const lcProds = [
+            lcRecord.productName,
+            ...(lcRecord.productsList || []).map(p => p.productName)
+        ].filter(Boolean).map(p => p.toLowerCase().trim());
+
+        if (lcProds.length > 0) {
+            const sProds = [
+                s.productName,
+                ...(s.items || []).map(i => i.productName)
+            ].filter(Boolean).map(p => p.toLowerCase().trim());
+
+            if (sProds.length > 0) {
+                const prodMatch = lcProds.some(lp =>
+                    sProds.some(sp => sp.includes(lp) || lp.includes(sp))
+                );
+                if (!prodMatch) return false;
+            }
+        }
+    }
+
+    return true;
+};
+
+const isStockLcMatch = (s, targetLc, lcRecord) => {
+    const targetClean = String(targetLc || '').replace(/\D/g, '');
+    if (!targetClean) return false;
+    const sLc = String(s.lcNo || s.lcNumber || '').replace(/\D/g, '');
+    if (!sLc) return false;
+
+    const targetNorm = targetClean.replace(/^0+/, '');
+    const sNorm = sLc.replace(/^0+/, '');
+    if (sNorm && sNorm === targetNorm) return true;
+
+    if (!isLcMatch(sLc, targetClean)) return false;
+
+    if (lcRecord) {
+        const sDate = s.date || s.receiveDate || s.createdAt;
+        if (sDate && lcRecord.openingDate) {
+            const sTime = new Date(sDate).getTime();
+            const lcTime = new Date(lcRecord.openingDate).getTime();
+            if (!isNaN(sTime) && !isNaN(lcTime) && sTime < lcTime - (30 * 24 * 3600 * 1000)) {
+                return false;
+            }
+        }
+
+        const lcProds = [
+            lcRecord.productName,
+            ...(lcRecord.productsList || []).map(p => p.productName)
+        ].filter(Boolean).map(p => p.toLowerCase().trim());
+
+        if (lcProds.length > 0) {
+            const sProds = [
+                s.productName,
+                ...(s.entries || []).map(e => e.productName)
+            ].filter(Boolean).map(p => p.toLowerCase().trim());
+
+            if (sProds.length > 0) {
+                const prodMatch = lcProds.some(lp =>
+                    sProds.some(sp => sp.includes(lp) || lp.includes(sp))
+                );
+                if (!prodMatch) return false;
+            }
+        }
+    }
+
+    return true;
 };
 
 export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onDeleteAmendment, onUpdateDollarRate, canManage, canDelete, canDeleteAmendment, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [], showDetailsFirst = false, initialShowDetails = false, getLcEntryDetails, employeesFullNameMap, modalZIndex = 'z-[5000]' }) => {
@@ -660,7 +748,7 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
     // Calculate Consumptions
     const receiptsMap = {};
     allStockRecords
-        .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
+        .filter(s => isStockLcMatch(s, lcNoClean, data) && isAcceptedStock(s))
         .forEach(s => {
             // Ensure date key is just the day, so milliseconds in createdAt don't break grouping
             const rawDate = s.date || s.receiveDate || s.createdAt || '';
@@ -856,7 +944,7 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
         // Calculate receipts
         const receiptsMapForBalance = {};
         allStockRecords
-            .filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s))
+            .filter(s => isStockLcMatch(s, lcNoClean, data) && isAcceptedStock(s))
             .forEach(s => {
                 const rawDate = s.date || s.receiveDate || s.createdAt || '';
                 const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
@@ -876,7 +964,7 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
 
         const borderSaleQtyKg = allSalesRecords
             .filter(s => {
-                const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
+                const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean, data);
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
                 const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                 const status = (s.status || '').toLowerCase();
@@ -8707,9 +8795,9 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         const openingValue = parseFloat(record.totalAmount) || 0;
 
         // Pre-filter stocks and border sales for this LC ONCE instead of inside each loop
-        const matchingStocks = allStockRecords.filter(s => isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s));
+        const matchingStocks = allStockRecords.filter(s => isStockLcMatch(s, lcNoClean, record) && isAcceptedStock(s));
         const matchingBorderSales = allSalesRecords.filter(s => {
-            const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean);
+            const matchesLc = !!lcNoClean && isSaleLcMatch(s, lcNoClean, record);
             const sTypeLow = (s.saleType || '').toLowerCase().trim();
             const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
             const status = (s.status || '').toLowerCase();
@@ -12966,7 +13054,7 @@ style={
                                                                                             const pReceiptsMap = {};
                                                                                             allStockRecords
                                                                                                 .filter(s => {
-                                                                                                    const matchesLc = isLcMatch(s.lcNo, lcNoClean) && isAcceptedStock(s);
+                                                                                                    const matchesLc = isStockLcMatch(s, lcNoClean, record) && isAcceptedStock(s);
                                                                                                     const matchesProduct = String(s.productName || '').toLowerCase().trim() === String(p.productName || '').toLowerCase().trim();
                                                                                                     return matchesLc && matchesProduct;
                                                                                                 })
@@ -12991,7 +13079,7 @@ style={
 
                                                                                             const pBorderSaleQtyKg = allSalesRecords
                                                                                                 .filter(s => {
-                                                                                                    const matchesLc = isSaleLcMatch(s, lcNoClean);
+                                                                                                    const matchesLc = isSaleLcMatch(s, lcNoClean, record);
                                                                                                     const sTypeLow = (s.saleType || '').toLowerCase().trim();
                                                                                                     const isBorder = sTypeLow.includes('border') ||
                                                                                                         (s.invoiceNo || '').startsWith('BS') ||
