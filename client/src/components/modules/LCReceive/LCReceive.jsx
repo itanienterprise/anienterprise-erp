@@ -3400,7 +3400,7 @@ function LCReceive({
                 }
                 const itemQty = parseFloat(item.quantity) || 0;
                 const swpQty = parseFloat(item.sweepedQuantity) || 0;
-                const inHouse = parseFloat(item.inHouseQuantity) || (itemQty - swpQty);
+                const inHouse = itemQty > 0 ? (itemQty - swpQty) : (parseFloat(item.inHouseQuantity) || 0);
                 acc[key].quantity += itemQty;
                 acc[key].sweepedQuantity += swpQty;
                 acc[key].inHouseQuantity += inHouse;
@@ -5467,7 +5467,7 @@ function LCReceive({
                                         }
                                         const itemQty = parseFloat(item.quantity) || 0;
                                         const swpQty = parseFloat(item.sweepedQuantity) || 0;
-                                        const inHouse = parseFloat(item.inHouseQuantity) || (itemQty - swpQty);
+                                        const inHouse = itemQty > 0 ? (itemQty - swpQty) : (parseFloat(item.inHouseQuantity) || 0);
                                         acc[key].quantity += itemQty;
                                         acc[key].sweepedQuantity += swpQty;
                                         acc[key].inHouseQuantity += inHouse;

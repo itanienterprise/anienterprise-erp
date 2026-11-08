@@ -116,6 +116,9 @@ const LCReport = ({
     };
 
     const getIHQty = (item) => {
+        const arr = parseFloat(item.quantity) || 0;
+        const swp = parseFloat(item.sweepedQuantity) || 0;
+        if (arr > 0) return Math.max(0, arr - swp);
         if (item.inHouseQuantity !== undefined && item.inHouseQuantity !== '') return parseFloat(item.inHouseQuantity) || 0;
         const ihPkt = getIHPkt(item);
         const size = parseFloat(item.packetSize) || 0;
