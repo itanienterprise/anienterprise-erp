@@ -5,6 +5,7 @@ import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
 import { preloadBengaliFont, ensureBengaliFont } from './bengaliFontLoader';
 import { computeCustomerBalance, compareTransactions, getIsoDateString, calculatePurchaseRemainingQty } from './helpers';
 import { getAdjustedLcValues, getRecCostingKg, getLcMilestoneFinances, calculateLcConclusion, getLcOpenCostMap, getLcOpenCost } from './lcValueUtils';
+import { api } from './api';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -2071,6 +2072,38 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
                 console.warn('Could not fetch records for invoice balance calculation:', e);
             }
 
+            // If the incoming sale object is from the customer ledger / partial history item, enrich with full sale record
+            const targetInvNo = (sale.invoiceNo || '').trim().toUpperCase();
+            const targetSaleId = (sale._id || sale.id || '').toString().trim();
+            const fullSaleRecord = salesList.find(s => {
+                const sInv = (s.invoiceNo || '').trim().toUpperCase();
+                const sId = (s._id || s.id || '').toString().trim();
+                if (targetInvNo && sInv && sInv === targetInvNo) return true;
+                if (targetSaleId && sId && sId === targetSaleId) return true;
+                return false;
+            });
+
+            if (fullSaleRecord) {
+                sale = {
+                    ...fullSaleRecord,
+                    ...sale,
+                    items: (fullSaleRecord.items && Array.isArray(fullSaleRecord.items) && fullSaleRecord.items.length > 0)
+                        ? fullSaleRecord.items
+                        : sale.items,
+                    challanNo: fullSaleRecord.challanNo || sale.challanNo || '',
+                    truckNo: fullSaleRecord.truckNo || sale.truckNo || '',
+                    truck: fullSaleRecord.truck || sale.truck || '',
+                    lcNo: fullSaleRecord.lcNo || sale.lcNo || '',
+                    address: sale.address || fullSaleRecord.address || '',
+                    contact: sale.contact || fullSaleRecord.contact || '',
+                    paidAmount: sale.paidAmount !== undefined ? sale.paidAmount : (sale.paid !== undefined ? sale.paid : fullSaleRecord.paidAmount),
+                    discount: sale.discount !== undefined ? sale.discount : fullSaleRecord.discount,
+                    requestedBy: fullSaleRecord.requestedBy || sale.requestedBy || '',
+                    orderRequestedBy: fullSaleRecord.orderRequestedBy || fullSaleRecord.orderCreatedBy || sale.orderRequestedBy || '',
+                    approvedBy: fullSaleRecord.approvedBy || fullSaleRecord.acceptedBy || sale.approvedBy || ''
+                };
+            }
+
             const cComp = (customer?.companyName || '').trim().toLowerCase();
             const cCust = (customer?.customerName || '').trim().toLowerCase();
             const cCode = (customer?.customerId || '').trim().toLowerCase();
@@ -2080,7 +2113,9 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
             const matchedPRs = prList.filter(pr => {
                 if ((pr.status || '').toLowerCase() === 'requested') return false;
                 const prCustId = (pr.customerId || '').toString().trim();
-                if (prCustId && (prCustId === cIdStr || (cCode && prCustId.toLowerCase() === cCode))) return true;
+                if (prCustId) {
+                    return prCustId === cIdStr || (cCode && prCustId.toLowerCase() === cCode);
+                }
                 const prComp = (pr.companyName || '').trim().toLowerCase();
                 const prSupp = (pr.supplierName || '').trim().toLowerCase();
 
@@ -2150,7 +2185,9 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
                 if (pNo && coveredPurchaseNos.has(pNo)) return false;
 
                 const pCustId = (p.customerId || '').toString().trim();
-                if (pCustId && (pCustId === cIdStr || (cCode && pCustId.toLowerCase() === cCode))) return true;
+                if (pCustId) {
+                    return pCustId === cIdStr || (cCode && pCustId.toLowerCase() === cCode);
+                }
 
                 const pComp = (p.companyName || '').trim().toLowerCase();
                 const pSupp = (p.supplierName || '').trim().toLowerCase();
@@ -2191,11 +2228,16 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
                 const sComp = (s.companyName || '').trim().toLowerCase();
                 const sCustName = (s.customerName || '').trim().toLowerCase();
 
-                const idMatch = Boolean(cIdStr && sCustId && (cIdStr === sCustId || (cCode && sCustId.toLowerCase() === cCode)));
-                const compMatch = Boolean(cComp && sComp && (cComp === sComp || cComp.includes(sComp) || sComp.includes(cComp)));
-                const custMatch = Boolean(cCust && sCustName && (cCust === sCustName || cCust.includes(sCustName) || sCustName.includes(cCust)));
+                let isMatch = false;
+                if (sCustId) {
+                    isMatch = Boolean(cIdStr && sCustId === cIdStr) || Boolean(cCode && sCustId.toLowerCase() === cCode);
+                } else if (cComp && sComp) {
+                    isMatch = Boolean(cComp === sComp || cComp.includes(sComp) || sComp.includes(cComp));
+                } else if (cCust && sCustName) {
+                    isMatch = Boolean(cCust === sCustName);
+                }
 
-                if (idMatch || compMatch || custMatch) {
+                if (isMatch) {
                     if (sInv) processedInvoices.add(sInv);
                     if (sOrd) processedInvoices.add(sOrd);
 
@@ -2245,6 +2287,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
 
                                     salesHistory.push({
                                         _id: `${s._id || s.invoiceNo}_${pIdx}_${eIdx}`,
+                                        saleId: (s._id || '').toString(),
                                         date: s.date,
                                         createdAt: s.createdAt,
                                         invoiceNo: s.invoiceNo,
@@ -2296,6 +2339,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
 
                                 salesHistory.push({
                                     _id: `${s._id || s.invoiceNo}_${pIdx}_0`,
+                                    saleId: (s._id || '').toString(),
                                     date: s.date,
                                     createdAt: s.createdAt,
                                     invoiceNo: s.invoiceNo,
@@ -2334,7 +2378,9 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
             const matchedReturns = returnsList.filter(r => {
                 if ((r.status || '').toLowerCase() === 'requested' || (r.status || '').toLowerCase() === 'cancelled') return false;
                 const rId = String(r.customerId || '').trim();
-                if (cIdStr && rId && (rId === cIdStr || (cCode && rId.toLowerCase() === cCode))) return true;
+                if (rId) {
+                    return rId === cIdStr || (cCode && rId.toLowerCase() === cCode);
+                }
                 const rInv = (r.invoiceNo || '').trim().toUpperCase();
                 if (rInv && processedInvoices.has(rInv)) return true;
                 const rComp = (r.companyName || '').trim().toLowerCase();
@@ -2362,26 +2408,34 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
 
             let currentInvIndex = allTransactions.findIndex(item => {
                 const hInv = (item.invoiceNo || '').trim().toUpperCase();
-                const hOrd = (item.orderNo || '').trim().toUpperCase();
-                const hId = (item._id || item.id || '').toString().trim();
+                const hId = (item.saleId || item._id || item.id || '').toString().trim();
                 if (currentInv && hInv && hInv === currentInv) return true;
-                if (currentOrd && (hInv === currentOrd || hOrd === currentOrd)) return true;
-                if (currentId && hId && hId === currentId) return true;
+                if (currentId && hId && (hId === currentId || hId.startsWith(currentId + '_'))) return true;
+                if ((!currentInv || currentInv.startsWith('ORD')) && currentOrd) {
+                    const hOrd = (item.orderNo || '').trim().toUpperCase();
+                    if (hInv === currentOrd || (hOrd && hOrd === currentOrd)) return true;
+                }
                 return false;
             });
 
             const transactionsBeforeThisInvoice = currentInvIndex !== -1
                 ? allTransactions.slice(0, currentInvIndex)
                 : allTransactions.filter(item => {
-                    const saleDateStr = getIsoDateString(sale.date);
-                    const itemDateStr = getIsoDateString(item.date);
-                    if (saleDateStr && itemDateStr) {
-                        return itemDateStr <= saleDateStr;
-                    }
-                    return true;
+                    const hInv = (item.invoiceNo || '').trim().toUpperCase();
+                    const hId = (item.saleId || item._id || item.id || '').toString().trim();
+                    if (currentInv && hInv && hInv === currentInv) return false;
+                    if (currentId && hId && (hId === currentId || hId.startsWith(currentId + '_'))) return false;
+
+                    const cmp = compareTransactions(item, {
+                        date: sale.date,
+                        createdAt: sale.createdAt,
+                        _id: sale._id,
+                        id: sale.id
+                    });
+                    return cmp < 0;
                 });
 
-            let calculatedPrevBalance = 0;
+            let calculatedPrevBalance = parseFloat(customer.openingBalance || 0);
             transactionsBeforeThisInvoice.forEach(item => {
                 if (item.type === 'sale') {
                     const amt = parseFloat(item.amount) || 0;
@@ -2675,8 +2729,12 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
             const brandName = (brand || '').toString().toUpperCase();
 
             let displayRate = parseFloat(rate) || 0;
-            if (displayRate === 0 && netQuantity > 0) {
-                displayRate = (parseFloat(total) || 0) / netQuantity;
+            let displayTotal = parseFloat(total) || 0;
+
+            if (displayTotal === 0 && displayRate > 0 && netQuantity > 0) {
+                displayTotal = netQuantity * displayRate;
+            } else if (displayRate === 0 && netQuantity > 0 && displayTotal > 0) {
+                displayRate = displayTotal / netQuantity;
             }
 
             const unitSuffix = isBagUom ? ' BAG' : '';
@@ -2709,7 +2767,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
                     returnQuantity.toLocaleString('en-US') + unitSuffix,
                     netQuantity.toLocaleString('en-US') + unitSuffix,
                     displayRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-                    parseFloat(total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    displayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 ];
             }
 
@@ -2719,19 +2777,22 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
                 brandName,
                 netQuantity.toLocaleString('en-US') + unitSuffix,
                 displayRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-                parseFloat(total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                displayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
             ];
         };
 
         if (items.length === 0 && (sale.productId || sale.productName || sale.product)) {
             const isBag = !isBorderSale && sale.uom === 'BAG';
+            const sQty = isBag ? (parseFloat(sale.bag) || 0) : (parseFloat(sale.quantity || sale.qty) || 0);
+            const sRate = parseFloat(sale.unitPrice !== undefined && sale.unitPrice !== null && sale.unitPrice !== '' ? sale.unitPrice : (sale.rate || 0)) || 0;
+            const sTot = parseFloat(sale.totalAmount !== undefined && sale.totalAmount !== null && sale.totalAmount !== '' ? sale.totalAmount : (sale.amount || 0)) || (sQty * sRate);
             tableRows.push(prepareRow(
                 1,
                 sale.productName || sale.product || '-',
                 isBorderSale ? (sale.truck || '-') : (sale.brand || '-'),
                 isBag ? sale.bag : sale.quantity,
-                sale.unitPrice || sale.rate,
-                sale.totalAmount || sale.amount,
+                sRate,
+                sTot,
                 isBag ? (sale.returnBag || 0) : sale.returnQty,
                 isBag
             ));
@@ -2742,25 +2803,31 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
                 const isBag = !isBorderSale && item.uom === 'BAG';
                 if (bEntries.length > 0) {
                     bEntries.forEach((brand) => {
+                        const bQty = isBag ? (parseFloat(brand.bag) || 0) : (parseFloat(brand.quantity || brand.qty) || 0);
+                        const bRate = parseFloat(brand.unitPrice !== undefined && brand.unitPrice !== null && brand.unitPrice !== '' ? brand.unitPrice : (brand.rate || 0)) || 0;
+                        const bTot = parseFloat(brand.totalAmount !== undefined && brand.totalAmount !== null && brand.totalAmount !== '' ? brand.totalAmount : (brand.amount || 0)) || (bQty * bRate);
                         tableRows.push(prepareRow(
                             sl++,
                             item.productName || item.product || '-',
                             isBorderSale ? (brand.truck || '-') : (brand.brand || '-'),
                             isBag ? brand.bag : brand.quantity,
-                            brand.unitPrice || brand.rate || 0,
-                            brand.totalAmount || brand.amount || 0,
+                            bRate,
+                            bTot,
                             isBag ? (brand.returnBag || 0) : brand.returnQty,
                             isBag
                         ));
                     });
                 } else {
+                    const iQty = isBag ? (parseFloat(item.bag) || 0) : (parseFloat(item.quantity || item.qty) || 0);
+                    const iRate = parseFloat(item.unitPrice !== undefined && item.unitPrice !== null && item.unitPrice !== '' ? item.unitPrice : (item.rate || 0)) || 0;
+                    const iTot = parseFloat(item.totalAmount !== undefined && item.totalAmount !== null && item.totalAmount !== '' ? item.totalAmount : (item.amount || 0)) || (iQty * iRate);
                     tableRows.push(prepareRow(
                         sl++,
                         item.productName || item.product || '-',
                         isBorderSale ? (item.truck || '-') : (item.brand || '-'),
                         isBag ? item.bag : item.quantity,
-                        item.unitPrice || item.rate || 0,
-                        item.totalAmount || item.amount || 0,
+                        iRate,
+                        iTot,
                         isBag ? (item.returnBag || 0) : item.returnQty,
                         isBag
                     ));
