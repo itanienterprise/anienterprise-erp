@@ -3599,7 +3599,7 @@ const PaymentCollection = ({
                                     <input
                                         type="text"
                                         readOnly
-                                        value={Math.round(currentBalance).toLocaleString('en-IN')}
+                                        value={(Math.round(currentBalance) || 0).toLocaleString('en-IN')}
                                         title={currentBalance !== Math.round(currentBalance) ? `Exact: ৳${Number(currentBalance.toFixed(2)).toLocaleString('en-IN')}` : undefined}
                                         className={`payment-form-input pl-9 font-bold cursor-default ${currentBalance < 0 ? 'bg-emerald-50/30 text-emerald-700 border-emerald-100' : 'bg-orange-50/30 text-orange-700 border-orange-100'}`}
                                     />

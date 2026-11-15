@@ -138,9 +138,11 @@ const CustomerReport = ({
         return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
     });
 
-    const grandTotalDue = filtered.reduce((s, c) => s + computeDue(c), 0);
+    const grandTotalDue = filtered.reduce((s, c) => s + (Math.round(computeDue(c)) || 0), 0);
+    const roundedGrandTotal = Math.round(grandTotalDue) || 0;
+    const isGrandNegative = roundedGrandTotal < 0;
     // Only show customers with positive or negative (advance/credit) balances in alphabetical order — exclude zero
-    const displayCustomers = filtered.filter(c => Math.abs(computeDue(c)) > 0.01);
+    const displayCustomers = filtered.filter(c => Math.abs(Math.round(computeDue(c)) || 0) > 0);
 
     const handlePrint = () => {
         generateCustomerReportPDF(
@@ -455,7 +457,8 @@ const CustomerReport = ({
                                     {displayCustomers.length > 0 ? (
                                         displayCustomers.map((c, idx) => {
                                             const due = computeDue(c);
-                                            const isNegative = due < 0;
+                                            const roundedDue = Math.round(due) || 0;
+                                            const isNegative = roundedDue < 0;
                                             return (
                                                 <tr key={c._id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                                                     <td className="border-r border-gray-200 px-2 py-2 text-[13px] text-gray-900 text-center">{idx + 1}</td>
@@ -464,8 +467,8 @@ const CustomerReport = ({
                                                     <td className="border-r border-gray-200 px-2 py-2 text-[13px] font-medium text-gray-700 text-center">{getLastTransDay(c)}</td>
                                                     <td className={`px-2 py-2 text-[14px] text-right font-black ${isNegative ? 'text-emerald-600' : 'text-rose-600'}`}>
                                                         {isNegative
-                                                            ? `৳(-${Math.round(Math.abs(due)).toLocaleString('en-IN')})`
-                                                            : `৳${Math.round(due).toLocaleString('en-IN')}`
+                                                            ? `৳(-${Math.abs(roundedDue).toLocaleString('en-IN')})`
+                                                            : `৳${roundedDue.toLocaleString('en-IN')}`
                                                         }
                                                     </td>
                                                 </tr>
@@ -481,10 +484,10 @@ const CustomerReport = ({
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan="4" className="px-2 py-2 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total Balance</td>
-                                            <td className={`px-2 py-2 text-[14px] text-right font-black ${grandTotalDue < 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                                {grandTotalDue < 0
-                                                    ? `৳(-${Math.round(Math.abs(grandTotalDue)).toLocaleString('en-IN')})`
-                                                    : `৳${Math.round(grandTotalDue).toLocaleString('en-IN')}`
+                                            <td className={`px-2 py-2 text-[14px] text-right font-black ${isGrandNegative ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                                {isGrandNegative
+                                                    ? `৳(-${Math.abs(roundedGrandTotal).toLocaleString('en-IN')})`
+                                                    : `৳${roundedGrandTotal.toLocaleString('en-IN')}`
                                                 }
                                             </td>
                                         </tr>
@@ -495,9 +498,11 @@ const CustomerReport = ({
 
                         {/* Mobile Card View */}
                         <div className="md:hidden print:hidden space-y-3">
-                            {filtered.length > 0 ? (
-                                filtered.map((c, idx) => {
+                            {displayCustomers.length > 0 ? (
+                                displayCustomers.map((c, idx) => {
                                     const due = computeDue(c);
+                                    const roundedDue = Math.round(due) || 0;
+                                    const isNegative = roundedDue < 0;
                                     return (
                                         <div key={c._id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
                                             <div className="bg-gray-50/50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
@@ -514,8 +519,11 @@ const CustomerReport = ({
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Due</p>
-                                                    <p className={`text-lg font-black ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                        ৳{Math.round(due).toLocaleString('en-IN')}
+                                                    <p className={`text-lg font-black ${roundedDue > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                        {isNegative
+                                                            ? `৳(-${Math.abs(roundedDue).toLocaleString('en-IN')})`
+                                                            : `৳${roundedDue.toLocaleString('en-IN')}`
+                                                        }
                                                     </p>
                                                 </div>
                                             </div>
@@ -528,15 +536,15 @@ const CustomerReport = ({
                                 </div>
                             )}
 
-                            {filtered.length > 0 && (
+                            {displayCustomers.length > 0 && (
                                 <div className="mt-6 p-5 bg-gray-900 rounded-2xl shadow-xl">
                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 text-center">Grand Total</h4>
                                     <div className="text-center">
                                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Net Balance</p>
-                                        <p className={`text-3xl font-black ${grandTotalDue < 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                            {grandTotalDue < 0
-                                                ? `৳(-${Math.round(Math.abs(grandTotalDue)).toLocaleString('en-IN')})`
-                                                : `৳${Math.round(grandTotalDue).toLocaleString('en-IN')}`
+                                        <p className={`text-3xl font-black ${isGrandNegative ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {isGrandNegative
+                                                ? `৳(-${Math.abs(roundedGrandTotal).toLocaleString('en-IN')})`
+                                                : `৳${roundedGrandTotal.toLocaleString('en-IN')}`
                                             }
                                         </p>
                                     </div>
@@ -548,20 +556,20 @@ const CustomerReport = ({
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 px-2 print:grid">
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm">
                                 <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Total Customers</div>
-                                <div className="text-2xl sm:text-3xl font-black text-gray-900">{filtered.length}</div>
+                                <div className="text-2xl sm:text-3xl font-black text-gray-900">{displayCustomers.length}</div>
                             </div>
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-gray-50 shadow-sm">
                                 <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Customers with Due</div>
                                 <div className="text-2xl sm:text-3xl font-black text-rose-600">
-                                    {filtered.filter(c => computeDue(c) > 0).length}
+                                    {filtered.filter(c => (Math.round(computeDue(c)) || 0) > 0).length}
                                 </div>
                             </div>
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-white shadow-sm">
-                                <div className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider mb-2 ${grandTotalDue < 0 ? 'text-emerald-500' : 'text-rose-500'}`}>Grand Total Balance</div>
-                                <div className={`text-xl sm:text-2xl font-black ${grandTotalDue < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                    {grandTotalDue < 0
-                                        ? `৳(-${Math.round(Math.abs(grandTotalDue)).toLocaleString('en-IN')})`
-                                        : `৳${Math.round(grandTotalDue).toLocaleString('en-IN')}`
+                                <div className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider mb-2 ${isGrandNegative ? 'text-emerald-500' : 'text-rose-500'}`}>Grand Total Balance</div>
+                                <div className={`text-xl sm:text-2xl font-black ${isGrandNegative ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {isGrandNegative
+                                        ? `৳(-${Math.abs(roundedGrandTotal).toLocaleString('en-IN')})`
+                                        : `৳${roundedGrandTotal.toLocaleString('en-IN')}`
                                     }
                                 </div>
                             </div>

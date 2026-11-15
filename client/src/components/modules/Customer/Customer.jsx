@@ -2309,7 +2309,7 @@ const Customer = ({
                                                             </span>
                                                         </td>
                                                         <td className={`px-6 py-4 text-sm font-bold text-right ${custTotalDue > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                                            {Math.round(custTotalDue).toLocaleString('en-IN')}
+                                                            {(Math.round(custTotalDue) || 0).toLocaleString('en-IN')}
                                                         </td>
                                                         <td className="px-6 py-4 text-sm text-gray-600"><span className={`customer-status-badge ${c.status === 'Active' ? 'active' : 'inactive'}`}>{c.status}</span></td>
                                                         <td className="px-6 py-4 text-sm text-gray-600">
@@ -2375,7 +2375,7 @@ const Customer = ({
                                                             <div className="shrink-0">
                                                                 <span className={`customer-status-badge ${custTotalDue > 0 ? 'inactive' : 'active'} flex items-center justify-center`}>
                                                                     <span className="font-bold">
-                                                                        ৳{Math.round(custTotalDue).toLocaleString('en-IN')}
+                                                                        ৳{(Math.round(custTotalDue) || 0).toLocaleString('en-IN')}
                                                                     </span>
                                                                 </span>
                                                             </div>
@@ -2408,7 +2408,7 @@ const Customer = ({
                                                                 <div className="mobile-card-row">
                                                                     <span className="mobile-card-label">Balance:</span>
                                                                     <span className={`mobile-card-value font-bold ${custTotalDue > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                                                        ৳{Math.round(custTotalDue).toLocaleString('en-IN')}
+                                                                        ৳{(Math.round(custTotalDue) || 0).toLocaleString('en-IN')}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -3075,8 +3075,8 @@ const Customer = ({
                                                             </div>
                                                             <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md min-w-0 overflow-hidden">
                                                                 <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1 truncate">Total Balance</p>
-                                                                <p className="text-base md:text-lg font-black text-orange-700 truncate" title={`৳${Math.round(Number(displayTotalBalance || 0)).toLocaleString('en-IN')}`}>
-                                                                    ৳{Math.round(Number(displayTotalBalance || 0)).toLocaleString('en-IN')}
+                                                                <p className="text-base md:text-lg font-black text-orange-700 truncate" title={`৳${(Math.round(Number(displayTotalBalance || 0)) || 0).toLocaleString('en-IN')}`}>
+                                                                    ৳{(Math.round(Number(displayTotalBalance || 0)) || 0).toLocaleString('en-IN')}
                                                                 </p>
                                                             </div>
                                                         </>
@@ -4299,7 +4299,7 @@ const Customer = ({
                                                                     <td colSpan={isParty ? "10" : "8"} className="px-4 py-3 text-gray-950 font-bold text-center">
                                                                         Opening Balance
                                                                     </td>
-                                                                    <td className="px-4 py-3 text-left font-black text-orange-600">৳{Math.round(openingBalance).toLocaleString('en-IN')}</td>
+                                                                    <td className="px-4 py-3 text-left font-black text-orange-600">৳{(Math.round(openingBalance) || 0).toLocaleString('en-IN')}</td>
                                                                     <td className="px-4 py-3 text-center"></td>
                                                                 </tr>
                                                             )}
@@ -4475,7 +4475,7 @@ const Customer = ({
                                                                         <td className="px-4 py-3 text-left text-xs font-bold text-pink-600">
                                                                             {parseFloat(item.discount || 0) > 0 ? `৳${parseFloat(item.discount).toLocaleString('en-IN')}` : '—'}
                                                                         </td>
-                                                                        <td className="px-4 py-3 text-left font-black text-orange-600 text-xs">৳{Math.round(item.runningBalance).toLocaleString('en-IN')}</td>
+                                                                        <td className="px-4 py-3 text-left font-black text-orange-600 text-xs">৳{(Math.round(item.runningBalance) || 0).toLocaleString('en-IN')}</td>
                                                                         <td className="px-4 py-3 text-center">
                                                                             {item.type === 'sale' && (
                                                                                 <button
@@ -4638,7 +4638,7 @@ const Customer = ({
                                                                                 <div className={`text-sm font-black ${item.type === 'sale' || item.type === 'payToCustomer' ? 'text-violet-700' : (item.type === 'return' ? 'text-rose-600' : 'text-emerald-600')}`}>
                                                                                     {item.type === 'sale' || item.type === 'payToCustomer' ? `+৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}` : `-৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`}
                                                                                 </div>
-                                                                                <div className="text-[10px] font-bold text-orange-600">Balance: ৳{Math.round(item.runningBalance).toLocaleString('en-IN')}</div>
+                                                                                <div className="text-[10px] font-bold text-orange-600">Balance: ৳{(Math.round(item.runningBalance) || 0).toLocaleString('en-IN')}</div>
                                                                             </div>
                                                                         </div>
 

@@ -3262,7 +3262,7 @@ const PayToCustomer = ({
                                     <input
                                         type="text"
                                         readOnly
-                                        value={Math.round(currentCustomerPurchaseBalance).toLocaleString('en-IN')}
+                                        value={(Math.round(currentCustomerPurchaseBalance) || 0).toLocaleString('en-IN')}
                                         title={Number.isFinite(currentCustomerPurchaseBalance) ? `Exact: ৳${currentCustomerPurchaseBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
                                         className="payment-form-input pl-9 font-bold bg-orange-50/30 text-orange-700 border-orange-100 cursor-default"
                                     />

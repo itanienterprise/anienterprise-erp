@@ -2773,7 +2773,7 @@ export const generateCustomerReportExcel = (
         // Filter out customers with zero balance, sorted in alphabetical ascending order
         const displayCustomers = (customers || []).filter(c => {
             const due = computeDue(c);
-            return Math.abs(due) > 0.01;
+            return Math.abs(Math.round(due) || 0) > 0;
         }).sort((a, b) => {
             const nameA = (a.companyName || a.customerName || '').trim().toLowerCase();
             const nameB = (b.companyName || b.customerName || '').trim().toLowerCase();
@@ -2835,8 +2835,8 @@ export const generateCustomerReportExcel = (
         let calculatedGrandTotal = 0;
         displayCustomers.forEach((c, idx) => {
             const due = computeDue(c);
-            calculatedGrandTotal += due;
-            const roundedDue = Math.round(due);
+            const roundedDue = Math.round(due) || 0;
+            calculatedGrandTotal += roundedDue;
 
             rows.push([
                 idx + 1,
@@ -2854,8 +2854,8 @@ export const generateCustomerReportExcel = (
 
         // 5. Grand Total Row
         const finalGrandTotal = grandTotalDue !== null && grandTotalDue !== undefined
-            ? Math.round(grandTotalDue)
-            : Math.round(calculatedGrandTotal);
+            ? (Math.round(grandTotalDue) || 0)
+            : calculatedGrandTotal;
 
         rows.push([
             'GRAND TOTAL BALANCE',
@@ -2996,7 +2996,7 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                     '',
                     '',
                     '',
-                    summary.openingBalance ? Math.round(summary.openingBalance) : 0
+                    summary.openingBalance ? (Math.round(summary.openingBalance) || 0) : 0
                 ]);
             }
 
@@ -3143,7 +3143,7 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                     debitVal > 0 ? Math.round(debitVal) : '',
                     creditVal > 0 ? Math.round(creditVal) : '',
                     discVal > 0 ? Math.round(discVal) : '',
-                    entry.runningBalance !== undefined ? Math.round(entry.runningBalance) : ''
+                    entry.runningBalance !== undefined ? (Math.round(entry.runningBalance) || 0) : ''
                 ]);
             });
 
@@ -3158,7 +3158,7 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                 Math.round(totalDebit),
                 Math.round(totalCredit),
                 totalDiscount > 0 ? Math.round(totalDiscount) : '',
-                summary.totalBalance !== undefined ? Math.round(summary.totalBalance) : ''
+                summary.totalBalance !== undefined ? (Math.round(summary.totalBalance) || 0) : ''
             ]);
 
             const ws = XLSX.utils.aoa_to_sheet(rows);

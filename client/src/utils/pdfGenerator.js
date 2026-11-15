@@ -4647,7 +4647,7 @@ export const generateCustomerReportPDF = async (
         // Filter out customers with zero balance, sorted in alphabetical ascending order
         const displayCustomers = customers.filter(c => {
             const due = computeDue(c);
-            return Math.abs(due) > 0.01; // Avoid floating point issues with zero
+            return Math.abs(Math.round(due) || 0) > 0;
         }).sort((a, b) => {
             const nameA = (a.companyName || a.customerName || '').trim().toLowerCase();
             const nameB = (b.companyName || b.customerName || '').trim().toLowerCase();
@@ -4800,16 +4800,18 @@ export const generateCustomerReportPDF = async (
         const tableRows = [];
         displayCustomers.forEach((c, idx) => {
             const due = computeDue(c);
+            const roundedDue = Math.round(due) || 0;
+            const isNegative = roundedDue < 0;
             tableRows.push([
                 idx + 1,
                 c.customerId || '-',
                 c.companyName || c.customerName || '-',
                 getLastTransDay(c),
                 {
-                    content: due < 0
-                        ? `(-${Math.round(Math.abs(due)).toLocaleString('en-IN')})`
-                        : `${Math.round(due).toLocaleString('en-IN')}`,
-                    styles: { fontStyle: due < 0 ? 'bold' : 'normal', halign: 'right' }
+                    content: isNegative
+                        ? `(-${Math.abs(roundedDue).toLocaleString('en-IN')})`
+                        : `${roundedDue.toLocaleString('en-IN')}`,
+                    styles: { fontStyle: isNegative ? 'bold' : 'normal', halign: 'right' }
                 },
                 '' // Remark field
             ]);
@@ -4818,12 +4820,14 @@ export const generateCustomerReportPDF = async (
         // Add Grand Total
         const totalDueVal = grandTotalDue !== undefined && grandTotalDue !== null
             ? grandTotalDue
-            : customers.reduce((s, c) => s + computeDue(c), 0);
+            : customers.reduce((s, c) => s + (Math.round(computeDue(c)) || 0), 0);
+        const roundedGt = Math.round(totalDueVal) || 0;
+        const isGtNeg = roundedGt < 0;
 
-        const gtContent = totalDueVal < 0
-            ? `(-${Math.round(Math.abs(totalDueVal)).toLocaleString('en-IN')})`
-            : `${Math.round(totalDueVal).toLocaleString('en-IN')}`;
-        const gtColor = totalDueVal < 0 ? [5, 150, 105] : [220, 38, 38]; // emerald or rose
+        const gtContent = isGtNeg
+            ? `(-${Math.abs(roundedGt).toLocaleString('en-IN')})`
+            : `${roundedGt.toLocaleString('en-IN')}`;
+        const gtColor = isGtNeg ? [5, 150, 105] : [220, 38, 38]; // emerald or rose
         tableRows.push([
             { content: 'GRAND TOTAL BALANCE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             { content: gtContent, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: gtColor } },
@@ -5672,7 +5676,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                         colSpan: isParty ? 10 : 8,
                         styles: { halign: 'center', fontStyle: 'bold' }
                     },
-                    `${Math.round(summary.openingBalance || 0).toLocaleString('en-IN')}`
+                    `${(Math.round(summary.openingBalance || 0) || 0).toLocaleString('en-IN')}`
                 ];
                 tableRows.push(openingBalanceRow);
             }
@@ -5858,7 +5862,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 }
 
                 const balNum = parseFloat(entry.runningBalance || 0);
-                const balFormatted = Math.round(balNum).toLocaleString('en-IN');
+                const balFormatted = (Math.round(balNum) || 0).toLocaleString('en-IN');
 
                 const row = [
                     idx + 1,
@@ -5880,7 +5884,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 ? ['SL', 'Date', 'Ref No', 'Particulars', 'Port', 'Truck', 'Qty', 'Rate', 'Debit (Dr)', 'Credit (Cr)', 'Discount', 'Balance']
                 : ['SL', 'Date', 'Ref No', 'Particulars', 'Qty', 'Rate', 'Debit (Dr)', 'Credit (Cr)', 'Discount', 'Balance'];
 
-            const lastBalFormatted = Math.round(lastBalance).toLocaleString('en-IN');
+            const lastBalFormatted = (Math.round(lastBalance) || 0).toLocaleString('en-IN');
 
             const foot = isParty ? [
                 { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
@@ -6198,7 +6202,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: totalDiscount > 0 ? totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: totalPaid > 0 ? totalPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                { content: Math.round(totalBalance).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: (Math.round(totalBalance) || 0).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: '', styles: { fillColor: [240, 240, 240] } }
             ]);
 
