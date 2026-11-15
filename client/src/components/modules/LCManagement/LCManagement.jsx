@@ -4304,25 +4304,25 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
 
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">RETURN AMT</span>
                                                 <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                <span className="text-xs font-bold text-blue-600">৳{parseFloat(activeMilestone.expectedReturnAmount || data.expectedReturnAmount || 0).toLocaleString('en-IN')}</span>
+                                                <span className="text-xs font-bold text-blue-600">৳{Math.round(parseFloat(activeMilestone.expectedReturnAmount || data.expectedReturnAmount || 0)).toLocaleString('en-IN')}</span>
 
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat || '0'}%)</span>
                                                 <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                 <span className="text-xs font-semibold text-gray-800">
-                                                    ৳{(parseFloat(activeMilestone.netPremium || data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ৳{Math.round(parseFloat(activeMilestone.netPremium || data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString('en-IN')}
                                                 </span>
 
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">STAMP DUTY</span>
                                                 <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                <span className="text-xs font-semibold text-gray-800">৳{parseFloat(activeMilestone.isOriginal ? data.stampCharge || 0 : 0).toLocaleString('en-IN')}</span>
+                                                <span className="text-xs font-semibold text-gray-800">৳{Math.round(parseFloat(activeMilestone.isOriginal ? data.stampCharge || 0 : 0)).toLocaleString('en-IN')}</span>
 
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">GROSS PREMIUM</span>
                                                 <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                <span className="text-xs font-bold text-gray-850">৳{parseFloat(activeMilestone.grossPremium || data.grossPremium || 0).toLocaleString('en-US')}</span>
+                                                <span className="text-xs font-bold text-gray-850">৳{Math.round(parseFloat(activeMilestone.grossPremium || data.grossPremium || 0)).toLocaleString('en-IN')}</span>
 
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">NET PREMIUM</span>
                                                 <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                <span className="text-xs font-black text-blue-700">৳{parseFloat(activeMilestone.netPremium || data.netPremium || 0).toLocaleString('en-US')}</span>
+                                                <span className="text-xs font-black text-blue-700">৳{Math.round(parseFloat(activeMilestone.netPremium || data.netPremium || 0)).toLocaleString('en-IN')}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -4371,36 +4371,36 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
 
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
-                                            <p className="text-sm font-bold text-blue-600">৳{parseFloat(activeMilestone.expectedReturnAmount || data.expectedReturnAmount || 0).toLocaleString('en-IN')}</p>
+                                            <p className="text-sm font-bold text-blue-600">৳{Math.round(parseFloat(activeMilestone.expectedReturnAmount || data.expectedReturnAmount || 0)).toLocaleString('en-IN')}</p>
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT ({data.premiumVat || '0'}%)</span>
                                             <p className="text-sm font-bold text-gray-800">
-                                                ৳{(parseFloat(activeMilestone.netPremium || data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                ৳{Math.round(parseFloat(activeMilestone.netPremium || data.netPremium || 0) * (parseFloat(data.premiumVat || 0) / 100)).toLocaleString('en-IN')}
                                             </p>
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
-                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.isOriginal ? data.stampCharge || 0 : 0).toLocaleString('en-IN')}</p>
+                                            <p className="text-sm font-bold text-gray-800">৳{Math.round(parseFloat(activeMilestone.isOriginal ? data.stampCharge || 0 : 0)).toLocaleString('en-IN')}</p>
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
-                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.grossPremium || data.grossPremium || 0).toLocaleString('en-US')}</p>
+                                            <p className="text-sm font-bold text-gray-800">৳{Math.round(parseFloat(activeMilestone.grossPremium || data.grossPremium || 0)).toLocaleString('en-IN')}</p>
                                         </div>
 
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Premium</span>
-                                            <p className="text-sm font-black text-blue-600">৳{parseFloat(activeMilestone.netPremium || data.netPremium || 0).toLocaleString('en-US')}</p>
+                                            <p className="text-sm font-black text-blue-600">৳{Math.round(parseFloat(activeMilestone.netPremium || data.netPremium || 0)).toLocaleString('en-IN')}</p>
                                         </div>
                                     </div>
                                     {(() => {
-                                        const gross = parseFloat(activeMilestone.grossPremium || data.grossPremium || 0);
-                                        const ret = parseFloat(activeMilestone.expectedReturnAmount || data.expectedReturnAmount || 0);
+                                        const gross = Math.round(parseFloat(activeMilestone.grossPremium || data.grossPremium || 0));
+                                        const ret = Math.round(parseFloat(activeMilestone.expectedReturnAmount || data.expectedReturnAmount || 0));
                                         const netPayable = Math.max(0, gross - ret);
                                         return (
                                             <div className="mt-4 p-4 bg-blue-50/60 rounded-xl flex justify-between items-center border border-blue-100/80 text-left">
                                                 <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Net Payable Premium</span>
-                                                <span className="text-lg font-black text-blue-700">৳{netPayable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                <span className="text-lg font-black text-blue-700">৳{netPayable.toLocaleString('en-IN')}</span>
                                             </div>
                                         );
                                     })()}
@@ -5229,6 +5229,12 @@ export const getLCHistoryTimeline = (lc) => {
         const totalQty = lc.productsList && lc.productsList.length > 0
             ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
             : lc.quantity;
+        const totalDollarVal = lc.productsList && lc.productsList.length > 0
+            ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.totalDollar) || 0), 0)
+            : parseFloat(lc.totalDollar || 0);
+        const openingDRate = parseFloat(lc.openingDollarRate || lc.dollarRate || 0);
+        const calcOrigAmount = (totalDollarVal > 0 && openingDRate > 0) ? (totalDollarVal * openingDRate).toFixed(2) : '';
+        const resolvedOrigTotalAmount = calcOrigAmount || lc.openingTotalAmount || lc.totalAmount;
         baseTimeline = [{
             amendmentNo: 'Original LC',
             amendmentDate: lc.openingDate,
@@ -5236,8 +5242,8 @@ export const getLCHistoryTimeline = (lc) => {
             quantity: totalQty,
             rate: lc.rate,
             dollarRate: lc.openingDollarRate || lc.dollarRate,
-            totalDollar: lc.totalDollar,
-            totalAmount: lc.totalAmount,
+            totalDollar: totalDollarVal > 0 ? totalDollarVal.toFixed(2) : lc.totalDollar,
+            totalAmount: resolvedOrigTotalAmount,
             netPremium: lc.netPremium,
             expectedReturnAmount: lc.expectedReturnAmount,
             grossPremium: lc.grossPremium,
@@ -5245,7 +5251,8 @@ export const getLCHistoryTimeline = (lc) => {
             port: lc.port || '',
             latestShipmentDate: lc.latestShipmentDate || '',
             remarks: 'Original LC Details',
-            isOriginal: true
+            isOriginal: true,
+            productsList: lc.productsList || []
         }];
     } else {
         const origQty = amendments[0]?.productsList && amendments[0].productsList.length > 0
@@ -5290,7 +5297,12 @@ export const getLCHistoryTimeline = (lc) => {
         if (lc.insuranceCo) {
             let baseAmount = 0;
             if (item.isOriginal) {
-                baseAmount = parseFloat(item.totalAmount) || 0;
+                const itemTotalDollar = (item.productsList && item.productsList.length > 0)
+                    ? item.productsList.reduce((sum, p) => sum + (parseFloat(p.totalDollar) || 0), 0)
+                    : (parseFloat(item.totalDollar) || 0);
+                const itemDollarRate = parseFloat(item.dollarRate || lc.openingDollarRate || lc.dollarRate || 0);
+                const calcBase = (itemTotalDollar > 0 && itemDollarRate > 0) ? (itemTotalDollar * itemDollarRate) : 0;
+                baseAmount = calcBase > 0 ? calcBase : (parseFloat(lc.openingTotalAmount) || parseFloat(item.totalAmount) || parseFloat(lc.totalAmount) || 0);
             } else {
                 const prevMilestone = idx > 0 ? baseTimeline[idx - 1] : null;
                 const prevDollarValue = getMilestoneTotalDollar(prevMilestone, lc);
@@ -5310,14 +5322,14 @@ export const getLCHistoryTimeline = (lc) => {
 
                 const baseNetPrem = (baseAmount * (prem / 100)) / 100;
                 const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
-                netPremium = netP > 0 ? netP.toFixed(2) : '0';
+                netPremium = netP > 0 ? String(Math.round(netP)) : '0';
 
                 const expRet = netP * (premRet / 100);
-                expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '0';
+                expectedReturnAmount = expRet > 0 ? String(Math.round(expRet)) : '0';
 
                 const vatAmount = netP * (pVat / 100);
                 const gPrem = netP + vatAmount + stamp;
-                grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '0';
+                grossPremium = gPrem > 0 ? String(Math.round(gPrem)) : '0';
             }
         } else {
             netPremium = '0';
@@ -5327,9 +5339,9 @@ export const getLCHistoryTimeline = (lc) => {
 
         return {
             ...item,
-            netPremium: netPremium || item.netPremium || '0',
-            expectedReturnAmount: expectedReturnAmount || item.expectedReturnAmount || '0',
-            grossPremium: grossPremium || item.grossPremium || '0'
+            netPremium: netPremium ? String(Math.round(parseFloat(netPremium) || 0)) : (item.netPremium ? String(Math.round(parseFloat(item.netPremium) || 0)) : '0'),
+            expectedReturnAmount: expectedReturnAmount ? String(Math.round(parseFloat(expectedReturnAmount) || 0)) : (item.expectedReturnAmount ? String(Math.round(parseFloat(item.expectedReturnAmount) || 0)) : '0'),
+            grossPremium: grossPremium ? String(Math.round(parseFloat(grossPremium) || 0)) : (item.grossPremium ? String(Math.round(parseFloat(item.grossPremium) || 0)) : '0')
         };
     });
 };
@@ -6734,6 +6746,26 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                         const tDollar = parseFloat(newState.totalDollar) || 0;
                         const totalVal = tDollar * dRate;
                         newState.totalAmount = totalVal > 0 ? totalVal.toFixed(2) : '';
+
+                        const exPct = parseFloat(newState.extraPercent || prev.extraPercent) || 0;
+                        const prem = parseFloat(newState.premium || prev.premium) || 0;
+                        const premRet = parseFloat(newState.premiumReturn || prev.premiumReturn) || 0;
+                        const pVat = parseFloat(newState.premiumVat || prev.premiumVat) || 15;
+                        const stamp = parseFloat(newState.stampCharge || prev.stampCharge) || 0;
+
+                        if (totalVal > 0 && prem > 0) {
+                            const baseNetPrem = (totalVal * (prem / 100)) / 100;
+                            const netPrem = baseNetPrem + (baseNetPrem * (exPct / 100));
+                            newState.netPremium = netPrem > 0 ? String(Math.round(netPrem)) : '';
+
+                            const expRet = netPrem * (premRet / 100);
+                            newState.expectedReturnAmount = expRet > 0 ? String(Math.round(expRet)) : '';
+
+                            const vatAmount = netPrem * (pVat / 100);
+                            const gPrem = netPrem + vatAmount + stamp;
+                            newState.grossPremium = gPrem > 0 ? String(Math.round(gPrem)) : '';
+                        }
+                        syncBankBills(newState);
                     }
                 } else {
                     newState.importerName = '';
@@ -6762,7 +6794,13 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                         if (selectedIns.stampCharge) newState.stampCharge = selectedIns.stampCharge;
 
                         // Auto-calculate Net Premium, Gross Premium, and Return Amount
-                        const totalAmount = parseFloat(newState.totalAmount || prev.totalAmount) || 0;
+                        const dRate = parseFloat(newState.dollarRate || prev.dollarRate) || 0;
+                        const tDollar = parseFloat(newState.totalDollar || prev.totalDollar) || 0;
+                        const calcTot = (tDollar > 0 && dRate > 0) ? (tDollar * dRate) : 0;
+                        const totalAmount = calcTot > 0 ? calcTot : (parseFloat(newState.totalAmount || prev.totalAmount) || 0);
+                        if (calcTot > 0 && (!newState.totalAmount || parseFloat(newState.totalAmount) <= 0)) {
+                            newState.totalAmount = calcTot.toFixed(2);
+                        }
                         const exPct = parseFloat(newState.extraPercent || prev.extraPercent) || 0;
                         const prem = parseFloat(selectedIns.premiumPercent || newState.premium || prev.premium) || 0;
                         const premRet = parseFloat(selectedIns.premiumReturnPercent || newState.premiumReturn || prev.premiumReturn) || 0;
@@ -6771,14 +6809,14 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
                         const baseNetPrem = (totalAmount * (prem / 100)) / 100;
                         const netPrem = baseNetPrem + (baseNetPrem * (exPct / 100));
-                        newState.netPremium = netPrem > 0 ? netPrem.toFixed(2) : '';
+                        newState.netPremium = netPrem > 0 ? String(Math.round(netPrem)) : '';
 
                         const expRet = netPrem * (premRet / 100);
-                        newState.expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
+                        newState.expectedReturnAmount = expRet > 0 ? String(Math.round(expRet)) : '';
 
                         const vatAmount = netPrem * (pVat / 100);
                         const gPrem = netPrem + vatAmount + stamp;
-                        newState.grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
+                        newState.grossPremium = gPrem > 0 ? String(Math.round(gPrem)) : '';
                     }
                 } else {
                     newState.policyType = '';
@@ -7355,12 +7393,12 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             const stamp = parseFloat(newState.stampCharge) || 0;
             const baseNetPrem = (totalVal * (prem / 100)) / 100;
             const netPrem = baseNetPrem + (baseNetPrem * (exPct / 100));
-            newState.netPremium = netPrem > 0 ? netPrem.toFixed(2) : '';
+            newState.netPremium = netPrem > 0 ? String(Math.round(netPrem)) : '';
             const expRet = netPrem * (premRet / 100);
-            newState.expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '';
+            newState.expectedReturnAmount = expRet > 0 ? String(Math.round(expRet)) : '';
             const vatAmount = netPrem * (pVat / 100);
             const gPrem = netPrem + vatAmount + stamp;
-            newState.grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '';
+            newState.grossPremium = gPrem > 0 ? String(Math.round(gPrem)) : '';
 
             syncBankBills(newState);
             return newState;
@@ -7393,6 +7431,15 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                     newState.totalAmount = totalVal > 0 ? totalVal.toFixed(2) : '';
                 } else if (name === 'totalAmount') {
                     latestTotalAmount = parseFloat(value) || 0;
+                } else {
+                    const tDollar = parseFloat(newState.totalDollar || prev.totalDollar) || 0;
+                    const dRate = parseFloat(newState.dollarRate || prev.dollarRate) || 0;
+                    if (tDollar > 0 && dRate > 0) {
+                        latestTotalAmount = tDollar * dRate;
+                        if (!newState.totalAmount || parseFloat(newState.totalAmount) <= 0) {
+                            newState.totalAmount = latestTotalAmount.toFixed(2);
+                        }
+                    }
                 }
 
                 const exPct = parseFloat(name === 'extraPercent' ? value : prev.extraPercent) || 0;
@@ -7751,6 +7798,17 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 }]
             );
         const loadedProducts = rawProducts.map(calcLcProductLine);
+        const sumDollar = loadedProducts.reduce((acc, p) => acc + (parseFloat(p.totalDollar) || 0), 0);
+        const resolvedTotalDollar = sumDollar > 0
+            ? sumDollar.toFixed(2)
+            : (hasAmendments ? (origMilestone?.totalDollar !== undefined && origMilestone.totalDollar !== '' ? origMilestone.totalDollar : record.totalDollar) : (record.totalDollar || ''));
+        const resolvedDollarRate = hasAmendments
+            ? (origMilestone?.dollarRate || record.openingDollarRate || record.dollarRate || '')
+            : (record.openingDollarRate || record.dollarRate || '');
+        const calcTotalAmount = (parseFloat(resolvedTotalDollar) > 0 && parseFloat(resolvedDollarRate) > 0)
+            ? (parseFloat(resolvedTotalDollar) * parseFloat(resolvedDollarRate)).toFixed(2)
+            : '';
+        const resolvedTotalAmount = calcTotalAmount || (hasAmendments ? (origMilestone?.totalAmount || record.openingTotalAmount || record.totalAmount || '') : (record.openingTotalAmount || record.totalAmount || ''));
 
         const parsedIpNumbers = record.ipNumbers?.length
             ? record.ipNumbers
@@ -7783,6 +7841,32 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 : (origFinances.expReturn > 0 ? String(origFinances.expReturn) : (record.expectedReturnAmount || '')))
             : (record.expectedReturnAmount || '');
 
+        const exPct = parseFloat(record.extraPercent) || 0;
+        const prem = parseFloat(record.premium) || 0;
+        const premRet = parseFloat(record.premiumReturn) || 0;
+        const pVat = parseFloat((hasAmendments && origMilestone?.premiumVat !== undefined && origMilestone.premiumVat !== '')
+            ? origMilestone.premiumVat
+            : (record.premiumVat || '15')) || 15;
+        const stamp = parseFloat((hasAmendments && origMilestone?.stampCharge !== undefined && origMilestone.stampCharge !== '')
+            ? origMilestone.stampCharge
+            : (record.stampCharge || '')) || 0;
+
+        let editNetPrem = initialNetPremium;
+        let editExpReturn = initialExpectedReturn;
+        let editGrossPrem = initialGrossPremium;
+
+        const totAmtNum = parseFloat(resolvedTotalAmount) || 0;
+        if (totAmtNum > 0 && prem > 0) {
+            const baseNetPrem = (totAmtNum * (prem / 100)) / 100;
+            const netPrem = baseNetPrem + (baseNetPrem * (exPct / 100));
+            editNetPrem = netPrem > 0 ? netPrem.toFixed(2) : '';
+            const expRet = netPrem * (premRet / 100);
+            editExpReturn = expRet > 0 ? expRet.toFixed(2) : '';
+            const vatAmount = netPrem * (pVat / 100);
+            const gPrem = netPrem + vatAmount + stamp;
+            editGrossPrem = gPrem > 0 ? gPrem.toFixed(2) : '';
+        }
+
         setFormData({
             ipNo: record.ipNo || parsedIpNumbers[0] || '',
             ipNumbers: parsedIpNumbers,
@@ -7796,23 +7880,23 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             productName: (hasAmendments ? (origMilestone?.productsList?.[0]?.productName || origMilestone?.productName || record.productName) : record.productName) || '',
             quantity: hasAmendments ? (origMilestone?.quantity !== undefined && origMilestone.quantity !== '' ? origMilestone.quantity : record.quantity) : (record.quantity || ''),
             rate: hasAmendments ? (origMilestone?.rate !== undefined && origMilestone.rate !== '' ? origMilestone.rate : record.rate) : (record.rate || ''),
-            totalDollar: hasAmendments ? (origMilestone?.totalDollar !== undefined && origMilestone.totalDollar !== '' ? origMilestone.totalDollar : record.totalDollar) : (record.totalDollar || ''),
-            dollarRate: hasAmendments ? (origMilestone?.dollarRate || record.openingDollarRate || record.dollarRate || '') : (record.openingDollarRate || record.dollarRate || ''),
+            totalDollar: resolvedTotalDollar,
+            dollarRate: resolvedDollarRate,
             insuranceCo: record.insuranceCo || '',
             policyType: record.policyType || '',
             extraPercent: record.extraPercent || '',
             premium: record.premium || '',
-            grossPremium: initialGrossPremium,
+            grossPremium: editGrossPrem,
             premiumReturn: record.premiumReturn || '',
-            expectedReturnAmount: initialExpectedReturn,
-            netPremium: initialNetPremium,
+            expectedReturnAmount: editExpReturn,
+            netPremium: editNetPrem,
             premiumVat: (hasAmendments && origMilestone?.premiumVat !== undefined && origMilestone.premiumVat !== '')
                 ? origMilestone.premiumVat
                 : (record.premiumVat || '15'),
             stampCharge: (hasAmendments && origMilestone?.stampCharge !== undefined && origMilestone.stampCharge !== '')
                 ? origMilestone.stampCharge
                 : (record.stampCharge || ''),
-            totalAmount: hasAmendments ? (origMilestone?.totalAmount || record.openingTotalAmount || record.totalAmount || '') : (record.totalAmount || ''),
+            totalAmount: resolvedTotalAmount,
             status: record.status || 'Opened',
             piNo: (hasAmendments ? (origMilestone?.piNo || record.piNo) : record.piNo) || '',
             piOpeningDate: formatDateVal(record.piOpeningDate),
@@ -7830,13 +7914,19 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             bankLcApplicationForm: record.bankLcApplicationForm || '',
             bankMpCharge: record.bankMpCharge || '',
             bankStampCharge: record.bankStampCharge || '',
-            marginBill: (hasAmendments ? (origMilestone?.marginBill || record.marginBill) : record.marginBill) || '',
-            marginPaid: record.openingMarginPaid || (hasAmendments ? origMilestone?.marginPaid : null) || record.marginPaid || '',
-            openingDollarRate: record.openingDollarRate || (hasAmendments ? origMilestone?.dollarRate : null) || record.dollarRate || '',
-            openingTotalAmount: record.openingTotalAmount || (hasAmendments ? origMilestone?.totalAmount : null) || record.totalAmount || '',
-            openingMarginPaid: record.openingMarginPaid || (hasAmendments ? origMilestone?.marginPaid : null) || record.marginPaid || '',
+            marginBill: (hasAmendments ? (origMilestone?.marginBill || resolvedTotalAmount) : resolvedTotalAmount) || '',
+            marginPaid: record.openingMarginPaid || (hasAmendments ? origMilestone?.marginPaid : null) || (totAmtNum > 0 && parseFloat(record.bankMargin) > 0 ? (totAmtNum * (parseFloat(record.bankMargin) / 100)).toFixed(2) : record.marginPaid) || '',
+            openingDollarRate: resolvedDollarRate,
+            openingTotalAmount: resolvedTotalAmount,
+            openingMarginPaid: record.openingMarginPaid || (hasAmendments ? origMilestone?.marginPaid : null) || (totAmtNum > 0 && parseFloat(record.bankMargin) > 0 ? (totAmtNum * (parseFloat(record.bankMargin) / 100)).toFixed(2) : record.marginPaid) || '',
             bankBill: record.bankBill || '',
-            totalBankBill: record.totalBankBill || '',
+            totalBankBill: (() => {
+                const mb = parseFloat(hasAmendments ? (origMilestone?.marginBill || resolvedTotalAmount) : resolvedTotalAmount) || 0;
+                const bb = parseFloat(record.bankBill) || 0;
+                const mp = parseFloat(record.openingMarginPaid || (hasAmendments ? origMilestone?.marginPaid : null) || (totAmtNum > 0 && parseFloat(record.bankMargin) > 0 ? (totAmtNum * (parseFloat(record.bankMargin) / 100)).toFixed(2) : record.marginPaid) || 0) || 0;
+                const total = (mb + bb) - mp;
+                return total > 0 ? total.toFixed(2) : (record.totalBankBill || '');
+            })(),
             lcBillEnabled: record.lcBillEnabled !== undefined
                 ? record.lcBillEnabled
                 : !!(record.bankLcCommission || record.bankSwiftCharge || record.bankLcApplicationForm || record.bankMpCharge || record.bankStampCharge),

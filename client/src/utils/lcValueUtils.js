@@ -45,6 +45,12 @@ export const getLCHistoryTimeline = (lc) => {
         const totalQty = lc.productsList && lc.productsList.length > 0
             ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
             : lc.quantity;
+        const totalDollarVal = lc.productsList && lc.productsList.length > 0
+            ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.totalDollar) || 0), 0)
+            : parseFloat(lc.totalDollar || 0);
+        const openingDRate = parseFloat(lc.openingDollarRate || lc.dollarRate || 0);
+        const calcOrigAmount = (totalDollarVal > 0 && openingDRate > 0) ? (totalDollarVal * openingDRate).toFixed(2) : '';
+        const resolvedOrigTotalAmount = calcOrigAmount || lc.openingTotalAmount || lc.totalAmount;
         baseTimeline = [{
             amendmentNo: 'Original LC',
             amendmentDate: lc.openingDate,
@@ -52,8 +58,8 @@ export const getLCHistoryTimeline = (lc) => {
             quantity: totalQty,
             rate: lc.rate,
             dollarRate: lc.openingDollarRate || lc.dollarRate,
-            totalDollar: lc.totalDollar,
-            totalAmount: lc.totalAmount,
+            totalDollar: totalDollarVal > 0 ? totalDollarVal.toFixed(2) : lc.totalDollar,
+            totalAmount: resolvedOrigTotalAmount,
             netPremium: lc.netPremium,
             expectedReturnAmount: lc.expectedReturnAmount,
             grossPremium: lc.grossPremium,
@@ -105,7 +111,12 @@ export const getLCHistoryTimeline = (lc) => {
         if (lc.insuranceCo) {
             let baseAmount = 0;
             if (item.isOriginal) {
-                baseAmount = parseFloat(item.totalAmount) || 0;
+                const itemTotalDollar = (item.productsList && item.productsList.length > 0)
+                    ? item.productsList.reduce((sum, p) => sum + (parseFloat(p.totalDollar) || 0), 0)
+                    : (parseFloat(item.totalDollar) || 0);
+                const itemDollarRate = parseFloat(item.dollarRate || lc.openingDollarRate || lc.dollarRate || 0);
+                const calcBase = (itemTotalDollar > 0 && itemDollarRate > 0) ? (itemTotalDollar * itemDollarRate) : 0;
+                baseAmount = calcBase > 0 ? calcBase : (parseFloat(lc.openingTotalAmount) || parseFloat(item.totalAmount) || parseFloat(lc.totalAmount) || 0);
             } else {
                 const prevMilestone = idx > 0 ? baseTimeline[idx - 1] : null;
                 const prevDollarValue = getMilestoneTotalDollar(prevMilestone, lc);
@@ -125,14 +136,14 @@ export const getLCHistoryTimeline = (lc) => {
 
                 const baseNetPrem = (baseAmount * (prem / 100)) / 100;
                 const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
-                netPremium = netP > 0 ? netP.toFixed(2) : '0';
+                netPremium = netP > 0 ? String(Math.round(netP)) : '0';
 
                 const expRet = netP * (premRet / 100);
-                expectedReturnAmount = expRet > 0 ? expRet.toFixed(2) : '0';
+                expectedReturnAmount = expRet > 0 ? String(Math.round(expRet)) : '0';
 
                 const vatAmount = netP * (pVat / 100);
                 const gPrem = netP + vatAmount + stamp;
-                grossPremium = gPrem > 0 ? gPrem.toFixed(2) : '0';
+                grossPremium = gPrem > 0 ? String(Math.round(gPrem)) : '0';
             }
         } else {
             netPremium = '0';
@@ -142,9 +153,9 @@ export const getLCHistoryTimeline = (lc) => {
 
         return {
             ...item,
-            netPremium: netPremium || item.netPremium || '0',
-            expectedReturnAmount: expectedReturnAmount || item.expectedReturnAmount || '0',
-            grossPremium: grossPremium || item.grossPremium || '0'
+            netPremium: netPremium ? String(Math.round(parseFloat(netPremium) || 0)) : (item.netPremium ? String(Math.round(parseFloat(item.netPremium) || 0)) : '0'),
+            expectedReturnAmount: expectedReturnAmount ? String(Math.round(parseFloat(expectedReturnAmount) || 0)) : (item.expectedReturnAmount ? String(Math.round(parseFloat(item.expectedReturnAmount) || 0)) : '0'),
+            grossPremium: grossPremium ? String(Math.round(parseFloat(grossPremium) || 0)) : (item.grossPremium ? String(Math.round(parseFloat(item.grossPremium) || 0)) : '0')
         };
     });
 };
@@ -473,9 +484,9 @@ export const getLcMilestoneFinances = (lc, amendmentNo) => {
     if (!lc) return { grossPrem: 0, expReturn: 0, netPayable: 0, netPrem: 0 };
     const timeline = getLCHistoryTimeline(lc);
     if (!timeline || timeline.length === 0) {
-        const grossPrem = parseFloat(lc.grossPremium || 0);
-        const expReturn = parseFloat(lc.expectedReturnAmount || 0);
-        const netPrem = parseFloat(lc.netPremium || 0);
+        const grossPrem = Math.round(parseFloat(lc.grossPremium || 0));
+        const expReturn = Math.round(parseFloat(lc.expectedReturnAmount || 0));
+        const netPrem = Math.round(parseFloat(lc.netPremium || 0));
         return {
             grossPrem,
             expReturn,
@@ -489,9 +500,9 @@ export const getLcMilestoneFinances = (lc, amendmentNo) => {
         let expReturn = 0;
         let netPrem = 0;
         timeline.forEach(m => {
-            grossPrem += parseFloat(m.grossPremium || 0);
-            expReturn += parseFloat(m.expectedReturnAmount || 0);
-            netPrem += parseFloat(m.netPremium || 0);
+            grossPrem += Math.round(parseFloat(m.grossPremium || 0));
+            expReturn += Math.round(parseFloat(m.expectedReturnAmount || 0));
+            netPrem += Math.round(parseFloat(m.netPremium || 0));
         });
         return {
             grossPrem,
@@ -515,9 +526,9 @@ export const getLcMilestoneFinances = (lc, amendmentNo) => {
     }
 
     if (milestone) {
-        const grossPrem = parseFloat(milestone.grossPremium || 0);
-        const expReturn = parseFloat(milestone.expectedReturnAmount || 0);
-        const netPrem = parseFloat(milestone.netPremium || 0);
+        const grossPrem = Math.round(parseFloat(milestone.grossPremium || 0));
+        const expReturn = Math.round(parseFloat(milestone.expectedReturnAmount || 0));
+        const netPrem = Math.round(parseFloat(milestone.netPremium || 0));
         return {
             grossPrem,
             expReturn,
@@ -567,9 +578,9 @@ export const getLcMilestonesBreakdown = (lc, payments = []) => {
             return p.amendmentNo === m.amendmentNo;
         });
 
-        const gross = parseFloat(m.grossPremium || 0);
-        const net = parseFloat(m.netPremium || 0);
-        const expRet = parseFloat(m.expectedReturnAmount || 0);
+        const gross = Math.round(parseFloat(m.grossPremium || 0));
+        const net = Math.round(parseFloat(m.netPremium || 0));
+        const expRet = Math.round(parseFloat(m.expectedReturnAmount || 0));
         const status = evaluateStatus(gross, net, expRet, matchedPayments);
 
         return {

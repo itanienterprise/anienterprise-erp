@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, FunnelIcon, PrinterIcon, BarChartIcon, ReceiptIcon, TruckIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, FunnelIcon, PrinterIcon, BarChartIcon, ReceiptIcon, TruckIcon, FileTextIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
-import { generateCnFHistoryReportPDF, generateCnFAgentListReportPDF, generateCnFExpenseReportPDF, generateCnFPaymentReportPDF, generateCnFAllReportPDF } from '../../../utils/pdfGenerator';
+import { generateCnFHistoryReportPDF, generateCnFLCWiseReportPDF, generateCnFAgentListReportPDF, generateCnFExpenseReportPDF, generateCnFPaymentReportPDF, generateCnFAllReportPDF } from '../../../utils/pdfGenerator';
 import { generateCnFHistoryExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import TableScrollNav from '../../shared/TableScrollNav';
@@ -134,6 +134,9 @@ const CnF = ({
     const historyFilterButtonMobileRef = useRef(null);
     const historyFilterPanelRef = useRef(null);
     const [showAgentHistoryFormatModal, setShowAgentHistoryFormatModal] = useState(false);
+    const [showPrintMenu, setShowPrintMenu] = useState(false);
+    const printMenuDesktopRef = useRef(null);
+    const printMenuMobileRef = useRef(null);
     const [historyFilterSearchInputs, setHistoryFilterSearchInputs] = useState({ lcNo: '', product: '', port: '' });
     const [historyFilterDropdownOpen, setHistoryFilterDropdownOpen] = useState({ lcNo: false, product: false, port: false });
     const lcNoFilterRef = useRef(null);
@@ -208,6 +211,9 @@ const CnF = ({
             if (showHistoryFilterPanel && historyFilterPanelRef.current && !historyFilterPanelRef.current.contains(event.target) && !historyFilterButtonRef.current?.contains(event.target) && !historyFilterButtonMobileRef.current?.contains(event.target)) {
                 setShowHistoryFilterPanel(false);
             }
+            if (showPrintMenu && printMenuDesktopRef.current && !printMenuDesktopRef.current.contains(event.target) && !printMenuMobileRef.current?.contains(event.target)) {
+                setShowPrintMenu(false);
+            }
             if (lcNoFilterRef.current && !lcNoFilterRef.current.contains(event.target)) {
                 setHistoryFilterDropdownOpen(prev => prev.lcNo ? { ...prev, lcNo: false } : prev);
             }
@@ -221,6 +227,7 @@ const CnF = ({
         const handleEscape = (e) => {
             if (e.key === 'Escape') {
                 setShowHistoryFilterPanel(false);
+                setShowPrintMenu(false);
                 setHistoryFilterDropdownOpen({ lcNo: false, product: false, port: false });
             }
         };
@@ -230,7 +237,7 @@ const CnF = ({
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('keydown', handleEscape);
         };
-    }, [showHistoryFilterPanel, historyFilterDropdownOpen]);
+    }, [showHistoryFilterPanel, showPrintMenu, historyFilterDropdownOpen]);
 
     useEffect(() => {
         if (viewData?._id) {
@@ -488,7 +495,16 @@ const CnF = ({
 
     const handlePrintHistory = () => {
         if (!viewData) return;
-        setShowAgentHistoryFormatModal(true);
+        setShowPrintMenu(prev => !prev);
+    };
+
+    const handlePrintLCWise = () => {
+        if (!viewData) return;
+        const agentInfo = { name: viewData.name, cnfId: viewData.cnfId, phone: viewData.phone };
+        const activeMode = historyViewMode === 'payments' ? 'earnings' : historyViewMode;
+        const data = activeMode === 'expense' ? filteredExpenses :
+                     activeMode === 'all' ? filteredAll : filteredHistory;
+        generateCnFLCWiseReportPDF(data, agentInfo, historyFilters, activeMode);
     };
 
     const fetchCnFs = async (silent = false) => {
@@ -1645,7 +1661,7 @@ const CnF = ({
 
             {viewData && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
-                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); }}></div>
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); setShowPrintMenu(false); }}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[96vw] xl:max-w-[1750px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200 z-10">
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left w-full flex items-center justify-between md:block">
@@ -1666,15 +1682,61 @@ const CnF = ({
                                     >
                                         <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
                                     </button>
+                                    <div className="relative" ref={printMenuMobileRef}>
+                                        <button
+                                            onClick={() => setShowPrintMenu(!showPrintMenu)}
+                                            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all border ${showPrintMenu
+                                                ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                                : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
+                                                }`}
+                                            title="Print Report"
+                                        >
+                                            <PrinterIcon className={`w-4 h-4 ${showPrintMenu ? 'text-white' : 'text-gray-400'}`} />
+                                        </button>
+
+                                        {showPrintMenu && (
+                                            <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-2xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] z-[2020] p-1.5 animate-in fade-in zoom-in-95 duration-150">
+                                                <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
+                                                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Select Report Type</span>
+                                                </div>
+                                                <div className="space-y-1 mt-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setShowPrintMenu(false);
+                                                            setShowAgentHistoryFormatModal(true);
+                                                        }}
+                                                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left hover:bg-blue-50/70 transition-colors group cursor-pointer"
+                                                    >
+                                                        <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                            <FileTextIcon className="w-3.5 h-3.5" />
+                                                        </div>
+                                                        <span className="text-sm font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">
+                                                            General Report
+                                                        </span>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setShowPrintMenu(false);
+                                                            handlePrintLCWise();
+                                                        }}
+                                                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left hover:bg-indigo-50/70 transition-colors group cursor-pointer"
+                                                    >
+                                                        <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                            <BoxIcon className="w-3.5 h-3.5" />
+                                                        </div>
+                                                        <span className="text-sm font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors">
+                                                            LC Base Report
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                     <button
-                                        onClick={handlePrintHistory}
-                                        className="w-9 h-9 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30"
-                                        title="Print Report"
-                                    >
-                                        <PrinterIcon className="w-4 h-4 text-gray-400" />
-                                    </button>
-                                    <button
-                                        onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); }}
+                                        onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); setShowPrintMenu(false); }}
                                         className="w-9 h-9 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
                                         title="Close"
                                     >
@@ -1847,13 +1909,59 @@ const CnF = ({
                                     </button>
                                 </div>
 
-                                <button
-                                    onClick={handlePrintHistory}
-                                    className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30"
-                                    title="Print Report"
-                                >
-                                    <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                                </button>
+                                <div className="relative" ref={printMenuDesktopRef}>
+                                    <button
+                                        onClick={() => setShowPrintMenu(!showPrintMenu)}
+                                        className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showPrintMenu
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                            : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
+                                            }`}
+                                        title="Print Report"
+                                    >
+                                        <PrinterIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${showPrintMenu ? 'text-white' : 'text-gray-400'}`} />
+                                    </button>
+
+                                    {showPrintMenu && (
+                                        <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-2xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] z-[2020] p-1.5 animate-in fade-in zoom-in-95 duration-150">
+                                            <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
+                                                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Select Report Type</span>
+                                            </div>
+                                            <div className="space-y-1 mt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowPrintMenu(false);
+                                                        setShowAgentHistoryFormatModal(true);
+                                                    }}
+                                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left hover:bg-blue-50/70 transition-colors group cursor-pointer"
+                                                >
+                                                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                        <FileTextIcon className="w-3.5 h-3.5" />
+                                                    </div>
+                                                    <span className="text-sm font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">
+                                                        General Report
+                                                    </span>
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowPrintMenu(false);
+                                                        handlePrintLCWise();
+                                                    }}
+                                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left hover:bg-indigo-50/70 transition-colors group cursor-pointer"
+                                                >
+                                                    <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                        <BoxIcon className="w-3.5 h-3.5" />
+                                                    </div>
+                                                    <span className="text-sm font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors">
+                                                        LC Base Report
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
 
                                 {isHistorySelectionMode && (
                                     <button onClick={() => setIsBulkEditModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-blue-600 bg-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-all shadow shadow-blue-500/30 text-sm font-medium whitespace-nowrap">
@@ -1861,7 +1969,7 @@ const CnF = ({
                                     </button>
                                 )}
                                 <button
-                                    onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); }}
+                                    onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); setShowPrintMenu(false); }}
                                     className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
                                     title="Close"
                                 >

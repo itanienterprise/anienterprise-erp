@@ -6569,6 +6569,467 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
     }
 };
 
+export const generateCnFLCWiseReportPDF = (reportData = [], agentInfo = {}, filters = {}, historyViewMode = 'earnings') => {
+    try {
+        if (!reportData || reportData.length === 0) {
+            alert("No records available to generate LC Base report.");
+            return;
+        }
+
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+        // --- Configuration ---
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 32, pageWidth - margin, 32);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 45, 29, 90, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("C&F LC WISE REPORT", pageWidth / 2, 34, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 47;
+        doc.setFontSize(9);
+
+        // Agent Info (Box Style)
+        doc.setFont('helvetica', 'bold');
+        doc.text("Agent ID", margin, yPos);
+        doc.text("Agent Name", margin, yPos + 5);
+        doc.text("Contact No.", margin, yPos + 10);
+
+        doc.text(":", margin + 23, yPos);
+        doc.text(":", margin + 23, yPos + 5);
+        doc.text(":", margin + 23, yPos + 10);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.cnfId || '-', margin + 26, yPos);
+        doc.text(agentInfo.name || '-', margin + 26, yPos + 5);
+        doc.text(agentInfo.phone || '-', margin + 26, yPos + 10);
+
+        let yOffset = 10;
+        if (filters && filters.port) {
+            yOffset += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Port", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.port, margin + 26, yPos + yOffset);
+        }
+        if (filters && filters.lcNo) {
+            yOffset += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 26, yPos + yOffset);
+        }
+        if (filters && filters.productName) {
+            yOffset += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Product", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.productName, margin + 26, yPos + yOffset);
+        }
+
+        // --- Group Data by LC ---
+        const lcGroupsMap = new Map();
+        let totalTrucks = 0;
+        let totalQty = 0;
+        let totalCommissionVal = 0;
+
+        reportData.forEach(row => {
+            const rawLc = (row.lcNo || '').toString().trim();
+            const lcKey = (rawLc && rawLc !== '-' && rawLc.toLowerCase() !== 'null' && rawLc.toLowerCase() !== 'undefined') ? rawLc : 'Without LC';
+
+            if (!lcGroupsMap.has(lcKey)) {
+                lcGroupsMap.set(lcKey, {
+                    lcNo: lcKey,
+                    importer: row.importer || '-',
+                    exporter: row.exporter || '-',
+                    product: row.product || '-',
+                    port: row.port || '-',
+                    rows: [],
+                    totalTrucks: 0,
+                    totalQty: 0,
+                    totalCommission: 0
+                });
+            }
+
+            const group = lcGroupsMap.get(lcKey);
+            if (group.importer === '-' && row.importer && row.importer !== '-') group.importer = row.importer;
+            if (group.exporter === '-' && row.exporter && row.exporter !== '-') group.exporter = row.exporter;
+            if (group.product === '-' && row.product && row.product !== '-') group.product = row.product;
+            if (group.port === '-' && row.port && row.port !== '-') group.port = row.port;
+
+            const trucks = parseFloat(row.truck) || 0;
+            const qty = parseFloat(row.qty) || 0;
+            const comm = parseFloat(row.totalCommission !== undefined ? row.totalCommission : (row.billingAmount !== undefined ? row.billingAmount : (row.amount || 0))) || 0;
+
+            group.rows.push(row);
+            group.totalTrucks += trucks;
+            group.totalQty += qty;
+            group.totalCommission += comm;
+
+            totalTrucks += trucks;
+            totalQty += qty;
+            totalCommissionVal += comm;
+        });
+
+        const lcGroups = Array.from(lcGroupsMap.values());
+        // Sort groups: LCs chronologically or alphanumerically, Without LC at the end
+        lcGroups.sort((a, b) => {
+            if (a.lcNo === 'Without LC') return 1;
+            if (b.lcNo === 'Without LC') return -1;
+            const d1 = a.rows[0]?.date ? new Date(a.rows[0].date).getTime() : 0;
+            const d2 = b.rows[0]?.date ? new Date(b.rows[0].date).getTime() : 0;
+            if (d1 !== d2) return d1 - d2;
+            return a.lcNo.localeCompare(b.lcNo, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        // Right Side: Date Range, Printed On
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const rightColX = pageWidth - margin - 60;
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Printed on", rightColX, yPos);
+        doc.text(":", rightColX + 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(dateStr, rightColX + 23, yPos);
+
+        if (filters.startDate || filters.endDate) {
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range", rightColX, yPos + 6);
+            doc.text(":", rightColX + 20, yPos + 6);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, rightColX + 23, yPos + 6);
+        }
+
+        // Port Truck Distribution
+        const portTrucksMap = {};
+        reportData.forEach(row => {
+            const portName = (row.port || '-').trim();
+            const trucks = parseFloat(row.truck) || 0;
+            if (trucks > 0 && portName !== '-') {
+                portTrucksMap[portName] = (portTrucksMap[portName] || 0) + trucks;
+            }
+        });
+        const portTrucksList = Object.entries(portTrucksMap).sort((a, b) => b[1] - a[1]);
+
+        // Draw Single Summary Card (Middle)
+        const cardY = yPos + 1;
+        const cardWidth = 65;
+        const cardLineHeight = 5;
+        const cardHeight = 20 + (portTrucksList.length * cardLineHeight);
+        const cardX = (pageWidth - cardWidth) / 2;
+
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.2);
+        doc.rect(cardX, cardY, cardWidth, cardHeight, 'S');
+
+        doc.setFontSize(9);
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'bold');
+
+        let currentY = cardY + 0.5;
+        portTrucksList.forEach(([port, trucks]) => {
+            currentY += cardLineHeight;
+            const formattedPort = port.toUpperCase();
+            doc.text(formattedPort, cardX + 3, currentY);
+            doc.text(":", cardX + 36, currentY);
+            doc.text(trucks.toString(), cardX + 39, currentY);
+        });
+
+        currentY += cardLineHeight;
+        doc.text("TOTAL LCS", cardX + 3, currentY);
+        doc.text(":", cardX + 36, currentY);
+        doc.text(lcGroups.length.toString(), cardX + 39, currentY);
+
+        currentY += cardLineHeight;
+        doc.text("TOTAL TRUCKS", cardX + 3, currentY);
+        doc.text(":", cardX + 36, currentY);
+        doc.text(totalTrucks.toString(), cardX + 39, currentY);
+
+        currentY += cardLineHeight;
+        doc.text("TOTAL BALANCE", cardX + 3, currentY);
+        doc.text(":", cardX + 36, currentY);
+        doc.text(totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), cardX + 39, currentY);
+
+        const totalTableWidth = 17 + 17 + 26 + 24 + 26 + 18 + 12 + 20 + 16 + 24; // 200mm
+        const tableMargin = (pageWidth - totalTableWidth) / 2;
+        const tableStartY = Math.max(yPos + yOffset, cardY + cardHeight) + 6;
+
+        // --- Build AutoTable Body with LC Group Headers and Subtotals ---
+        const tableRows = [];
+
+        lcGroups.forEach(group => {
+            // Sort rows inside group chronologically
+            group.rows.sort((a, b) => {
+                const d1 = new Date(a.date || 0).getTime();
+                const d2 = new Date(b.date || 0).getTime();
+                if (d1 !== d2) return d1 - d2;
+                return (a.createdAt || a._id || 0) > (b.createdAt || b._id || 0) ? 1 : -1;
+            });
+
+            // 1. Group Header Row
+            tableRows.push([
+                {
+                    content: `LC NO: ${group.lcNo}   |   Importer: ${group.importer}   |   Product: ${group.product}   |   Port: ${group.port}`,
+                    colSpan: 10,
+                    styles: {
+                        fillColor: [230, 240, 255],
+                        textColor: [10, 45, 110],
+                        fontStyle: 'bold',
+                        halign: 'left',
+                        cellPadding: 1.5,
+                        fontSize: 8.5
+                    }
+                }
+            ]);
+
+            // 2. Transaction Rows
+            group.rows.forEach(row => {
+                const rateVal = row.commission !== undefined ? row.commission : (row.rate || 0);
+                const commVal = row.totalCommission !== undefined ? row.totalCommission : (row.billingAmount !== undefined ? row.billingAmount : (row.amount || 0));
+
+                tableRows.push([
+                    formatDate(row.date),
+                    row.billOfEntry || '-',
+                    row.importer || '-',
+                    row.exporter || '-',
+                    row.product || '-',
+                    row.port || '-',
+                    row.truck || '0',
+                    parseFloat(row.qty || 0).toLocaleString('en-US'),
+                    (row.uom || '').toUpperCase() === 'BOE' ? '-' : (parseFloat(rateVal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+                    (parseFloat(commVal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                ]);
+            });
+
+            // 3. LC Subtotal Row
+            tableRows.push([
+                {
+                    content: `Subtotal for LC: ${group.lcNo} (${group.rows.length} ${group.rows.length === 1 ? 'entry' : 'entries'})`,
+                    colSpan: 6,
+                    styles: {
+                        fillColor: [248, 249, 250],
+                        fontStyle: 'bold',
+                        halign: 'right',
+                        textColor: [0, 0, 0]
+                    }
+                },
+                {
+                    content: group.totalTrucks.toString(),
+                    styles: {
+                        fillColor: [248, 249, 250],
+                        fontStyle: 'bold',
+                        halign: 'center',
+                        textColor: [0, 0, 0]
+                    }
+                },
+                {
+                    content: group.totalQty.toLocaleString('en-US'),
+                    styles: {
+                        fillColor: [248, 249, 250],
+                        fontStyle: 'bold',
+                        halign: 'right',
+                        textColor: [0, 0, 0]
+                    }
+                },
+                {
+                    content: '',
+                    styles: {
+                        fillColor: [248, 249, 250]
+                    }
+                },
+                {
+                    content: group.totalCommission.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                    styles: {
+                        fillColor: [248, 249, 250],
+                        fontStyle: 'bold',
+                        halign: 'right',
+                        textColor: [0, 0, 0]
+                    }
+                }
+            ]);
+        });
+
+        // --- Render Main Grouped Table ---
+        autoTable(doc, {
+            startY: tableStartY,
+            head: [['Date', 'BOE No', 'Importer', 'Exporter', 'Product', 'Port', 'Truck', 'QTY', 'Rate', 'Total']],
+            body: tableRows,
+            foot: [[
+                { content: `GRAND TOTAL (${lcGroups.length} ${lcGroups.length === 1 ? 'LC' : 'LCs'})`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalTrucks.toString(), styles: { halign: 'center', fontStyle: 'bold' } },
+                { content: totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
+                '',
+                { content: totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]],
+            theme: 'plain',
+            showFoot: 'lastPage',
+            styles: {
+                fontSize: 8.5,
+                cellPadding: 1.2,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.35,
+                textColor: [0, 0, 0],
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.35
+            },
+            footStyles: {
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.35
+            },
+            margin: { left: tableMargin, right: tableMargin },
+            columnStyles: {
+                0: { cellWidth: 17, halign: 'center' }, // Date
+                1: { cellWidth: 17, halign: 'center' }, // BOE No
+                2: { cellWidth: 26, halign: 'left', overflow: 'hidden' }, // Importer
+                3: { cellWidth: 24, halign: 'left', overflow: 'hidden' }, // Exporter
+                4: { cellWidth: 26, halign: 'left', overflow: 'hidden' }, // Product
+                5: { cellWidth: 18, halign: 'center', overflow: 'linebreak' }, // Port
+                6: { cellWidth: 12, halign: 'center' }, // Truck
+                7: { cellWidth: 20, halign: 'right' },  // QTY
+                8: { cellWidth: 16, halign: 'right' }, // Rate
+                9: { cellWidth: 24, halign: 'right', fontStyle: 'bold' }  // Total
+            }
+        });
+
+        // --- Optional LC Summary Breakdown (when multiple LCs exist) ---
+        if (lcGroups.length > 1) {
+            let nextStartY = doc.lastAutoTable.finalY + 8;
+            if (nextStartY + 35 > pageHeight) {
+                doc.addPage();
+                nextStartY = 20;
+            }
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC SUMMARY BREAKDOWN", margin, nextStartY);
+
+            const summaryBody = lcGroups.map((group, index) => [
+                index + 1,
+                group.lcNo,
+                group.importer || '-',
+                group.product || '-',
+                group.port || '-',
+                group.totalTrucks.toString(),
+                group.totalQty.toLocaleString('en-US'),
+                group.totalCommission.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ]);
+
+            autoTable(doc, {
+                startY: nextStartY + 3,
+                head: [['Sl', 'LC Number', 'Importer', 'Product', 'Port', 'Trucks', 'QTY', 'Total (Tk)']],
+                body: summaryBody,
+                foot: [[
+                    { content: 'TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: totalTrucks.toString(), styles: { halign: 'center', fontStyle: 'bold' } },
+                    { content: totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+                ]],
+                theme: 'plain',
+                showFoot: 'lastPage',
+                styles: {
+                    fontSize: 8.5,
+                    cellPadding: 1.2,
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.35,
+                    textColor: [0, 0, 0],
+                    valign: 'middle'
+                },
+                headStyles: {
+                    fillColor: [240, 240, 240],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    halign: 'center',
+                    lineWidth: 0.35
+                },
+                footStyles: {
+                    fillColor: [240, 240, 240],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    lineWidth: 0.35
+                },
+                margin: { left: tableMargin, right: tableMargin },
+                columnStyles: {
+                    0: { cellWidth: 10, halign: 'center' },
+                    1: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
+                    2: { cellWidth: 35, halign: 'left', overflow: 'hidden' },
+                    3: { cellWidth: 35, halign: 'left', overflow: 'hidden' },
+                    4: { cellWidth: 22, halign: 'center' },
+                    5: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+                    6: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
+                    7: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
+                }
+            });
+        }
+
+        // --- Signatures ---
+        let finalY = doc.lastAutoTable.finalY + 35;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 35;
+        }
+
+        const sigWidth = 40;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setLineWidth(0.2);
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.setFontSize(8);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        // Open in new tab
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+
+    } catch (error) {
+        console.error("C&F LC-Wise PDF Error:", error);
+        alert(`Failed to generate C&F LC-Wise PDF: ${error.message}`);
+    }
+};
+
+
 export const generateCnFExpenseReportPDF = (reportData, agentInfo, filters) => {
     try {
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
