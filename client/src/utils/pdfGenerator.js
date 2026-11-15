@@ -6558,6 +6558,17 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
+        // Page Numbers Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - C&F LC WISE REPORT', margin, pageHeight - 6);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+        }
+
         // Open in new tab
         const pdfOutput = doc.output('blob');
         const blobURL = URL.createObjectURL(pdfOutput);
@@ -6569,7 +6580,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
     }
 };
 
-export const generateCnFLCWiseReportPDF = (reportData = [], agentInfo = {}, filters = {}, historyViewMode = 'earnings') => {
+export const generateCnFLCWiseReportPDF = async (reportData = [], agentInfo = {}, filters = {}, historyViewMode = 'earnings') => {
     try {
         if (!reportData || reportData.length === 0) {
             alert("No records available to generate LC Base report.");
@@ -6583,36 +6594,120 @@ export const generateCnFLCWiseReportPDF = (reportData = [], agentInfo = {}, filt
         const pageHeight = doc.internal.pageSize.height;
         const margin = 5;
 
-        // --- Header ---
-        doc.setFontSize(22);
-        doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+        // Load company logo (same as Stock Report / P&L)
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
 
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+        // --- Header (identical to Stock Report) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
 
-        // Separator
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.5);
-        doc.line(margin, 32, pageWidth - margin, 32);
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
 
-        // Report Title
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 45, 29, 90, 8, 'FD');
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0);
-        doc.text("C&F LC WISE REPORT", pageWidth / 2, 34, { align: 'center' });
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
 
-        // --- Info Row ---
-        let yPos = 47;
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill (no black border)
+        doc.setTextColor(249, 115, 22); // Orange (#f97316)
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
         doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
 
-        // Agent Info (Box Style)
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
+
+        // Title badge
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - 45, y, 90, 7, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text("C&F LC WISE REPORT", pageWidth / 2, y + 5, { align: 'center' });
+
+        y += 9;
+
+        // Filter info pill
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const dateRange = `${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} — ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`;
+        const filterParts = [`Date: ${dateRange}`];
+        const filterText = filterParts.join('   |   ');
+
+        // Center: Date Pill
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        const filterTW = doc.getTextWidth(filterText);
+        const pillW = Math.min(filterTW + 12, pageWidth - margin * 2);
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth / 2) - (pillW / 2), y, pillW, 6, 1.5, 1.5, 'FD');
+        doc.setTextColor(30, 41, 59);
+        doc.text(filterText, pageWidth / 2, y + 4.2, { align: 'center' });
+
+        // Right Side: Printed on
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 4.2, { align: 'right' });
+
+        // --- Info Row & Summary Card ---
+        let yPos = y + 8;
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+
+        // Agent Info (Left Side)
         doc.setFont('helvetica', 'bold');
         doc.text("Agent ID", margin, yPos);
         doc.text("Agent Name", margin, yPos + 5);
@@ -6708,24 +6803,6 @@ export const generateCnFLCWiseReportPDF = (reportData = [], agentInfo = {}, filt
             return a.lcNo.localeCompare(b.lcNo, undefined, { numeric: true, sensitivity: 'base' });
         });
 
-        // Right Side: Date Range, Printed On
-        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        const rightColX = pageWidth - margin - 60;
-
-        doc.setFont('helvetica', 'bold');
-        doc.text("Printed on", rightColX, yPos);
-        doc.text(":", rightColX + 20, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(dateStr, rightColX + 23, yPos);
-
-        if (filters.startDate || filters.endDate) {
-            doc.setFont('helvetica', 'bold');
-            doc.text("Date Range", rightColX, yPos + 6);
-            doc.text(":", rightColX + 20, yPos + 6);
-            doc.setFont('helvetica', 'normal');
-            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, rightColX + 23, yPos + 6);
-        }
-
         // Port Truck Distribution
         const portTrucksMap = {};
         reportData.forEach(row => {
@@ -6738,7 +6815,7 @@ export const generateCnFLCWiseReportPDF = (reportData = [], agentInfo = {}, filt
         const portTrucksList = Object.entries(portTrucksMap).sort((a, b) => b[1] - a[1]);
 
         // Draw Single Summary Card (Middle)
-        const cardY = yPos + 1;
+        const cardY = yPos - 1;
         const cardWidth = 65;
         const cardLineHeight = 5;
         const cardHeight = 20 + (portTrucksList.length * cardLineHeight);
@@ -6802,14 +6879,28 @@ export const generateCnFLCWiseReportPDF = (reportData = [], agentInfo = {}, filt
                         fillColor: [230, 240, 255],
                         textColor: [10, 45, 110],
                         fontStyle: 'bold',
-                        halign: 'left',
+                        halign: 'center',
                         cellPadding: 1.5,
                         fontSize: 8.5
                     }
                 }
             ]);
 
-            // 2. Transaction Rows
+            // 2. Column Head Row (placed below LC Header Banner)
+            tableRows.push([
+                { content: 'Date', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+                { content: 'BOE No', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+                { content: 'Importer', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+                { content: 'Exporter', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+                { content: 'Product', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+                { content: 'Port', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+                { content: 'Truck', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+                { content: 'QTY', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+                { content: 'Rate', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+                { content: 'Total', styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], textColor: [0, 0, 0] } }
+            ]);
+
+            // 3. Transaction Rows
             group.rows.forEach(row => {
                 const rateVal = row.commission !== undefined ? row.commission : (row.rate || 0);
                 const commVal = row.totalCommission !== undefined ? row.totalCommission : (row.billingAmount !== undefined ? row.billingAmount : (row.amount || 0));
@@ -6828,10 +6919,10 @@ export const generateCnFLCWiseReportPDF = (reportData = [], agentInfo = {}, filt
                 ]);
             });
 
-            // 3. LC Subtotal Row
+            // 4. LC Subtotal Row
             tableRows.push([
                 {
-                    content: `Subtotal for LC: ${group.lcNo} (${group.rows.length} ${group.rows.length === 1 ? 'entry' : 'entries'})`,
+                    content: `Subtotal for LC: ${group.lcNo}`,
                     colSpan: 6,
                     styles: {
                         fillColor: [248, 249, 250],
@@ -6874,12 +6965,25 @@ export const generateCnFLCWiseReportPDF = (reportData = [], agentInfo = {}, filt
                     }
                 }
             ]);
+
+            // 5. Gap after every LC
+            tableRows.push([
+                {
+                    content: '',
+                    colSpan: 10,
+                    styles: {
+                        cellPadding: 1.8,
+                        fillColor: [255, 255, 255],
+                        lineWidth: 0,
+                        lineColor: [255, 255, 255]
+                    }
+                }
+            ]);
         });
 
         // --- Render Main Grouped Table ---
         autoTable(doc, {
             startY: tableStartY,
-            head: [['Date', 'BOE No', 'Importer', 'Exporter', 'Product', 'Port', 'Truck', 'QTY', 'Rate', 'Total']],
             body: tableRows,
             foot: [[
                 { content: `GRAND TOTAL (${lcGroups.length} ${lcGroups.length === 1 ? 'LC' : 'LCs'})`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -6998,10 +7102,10 @@ export const generateCnFLCWiseReportPDF = (reportData = [], agentInfo = {}, filt
         }
 
         // --- Signatures ---
-        let finalY = doc.lastAutoTable.finalY + 35;
-        if (finalY + 20 > pageHeight) {
+        let finalY = doc.lastAutoTable.finalY + 15;
+        if (finalY + 15 > pageHeight - margin) {
             doc.addPage();
-            finalY = 35;
+            finalY = 25;
         }
 
         const sigWidth = 40;
@@ -7017,6 +7121,17 @@ export const generateCnFLCWiseReportPDF = (reportData = [], agentInfo = {}, filt
 
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        // Page Numbers Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - C&F LC WISE REPORT', margin, pageHeight - 6);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+        }
 
         // Open in new tab
         const pdfOutput = doc.output('blob');
