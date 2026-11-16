@@ -7,7 +7,7 @@ const easeInOutCubic = (t) => {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 };
 
-const TableScrollNav = ({ containerRef, count, className = '' }) => {
+const TableScrollNav = ({ containerRef, count, className = '', embedded = false }) => {
     const placeholderRef = useRef(null);
     const animIdRef = useRef(null);
     const [atStart, setAtStart] = useState(true);
@@ -22,7 +22,16 @@ const TableScrollNav = ({ containerRef, count, className = '' }) => {
         }
         const anchor = placeholderRef.current;
         if (anchor) {
-            let prev = anchor.previousElementSibling;
+            // First check within the same card/table container
+            const cardParent = anchor.closest('.bg-white, .table-container, [class*="rounded-"], [class*="shadow"]');
+            if (cardParent) {
+                const scrollable = cardParent.querySelector('.overflow-x-auto, table');
+                if (scrollable) {
+                    return scrollable.tagName === 'TABLE' ? scrollable.parentElement : scrollable;
+                }
+            }
+            let el = anchor.closest('.bg-white, .border-t') || anchor;
+            let prev = el.previousElementSibling;
             while (prev) {
                 if (
                     prev.tagName === 'TABLE' ||
@@ -30,7 +39,8 @@ const TableScrollNav = ({ containerRef, count, className = '' }) => {
                     prev.classList.contains('overflow-x-auto') ||
                     prev.scrollWidth > prev.clientWidth
                 ) {
-                    return prev;
+                    const tableInPrev = prev.querySelector('.overflow-x-auto, table');
+                    return tableInPrev ? (tableInPrev.tagName === 'TABLE' ? tableInPrev.parentElement : tableInPrev) : prev;
                 }
                 prev = prev.previousElementSibling;
             }
@@ -244,6 +254,32 @@ const TableScrollNav = ({ containerRef, count, className = '' }) => {
 
     const displayCount = typeof count === 'number' ? count : null;
 
+    const renderButtons = () => (
+        <div className="inline-flex items-center bg-gray-50/80 hover:bg-white border border-gray-200/90 shadow-2xs rounded-full p-0.5 transition-all">
+            <button
+                type="button"
+                onClick={() => handleScrollStep('left')}
+                disabled={atStart}
+                className="p-1 px-3.5 rounded-full text-gray-600 hover:text-blue-600 hover:bg-white disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-all cursor-pointer disabled:cursor-not-allowed active:scale-90 flex items-center justify-center shrink-0"
+                title="Go to First Column"
+            >
+                <ChevronLeftIcon className="w-4 h-4 stroke-[2.5]" />
+            </button>
+
+            <div className="h-3.5 w-px bg-gray-200/90 mx-0.5 shrink-0"></div>
+
+            <button
+                type="button"
+                onClick={() => handleScrollStep('right')}
+                disabled={atEnd}
+                className="p-1 px-3.5 rounded-full text-gray-600 hover:text-blue-600 hover:bg-white disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-all cursor-pointer disabled:cursor-not-allowed active:scale-90 flex items-center justify-center shrink-0"
+                title="Go to Last Column"
+            >
+                <ChevronRightIcon className="w-4 h-4 stroke-[2.5]" />
+            </button>
+        </div>
+    );
+
     const renderInnerContent = () => (
         <>
             <span className="text-[11px] font-medium text-gray-500 flex items-center gap-1.5 min-w-[70px]">
@@ -255,35 +291,43 @@ const TableScrollNav = ({ containerRef, count, className = '' }) => {
                 ) : null}
             </span>
 
-            <div className="inline-flex items-center bg-white border border-gray-200/90 shadow-2xs rounded-full p-0.5">
-                <button
-                    type="button"
-                    onClick={() => handleScrollStep('left')}
-                    disabled={atStart}
-                    className="p-1 px-3.5 rounded-full text-gray-600 hover:text-blue-600 hover:bg-blue-50/80 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-all cursor-pointer disabled:cursor-not-allowed active:scale-90 flex items-center justify-center shrink-0"
-                    title="Go to First Column"
-                >
-                    <ChevronLeftIcon className="w-4 h-4 stroke-[2.5]" />
-                </button>
-
-                <div className="h-3.5 w-px bg-gray-200/90 mx-0.5 shrink-0"></div>
-
-                <button
-                    type="button"
-                    onClick={() => handleScrollStep('right')}
-                    disabled={atEnd}
-                    className="p-1 px-3.5 rounded-full text-gray-600 hover:text-blue-600 hover:bg-blue-50/80 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-all cursor-pointer disabled:cursor-not-allowed active:scale-90 flex items-center justify-center shrink-0"
-                    title="Go to Last Column"
-                >
-                    <ChevronRightIcon className="w-4 h-4 stroke-[2.5]" />
-                </button>
-            </div>
+            {renderButtons()}
 
             <div className="min-w-[70px]"></div>
         </>
     );
 
     const portalTarget = typeof document !== 'undefined' ? document.body : null;
+
+    if (embedded) {
+        return (
+            <>
+                <div
+                    ref={placeholderRef}
+                    className={`hidden md:inline-flex items-center shrink-0 ${className} ${isFloating ? 'opacity-0 pointer-events-none' : ''}`}
+                    aria-hidden={isFloating}
+                >
+                    {renderButtons()}
+                </div>
+
+                {isFloating && portalTarget && createPortal(
+                    <div
+                        style={{
+                            position: 'fixed',
+                            left: `${floatBounds.left}px`,
+                            width: `${floatBounds.width}px`,
+                            bottom: 0,
+                            zIndex: floatBounds.inModal ? 60 : 25,
+                        }}
+                        className={`border-t border-gray-200 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.06)] px-4 py-1.5 flex items-center justify-center select-none rounded-t-lg md:rounded-b-2xl transition-[left,width] duration-300 ease-in-out ${className}`}
+                    >
+                        {renderButtons()}
+                    </div>,
+                    portalTarget
+                )}
+            </>
+        );
+    }
 
     return (
         <>

@@ -10,7 +10,6 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import TableScrollNav from '../../shared/TableScrollNav';
 import PaginationBar from '../../shared/PaginationBar';
 import './PackingList.css';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -3399,7 +3398,6 @@ function PackingList({
                                     </tbody>
                                 </table>
                             </div>
-                            <TableScrollNav className="hidden md:flex" count={filteredRecords.length} />
 
                             {/* Mobile Card Layout */}
                             <div className="block md:hidden space-y-4 px-2 pb-6">

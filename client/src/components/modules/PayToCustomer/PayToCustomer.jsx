@@ -6,7 +6,6 @@ import { generatePayToCustomerVoucherPDF } from '../../../utils/pdfGenerator';
 import { decryptData, encryptData } from '../../../utils/encryption';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import TableScrollNav from '../../shared/TableScrollNav';
 import PaginationBar from '../../shared/PaginationBar';
 import axios, { api } from '../../../utils/api';
 import PayToCustomerReport from './PayToCustomerReport';
@@ -2791,7 +2790,6 @@ const PayToCustomer = ({
                             </tbody>
                         </table>
                         </div>
-                        <TableScrollNav className="hidden md:flex" count={displayedGroups.length} />
 
                         {/* Mobile Card View */}
                         <div className="block md:hidden px-1 py-4 space-y-3">

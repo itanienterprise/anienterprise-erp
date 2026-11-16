@@ -12,7 +12,6 @@ import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { generateLCReceiveReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
-import TableScrollNav from '../../shared/TableScrollNav';
 import PaginationBar from '../../shared/PaginationBar';
 import { getSocket } from '../../../utils/socket';
 import './LCReceive.css';
@@ -5440,7 +5439,6 @@ function LCReceive({
                                 </tbody>
                             </table>
                         </div>
-                        <TableScrollNav className="hidden md:flex" count={groupedRecordsList.length} />
 
                         {/* Mobile List View */}
                         <div className="md:hidden divide-y divide-gray-100">

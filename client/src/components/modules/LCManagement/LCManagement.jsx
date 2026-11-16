@@ -15,7 +15,6 @@ import { generateLCManagementReportPDF, generateLCBillReportPDF } from '../../..
 import { generateLCManagementReportExcel, generateLCBillReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import TableScrollNav from '../../shared/TableScrollNav';
 import PaginationBar from '../../shared/PaginationBar';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getCogNetBillBdt, isProductMatch, getLcMilestoneFinances } from '../../../utils/lcValueUtils';
@@ -13476,7 +13475,6 @@ style={
                             </tbody>
                         </table>
                         </div>
-                        <TableScrollNav count={sortedRecords.length} />
                     </div>
 
                     {/* Mobile View */}

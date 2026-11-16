@@ -11,7 +11,6 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import TableScrollNav from '../../shared/TableScrollNav';
 import PaginationBar from '../../shared/PaginationBar';
 import { getSocket } from '../../../utils/socket';
 import PurchaseReport from './PurchaseReport';
@@ -2080,7 +2079,6 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                         </tbody>
                     </table>
                 </div>
-                <TableScrollNav className="hidden md:flex" count={filteredPurchases.length} />
 
                 {/* Mobile Card View */}
                 <div className="block md:hidden px-3 py-3 space-y-3">

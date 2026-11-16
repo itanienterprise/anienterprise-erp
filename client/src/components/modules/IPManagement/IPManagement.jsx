@@ -13,7 +13,6 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { generateIPManagementReportPDF } from '../../../utils/pdfGenerator';
 import { generateIPManagementReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
-import TableScrollNav from '../../shared/TableScrollNav';
 import PaginationBar from '../../shared/PaginationBar';
 import { getSocket } from '../../../utils/socket';
 
@@ -2602,7 +2601,6 @@ function IPManagement({
                                     </tbody>
                                 </table>
                             </div>
-                            <TableScrollNav className="hidden md:flex" count={sortedIpRecords.length} />
 
                             {/* Mobile Card View */}
                             <div className="block md:hidden px-2 py-3 space-y-3">

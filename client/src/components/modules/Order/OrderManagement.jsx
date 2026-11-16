@@ -10,7 +10,6 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { getSocket } from '../../../utils/socket';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import TableScrollNav from '../../shared/TableScrollNav';
 import PaginationBar from '../../shared/PaginationBar';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { formatFirstName } from '../IPManagement/IPManagement';
@@ -3734,7 +3733,6 @@ const OrderManagement = ({
                             </tbody>
                         </table>
                     </div>
-                    <TableScrollNav className="hidden md:flex" count={getFilteredData.length} />
 
                     {/* Mobile Card View */}
                     <div className="block md:hidden px-3 py-3 space-y-3">

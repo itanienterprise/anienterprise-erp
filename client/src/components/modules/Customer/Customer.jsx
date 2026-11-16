@@ -11,7 +11,6 @@ import { getSocket } from '../../../utils/socket';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import ReportFormatModal from '../../shared/ReportFormatModal';
-import TableScrollNav from '../../shared/TableScrollNav';
 import PaginationBar from '../../shared/PaginationBar';
 import CustomerReport from './CustomerReport';
 import './Customer.css';
@@ -2329,7 +2328,6 @@ const Customer = ({
                                         </tbody>
                                     </table>
                                 </div>
-                                <TableScrollNav className="hidden md:flex" count={getFilteredAndSortedData().length} />
 
                                 {/* Mobile Card View */}
                                 <div className="block md:hidden px-1 py-4 space-y-3">

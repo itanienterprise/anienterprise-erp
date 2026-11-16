@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from '../Icons';
+import TableScrollNav from './TableScrollNav';
 
 const getPageNumbers = (current, total) => {
     if (total <= 7) {
@@ -23,7 +24,9 @@ const PaginationBar = ({
     pageSizeOptions = [15, 30, 50, 100],
     totalUnfiltered = null,
     itemName = 'records',
-    className = ''
+    className = '',
+    showScrollNav = true,
+    tableContainerRef = null
 }) => {
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const startItem = totalItems > 0 ? (currentPage - 1) * pageSize + 1 : 0;
@@ -55,9 +58,18 @@ const PaginationBar = ({
                 </div>
             </div>
 
-            {/* Right Page Navigation */}
-            {totalPages > 1 && (
-                <div className="flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-end overflow-x-auto py-0.5">
+            {/* Right Controls: Horizontal Table Scroll Buttons + Page Navigation */}
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-end">
+                {showScrollNav && (
+                    <TableScrollNav
+                        embedded={true}
+                        containerRef={tableContainerRef}
+                    />
+                )}
+
+                {/* Right Page Navigation */}
+                {totalPages > 1 && (
+                    <div className="flex items-center gap-1 overflow-x-auto py-0.5">
                     <button
                         type="button"
                         onClick={() => onPageChange && onPageChange(1)}
@@ -121,6 +133,7 @@ const PaginationBar = ({
                     </button>
                 </div>
             )}
+            </div>
         </div>
     );
 };

@@ -6,7 +6,6 @@ import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import TableScrollNav from '../../shared/TableScrollNav';
 import PaginationBar from '../../shared/PaginationBar';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
@@ -8067,9 +8066,6 @@ const SaleManagement = ({
                         </table>
                     </div>
 
-                    {/* Table Bottom Navigation Bar */}
-                    <TableScrollNav className="hidden md:flex" containerRef={tableContainerRef} count={getFilteredData().length} />
-
                     {/* Mobile Card View */}
                     <div className="block md:hidden px-3 py-3 space-y-3">
                         {isLoading ? (
@@ -8448,6 +8444,7 @@ const SaleManagement = ({
                     onPageSizeChange={setPageSize}
                     pageSizeOptions={[15, 30, 50, 100]}
                     itemName={saleType === 'Border' ? 'Border Sales' : 'Sales'}
+                    tableContainerRef={tableContainerRef}
                 />
                 </div>
             )}
