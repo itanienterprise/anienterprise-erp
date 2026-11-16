@@ -130,12 +130,16 @@ const Dashboard = ({
   lcStockRecords = [],
   products = [],
   warehouseData = [],
+  customerRecords: initialCustomerRecords = [],
   onNavigate
 }) => {
   // ─── Dashboard Stats & Backend State ──────────────────────────
   const [statsData, setStatsData] = useState(null);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
+
+  // ─── Customer Records (for Payment Collections) ───────────────
+  const [customerRecords, setCustomerRecords] = useState(initialCustomerRecords || []);
 
   // ─── Card 1: Attendance & Working Time State ──────────────────
   const [attendanceViewMode, setAttendanceViewMode] = useState('attendance'); // 'attendance' | 'workingTime'
@@ -153,11 +157,11 @@ const Dashboard = ({
   const [pieProductType, setPieProductType] = useState('all'); // 'all' | 'General' | 'Border'
 
   // ─── Card 4: Order & Sales Donut State ─────────────────────────
-  const [orderSalesTimeframe, setOrderSalesTimeframe] = useState('yearly'); // 'today' | 'weekly' | 'monthly' | 'yearly' | 'all'
+  const [orderSalesTimeframe, setOrderSalesTimeframe] = useState('today'); // 'today' | 'weekly' | 'monthly' | 'yearly' | 'all'
   const [donutHoveredSlice, setDonutHoveredSlice] = useState(null);
 
   // ─── Card 5: Collection vs Sales State ─────────────────────────
-  const [collectionTimeframe, setCollectionTimeframe] = useState('7days'); // '7days' | 'monthly'
+  const [collectionTimeframe, setCollectionTimeframe] = useState('today'); // 'today' | 'weekly' | 'monthly' | 'yearly' | 'all'
   const [barHoveredIndex, setBarHoveredIndex] = useState(null);
 
   // ─── Card 6: To-Do List State ──────────────────────────────────
@@ -273,13 +277,32 @@ const Dashboard = ({
     }
   }, []);
 
+  // ─── Fetch Customer Records (for Payment Collections) ──────────
+  const fetchCustomerRecords = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/customers`);
+      if (Array.isArray(res.data)) {
+        setCustomerRecords(res.data);
+      }
+    } catch (e) {
+      console.warn('Failed to load customers in dashboard:', e);
+    }
+  }, []);
+
   useEffect(() => {
     fetchDashboardStats();
     fetchTodos();
     fetchPiRecords();
     fetchLcRecords();
     fetchUserProfile();
-  }, [fetchDashboardStats, fetchTodos, fetchPiRecords, fetchLcRecords, fetchUserProfile]);
+    fetchCustomerRecords();
+  }, [fetchDashboardStats, fetchTodos, fetchPiRecords, fetchLcRecords, fetchUserProfile, fetchCustomerRecords]);
+
+  useEffect(() => {
+    if (initialCustomerRecords && initialCustomerRecords.length > 0) {
+      setCustomerRecords(initialCustomerRecords);
+    }
+  }, [initialCustomerRecords]);
 
   // ─── Todo Handlers ─────────────────────────────────────────────
   const handleAddTodo = async (e) => {
@@ -837,41 +860,257 @@ const Dashboard = ({
 
   // ─── CARD 5: Collection vs Sales Bar Chart Data ────────────────
   const collectionSalesData = useMemo(() => {
-    const days = weeklyDaysList.map(d => {
-      let daySales = 0;
-      let dayCollected = 0;
-
-      salesRecords.forEach(s => {
-        const sDate = (s.date || s.createdAt || '').slice(0, 10);
-        if (sDate === d.date) {
-          const tot = parseFloat(s.totalAmount || 0);
-          const paid = parseFloat(s.paidAmount || 0);
-          daySales += tot;
-          dayCollected += paid;
-        }
-      });
-
-      return {
-        label: d.dayName.slice(0, 3),
-        date: d.date,
-        sales: daySales,
-        collection: dayCollected
-      };
+    // Flatten customer payment collection history
+    const allCollections = [];
+    (customerRecords || []).forEach(cust => {
+      if (Array.isArray(cust.paymentHistory)) {
+        cust.paymentHistory.forEach(p => {
+          if (p && p.date) {
+            allCollections.push({
+              date: String(p.date || '').slice(0, 10),
+              amount: parseFloat(p.amount || 0)
+            });
+          }
+        });
+      }
     });
 
-    const totalSales = days.reduce((s, d) => s + d.sales, 0);
-    const totalCollection = days.reduce((s, d) => s + d.collection, 0);
-    const maxVal = Math.max(1, ...days.map(d => Math.max(d.sales, d.collection)));
+    const allSalesList = (salesRecords || []).map(s => ({
+      date: String(s.date || s.createdAt || '').slice(0, 10),
+      totalAmount: parseFloat(s.totalAmount || 0),
+      paidAmount: parseFloat(s.paidAmount || 0)
+    }));
+
+    const now = new Date();
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(now);
+
+    let columns = [];
+
+    if (collectionTimeframe === 'today') {
+      // Past 7 Days leading up to and including Today
+      for (let i = 6; i >= 0; i--) {
+        const cur = new Date(now);
+        cur.setDate(now.getDate() - i);
+        const dateStr = cur.toISOString().slice(0, 10);
+        const dayName = cur.toLocaleDateString('en-US', { weekday: 'short' });
+        const [y, m, d] = dateStr.split('-');
+        const isToday = dateStr === todayStr;
+
+        let daySales = 0;
+        let dayColl = 0;
+
+        allSalesList.forEach(s => {
+          if (s.date === dateStr) {
+            daySales += s.totalAmount;
+            dayColl += s.paidAmount;
+          }
+        });
+        allCollections.forEach(c => {
+          if (c.date === dateStr) {
+            dayColl += c.amount;
+          }
+        });
+
+        columns.push({
+          label: isToday ? 'Today' : dayName,
+          subLabel: `${d}/${m}/${y}`,
+          date: dateStr,
+          sales: Math.round(daySales),
+          collection: Math.round(dayColl),
+          isHighlight: isToday
+        });
+      }
+
+    } else if (collectionTimeframe === 'monthly') {
+      // Weeks of current month (Nov 2026: Week 1 to Week 5)
+      const curYear = now.getFullYear();
+      const curMonth = now.getMonth(); // 0-based
+      const daysInMonth = new Date(curYear, curMonth + 1, 0).getDate();
+      const monthShort = now.toLocaleDateString('en-US', { month: 'short' });
+
+      const weekRanges = [
+        { label: 'W1', subLabel: `1-7 ${monthShort}`, startDay: 1, endDay: 7 },
+        { label: 'W2', subLabel: `8-14 ${monthShort}`, startDay: 8, endDay: 14 },
+        { label: 'W3', subLabel: `15-21 ${monthShort}`, startDay: 15, endDay: 21 },
+        { label: 'W4', subLabel: `22-28 ${monthShort}`, startDay: 22, endDay: 28 },
+      ];
+      if (daysInMonth > 28) {
+        weekRanges.push({
+          label: 'W5',
+          subLabel: `29-${daysInMonth} ${monthShort}`,
+          startDay: 29,
+          endDay: daysInMonth
+        });
+      }
+
+      const pad = (n) => String(n).padStart(2, '0');
+      const curYm = `${curYear}-${pad(curMonth + 1)}`;
+
+      columns = weekRanges.map(w => {
+        const startStr = `${curYm}-${pad(w.startDay)}`;
+        const endStr = `${curYm}-${pad(w.endDay)}`;
+        let wSales = 0;
+        let wColl = 0;
+
+        allSalesList.forEach(s => {
+          if (s.date >= startStr && s.date <= endStr) {
+            wSales += s.totalAmount;
+            wColl += s.paidAmount;
+          }
+        });
+        allCollections.forEach(c => {
+          if (c.date >= startStr && c.date <= endStr) {
+            wColl += c.amount;
+          }
+        });
+
+        return {
+          label: w.label,
+          subLabel: w.subLabel,
+          date: `${w.startDay}-${w.endDay}`,
+          sales: Math.round(wSales),
+          collection: Math.round(wColl)
+        };
+      });
+
+    } else if (collectionTimeframe === 'yearly') {
+      // 12 Months of the current year (Jan to Dec)
+      const curYear = now.getFullYear();
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      columns = monthNames.map((mName, idx) => {
+        const mStr = `${curYear}-${String(idx + 1).padStart(2, '0')}`;
+        let mSales = 0;
+        let mColl = 0;
+
+        allSalesList.forEach(s => {
+          if (s.date.startsWith(mStr)) {
+            mSales += s.totalAmount;
+            mColl += s.paidAmount;
+          }
+        });
+        allCollections.forEach(c => {
+          if (c.date.startsWith(mStr)) {
+            mColl += c.amount;
+          }
+        });
+
+        return {
+          label: mName,
+          subLabel: `${mName} ${curYear}`,
+          date: mStr,
+          sales: Math.round(mSales),
+          collection: Math.round(mColl)
+        };
+      });
+
+    } else if (collectionTimeframe === 'all') {
+      // Last 6 Quarters across recorded history
+      const quarters = [
+        { label: "Q3 '25", subLabel: 'Jul - Sep 2025', start: '2025-07-01', end: '2025-09-30' },
+        { label: "Q4 '25", subLabel: 'Oct - Dec 2025', start: '2025-10-01', end: '2025-12-31' },
+        { label: "Q1 '26", subLabel: 'Jan - Mar 2026', start: '2026-01-01', end: '2026-03-31' },
+        { label: "Q2 '26", subLabel: 'Apr - Jun 2026', start: '2026-04-01', end: '2026-06-30' },
+        { label: "Q3 '26", subLabel: 'Jul - Sep 2026', start: '2026-07-01', end: '2026-09-30' },
+        { label: "Q4 '26", subLabel: 'Oct - Dec 2026', start: '2026-10-01', end: '2026-12-31' }
+      ];
+
+      columns = quarters.map(q => {
+        let qSales = 0;
+        let qColl = 0;
+
+        allSalesList.forEach(s => {
+          if (s.date >= q.start && s.date <= q.end) {
+            qSales += s.totalAmount;
+            qColl += s.paidAmount;
+          }
+        });
+        allCollections.forEach(c => {
+          if (c.date >= q.start && c.date <= q.end) {
+            qColl += c.amount;
+          }
+        });
+
+        return {
+          label: q.label,
+          subLabel: q.subLabel,
+          date: q.label,
+          sales: Math.round(qSales),
+          collection: Math.round(qColl)
+        };
+      });
+
+    } else {
+      // Default: 'weekly' (Work Week Saturday to Friday)
+      columns = weeklyDaysList.map(d => {
+        let daySales = 0;
+        let dayCollected = 0;
+
+        allSalesList.forEach(s => {
+          if (s.date === d.date) {
+            daySales += s.totalAmount;
+            dayCollected += s.paidAmount;
+          }
+        });
+
+        allCollections.forEach(c => {
+          if (c.date === d.date) {
+            dayCollected += c.amount;
+          }
+        });
+
+        return {
+          label: d.dayName.slice(0, 3),
+          fullLabel: d.dayName,
+          subLabel: d.formattedDate || d.date,
+          date: d.date,
+          sales: Math.round(daySales),
+          collection: Math.round(dayCollected)
+        };
+      });
+    }
+
+    // Compute Totals
+    let totalSales = 0;
+    let totalCollection = 0;
+
+    if (collectionTimeframe === 'today') {
+      // Today KPI is filtered strictly to Today
+      allSalesList.forEach(s => {
+        if (s.date === todayStr) {
+          totalSales += s.totalAmount;
+          totalCollection += s.paidAmount;
+        }
+      });
+      allCollections.forEach(c => {
+        if (c.date === todayStr) {
+          totalCollection += c.amount;
+        }
+      });
+    } else if (collectionTimeframe === 'all') {
+      // All time totals across all records
+      totalSales = allSalesList.reduce((acc, s) => acc + s.totalAmount, 0);
+      totalCollection = allSalesList.reduce((acc, s) => acc + s.paidAmount, 0) + allCollections.reduce((acc, c) => acc + c.amount, 0);
+    } else {
+      // Sum of columns for weekly / monthly / yearly
+      totalSales = columns.reduce((s, d) => s + d.sales, 0);
+      totalCollection = columns.reduce((s, d) => s + d.collection, 0);
+    }
+
+    totalSales = Math.round(totalSales);
+    totalCollection = Math.round(totalCollection);
+    const maxVal = Math.max(1, ...columns.map(d => Math.max(d.sales, d.collection)));
 
     return {
-      days,
+      days: columns,
       totalSales,
       totalCollection,
       dueAmount: Math.max(0, totalSales - totalCollection),
-      collectionRatio: totalSales > 0 ? Math.round((totalCollection / totalSales) * 100) : 100,
-      maxVal
+      collectionRatio: totalSales > 0 ? Math.min(100, Math.round((totalCollection / totalSales) * 100)) : (totalCollection > 0 ? 100 : 0),
+      maxVal,
+      timeframe: collectionTimeframe
     };
-  }, [weeklyDaysList, salesRecords]);
+  }, [weeklyDaysList, salesRecords, customerRecords, collectionTimeframe]);
 
   // ─── CARD 7: Leaflet Map Setup ─────────────────────────────────
   useEffect(() => {
@@ -1667,7 +1906,7 @@ const Dashboard = ({
           <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
             <div>
               {/* Header */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-gray-100">
+              <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100 min-h-[46px]">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
                     <ShoppingCartIcon className="w-4 h-4" />
@@ -1684,7 +1923,7 @@ const Dashboard = ({
                 </div>
 
                 {/* Timeframe Selector: Today | Weekly | Monthly | Yearly | All */}
-                <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
+                <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs flex-shrink-0">
                   {[
                     { id: 'today', label: 'Today' },
                     { id: 'weekly', label: 'Weekly' },
@@ -1858,9 +2097,9 @@ const Dashboard = ({
           <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
             <div>
               {/* Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100 min-h-[46px]">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
                     <BarChartIcon className="w-4 h-4" />
                   </div>
                   <div>
@@ -1869,13 +2108,28 @@ const Dashboard = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="flex items-center gap-1 text-[11px] font-semibold text-blue-600">
-                    <span className="w-2 h-2 rounded-full bg-blue-500"></span> Sales
-                  </span>
-                  <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Collection
-                  </span>
+                {/* Timeframe Selector: Today | Weekly | Monthly | Yearly | All */}
+                <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs flex-shrink-0">
+                  {[
+                    { id: 'today', label: 'Today' },
+                    { id: 'weekly', label: 'Weekly' },
+                    { id: 'monthly', label: 'Monthly' },
+                    { id: 'yearly', label: 'Yearly' },
+                    { id: 'all', label: 'All' }
+                  ].map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => { setCollectionTimeframe(id); setBarHoveredIndex(null); }}
+                      className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                        collectionTimeframe === id
+                          ? 'bg-white text-blue-600 shadow-xs'
+                          : 'text-gray-500 hover:text-gray-800'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1894,36 +2148,48 @@ const Dashboard = ({
                   <span className="text-xs font-bold text-amber-950">৳{Number(collectionSalesData.dueAmount).toLocaleString()}</span>
                 </div>
               </div>
+            </div>
 
-              {/* Visual Bar / Column Chart */}
-              <div className="relative h-44 w-full flex items-end justify-between gap-2 pt-6 pb-2 px-1">
+            {/* Visual Bar / Column Chart - Flexibly fills available vertical height */}
+            <div className="flex-1 flex flex-col justify-end pt-2 pb-1">
+              <div className="relative w-full flex items-end justify-between gap-1 sm:gap-2 h-44 sm:h-52 px-1">
                 {collectionSalesData.days.map((d, idx) => {
                   const max = Math.max(1, collectionSalesData.maxVal);
-                  const salesHeight = Math.max(8, Math.round((d.sales / max) * 110));
-                  const collectionHeight = Math.max(8, Math.round((d.collection / max) * 110));
+                  const maxBarHeight = 152;
+                  const salesHeight = d.sales > 0 ? Math.max(8, Math.round((d.sales / max) * maxBarHeight)) : 4;
+                  const collectionHeight = d.collection > 0 ? Math.max(8, Math.round((d.collection / max) * maxBarHeight)) : 4;
+                  const isYearly = collectionTimeframe === 'yearly';
 
                   return (
                     <div
                       key={idx}
-                      className="flex-1 flex flex-col items-center gap-1 h-full justify-end cursor-pointer group"
+                      className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end cursor-pointer group"
                       onMouseEnter={() => setBarHoveredIndex(idx)}
                       onMouseLeave={() => setBarHoveredIndex(null)}
                     >
-                      <div className="w-full flex items-end justify-center gap-1 h-32">
+                      <div className={`w-full flex items-end justify-center ${isYearly ? 'gap-0.5' : 'gap-1 sm:gap-1.5'} h-40`}>
                         {/* Sales Bar */}
                         <div
-                          className="w-1/2 max-w-[12px] bg-blue-400 group-hover:bg-blue-600 rounded-t-sm transition-all"
+                          className={`w-1/2 ${isYearly ? 'max-w-[8px]' : 'max-w-[14px]'} rounded-t-sm transition-all duration-300 ${
+                            d.sales > 0
+                              ? 'bg-blue-500 group-hover:bg-blue-600 shadow-2xs'
+                              : 'bg-blue-200/60'
+                          }`}
                           style={{ height: `${salesHeight}px` }}
                           title={`Sales: ৳${d.sales.toLocaleString()}`}
                         ></div>
                         {/* Collection Bar */}
                         <div
-                          className="w-1/2 max-w-[12px] bg-emerald-400 group-hover:bg-emerald-600 rounded-t-sm transition-all"
+                          className={`w-1/2 ${isYearly ? 'max-w-[8px]' : 'max-w-[14px]'} rounded-t-sm transition-all duration-300 ${
+                            d.collection > 0
+                              ? 'bg-emerald-500 group-hover:bg-emerald-600 shadow-2xs'
+                              : 'bg-emerald-200/60'
+                          }`}
                           style={{ height: `${collectionHeight}px` }}
                           title={`Collection: ৳${d.collection.toLocaleString()}`}
                         ></div>
                       </div>
-                      <span className="text-[10px] font-semibold text-gray-500 group-hover:text-gray-900 mt-1">
+                      <span className={`${isYearly ? 'text-[9px]' : 'text-[10px]'} font-semibold ${d.isHighlight ? 'text-blue-600 font-bold' : 'text-gray-500'} group-hover:text-gray-900 truncate max-w-full text-center`}>
                         {d.label}
                       </span>
                     </div>
@@ -1931,19 +2197,45 @@ const Dashboard = ({
                 })}
 
                 {/* Hover Tooltip */}
-                {barHoveredIndex !== null && (
-                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-[11px] px-3 py-1.5 rounded-lg shadow-lg pointer-events-none flex items-center gap-3">
-                    <span className="font-bold">{collectionSalesData.days[barHoveredIndex].label}:</span>
-                    <span className="text-blue-300">Sales: ৳{collectionSalesData.days[barHoveredIndex].sales.toLocaleString()}</span>
-                    <span className="text-emerald-300">Coll: ৳{collectionSalesData.days[barHoveredIndex].collection.toLocaleString()}</span>
+                {barHoveredIndex !== null && collectionSalesData.days[barHoveredIndex] && (
+                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-[11px] px-3 py-1.5 rounded-lg shadow-lg pointer-events-none flex items-center gap-2.5 z-10 whitespace-nowrap">
+                    <span className="font-bold">
+                      {collectionSalesData.days[barHoveredIndex].label}
+                      {collectionSalesData.days[barHoveredIndex].subLabel ? ` (${collectionSalesData.days[barHoveredIndex].subLabel})` : ''}:
+                    </span>
+                    <span className="text-blue-300 font-semibold">Sales: ৳{collectionSalesData.days[barHoveredIndex].sales.toLocaleString()}</span>
+                    <span className="text-emerald-300 font-semibold">Coll: ৳{collectionSalesData.days[barHoveredIndex].collection.toLocaleString()}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-              <span>Collection Recovery Rate:</span>
-              <span className="font-bold text-emerald-600">{collectionSalesData.collectionRatio}%</span>
+            {/* Recovery Rate Footer & Progress Bar */}
+            <div className="mt-2 pt-2.5 border-t border-gray-100">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium">Collection Recovery Rate:</span>
+                  <span className="font-bold text-emerald-600 text-sm">{collectionSalesData.collectionRatio}%</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-[11px] font-semibold">
+                  <span className="flex items-center gap-1 text-blue-600">
+                    <span className="w-2 h-2 rounded-full bg-blue-500"></span> Sales
+                  </span>
+                  <span className="flex items-center gap-1 text-emerald-600">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Collection
+                  </span>
+                </div>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(0, collectionSalesData.collectionRatio))}%` }}
+                ></div>
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-gray-400 mt-1">
+                <span>৳{Number(collectionSalesData.totalCollection).toLocaleString()} Collected</span>
+                <span>Target: ৳{Number(collectionSalesData.totalSales).toLocaleString()}</span>
+              </div>
             </div>
           </div>
         ) : null}
