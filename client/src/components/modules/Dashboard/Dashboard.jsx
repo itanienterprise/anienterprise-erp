@@ -1001,7 +1001,7 @@ const Dashboard = ({
 
           {/* Card 1: Profile & Attendance (Left: Portrait Card, Right: Days List) */}
           {canAccess('profile', 'attendance') ? (
-            <div className={`dash-card ${(!canAccess('lcGraph', 'lcManagement') && !canAccess('pieChart', 'product')) ? 'xl:col-span-12' : 'xl:col-span-6'} bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between`}>
+            <div className="dash-card xl:col-span-6 bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5 h-full items-stretch">
               
               {/* LEFT SIDE: Portrait Profile Card */}
@@ -1253,7 +1253,7 @@ const Dashboard = ({
 
         {/* Card 2: Weekly LC / Daily LC Line Graph */}
         {canAccess('lcGraph', 'lcManagement') ? (
-          <div className={`dash-card ${canAccess('profile', 'attendance') ? 'xl:col-span-3' : 'xl:col-span-6'} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between`}>
+          <div className="dash-card xl:col-span-3 bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
             <div>
               {/* Header with Switch */}
               <div className="flex items-center justify-between pb-3 border-b border-gray-100">
@@ -1446,7 +1446,7 @@ const Dashboard = ({
 
         {/* Card 3: LC / IP / Pie Chart (Product & Profit) */}
         {canAccess('pieChart', 'product') ? (
-          <div className={`dash-card ${canAccess('profile', 'attendance') ? 'xl:col-span-3' : 'xl:col-span-6'} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between`}>
+          <div className="dash-card xl:col-span-3 bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
             <div>
               {/* Header with Product / IP / LC Switch */}
               <div className="flex items-center justify-between pb-3 border-b border-gray-100">
@@ -2067,7 +2067,7 @@ const Dashboard = ({
 
           {/* Card 7: Location (Leaflet Map) */}
           {canAccess('locationMap', 'mdm') ? (
-            <div className={`dash-card ${canAccess('recentActivity', 'log') ? '' : 'lg:col-span-3'} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between`}>
+            <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
             <div>
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-gray-100">
@@ -2123,7 +2123,7 @@ const Dashboard = ({
 
         {/* Card 8: Recent Activity (Spans 2 Columns on desktop) */}
         {canAccess('recentActivity', 'log') ? (
-          <div className={`dash-card ${canAccess('locationMap', 'mdm') ? 'lg:col-span-2' : 'lg:col-span-3'} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between`}>
+          <div className="dash-card lg:col-span-2 bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
             <div>
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100">
