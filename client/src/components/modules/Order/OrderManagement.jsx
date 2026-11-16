@@ -4051,8 +4051,8 @@ const OrderManagement = ({
                             return sType === 'order' || inv.startsWith('ord') || ordNo.startsWith('ord') || s.isOrderEntry === true;
                         }).length}
                         onPageChange={setCurrentPage}
-                        onPageSizeChange={setPageSize}
-                        pageSizeOptions={[15, 30, 50, 100]}
+                        onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
+                        pageSizeOptions={['all', 15, 30, 50, 100]}
                         itemName="Orders"
                     />
                 </div>

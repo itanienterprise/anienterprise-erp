@@ -8441,8 +8441,8 @@ const SaleManagement = ({
                     totalItems={sortedFilteredData.length}
                     totalUnfiltered={displayedSales.length}
                     onPageChange={setCurrentPage}
-                    onPageSizeChange={setPageSize}
-                    pageSizeOptions={[15, 30, 50, 100]}
+                    onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
+                    pageSizeOptions={['all', 15, 30, 50, 100]}
                     itemName={saleType === 'Border' ? 'Border Sales' : 'Sales'}
                     tableContainerRef={tableContainerRef}
                 />

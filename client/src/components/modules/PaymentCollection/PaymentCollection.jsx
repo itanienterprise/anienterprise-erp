@@ -3449,8 +3449,8 @@ const PaymentCollection = ({
                         totalItems={displayedGroups.length}
                         totalUnfiltered={payments.length}
                         onPageChange={setCurrentPage}
-                        onPageSizeChange={setPageSize}
-                        pageSizeOptions={[15, 30, 50, 100]}
+                        onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
+                        pageSizeOptions={['all', 15, 30, 50, 100]}
                         itemName="Collections"
                     />
                 </div>

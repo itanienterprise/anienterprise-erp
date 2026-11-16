@@ -22,16 +22,16 @@ const TableScrollNav = ({ containerRef, count, className = '', embedded = false 
         }
         const anchor = placeholderRef.current;
         if (anchor) {
-            // First check within the same card/table container
-            const cardParent = anchor.closest('.bg-white, .table-container, [class*="rounded-"], [class*="shadow"]');
+            const bar = anchor.closest('.border-t') || anchor;
+            // First check within the surrounding card/table container (outside the bar itself)
+            const cardParent = bar.parentElement?.closest('.bg-white, .table-container, [class*="rounded-"], [class*="shadow"]') || bar.parentElement;
             if (cardParent) {
                 const scrollable = cardParent.querySelector('.overflow-x-auto, table');
-                if (scrollable) {
+                if (scrollable && !bar.contains(scrollable)) {
                     return scrollable.tagName === 'TABLE' ? scrollable.parentElement : scrollable;
                 }
             }
-            let el = anchor.closest('.bg-white, .border-t') || anchor;
-            let prev = el.previousElementSibling;
+            let prev = bar.previousElementSibling;
             while (prev) {
                 if (
                     prev.tagName === 'TABLE' ||
@@ -40,12 +40,12 @@ const TableScrollNav = ({ containerRef, count, className = '', embedded = false 
                     prev.scrollWidth > prev.clientWidth
                 ) {
                     const tableInPrev = prev.querySelector('.overflow-x-auto, table');
-                    return tableInPrev ? (tableInPrev.tagName === 'TABLE' ? tableInPrev.parentElement : tableInPrev) : prev;
+                    return tableInPrev ? (tableInPrev.tagName === 'TABLE' ? tableInPrev.parentElement : tableInPrev) : (prev.tagName === 'TABLE' ? prev.parentElement : prev);
                 }
                 prev = prev.previousElementSibling;
             }
-            if (anchor.previousElementSibling) {
-                return anchor.previousElementSibling;
+            if (bar.previousElementSibling) {
+                return bar.previousElementSibling;
             }
         }
         return null;

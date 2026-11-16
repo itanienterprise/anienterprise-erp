@@ -2510,7 +2510,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                 setPageSize(newSize);
                                 setCurrentPage(1);
                             }}
-                            pageSizeOptions={[15, 30, 50, 100]}
+                            pageSizeOptions={['all', 15, 30, 50, 100]}
                         />
                     </div>
                 )}

@@ -5811,8 +5811,8 @@ function LCReceive({
                         totalItems={groupedRecordsList.length}
                         totalUnfiltered={effectiveStockRecords ? effectiveStockRecords.filter(item => !isPurchaseReceiveItem(item)).length : 0}
                         onPageChange={setCurrentPage}
-                        onPageSizeChange={setPageSize}
-                        pageSizeOptions={[15, 30, 50, 100]}
+                        onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
+                        pageSizeOptions={['all', 15, 30, 50, 100]}
                         itemName="LC Receives"
                     />
                 </div>
