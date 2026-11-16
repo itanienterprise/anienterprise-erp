@@ -35,7 +35,6 @@ const PaginationBar = ({
     const totalPages = Math.max(1, Math.ceil(totalItems / effectivePageSize));
     const startItem = totalItems > 0 ? (isAll ? 1 : (currentPage - 1) * effectivePageSize + 1) : 0;
     const endItem = isAll ? totalItems : Math.min(currentPage * effectivePageSize, totalItems);
-    const isFiltered = totalUnfiltered !== null && totalUnfiltered !== undefined && totalUnfiltered > totalItems;
 
     const rawOptions = Array.isArray(pageSizeOptions) && pageSizeOptions.length > 0
         ? pageSizeOptions
@@ -53,9 +52,6 @@ const PaginationBar = ({
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 sm:gap-3 w-full md:w-auto">
                 <span className="text-gray-600 font-medium">
                     Showing <strong className="text-gray-900 font-bold">{startItem}</strong> to <strong className="text-gray-900 font-bold">{endItem}</strong> of <strong className="text-gray-900 font-bold">{totalItems.toLocaleString()}</strong> {itemName}
-                    {isFiltered && (
-                        <span className="ml-1 text-blue-600 font-semibold">(filtered from {totalUnfiltered.toLocaleString()} total)</span>
-                    )}
                 </span>
                 <span className="text-gray-300 hidden sm:inline">|</span>
                 <div className="flex items-center gap-1.5">
