@@ -493,6 +493,7 @@ const MetaData = require('./models/MetaData');
 const CnFPayment = require('./models/CnFPayment');
 const InsurancePayment = require('./models/InsurancePayment');
 const StockBaseline = require('./models/StockBaseline');
+const Todo = require('./models/Todo');
 const { encryptData, decryptData, decryptRecordWithUnwrap } = require('./utils/encryption');
 const { updateBrandAcrossAllCollections } = require('./services/brandCascadeService');
 const { cascadeIpUpdate, cascadeProductUpdate, cascadeProductIpNameUpdate } = require('./services/ipCascadeService');
@@ -1293,6 +1294,391 @@ apiRouter.get('/api/pending-indicators', async (req, res) => {
   }
 });
 
+// ==========================================
+// Dashboard Statistics & Widgets API
+// ==========================================
+apiRouter.get('/api/dashboard/stats', async (req, res) => {
+  try {
+    const user = req.session?.user;
+    const username = user?.username || 'user';
+    const mode = (req.query.mode || 'personal').toLowerCase(); // 'personal' | 'all'
+
+    // Compute Asia/Dhaka (+06:00) current date string
+    const formatDhakaYMD = (date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(date);
+    const todayDhaka = formatDhakaYMD(new Date());
+
+    // Compute Saturday-Friday week dates in Asia/Dhaka
+    const d = new Date();
+    const dhakaDayStr = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'Asia/Dhaka' }).format(d);
+    const dayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
+    const dayOfWeek = dayMap[dhakaDayStr] !== undefined ? dayMap[dhakaDayStr] : d.getDay();
+    const diffToSaturday = (dayOfWeek + 1) % 7;
+
+    const satDate = new Date(d);
+    satDate.setDate(d.getDate() - diffToSaturday);
+    satDate.setHours(12, 0, 0, 0);
+
+    const weekDays = [];
+    const dayNames = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const dateStrings = [];
+
+    for (let i = 0; i < 7; i++) {
+      const cur = new Date(satDate);
+      cur.setDate(satDate.getDate() + i);
+      const dateStr = formatDhakaYMD(cur);
+      const [y, m, dayNum] = dateStr.split('-');
+      const formattedDate = `${dayNum}/${m}/${y}`;
+      dateStrings.push(dateStr);
+      weekDays.push({
+        dayName: dayNames[i],
+        date: dateStr,
+        formattedDate, // dd/mm/yyyy
+        isToday: dateStr === todayDhaka,
+        activeMinutes: 0,
+        activeHours: 0,
+        actionCount: 0,
+        status: dateStr === todayDhaka ? 'Active' : 'Offline'
+      });
+    }
+
+    // Fetch user activity / attendance for the week
+    if (mode === 'all') {
+      try {
+        const agg = await UserDailyActivity.aggregate([
+          { $match: { date: { $in: dateStrings } } },
+          {
+            $group: {
+              _id: "$date",
+              totalSeconds: { $sum: "$activeSeconds" },
+              totalActions: { $sum: "$actionCount" },
+              userCount: { $addToSet: "$username" }
+            }
+          }
+        ]);
+        const aggMap = {};
+        agg.forEach(a => { aggMap[a._id] = a; });
+
+        weekDays.forEach(wd => {
+          if (aggMap[wd.date]) {
+            const sec = aggMap[wd.date].totalSeconds || 0;
+            wd.activeMinutes = Math.round(sec / 60);
+            wd.activeHours = Number((sec / 3600).toFixed(1));
+            wd.actionCount = aggMap[wd.date].totalActions || 0;
+            wd.usersActive = (aggMap[wd.date].userCount || []).length;
+            wd.status = wd.usersActive > 0 ? `${wd.usersActive} Active` : (wd.dayName === 'Friday' ? 'Weekend' : 'Off');
+          } else {
+            wd.status = wd.dayName === 'Friday' ? 'Weekend' : 'No Data';
+          }
+        });
+      } catch (e) {
+        console.warn('Dashboard all-activity agg error:', e.message);
+      }
+    } else {
+      try {
+        const userLogs = await UserDailyActivity.find({
+          username: username,
+          date: { $in: dateStrings }
+        }).lean();
+
+        const logMap = {};
+        userLogs.forEach(l => { logMap[l.date] = l; });
+
+        weekDays.forEach(wd => {
+          if (logMap[wd.date]) {
+            const sec = logMap[wd.date].activeSeconds || 0;
+            wd.activeMinutes = Math.round(sec / 60);
+            wd.activeHours = Number((sec / 3600).toFixed(1));
+            wd.actionCount = logMap[wd.date].actionCount || 0;
+            wd.status = sec > 0 ? (sec > 14400 ? 'Present' : 'Active') : (wd.dayName === 'Friday' ? 'Weekend' : 'Absent');
+          } else {
+            wd.status = wd.dayName === 'Friday' ? 'Weekend' : (wd.isToday ? 'Online' : 'Absent');
+          }
+        });
+      } catch (e) {
+        console.warn('Dashboard personal-activity error:', e.message);
+      }
+    }
+
+    // Fetch Attendance Module Logs for the 7 days (Saturday to Friday)
+    let staffList = [];
+    let activeEmployeeName = '';
+    let activeEmployeeEmpId = '';
+
+    try {
+      const distinctStaff = await AttendanceLog.aggregate([
+        { $match: { date: { $in: dateStrings } } },
+        { $group: { _id: "$employeeEmpId", name: { $first: "$employeeName" } } },
+        { $sort: { _id: 1 } }
+      ]);
+      staffList = distinctStaff.filter(s => s._id).map(s => ({ empId: s._id, name: s.name || s._id }));
+
+      let empLogQuery = { date: { $in: dateStrings } };
+      if (req.query.employeeId) {
+        empLogQuery.$or = [
+          { employeeEmpId: req.query.employeeId },
+          { employeeId: req.query.employeeId }
+        ];
+      } else if (user) {
+        const ownFilter = await buildOwnEmployeeFilter(user);
+        if (ownFilter && ownFilter.length > 0) {
+          empLogQuery.$or = ownFilter;
+        }
+      }
+
+      let attLogs = await AttendanceLog.find(empLogQuery).lean();
+
+      // If no logs found for admin user or requested emp, fallback to A-1002 (Admin MD RIYAD AHMED) or A-1001 or first active staff
+      if ((!attLogs || attLogs.length === 0) && (username === 'admin' || user?.role === 'admin')) {
+        attLogs = await AttendanceLog.find({
+          employeeEmpId: 'A-1002',
+          date: { $in: dateStrings }
+        }).lean();
+        if (!attLogs || attLogs.length === 0) {
+          attLogs = await AttendanceLog.find({
+            employeeEmpId: 'A-1001',
+            date: { $in: dateStrings }
+          }).lean();
+        }
+      }
+
+      if (attLogs && attLogs.length > 0) {
+        activeEmployeeName = attLogs[0].employeeName || '';
+        activeEmployeeEmpId = attLogs[0].employeeEmpId || '';
+      }
+
+      const attMap = {};
+      (attLogs || []).forEach(l => { attMap[l.date] = l; });
+
+      // Fallback: check raw biometric punches if AttendanceLog has no punches for any day
+      const targetEmpId = activeEmployeeEmpId || 'A-1002';
+      const missingDates = weekDays.filter(wd => !attMap[wd.date] || !attMap[wd.date].firstPunchIn).map(wd => wd.date);
+      if (missingDates.length > 0 && targetEmpId) {
+        try {
+          const empDoc = await Employee.findOne({
+            $or: [
+              { employeeId: targetEmpId },
+              { _id: attLogs && attLogs[0]?.employeeId ? attLogs[0].employeeId : undefined }
+            ].filter(Boolean)
+          });
+          if (empDoc) {
+            for (const dStr of missingDates) {
+              const dayStart = new Date(`${dStr}T00:00:00.000+06:00`);
+              const dayEnd = new Date(`${dStr}T23:59:59.999+06:00`);
+              const rawPunches = await AttendancePunch.find({
+                employeeId: empDoc._id,
+                punchTime: { $gte: dayStart, $lte: dayEnd }
+              }).sort({ punchTime: 1 });
+              if (rawPunches && rawPunches.length > 0) {
+                const firstIn = rawPunches[0].punchTime;
+                const lastOut = rawPunches.length > 1 ? rawPunches[rawPunches.length - 1].punchTime : null;
+                let totalHours = 0;
+                if (firstIn && lastOut) {
+                  const diffMs = new Date(lastOut).getTime() - new Date(firstIn).getTime();
+                  totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+                }
+                attMap[dStr] = {
+                  date: dStr,
+                  employeeEmpId: targetEmpId,
+                  employeeName: activeEmployeeName || empDoc.name || '',
+                  firstPunchIn: firstIn,
+                  lastPunchOut: lastOut,
+                  totalHours,
+                  status: totalHours > 4 ? 'PRESENT' : (totalHours > 0 ? 'HALF_DAY' : 'LATE')
+                };
+              }
+            }
+          }
+        } catch (punchFallbackErr) {
+          console.warn('Dashboard attendance punch fallback warning:', punchFallbackErr.message);
+        }
+      }
+
+      weekDays.forEach(wd => {
+        const al = attMap[wd.date];
+        if (al) {
+          wd.inTime = al.firstPunchIn ? new Date(al.firstPunchIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' }) : '--:--';
+          wd.outTime = al.lastPunchOut ? new Date(al.lastPunchOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' }) : '--:--';
+          wd.attendanceStatus = al.status || (al.firstPunchIn ? 'PRESENT' : 'ABSENT');
+          wd.lateMinutes = al.lateMinutes || 0;
+          wd.shiftName = al.shiftName || 'General';
+
+          // Accurate working hours from Attendance Module punches
+          if (al.totalHours && al.totalHours > 0) {
+            wd.attendanceHours = Number((al.totalHours).toFixed(1));
+          } else if (al.firstPunchIn) {
+            if (wd.isToday) {
+              // Clocked in today: calculate elapsed working hours from firstPunchIn to current time
+              const elapsedHours = (Date.now() - new Date(al.firstPunchIn).getTime()) / (1000 * 60 * 60);
+              wd.attendanceHours = Number(Math.max(0.5, Math.min(10.0, elapsedHours)).toFixed(1));
+            } else if (wd.attendanceStatus === 'HALF_DAY') {
+              wd.attendanceHours = 4.0;
+            } else if (wd.attendanceStatus === 'PRESENT' || wd.attendanceStatus === 'LATE') {
+              wd.attendanceHours = 8.0;
+            } else {
+              wd.attendanceHours = 0;
+            }
+          } else {
+            wd.attendanceHours = 0;
+          }
+
+          // Working time tracker reflects Attendance Module hours
+          wd.activeHours = wd.attendanceHours;
+        } else {
+          wd.inTime = '--:--';
+          wd.outTime = '--:--';
+          wd.attendanceStatus = wd.dayName === 'Friday' ? 'WEEKEND' : (wd.isToday ? 'ACTIVE' : 'ABSENT');
+          wd.attendanceHours = 0;
+          wd.activeHours = 0;
+          wd.lateMinutes = 0;
+        }
+      });
+    } catch (attErr) {
+      console.warn('Dashboard attendance fetch error:', attErr.message);
+    }
+
+    // Fetch Recent Activity Logs (last 15)
+    let recentLogs = [];
+    try {
+      recentLogs = await ActivityLog.find({
+        module: { $ne: 'Notification' },
+        action: { $nin: ['CLICK', 'UI_CLICK'] }
+      })
+      .sort({ timestamp: -1 })
+      .limit(15)
+      .lean();
+    } catch (e) {
+      console.warn('Dashboard recent logs error:', e.message);
+    }
+
+    // Fetch MDM Devices with location coordinates
+    let trackedDevices = [];
+    try {
+      trackedDevices = await DeviceRegistry.find({
+        "lastLocation.lat": { $ne: null },
+        status: { $ne: 'revoked' }
+      })
+      .select('employeeName employeeEmpId deviceModel status isOnline lastLocation lastSeen batteryLevel trackingMode')
+      .lean();
+    } catch (e) {
+      console.warn('Dashboard devices error:', e.message);
+    }
+
+    // Standard Logistics / Port Hubs for Bangladesh
+    const logisticsHubs = [
+      { name: 'Chattogram Sea Port', type: 'Port', lat: 22.3167, lng: 91.8000, description: 'Main Maritime Gateway' },
+      { name: 'Mongla Port', type: 'Port', lat: 22.4833, lng: 89.6000, description: 'Second Sea Port' },
+      { name: 'Benapole Land Port', type: 'Land Port', lat: 23.0333, lng: 88.8833, description: 'Primary Border Clearance' },
+      { name: 'Bhomra Land Port', type: 'Land Port', lat: 22.6833, lng: 88.9333, description: 'Satkhira Border Checkpost' },
+      { name: 'Central Warehouse (Khatungonj)', type: 'Warehouse', lat: 22.3364, lng: 91.8385, description: 'Main Storage & Dispatch' },
+      { name: 'Dhaka Regional Hub', type: 'Warehouse', lat: 23.8103, lng: 90.4125, description: 'Central Distribution Center' }
+    ];
+
+    res.json({
+      success: true,
+      currentUser: {
+        username: user?.username,
+        displayName: user?.name || user?.displayName || user?.username,
+        role: user?.role || 'Staff'
+      },
+      weekDays,
+      todayStr: todayDhaka,
+      staffList,
+      activeEmployeeName,
+      activeEmployeeEmpId,
+      recentLogs,
+      trackedDevices,
+      logisticsHubs
+    });
+  } catch (err) {
+    console.error('Dashboard stats API error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// To-Do List APIs
+// ==========================================
+apiRouter.get('/api/todos', async (req, res) => {
+  try {
+    const user = req.session?.user;
+    const username = user?.username || '';
+    const isAdmin = await isUserAdmin(user);
+
+    const filter = isAdmin
+      ? {}
+      : {
+          $or: [
+            { assignedTo: 'All' },
+            { assignedTo: username },
+            { createdBy: username }
+          ]
+        };
+
+    const todos = await Todo.find(filter).sort({ completed: 1, createdAt: -1 }).lean();
+    res.json({ success: true, todos });
+  } catch (err) {
+    console.error('Error fetching todos:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch todos: ' + err.message });
+  }
+});
+
+apiRouter.post('/api/todos', async (req, res) => {
+  try {
+    const user = req.session?.user;
+    const { title, description, priority, dueDate, category, assignedTo } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ success: false, message: 'Title is required' });
+    }
+
+    const newTodo = new Todo({
+      title: title.trim(),
+      description: (description || '').trim(),
+      priority: priority || 'normal',
+      dueDate: dueDate || null,
+      category: category || 'General',
+      assignedTo: assignedTo || 'All',
+      createdBy: user?.username || 'user',
+      createdByName: user?.name || user?.displayName || user?.username || 'Staff'
+    });
+
+    await newTodo.save();
+    res.json({ success: true, todo: newTodo });
+  } catch (err) {
+    console.error('Error creating todo:', err);
+    res.status(500).json({ success: false, message: 'Failed to create todo: ' + err.message });
+  }
+});
+
+apiRouter.put('/api/todos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = { ...req.body };
+    delete updateData._id;
+    delete updateData.createdAt;
+
+    const updated = await Todo.findByIdAndUpdate(id, { $set: updateData }, { new: true });
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Todo not found' });
+    }
+    res.json({ success: true, todo: updated });
+  } catch (err) {
+    console.error('Error updating todo:', err);
+    res.status(500).json({ success: false, message: 'Failed to update todo: ' + err.message });
+  }
+});
+
+apiRouter.delete('/api/todos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Todo.findByIdAndDelete(id);
+    res.json({ success: true, message: 'Todo deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting todo:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete todo: ' + err.message });
+  }
+});
+
 // Admin Authorization Helper & Middleware
 const isUserAdmin = async (user) => {
   if (!user) return false;
@@ -1357,7 +1743,7 @@ const getDefaultPermissionsForRole = (role) => {
   const modules = [
     'employees', 'attendance', 'port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup',
     'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'borderSale', 'purchase', 'purchaseReceive', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank',
-    'insurance', 'insurancePayment', 'lcManagement', 'lcGp', 'lcExpense', 'returnProduct', 'backupRestore', 'log'
+    'insurance', 'insurancePayment', 'lcManagement', 'lcGp', 'lcExpense', 'returnProduct', 'backupRestore', 'log', 'dashboard'
   ];
 
   modules.forEach(m => {
@@ -1368,7 +1754,8 @@ const getDefaultPermissionsForRole = (role) => {
       addShift: false, editShift: false, deleteShift: false,
       deviceMapping: false,
       addMapping: false, editMapping: false, deleteMapping: false,
-      openingBalance: false
+      openingBalance: false,
+      profile: false, lcGraph: false, pieChart: false, orderSales: false, collectionSales: false, todoList: false, locationMap: false, recentActivity: false
     };
   });
 
@@ -1381,7 +1768,8 @@ const getDefaultPermissionsForRole = (role) => {
         addShift: true, editShift: true, deleteShift: true,
         deviceMapping: true,
         addMapping: true, editMapping: true, deleteMapping: true,
-        openingBalance: true
+        openingBalance: true,
+        profile: true, lcGraph: true, pieChart: true, orderSales: true, collectionSales: true, todoList: true, locationMap: true, recentActivity: true
       };
     });
   } else if (roleLower === 'incharge') {
@@ -1436,6 +1824,15 @@ const getDefaultPermissionsForRole = (role) => {
     staffModules.forEach(m => {
       defaults[m] = { view: true, add: false, edit: false, delete: false, special: false, showRate: false, lcPriceReport: false };
     });
+  }
+
+  // Ensure dashboard is visible by default with core widgets unless explicitly overridden
+  if (!defaults['dashboard'] || defaults['dashboard'].view === undefined) {
+    defaults['dashboard'] = {
+      view: true, profile: true, lcGraph: true, pieChart: true,
+      orderSales: true, collectionSales: true, todoList: true,
+      locationMap: true, recentActivity: true
+    };
   }
 
   return defaults;

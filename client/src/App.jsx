@@ -87,6 +87,7 @@ import Token from './components/modules/Token/Token';
 import LogManagement from './components/modules/Log/LogManagement';
 import Attendance from './components/modules/Attendance/Attendance';
 import MdmManagement from './components/modules/MDM/MdmManagement';
+import Dashboard from './components/modules/Dashboard/Dashboard';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 
 import { initActivityTracker } from './utils/activityTracker';
@@ -1509,6 +1510,11 @@ function App() {
     } else if (currentView === 'customer-section') {
       fetchSales();
       fetchReturns();
+    } else if (currentView === 'dashboard') {
+      fetchStockRecords();
+      fetchSales();
+      fetchProducts();
+      fetchWarehouses();
     }
 
   }, [currentView]);
@@ -2644,10 +2650,15 @@ function App() {
     switch (currentView) {
       case 'dashboard':
         return (
-          <div className="flex flex-col items-center justify-center h-[80vh] text-center">
-            <h2 className="text-3xl font-bold text-gray-800 mb-2">Welcome to ANI Enterprise ERP</h2>
-            <p className="text-gray-500">Select an option from the sidebar to get started.</p>
-          </div>
+          <Dashboard
+            currentUser={currentUser}
+            salesRecords={salesRecords}
+            stockRecords={stockRecords}
+            lcStockRecords={lcStockRecords}
+            products={products}
+            warehouseData={warehouseData}
+            onNavigate={handleNavigate}
+          />
         );
       case 'lc-entry-section':
         return (

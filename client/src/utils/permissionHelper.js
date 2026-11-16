@@ -301,6 +301,20 @@ export const MODULES_LIST = [
             { key: 'special', label: 'Manage All Tokens' }
         ]
     },
+    {
+        key: 'dashboard',
+        label: 'Dashboard Overview',
+        specialLabels: [
+            { key: 'profile', label: 'Profile & Weekly Activity' },
+            { key: 'lcGraph', label: 'Weekly/Daily LC Line Graph' },
+            { key: 'pieChart', label: 'Product & IP Pie Chart' },
+            { key: 'orderSales', label: 'Order & Sales Donut' },
+            { key: 'collectionSales', label: 'Collection vs Sales Chart' },
+            { key: 'todoList', label: 'To-Do List' },
+            { key: 'locationMap', label: 'Location & Map' },
+            { key: 'recentActivity', label: 'Recent Activity Feed' }
+        ]
+    },
     { key: 'log', label: 'Log' }
 ].sort((a, b) => (a.label || '').localeCompare(b.label || ''));
 
@@ -445,6 +459,15 @@ export const getDefaultPermissionsForRole = (role) => {
         });
     }
 
+    // Ensure dashboard defaults are populated for all roles unless overridden
+    if (!defaults['dashboard'] || defaults['dashboard'].view === false) {
+        defaults['dashboard'] = {
+            view: true, add: true, edit: true, delete: false, special: true,
+            profile: true, lcGraph: true, pieChart: true, orderSales: true,
+            collectionSales: true, todoList: true, locationMap: true, recentActivity: true
+        };
+    }
+
     return defaults;
 };
 
@@ -526,6 +549,23 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
             return !!defaults.stock.lcPriceReport;
         }
         return false;
+    }
+
+    // Special check for dashboard & dashboard widgets
+    if (moduleName === 'dashboard') {
+        if (currentUser.permissions && currentUser.permissions.dashboard) {
+            if (currentUser.permissions.dashboard[checkAction] !== undefined) {
+                return !!currentUser.permissions.dashboard[checkAction];
+            }
+            if (checkAction !== 'view' && currentUser.permissions.dashboard.view !== undefined) {
+                return !!currentUser.permissions.dashboard.view;
+            }
+        }
+        const defaults = getDefaultPermissionsForRole(currentUser.role);
+        if (defaults.dashboard && defaults.dashboard[checkAction] !== undefined) {
+            return !!defaults.dashboard[checkAction];
+        }
+        return true;
     }
 
     // Special fallback for attendance if not explicitly defined in custom permissions
