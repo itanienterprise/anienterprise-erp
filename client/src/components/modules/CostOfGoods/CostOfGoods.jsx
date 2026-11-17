@@ -499,8 +499,8 @@ const CostOfGoods = ({
             truckChangeFare: dr.truckChangeFare !== undefined && dr.truckChangeFare !== '' ? dr.truckChangeFare : prev.truckChangeFare,
             slofCf: dr.slofCf !== undefined && dr.slofCf !== '' ? dr.slofCf : prev.slofCf,
             rebate: dr.rebate !== undefined && dr.rebate !== '' ? dr.rebate : (prev.rebate || '2.9'),
-            // Do not auto-fill rsToDollar as requested
-            rsToDollar: prev.rsToDollar || '',
+            // Auto-fill rsToDollar from deal receive entry
+            rsToDollar: dr.rsToDollar !== undefined && dr.rsToDollar !== '' ? dr.rsToDollar : (prev.rsToDollar || ''),
             dollarRateBdt: dr.dollarRateBdt !== undefined && dr.dollarRateBdt !== '' ? dr.dollarRateBdt : prev.dollarRateBdt,
             cfOtherExpense: autoCnfExpense,
             country: dr.country || prev.country || 'INDIA',

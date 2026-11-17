@@ -581,7 +581,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
             supplier: autoSupplier,
             product: autoProduct,
             brand: autoBrand,
-            rsToDollar: prev.rsToDollar || deal.rate || '',
+            rsToDollar: prev.rsToDollar || '',
             trucks: prev.trucks || 1,
             truckNumbers: (Array.isArray(prev.truckNumbers) && prev.truckNumbers.length > 0) ? prev.truckNumbers : ['']
         }));

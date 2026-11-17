@@ -372,6 +372,8 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
     // Records list state
     const [records, setRecords] = useState([]);
     const [dealReceivesList, setDealReceivesList] = useState([]);
+    const [costOfGoodsList, setCostOfGoodsList] = useState([]);
+    const [stockList, setStockList] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
@@ -425,14 +427,19 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
         }
     };
 
-    // Fetch Deal Receives to display in Purchase Deal Details
+    // Fetch Deal Receives, Cost of Goods, and Stock to display downstream LC Receive info in Purchase Deal Details
     const fetchDealReceives = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/deal-receives?_t=${Date.now()}`);
-            const data = Array.isArray(res.data) ? res.data : [];
-            setDealReceivesList(data);
+            const [drRes, cogRes, stockRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/deal-receives?_t=${Date.now()}`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/api/cost-of-goods?_t=${Date.now()}`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/api/stock?_t=${Date.now()}`).catch(() => ({ data: [] }))
+            ]);
+            setDealReceivesList(Array.isArray(drRes.data) ? drRes.data : []);
+            setCostOfGoodsList(Array.isArray(cogRes.data) ? cogRes.data : []);
+            setStockList(Array.isArray(stockRes.data) ? stockRes.data : []);
         } catch (err) {
-            console.error('Error fetching deal receives:', err);
+            console.error('Error fetching deal receives, COG, and stock:', err);
         }
     };
 
@@ -450,7 +457,7 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
             if (!mod || ['lc-purchases', 'lc-purchase', 'lcpurchase', 'all'].includes(mod)) {
                 fetchLCPurchases(true);
             }
-            if (!mod || ['deal-receives', 'deal-receive', 'dealreceive', 'all'].includes(mod)) {
+            if (!mod || ['deal-receives', 'deal-receive', 'dealreceive', 'costofgoods', 'cost-of-goods', 'stock', 'lcreceive', 'lc-receive', 'all'].includes(mod)) {
                 fetchDealReceives();
             }
         };
@@ -1781,7 +1788,7 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
             {viewData && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setViewData(null)} />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto z-10 animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto z-10 animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                         {(() => {
                             const dealId = String(viewData._id || '');
                             const cleanPId = String(viewData.purchaseId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
@@ -1808,6 +1815,108 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                 : (viewData.uom === 'Truck' ? totalTrucksFromEntries : totalReceivedFromEntries);
                             const remaining = Math.max(0, purchaseQty - receiveQty);
                             const dealStatus = getDealStatus(purchaseQty, remaining);
+
+                            // Match Deal Receive to LC Receive via Cost of Goods
+                            const getLcReceiveInfoForDealReceive = (rec) => {
+                                if (!rec) return { lcReceiveDate: null, status: null, matchedCog: null, matchedStock: null };
+                                const recReceiveId = String(rec.receiveId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                                const recId = String(rec._id || '').trim();
+                                const recInvoice = String(rec.invoiceNo || '').trim().toLowerCase();
+                                const recProduct = String(rec.product || rec.productName || '').trim().toLowerCase();
+                                const recBrand = String(rec.brand || '').trim().toLowerCase();
+
+                                // 1. Match Cost of Goods entry for this Deal Receive
+                                const matchedCog = (costOfGoodsList || []).find(cog => {
+                                    const cogDrId = String(cog.dealReceiveId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                                    const cogDrRef = String(cog.dealReceiveRefId || '').trim();
+                                    if (recReceiveId && cogDrId && cogDrId === recReceiveId) return true;
+                                    if (recId && cogDrRef && cogDrRef === recId) return true;
+                                    if (recId && cogDrId && cogDrId === recId) return true;
+                                    return false;
+                                }) || (recInvoice ? (costOfGoodsList || []).find(cog => {
+                                    const cogInv = String(cog.invoiceNo || '').trim().toLowerCase();
+                                    const cogProd = String(cog.product || '').trim().toLowerCase();
+                                    return cogInv && cogInv === recInvoice && (!recProduct || !cogProd || recProduct === cogProd);
+                                }) : null);
+
+                                if (!matchedCog) return { lcReceiveDate: null, status: null, matchedCog: null, matchedStock: null };
+
+                                // 2. Match LC Receive (Stock) entry using the COG entry
+                                const cogIdStr = String(matchedCog._id || '');
+                                const targetLc = String(matchedCog.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                                const targetInv = String(matchedCog.invoiceNo || rec.invoiceNo || '').trim().toLowerCase();
+                                const targetProd = String(matchedCog.product || recProduct || '').trim().toLowerCase();
+                                const targetBrand = String(matchedCog.brand || recBrand || '').trim().toLowerCase();
+                                const targetTruck = String(matchedCog.truckNo || rec.truckNo || '').trim().toLowerCase();
+
+                                const matchedStock = (stockList || []).find(st => {
+                                    if (st.matchedCogId && String(st.matchedCogId) === cogIdStr) return true;
+                                    const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                                    const stInv = String(st.invoiceNo || '').trim().toLowerCase();
+                                    const stProd = String(st.productName || st.product || '').trim().toLowerCase();
+                                    const stBrand = String(st.brand || '').trim().toLowerCase();
+
+                                    const lcMatches = targetLc && stLc && targetLc === stLc;
+                                    const invMatches = targetInv && stInv && targetInv === stInv;
+                                    if (lcMatches && invMatches) {
+                                        const prodMatches = !targetProd || !stProd || targetProd === stProd;
+                                        const brandMatches = !targetBrand || !stBrand || targetBrand === stBrand;
+                                        return prodMatches && brandMatches;
+                                    }
+                                    return false;
+                                }) || (stockList || []).find(st => {
+                                    const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                                    const stInv = String(st.invoiceNo || '').trim().toLowerCase();
+                                    return targetLc && stLc && targetLc === stLc && targetInv && stInv && targetInv === stInv;
+                                }) || (stockList || []).find(st => {
+                                    const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                                    const stTruck = String(st.truckNo || '').trim().toLowerCase();
+                                    return targetLc && stLc && targetLc === stLc && targetTruck && stTruck && targetTruck === stTruck;
+                                });
+
+                                if (!matchedStock) return { lcReceiveDate: null, status: null, matchedCog, matchedStock: null };
+
+                                const lcReceiveDate = matchedStock.date || matchedStock.receivedDate || (Array.isArray(matchedStock.entries) ? matchedStock.entries[0]?.date : null) || null;
+                                const status = matchedStock.status || (Array.isArray(matchedStock.entries) ? matchedStock.entries[0]?.status : null) || 'In Stock';
+
+                                return {
+                                    lcReceiveDate,
+                                    status,
+                                    matchedCog,
+                                    matchedStock
+                                };
+                            };
+
+                            const getStockStatusBadge = (status) => {
+                                if (!status) return null;
+                                const s = String(status).toLowerCase();
+                                if (s.includes('stock') || s.includes('accept') || s.includes('received')) {
+                                    return {
+                                        text: 'Received',
+                                        badgeClass: 'bg-green-50 text-green-700 border-green-200/60',
+                                        dotClass: 'bg-green-500'
+                                    };
+                                }
+                                if (s.includes('request') || s.includes('pending')) {
+                                    return {
+                                        text: status,
+                                        badgeClass: 'bg-amber-50 text-amber-700 border-amber-200/60',
+                                        dotClass: 'bg-amber-500'
+                                    };
+                                }
+                                if (s.includes('reject')) {
+                                    return {
+                                        text: status,
+                                        badgeClass: 'bg-red-50 text-red-700 border-red-200/60',
+                                        dotClass: 'bg-red-500'
+                                    };
+                                }
+                                return {
+                                    text: status === 'In Stock' ? 'Received' : status,
+                                    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200/60',
+                                    dotClass: 'bg-blue-500'
+                                };
+                            };
 
                             return (
                                 <>
@@ -1948,6 +2057,8 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                                                     <th className="px-3.5 py-2.5 text-center whitespace-nowrap">Received Qty</th>
                                                                     <th className="px-3.5 py-2.5 whitespace-nowrap">Truck No</th>
                                                                     <th className="px-3.5 py-2.5 text-right whitespace-nowrap">Costing/kg</th>
+                                                                    <th className="px-3.5 py-2.5 whitespace-nowrap">LC Rec. Date</th>
+                                                                    <th className="px-3.5 py-2.5 text-center whitespace-nowrap">Status</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="divide-y divide-gray-100 text-xs">
@@ -1964,6 +2075,9 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                                                         }
                                                                     }
                                                                     if (!rTruckNo) rTruckNo = '—';
+
+                                                                    const lcInfo = getLcReceiveInfoForDealReceive(rec);
+                                                                    const statusBadge = getStockStatusBadge(lcInfo.status);
 
                                                                     return (
                                                                         <tr key={rec._id || rIdx} className="hover:bg-blue-50/30 transition-colors">
@@ -1994,6 +2108,22 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                                                             </td>
                                                                             <td className="px-3.5 py-2.5 text-right font-bold text-gray-900 whitespace-nowrap">
                                                                                 {rCost ? `${rCost.toFixed(2)} BDT` : '—'}
+                                                                            </td>
+                                                                            <td className="px-3.5 py-2.5 font-semibold text-gray-700 whitespace-nowrap">
+                                                                                {lcInfo.lcReceiveDate ? formatDate(lcInfo.lcReceiveDate) : '—'}
+                                                                            </td>
+                                                                            <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
+                                                                                {statusBadge ? (
+                                                                                    <span
+                                                                                        title={lcInfo.matchedCog?.lcNo ? `LC: ${lcInfo.matchedCog.lcNo}` : ''}
+                                                                                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${statusBadge.badgeClass} whitespace-nowrap`}
+                                                                                    >
+                                                                                        <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dotClass}`} />
+                                                                                        {statusBadge.text}
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="text-gray-400 font-medium">—</span>
+                                                                                )}
                                                                             </td>
                                                                         </tr>
                                                                     );
