@@ -58,6 +58,7 @@ import SalesReport from './components/modules/Sale/SalesReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
 import PurchaseManagement from './components/modules/Purchase/PurchaseManagement';
 import LCPurchaseManagement from './components/modules/LCPurchase/LCPurchaseManagement';
+import DealReceiveManagement from './components/modules/LCPurchase/DealReceiveManagement';
 import PurchaseReceiveManagement from './components/modules/PurchaseReceive/PurchaseReceiveManagement';
 import OrderManagement from './components/modules/Order/OrderManagement';
 import ProfitLoss from './components/modules/Sale/ProfitLoss';
@@ -1075,7 +1076,7 @@ function App() {
   });
   const [purchaseDropdownOpen, setPurchaseDropdownOpen] = useState(() => {
     const saved = localStorage.getItem('currentView');
-    return saved === 'purchase-section' || saved === 'purchase-sale-section' || saved === 'purchase-receive-sale-section' || saved === 'lc-purchase-section';
+    return saved === 'purchase-section' || saved === 'purchase-sale-section' || saved === 'purchase-receive-sale-section' || saved === 'lc-purchase-section' || saved === 'deal-receive-section';
   });
   const [stockDropdownOpen, setStockDropdownOpen] = useState(false);
   const [saleDropdownOpen, setSaleDropdownOpen] = useState(false);
@@ -3131,6 +3132,14 @@ function App() {
             refreshPendingIndicators={fetchPendingEntries}
           />
         );
+      case 'deal-receive-section':
+        return (
+          <DealReceiveManagement
+            currentUser={currentUser}
+            addNotification={addNotification}
+            refreshPendingIndicators={fetchPendingEntries}
+          />
+        );
       case 'purchase-receive-sale-section':
         return (
           <PurchaseReceiveManagement
@@ -4215,7 +4224,7 @@ function App() {
                       }
                     }}
                     title={isMini ? 'Purchase' : undefined}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['purchase-section', 'purchase-sale-section', 'purchase-receive-sale-section', 'lc-purchase-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['purchase-section', 'purchase-sale-section', 'purchase-receive-sale-section', 'lc-purchase-section', 'deal-receive-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
                     <div className="flex items-center min-w-0">
                       <div className="relative flex-shrink-0">
@@ -4242,6 +4251,17 @@ function App() {
                           <div className="flex items-center">
                             <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                             <span>Purchase Deal</span>
+                          </div>
+                        </button>
+                      )}
+                      {(hasPermission(currentUser, 'purchase', 'view') || hasPermission(currentUser, 'lcManagement', 'view') || (currentUser?.role || '').toLowerCase().trim() === 'admin' || currentUser?.username === 'admin') && (
+                        <button
+                          onClick={() => { handleViewChange('deal-receive-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'deal-receive-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Deal Receive</span>
                           </div>
                         </button>
                       )}

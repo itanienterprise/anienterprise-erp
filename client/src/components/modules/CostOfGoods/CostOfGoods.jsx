@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon, FunnelIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, PrinterIcon, CheckIcon, ArrowUpRightIcon, LCManagerIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
@@ -128,6 +128,7 @@ const CostOfGoods = ({
 
     // Relational options states
     const [lcs, setLcs] = useState([]);
+    const [dealReceives, setDealReceives] = useState([]);
     const [suppliers, setSuppliers] = useState([]);
     const [products, setProducts] = useState([]);
 
@@ -191,6 +192,10 @@ const CostOfGoods = ({
     };
 
     // Dropdown search & toggle states
+    const [dealReceiveDropdownOpen, setDealReceiveDropdownOpen] = useState(false);
+    const [dealReceiveSearchQuery, setDealReceiveSearchQuery] = useState('');
+    const [highlightedDealReceiveIndex, setHighlightedDealReceiveIndex] = useState(-1);
+
     const [lcDropdownOpen, setLcDropdownOpen] = useState(false);
     const [lcSearchQuery, setLcSearchQuery] = useState('');
     const [highlightedLcIndex, setHighlightedLcIndex] = useState(-1);
@@ -209,6 +214,7 @@ const CostOfGoods = ({
     const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
 
     // Refs for click outside detection
+    const dealReceiveDropdownRef = useRef(null);
     const lcDropdownRef = useRef(null);
     const supplierDropdownRef = useRef(null);
     const productDropdownRef = useRef(null);
@@ -217,6 +223,8 @@ const CostOfGoods = ({
 
     const [formData, setFormData] = useState({
         country: 'INDIA',
+        dealReceiveId: '',
+        dealReceiveRefId: '',
         lcNo: '',
         importer: '',
         exporter: '',
@@ -344,9 +352,26 @@ const CostOfGoods = ({
         }
     };
 
+    const fetchDealReceives = async () => {
+        const cached = queryClient.getQueryData(['deal-receives']);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            setDealReceives(cached);
+        }
+        try {
+            const data = await queryClient.fetchQuery({
+                queryKey: ['deal-receives'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/deal-receives?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+            });
+            setDealReceives(data);
+        } catch (error) {
+            console.error('Error fetching deal receives:', error);
+        }
+    };
+
     useEffect(() => {
         fetchRecords();
         fetchLCs();
+        fetchDealReceives();
         fetchSuppliers();
         fetchProducts();
 
@@ -358,6 +383,9 @@ const CostOfGoods = ({
             }
             if (['lc-management', 'lc', 'all'].includes(mod)) {
                 fetchLCs();
+            }
+            if (['deal-receives', 'deal-receive', 'dealreceive', 'all'].includes(mod)) {
+                fetchDealReceives();
             }
             if (['suppliers', 'supplier', 'all'].includes(mod)) {
                 fetchSuppliers();
@@ -388,6 +416,9 @@ const CostOfGoods = ({
 
     useEffect(() => {
         function handleClickOutside(event) {
+            if (dealReceiveDropdownRef.current && !dealReceiveDropdownRef.current.contains(event.target)) {
+                setDealReceiveDropdownOpen(false);
+            }
             if (lcDropdownRef.current && !lcDropdownRef.current.contains(event.target)) {
                 setLcDropdownOpen(false);
             }
@@ -411,28 +442,31 @@ const CostOfGoods = ({
     };
 
     const handleLcSelect = (lc) => {
-        // Extract unique products from productsList and productName fields of selected LC
-        const uniqueProducts = [...new Set([
-            ...(lc.productsList || []).map(p => p.productName || p.product).filter(Boolean),
-            lc.productName
-        ].filter(Boolean))];
+        // Auto fill only importer when LC No is selected
+        setFormData(prev => ({
+            ...prev,
+            lcNo: lc.lcNo || '',
+            importer: lc.importerName || lc.importer || prev.importer || ''
+        }));
 
-        const autoProduct = uniqueProducts.length === 1 ? uniqueProducts[0] : '';
+        setLcDropdownOpen(false);
+        setLcSearchQuery('');
+        setHighlightedLcIndex(-1);
+    };
 
-        let autoBrand = '';
-        let autoCnfExpense = '9';
-        if (autoProduct) {
+    const handleDealReceiveSelect = (dr) => {
+        const receiveId = dr.receiveId || '';
+        const cleanPurchaseId = (dr.purchaseId || '').replace(/-/g, '');
+        
+        const drProduct = dr.product || '';
+        const drBrand = dr.brand || '';
+        
+        let autoCnfExpense = dr.cfOtherExpense || '9';
+        if (drProduct && !dr.cfOtherExpense) {
             const selectedProductObj = products.find(p => 
-                (p.name || '').trim().toLowerCase() === autoProduct.trim().toLowerCase() ||
-                (p.ipName || '').trim().toLowerCase() === autoProduct.trim().toLowerCase()
+                (p.name || '').trim().toLowerCase() === drProduct.trim().toLowerCase() ||
+                (p.ipName || '').trim().toLowerCase() === drProduct.trim().toLowerCase()
             );
-            const availableBrands = selectedProductObj ? [
-                ...(selectedProductObj.brands || []).map(b => b.brand).filter(Boolean),
-                selectedProductObj.brand
-            ].filter(Boolean) : [];
-            const uniqueBrands = [...new Set(availableBrands)];
-            autoBrand = uniqueBrands.length === 1 ? uniqueBrands[0] : '';
-
             if (selectedProductObj) {
                 const prodCnf = selectedProductObj.cnfOther || (selectedProductObj.cnf && selectedProductObj.other ? `${selectedProductObj.cnf} / ${selectedProductObj.other}` : selectedProductObj.cnf || selectedProductObj.other || '');
                 if (prodCnf && String(prodCnf).trim() !== '') {
@@ -441,20 +475,99 @@ const CostOfGoods = ({
             }
         }
 
+        const truckStr = dr.truckNo || (Array.isArray(dr.truckNumbers) ? dr.truckNumbers.filter(Boolean).join(', ') : '') || '';
+
         setFormData(prev => ({
             ...prev,
-            lcNo: lc.lcNo || '',
-            importer: lc.importerName || lc.importer || '',
-            exporter: lc.exporterName || lc.exporter || '',
-            product: autoProduct,
-            brand: autoBrand,
+            dealReceiveId: receiveId,
+            dealReceiveRefId: dr._id || '',
+            // Do not auto-fill lcNo from deal receive as requested
+            lcNo: prev.lcNo || '',
+            // Do not show importer name from deal receive as requested
+            importer: prev.lcNo ? (prev.importer || '') : '',
+            exporter: dr.exporter || prev.exporter,
+            supplier: dr.supplier || dr.supplierName || prev.supplier,
+            invoiceNo: dr.invoiceNo || prev.invoiceNo,
+            truckNo: truckStr || prev.truckNo,
+            product: drProduct || prev.product,
+            brand: drBrand || prev.brand,
+            quantity: dr.quantity !== undefined && dr.quantity !== '' ? dr.quantity : prev.quantity,
+            amount: dr.amount !== undefined && dr.amount !== '' ? dr.amount : prev.amount,
+            indTruckFare: dr.indTruckFare !== undefined && dr.indTruckFare !== '' ? dr.indTruckFare : prev.indTruckFare,
+            truckChangeFare: dr.truckChangeFare !== undefined && dr.truckChangeFare !== '' ? dr.truckChangeFare : prev.truckChangeFare,
+            slofCf: dr.slofCf !== undefined && dr.slofCf !== '' ? dr.slofCf : prev.slofCf,
+            rebate: dr.rebate !== undefined && dr.rebate !== '' ? dr.rebate : (prev.rebate || '2.9'),
+            rsToDollar: dr.rsToDollar !== undefined && dr.rsToDollar !== '' ? dr.rsToDollar : prev.rsToDollar,
+            dollarRateBdt: dr.dollarRateBdt !== undefined && dr.dollarRateBdt !== '' ? dr.dollarRateBdt : prev.dollarRateBdt,
             cfOtherExpense: autoCnfExpense,
-            supplier: '' // Reset supplier on LC change since exporter changes
+            country: dr.country || prev.country || 'INDIA',
+            date: dr.date ? dr.date.split('T')[0] : prev.date
         }));
 
-        setLcDropdownOpen(false);
-        setLcSearchQuery('');
-        setHighlightedLcIndex(-1);
+        setDealReceiveDropdownOpen(false);
+        setDealReceiveSearchQuery('');
+        setHighlightedDealReceiveIndex(-1);
+    };
+
+    const handleDealReceiveClear = () => {
+        setFormData(prev => ({
+            ...prev,
+            dealReceiveId: '',
+            dealReceiveRefId: '',
+            importer: '',
+            exporter: '',
+            supplier: '',
+            invoiceNo: '',
+            truckNo: '',
+            product: '',
+            brand: '',
+            quantity: '',
+            amount: '',
+            indTruckFare: '',
+            truckChangeFare: '',
+            slofCf: '',
+            rebate: '2.9',
+            rsToDollar: '',
+            dollarRateBdt: ''
+        }));
+        setDealReceiveSearchQuery('');
+        setHighlightedDealReceiveIndex(-1);
+        setDealReceiveDropdownOpen(false);
+    };
+
+    const filteredDealReceives = useMemo(() => {
+        const q = dealReceiveSearchQuery.trim().toLowerCase();
+        if (!q) return dealReceives;
+        return dealReceives.filter(dr => {
+            const drId = String(dr.receiveId || '').toLowerCase();
+            const pId = String(dr.purchaseId || '').toLowerCase().replace(/-/g, '');
+            const prod = String(dr.product || '').toLowerCase();
+            const sup = String(dr.supplier || dr.exporter || '').toLowerCase();
+            const truck = String(dr.truckNo || (Array.isArray(dr.truckNumbers) ? dr.truckNumbers.join(' ') : '')).toLowerCase();
+            return drId.includes(q) || pId.includes(q) || prod.includes(q) || sup.includes(q) || truck.includes(q);
+        });
+    }, [dealReceives, dealReceiveSearchQuery]);
+
+    const handleDealReceiveKeyDown = (e) => {
+        const filtered = filteredDealReceives;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (!dealReceiveDropdownOpen) setDealReceiveDropdownOpen(true);
+            setHighlightedDealReceiveIndex(prev => Math.min(prev + 1, filtered.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedDealReceiveIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (highlightedDealReceiveIndex >= 0 && filtered[highlightedDealReceiveIndex]) {
+                handleDealReceiveSelect(filtered[highlightedDealReceiveIndex]);
+            } else if (filtered.length === 1) {
+                handleDealReceiveSelect(filtered[0]);
+            }
+        } else if (e.key === 'Escape') {
+            setDealReceiveDropdownOpen(false);
+            setHighlightedDealReceiveIndex(-1);
+        }
     };
 
     const handleProductSelect = (prodName) => {
@@ -560,10 +673,21 @@ const CostOfGoods = ({
     const productBrands = getProductBrands();
     const filteredBrands = productBrands.filter(b => b.toLowerCase().includes(brandSearchQuery.toLowerCase()));
 
+    const filteredLcs = useMemo(() => {
+        const q = lcSearchQuery.trim().toLowerCase();
+        if (!q) return lcs;
+        return lcs.filter(lc => {
+            const lcNum = String(lc.lcNo || '').toLowerCase();
+            const imp = String(lc.importerName || lc.importer || '').toLowerCase();
+            const exp = String(lc.exporterName || lc.exporter || '').toLowerCase();
+            const prodList = (lc.productsList || []).map(p => p.productName || p.product).filter(Boolean);
+            const prodStr = String([lc.productName, ...prodList].filter(Boolean).join(' ')).toLowerCase();
+            return lcNum.includes(q) || imp.includes(q) || exp.includes(q) || prodStr.includes(q);
+        });
+    }, [lcs, lcSearchQuery]);
+
     const handleLcKeyDown = (e) => {
-        const filtered = lcs.filter(l =>
-            (l.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())
-        );
+        const filtered = filteredLcs;
         if (e.key === 'ArrowDown') {
             e.preventDefault();
             if (!lcDropdownOpen) setLcDropdownOpen(true);
@@ -733,8 +857,12 @@ const CostOfGoods = ({
         const isChina = (data.country || '').toUpperCase() === 'CHINA';
 
         check(data.date, 'Date');
-        check(data.lcNo, 'LC No');
-        check(data.importer, 'Importer');
+        if (!data.lcNo && !data.dealReceiveId) {
+            empty.push('LC No or Deal Receive ID');
+        }
+        if (data.lcNo) {
+            check(data.importer, 'Importer');
+        }
         check(data.exporter, 'Exporter');
         check(data.supplier, 'Supplier');
         check(data.invoiceNo, 'Invoice No');
@@ -851,6 +979,8 @@ const CostOfGoods = ({
     const resetForm = () => {
         setFormData({
             country: 'INDIA',
+            dealReceiveId: '',
+            dealReceiveRefId: '',
             lcNo: '',
             importer: '',
             exporter: '',
@@ -879,6 +1009,8 @@ const CostOfGoods = ({
         });
         setEditingId(null);
         setSubmitStatus(null);
+        setDealReceiveSearchQuery('');
+        setDealReceiveDropdownOpen(false);
         setLcSearchQuery('');
         setSupplierSearchQuery('');
         setBrandSearchQuery('');
@@ -889,6 +1021,8 @@ const CostOfGoods = ({
     const handleEdit = (record) => {
         setFormData({
             country: record.country || 'INDIA',
+            dealReceiveId: record.dealReceiveId || '',
+            dealReceiveRefId: record.dealReceiveRefId || '',
             lcNo: record.lcNo || '',
             importer: record.importer || '',
             exporter: record.exporter || '',
@@ -1906,61 +2040,175 @@ const CostOfGoods = ({
                                 labelClassName="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1"
                             />
 
-                            {/* Lc No Searchable Dropdown */}
-                            <div className="space-y-1.5 relative" ref={lcDropdownRef}>
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">LC No</label>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        placeholder="Search & Select LC No..."
-                                        value={lcDropdownOpen ? lcSearchQuery : (formData.lcNo || '')}
-                                        onChange={(e) => {
-                                            setLcSearchQuery(e.target.value);
-                                            setHighlightedLcIndex(-1);
-                                            if (!lcDropdownOpen) setLcDropdownOpen(true);
-                                        }}
-                                        onFocus={() => {
-                                            setLcDropdownOpen(true);
-                                            setLcSearchQuery('');
-                                            setHighlightedLcIndex(-1);
-                                        }}
-                                        onKeyDown={handleLcKeyDown}
-                                        autoComplete="off"
-                                        className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10"
-                                        required
-                                    />
-                                    <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                </div>
-                                {lcDropdownOpen && (
-                                    <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] max-h-56 overflow-y-auto py-1">
-                                        {lcs.filter(l => (l.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())).length > 0 ? (
-                                            lcs.filter(l => (l.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())).map((lc, idx) => (
-                                                <button
-                                                    key={lc._id}
-                                                    type="button"
-                                                    onMouseEnter={() => setHighlightedLcIndex(idx)}
-                                                    onClick={() => handleLcSelect(lc)}
-                                                    className={`w-full px-5 py-3 text-left text-sm transition-colors group ${highlightedLcIndex === idx
-                                                        ? 'bg-blue-50'
-                                                        : formData.lcNo === lc.lcNo
-                                                            ? 'bg-blue-50/60'
-                                                            : 'hover:bg-blue-50'
-                                                        }`}
-                                                >
-                                                    <div className="font-bold text-blue-600 group-hover:text-blue-700">{lc.lcNo}</div>
-                                                    <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">
-                                                        {lc.importerName || '—'} → {lc.exporterName || '—'}
-                                                    </div>
-                                                </button>
-                                            ))
+                            {/* Split: 1st Deal Receive ID & 2nd LC NO */}
+                            <div className="grid grid-cols-2 gap-2">
+                                {/* 1st: Deal Receive ID Dropdown */}
+                                <div className="space-y-1.5 relative" ref={dealReceiveDropdownRef}>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="DEAL RECEIVE ID">
+                                        Deal Receive ID
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            placeholder="Select DR..."
+                                            value={dealReceiveDropdownOpen ? dealReceiveSearchQuery : (formData.dealReceiveId || '')}
+                                            onChange={(e) => {
+                                                setDealReceiveSearchQuery(e.target.value);
+                                                setHighlightedDealReceiveIndex(-1);
+                                                if (!dealReceiveDropdownOpen) setDealReceiveDropdownOpen(true);
+                                            }}
+                                            onFocus={() => {
+                                                setDealReceiveDropdownOpen(true);
+                                                setDealReceiveSearchQuery('');
+                                                setHighlightedDealReceiveIndex(-1);
+                                            }}
+                                            onKeyDown={handleDealReceiveKeyDown}
+                                            autoComplete="off"
+                                            className="w-full px-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-7 font-bold text-blue-600"
+                                        />
+                                        {formData.dealReceiveId && !dealReceiveDropdownOpen ? (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDealReceiveClear();
+                                                }}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 p-0.5 transition-colors"
+                                                title="Clear Deal Receive"
+                                            >
+                                                <XIcon className="w-3.5 h-3.5" />
+                                            </button>
                                         ) : (
-                                            <div className="px-5 py-6 text-center text-gray-400">
-                                                <BoxIcon className="w-7 h-7 mb-2 mx-auto opacity-20" />
-                                                <p className="text-xs font-medium">No LC found</p>
-                                            </div>
+                                            <SearchIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                                         )}
                                     </div>
-                                )}
+                                    {dealReceiveDropdownOpen && (
+                                        <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[120] max-h-56 overflow-y-auto py-1 min-w-[260px] sm:min-w-[280px]">
+                                            {filteredDealReceives.length > 0 ? (
+                                                filteredDealReceives.map((dr, idx) => {
+                                                    const drId = dr.receiveId || `DR${String(idx + 1).padStart(4, '0')}`;
+                                                    const pId = (dr.purchaseId || '').replace(/-/g, '');
+                                                    const truckStr = dr.truckNo || (Array.isArray(dr.truckNumbers) ? dr.truckNumbers.filter(Boolean).join(', ') : '') || '';
+                                                    return (
+                                                        <button
+                                                            key={dr._id || idx}
+                                                            type="button"
+                                                            onMouseEnter={() => setHighlightedDealReceiveIndex(idx)}
+                                                            onClick={() => handleDealReceiveSelect(dr)}
+                                                            className={`w-full px-3.5 py-2.5 text-left text-xs transition-colors group ${
+                                                                highlightedDealReceiveIndex === idx
+                                                                    ? 'bg-blue-50'
+                                                                    : formData.dealReceiveId === drId
+                                                                        ? 'bg-blue-50/60'
+                                                                        : 'hover:bg-blue-50'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center justify-between gap-1.5">
+                                                                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                                                    <span className="font-bold text-blue-600 group-hover:text-blue-700">{drId}</span>
+                                                                    {truckStr ? (
+                                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/60 truncate max-w-[130px]" title={`Truck: ${truckStr}`}>
+                                                                            {truckStr}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-[10px] font-medium text-gray-400">
+                                                                            (No Truck)
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {pId && (
+                                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 shrink-0">
+                                                                        {pId}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[10px] text-gray-400 font-medium truncate mt-0.5">
+                                                                {dr.product || '—'} {dr.brand ? `(${dr.brand})` : ''} • {dr.supplier || dr.exporter || '—'}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="px-4 py-4 text-center text-gray-400 text-xs">
+                                                    No Deal Receive found
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 2nd: LC No Searchable Dropdown */}
+                                <div className="space-y-1.5 relative" ref={lcDropdownRef}>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="LC NO">
+                                        LC No
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            placeholder="Search LC..."
+                                            value={lcDropdownOpen ? lcSearchQuery : (formData.lcNo || '')}
+                                            onChange={(e) => {
+                                                setLcSearchQuery(e.target.value);
+                                                setHighlightedLcIndex(-1);
+                                                if (!lcDropdownOpen) setLcDropdownOpen(true);
+                                            }}
+                                            onFocus={() => {
+                                                setLcDropdownOpen(true);
+                                                setLcSearchQuery('');
+                                                setHighlightedLcIndex(-1);
+                                            }}
+                                            onKeyDown={handleLcKeyDown}
+                                            autoComplete="off"
+                                            className="w-full px-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-7 font-semibold text-gray-800"
+                                            required={!formData.dealReceiveId}
+                                        />
+                                        <SearchIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                    </div>
+                                    {lcDropdownOpen && (
+                                        <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[120] max-h-56 overflow-y-auto py-1 min-w-[260px] sm:min-w-[280px]">
+                                            {filteredLcs.length > 0 ? (
+                                                filteredLcs.map((lc, idx) => {
+                                                    const uniqueProducts = [...new Set([
+                                                        ...(lc.productsList || []).map(p => p.productName || p.product).filter(Boolean),
+                                                        lc.productName
+                                                    ].filter(Boolean))];
+                                                    const productStr = uniqueProducts.join(', ');
+
+                                                    return (
+                                                        <button
+                                                            key={lc._id || idx}
+                                                            type="button"
+                                                            onMouseEnter={() => setHighlightedLcIndex(idx)}
+                                                            onClick={() => handleLcSelect(lc)}
+                                                            className={`w-full px-3.5 py-2.5 text-left text-xs transition-colors group ${highlightedLcIndex === idx
+                                                                ? 'bg-blue-50'
+                                                                : formData.lcNo === lc.lcNo
+                                                                    ? 'bg-blue-50/60'
+                                                                    : 'hover:bg-blue-50'
+                                                                }`}
+                                                        >
+                                                            <div className="flex items-center justify-between gap-1.5">
+                                                                <span className="font-bold text-blue-600 group-hover:text-blue-700">{lc.lcNo}</span>
+                                                                {productStr && (
+                                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/60 truncate max-w-[140px]" title={`Product: ${productStr}`}>
+                                                                        {productStr}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 truncate">
+                                                                {lc.importerName || '—'} → {lc.exporterName || '—'}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="px-4 py-4 text-center text-gray-400 text-xs">
+                                                    No LC found
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Importer (Auto Fill) */}
@@ -1970,7 +2218,7 @@ const CostOfGoods = ({
                                     type="text"
                                     value={formData.importer}
                                     readOnly
-                                    placeholder="Select LC No first"
+                                    placeholder={formData.importer ? '' : 'Select LC No first'}
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 cursor-not-allowed outline-none"
                                 />
                             </div>
@@ -1982,7 +2230,7 @@ const CostOfGoods = ({
                                     type="text"
                                     value={formData.exporter}
                                     readOnly
-                                    placeholder="Select LC No first"
+                                    placeholder={formData.exporter ? '' : 'Select Deal Receive ID first'}
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 cursor-not-allowed outline-none"
                                 />
                             </div>
@@ -1993,7 +2241,7 @@ const CostOfGoods = ({
                                 <div className="relative">
                                     <input
                                         type="text"
-                                        placeholder={formData.exporter ? "Search & Select Supplier..." : "Select LC / Exporter first"}
+                                        placeholder={formData.exporter ? "Search & Select Supplier..." : "Select Deal Receive ID first"}
                                         value={supplierDropdownOpen ? supplierSearchQuery : (formData.supplier || '')}
                                         onChange={(e) => {
                                             const val = e.target.value;
@@ -2080,7 +2328,7 @@ const CostOfGoods = ({
                             {/* Product Auto Fill or Dropdown Select */}
                             <div className="space-y-1.5 relative" ref={productDropdownRef}>
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Product</label>
-                                {hasMultipleProducts ? (
+                                {hasMultipleProducts && !formData.dealReceiveId ? (
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -2121,7 +2369,7 @@ const CostOfGoods = ({
                                         type="text"
                                         value={formData.product}
                                         readOnly
-                                        placeholder={formData.lcNo ? "Auto filled" : "Select LC No first"}
+                                        placeholder={formData.dealReceiveId ? "Auto filled" : "Select Deal Receive ID first"}
                                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 cursor-not-allowed outline-none"
                                     />
                                 )}
@@ -2446,6 +2694,7 @@ const CostOfGoods = ({
                                 const isChinaView = viewData.country === 'CHINA';
                                 const fields = [
                                     ['Date', viewData.date ? formatDate(viewData.date) : '—'],
+                                    ...(viewData.dealReceiveId ? [['Deal Receive ID', <span className="font-bold text-blue-600">{viewData.dealReceiveId}</span>]] : []),
                                     ['LC No', (
                                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                             <span>{viewData.lcNo || '—'}</span>

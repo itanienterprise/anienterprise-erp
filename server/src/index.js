@@ -186,6 +186,13 @@ const invalidateMemoryCache = (modName, options = {}) => {
     memoryCache.stock = null;
     memoryCache.warehouses = null;
   }
+  if (['lc-purchase', 'lc-purchases', 'lcpurchase', 'lcpurchases'].includes(mod)) {
+    memoryCache.lcPurchases = null;
+  }
+  if (['deal-receive', 'deal-receives', 'dealreceive', 'dealreceives'].includes(mod)) {
+    memoryCache.dealReceives = null;
+    memoryCache.lcPurchases = null;
+  }
   if (['customer', 'customers', 'payment-collection', 'paymentcollection', 'payments', 'pay-to-customer', 'paytocustomer'].includes(mod)) {
     memoryCache.customers = null;
     if (!options?.preserveSalesCache) {
@@ -469,6 +476,7 @@ const Sale = require('./models/Sale');
 const Purchase = require('./models/Purchase');
 const PurchaseReceive = require('./models/PurchaseReceive');
 const LCPurchase = require('./models/LCPurchase');
+const DealReceive = require('./models/DealReceive');
 const Return = require('./models/Return');
 const Token = require('./models/Token');
 const User = require('./models/User');
@@ -1988,6 +1996,7 @@ const ROUTE_MODEL_MAP = {
   'purchases': Purchase,
   'purchase-receives': PurchaseReceive,
   'lc-purchases': LCPurchase,
+  'deal-receives': DealReceive,
   'employees': Employee,
   'importers': Importer,
   'exporters': Exporter,
@@ -4629,6 +4638,73 @@ apiRouter.get('/api/lc-purchases', async (req, res) => {
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
     memoryCache.lcPurchases = decrypted;
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Deal Receive APIs
+apiRouter.post('/api/deal-receives', async (req, res) => {
+  try {
+    if (!req.body.receiveId) {
+      const count = await DealReceive.countDocuments();
+      req.body.receiveId = `DR${String(count + 1).padStart(4, '0')}`;
+    }
+    const encryptedData = encryptData(req.body);
+    const newDealReceive = new DealReceive({ data: encryptedData });
+    await newDealReceive.save();
+    invalidateMemoryCache('deal-receives');
+    broadcastUpdate('deal-receives', 'create', { _id: newDealReceive._id, receiveId: req.body.receiveId });
+    req._broadcastDone = true;
+    res.status(201).json({ ...req.body, _id: newDealReceive._id, createdAt: newDealReceive.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/deal-receives/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updated = await DealReceive.findByIdAndUpdate(req.params.id, {
+      data: encryptedData
+    }, { returnDocument: 'after' });
+    if (!updated) return res.status(404).json({ message: 'Deal Receive record not found' });
+    invalidateMemoryCache('deal-receives');
+    broadcastUpdate('deal-receives', 'update', { _id: updated._id, receiveId: req.body.receiveId });
+    req._broadcastDone = true;
+    res.json({ ...req.body, _id: updated._id, createdAt: updated.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/deal-receives/:id', async (req, res) => {
+  try {
+    await DealReceive.findByIdAndDelete(req.params.id);
+    invalidateMemoryCache('deal-receives');
+    broadcastUpdate('deal-receives', 'delete', { _id: req.params.id });
+    req._broadcastDone = true;
+    res.json({ message: 'Deal Receive deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/deal-receives', async (req, res) => {
+  try {
+    if (memoryCache.dealReceives && !req.query._t && !req.query._nocache) {
+      return res.json(memoryCache.dealReceives);
+    }
+    const records = await DealReceive.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      let d = decryptData(r.data);
+      if (d && d.data && typeof d.data === 'string') {
+        try { d = decryptData(d.data); } catch (e) { }
+      }
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    memoryCache.dealReceives = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });

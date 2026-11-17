@@ -4,12 +4,37 @@ import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { getSocket } from '../../../utils/socket';
 import {
-    SearchIcon, PlusIcon, FunnelIcon, BarChartIcon, XIcon, CheckIcon, ChevronDownIcon, BoxIcon, TrashIcon, EditIcon
+    SearchIcon, PlusIcon, FunnelIcon, BarChartIcon, XIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, BoxIcon, TrashIcon, EditIcon, EyeIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import PaginationBar, { ALL_PAGE_SIZE } from '../../shared/PaginationBar';
 import '../Sale/SaleManagement.css';
+
+/**
+ * Reusable Table Header Sort Indicator
+ */
+const SortIndicator = ({ sortKey, currentSortKey, direction, align = 'left' }) => {
+    const isActive = sortKey === currentSortKey;
+    return (
+        <span className={`inline-flex items-center ${align === 'center' ? 'ml-1' : align === 'right' ? 'ml-1' : 'ml-1.5'} transition-opacity ${
+            isActive ? 'opacity-100 text-blue-600' : 'opacity-25 group-hover:opacity-60 text-gray-400'
+        }`}>
+            {isActive ? (
+                direction === 'asc' ? (
+                    <ChevronUpIcon className="w-3.5 h-3.5 stroke-[2.5]" />
+                ) : (
+                    <ChevronDownIcon className="w-3.5 h-3.5 stroke-[2.5]" />
+                )
+            ) : (
+                <span className="flex flex-col -space-y-1">
+                    <ChevronUpIcon className="w-2.5 h-2.5" />
+                    <ChevronDownIcon className="w-2.5 h-2.5" />
+                </span>
+            )}
+        </span>
+    );
+};
 
 export const getDealStatus = (qty, remainingQty) => {
     const purchase = parseFloat(qty) || 0;
@@ -291,6 +316,8 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
     const [searchQuery, setSearchQuery] = useState('');
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
+    const [viewData, setViewData] = useState(null);
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
 
     // Filter states
     const [filters, setFilters] = useState({
@@ -338,6 +365,7 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
 
     // Records list state
     const [records, setRecords] = useState([]);
+    const [dealReceivesList, setDealReceivesList] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
@@ -391,9 +419,21 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
         }
     };
 
+    // Fetch Deal Receives to display in Purchase Deal Details
+    const fetchDealReceives = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/deal-receives?_t=${Date.now()}`);
+            const data = Array.isArray(res.data) ? res.data : [];
+            setDealReceivesList(data);
+        } catch (err) {
+            console.error('Error fetching deal receives:', err);
+        }
+    };
+
     useEffect(() => {
         loadInitialData();
         fetchLCPurchases();
+        fetchDealReceives();
 
         const socket = getSocket();
         const handleRealtimeUpdate = (data) => {
@@ -403,6 +443,9 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
             }
             if (!mod || ['lc-purchases', 'lc-purchase', 'lcpurchase', 'all'].includes(mod)) {
                 fetchLCPurchases(true);
+            }
+            if (!mod || ['deal-receives', 'deal-receive', 'dealreceive', 'all'].includes(mod)) {
+                fetchDealReceives();
             }
         };
 
@@ -884,15 +927,75 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
         setCurrentPage(1);
     }, [searchQuery, filters]);
 
+    const requestSort = (key) => {
+        setSortConfig(prev => {
+            if (prev.key === key) {
+                return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+            }
+            return { key, direction: 'asc' };
+        });
+    };
+
+    const sortedRecords = useMemo(() => {
+        if (!sortConfig.key) return filteredRecords;
+        return [...filteredRecords].sort((a, b) => {
+            let aVal = a[sortConfig.key];
+            let bVal = b[sortConfig.key];
+
+            if (sortConfig.key === 'date') {
+                aVal = new Date(a.date || 0).getTime();
+                bVal = new Date(b.date || 0).getTime();
+            } else if (sortConfig.key === 'purchaseId') {
+                aVal = String(a.purchaseId || '').replace(/-/g, '').toLowerCase();
+                bVal = String(b.purchaseId || '').replace(/-/g, '').toLowerCase();
+            } else if (sortConfig.key === 'exporter') {
+                aVal = (a.exporter || '').toLowerCase();
+                bVal = (b.exporter || '').toLowerCase();
+            } else if (sortConfig.key === 'supplierName') {
+                aVal = (a.supplierName || '').toLowerCase();
+                bVal = (b.supplierName || '').toLowerCase();
+            } else if (sortConfig.key === 'productName') {
+                aVal = (a.productName || '').toLowerCase();
+                bVal = (b.productName || '').toLowerCase();
+            } else if (sortConfig.key === 'brand') {
+                aVal = (a.brand || '').toLowerCase();
+                bVal = (b.brand || '').toLowerCase();
+            } else if (sortConfig.key === 'rate') {
+                aVal = parseFloat(a.rate) || 0;
+                bVal = parseFloat(b.rate) || 0;
+            } else if (sortConfig.key === 'qty') {
+                aVal = parseFloat(a.qty) || 0;
+                bVal = parseFloat(b.qty) || 0;
+            } else if (sortConfig.key === 'receivedQty') {
+                aVal = parseFloat(a.receivedQty) || 0;
+                bVal = parseFloat(b.receivedQty) || 0;
+            } else if (sortConfig.key === 'remainingQty') {
+                aVal = Math.max(0, (parseFloat(a.qty) || 0) - (parseFloat(a.receivedQty) || 0));
+                bVal = Math.max(0, (parseFloat(b.qty) || 0) - (parseFloat(b.receivedQty) || 0));
+            } else if (sortConfig.key === 'status') {
+                const aRem = Math.max(0, (parseFloat(a.qty) || 0) - (parseFloat(a.receivedQty) || 0));
+                const bRem = Math.max(0, (parseFloat(b.qty) || 0) - (parseFloat(b.receivedQty) || 0));
+                const aStat = getDealStatus(parseFloat(a.qty) || 0, aRem).status;
+                const bStat = getDealStatus(parseFloat(b.qty) || 0, bRem).status;
+                aVal = aStat.toLowerCase();
+                bVal = bStat.toLowerCase();
+            }
+
+            if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [filteredRecords, sortConfig]);
+
     // Paginated records for table
     const paginatedRecords = useMemo(() => {
         if (pageSize === 'all' || Number(pageSize) >= ALL_PAGE_SIZE) {
-            return filteredRecords;
+            return sortedRecords;
         }
         const size = Number(pageSize) || 15;
         const start = (currentPage - 1) * size;
-        return filteredRecords.slice(start, start + size);
-    }, [filteredRecords, currentPage, pageSize]);
+        return sortedRecords.slice(start, start + size);
+    }, [sortedRecords, currentPage, pageSize]);
 
 
     const isFilterActive = (val) => Array.isArray(val) ? val.length > 0 && !val.includes('all') : Boolean(val);
@@ -1140,17 +1243,72 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                         <thead>
                             <tr className="border-b border-gray-100 bg-gray-50/80">
                                 <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">Sl</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Date</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Pur. ID</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Exporter</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Supplier</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Product</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Brand</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Pur. Rate</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">Pur. Truck / KG</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">Receive Truck / KG</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">Remaining</th>
-                                <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">Status</th>
+                                <th onClick={() => requestSort('date')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center">
+                                        <span>Date</span>
+                                        <SortIndicator sortKey="date" currentSortKey={sortConfig.key} direction={sortConfig.direction} />
+                                    </div>
+                                </th>
+                                <th onClick={() => requestSort('purchaseId')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center">
+                                        <span>Pur. ID</span>
+                                        <SortIndicator sortKey="purchaseId" currentSortKey={sortConfig.key} direction={sortConfig.direction} />
+                                    </div>
+                                </th>
+                                <th onClick={() => requestSort('exporter')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center">
+                                        <span>Exporter</span>
+                                        <SortIndicator sortKey="exporter" currentSortKey={sortConfig.key} direction={sortConfig.direction} />
+                                    </div>
+                                </th>
+                                <th onClick={() => requestSort('supplierName')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center">
+                                        <span>Supplier</span>
+                                        <SortIndicator sortKey="supplierName" currentSortKey={sortConfig.key} direction={sortConfig.direction} />
+                                    </div>
+                                </th>
+                                <th onClick={() => requestSort('productName')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center">
+                                        <span>Product</span>
+                                        <SortIndicator sortKey="productName" currentSortKey={sortConfig.key} direction={sortConfig.direction} />
+                                    </div>
+                                </th>
+                                <th onClick={() => requestSort('brand')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center">
+                                        <span>Brand</span>
+                                        <SortIndicator sortKey="brand" currentSortKey={sortConfig.key} direction={sortConfig.direction} />
+                                    </div>
+                                </th>
+                                <th onClick={() => requestSort('rate')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center justify-end">
+                                        <span>Pur. Rate</span>
+                                        <SortIndicator sortKey="rate" currentSortKey={sortConfig.key} direction={sortConfig.direction} align="right" />
+                                    </div>
+                                </th>
+                                <th onClick={() => requestSort('qty')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center justify-center">
+                                        <span>Pur. Truck / KG</span>
+                                        <SortIndicator sortKey="qty" currentSortKey={sortConfig.key} direction={sortConfig.direction} align="center" />
+                                    </div>
+                                </th>
+                                <th onClick={() => requestSort('receivedQty')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center justify-center">
+                                        <span>Receive Truck / KG</span>
+                                        <SortIndicator sortKey="receivedQty" currentSortKey={sortConfig.key} direction={sortConfig.direction} align="center" />
+                                    </div>
+                                </th>
+                                <th onClick={() => requestSort('remainingQty')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center justify-center">
+                                        <span>Remaining</span>
+                                        <SortIndicator sortKey="remainingQty" currentSortKey={sortConfig.key} direction={sortConfig.direction} align="center" />
+                                    </div>
+                                </th>
+                                <th onClick={() => requestSort('status')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                    <div className="flex items-center justify-center">
+                                        <span>Status</span>
+                                        <SortIndicator sortKey="status" currentSortKey={sortConfig.key} direction={sortConfig.direction} align="center" />
+                                    </div>
+                                </th>
                                 <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">Actions</th>
                             </tr>
                         </thead>
@@ -1185,7 +1343,19 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                         <tr key={item._id || idx} className="hover:bg-blue-50/40 transition-colors">
                                             <td className="px-4 py-3.5 text-xs font-bold text-gray-400 text-center whitespace-nowrap">{sl}</td>
                                             <td className="px-4 py-3.5 text-sm font-semibold text-gray-700 whitespace-nowrap">{formatDate(item.date)}</td>
-                                            <td className="px-4 py-3.5 text-sm font-black text-blue-600 whitespace-nowrap">{(item.purchaseId || '').replace(/-/g, '') || '—'}</td>
+                                            <td className="px-4 py-3.5 text-sm font-black whitespace-nowrap">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setViewData(item);
+                                                        fetchDealReceives();
+                                                    }}
+                                                    className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-black"
+                                                    title="View Deal Details"
+                                                >
+                                                    {(item.purchaseId || '').replace(/-/g, '') || '—'}
+                                                </button>
+                                            </td>
                                             <td className="px-4 py-3.5 text-sm font-semibold text-gray-800 whitespace-nowrap">{item.exporter || '—'}</td>
                                             <td className="px-4 py-3.5 text-sm font-semibold text-gray-800 whitespace-nowrap">{item.supplierName || '—'}</td>
                                             <td className="px-4 py-3.5 text-sm font-bold text-gray-900 whitespace-nowrap">{item.productName || '—'}</td>
@@ -1218,6 +1388,17 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                             </td>
                                             <td className="px-4 py-3.5 text-center whitespace-nowrap">
                                                 <div className="flex items-center justify-center gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setViewData(item);
+                                                            fetchDealReceives();
+                                                        }}
+                                                        className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                        title="View Deal Details"
+                                                    >
+                                                        <EyeIcon className="w-4 h-4" />
+                                                    </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => handleEditRecord(item)}
@@ -1735,6 +1916,284 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* View Detail Modal */}
+            {viewData && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-overlay">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setViewData(null)} />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto z-10 animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                        {(() => {
+                            const dealId = String(viewData._id || '');
+                            const cleanPId = String(viewData.purchaseId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+                            const matchingReceives = dealReceivesList.filter(rec => {
+                                if (!rec) return false;
+                                const recDealRef = String(rec.dealRefId || '');
+                                if (dealId && recDealRef && recDealRef === dealId) return true;
+                                const recPId = String(rec.purchaseId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                                if (cleanPId && recPId && recPId === cleanPId) return true;
+                                return false;
+                            });
+
+                            const totalReceivedFromEntries = matchingReceives.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+                            const totalTrucksFromEntries = matchingReceives.reduce((sum, r) => {
+                                const tCount = parseFloat(r.trucks) || (Array.isArray(r.truckNumbers) && r.truckNumbers.length ? r.truckNumbers.length : 1);
+                                return sum + tCount;
+                            }, 0);
+
+                            const purchaseQty = parseFloat(viewData.qty) || 0;
+                            const unitLabel = viewData.uom === 'Truck' ? 'Trucks' : 'KG';
+                            const receiveQty = viewData.receivedQty !== undefined && parseFloat(viewData.receivedQty) > 0
+                                ? parseFloat(viewData.receivedQty)
+                                : (viewData.uom === 'Truck' ? totalTrucksFromEntries : totalReceivedFromEntries);
+                            const remaining = Math.max(0, purchaseQty - receiveQty);
+                            const dealStatus = getDealStatus(purchaseQty, remaining);
+
+                            return (
+                                <>
+                                    {/* Modal Header */}
+                                    <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50/70 via-white to-gray-50/40">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 font-black">
+                                                <EyeIcon className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-black text-gray-900 tracking-tight">Purchase Deal Details</h3>
+                                                <p className="text-[11px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">
+                                                    {(viewData.purchaseId || '').replace(/-/g, '') || '—'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${dealStatus.badgeClass}`}>
+                                                <span className={`w-1.5 h-1.5 rounded-full ${dealStatus.dotClass}`} />
+                                                {dealStatus.status}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setViewData(null)}
+                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                            >
+                                                <XIcon className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Modal Body */}
+                                    <div className="p-6 space-y-5">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Date</span>
+                                                <span className="text-sm font-semibold text-gray-800">{formatDate(viewData.date)}</span>
+                                            </div>
+                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Purchase ID</span>
+                                                <span className="text-sm font-bold text-blue-600">{(viewData.purchaseId || '').replace(/-/g, '') || '—'}</span>
+                                            </div>
+                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Purchase Rate</span>
+                                                <span className="text-sm font-bold text-gray-900">৳{Number(viewData.rate || 0).toLocaleString('en-IN')}/kg</span>
+                                            </div>
+                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Exporter</span>
+                                                <span className="text-sm font-semibold text-gray-800">{viewData.exporter || '—'}</span>
+                                            </div>
+                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Supplier</span>
+                                                <span className="text-sm font-semibold text-gray-800">{viewData.supplierName || '—'}</span>
+                                            </div>
+                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Product</span>
+                                                <span className="text-sm font-bold text-gray-900">{viewData.productName || '—'}</span>
+                                            </div>
+                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Brand</span>
+                                                <span className="text-sm font-semibold text-gray-800">{viewData.brand || '—'}</span>
+                                            </div>
+                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Deal Unit (UOM)</span>
+                                                <span className="text-sm font-bold text-gray-800">{unitLabel}</span>
+                                            </div>
+                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Truck No / Vehicle</span>
+                                                <span className="text-sm font-semibold text-gray-800">{viewData.truckNo || '—'}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Deal Quantities Progression Card */}
+                                        <div className="bg-gray-50/80 rounded-2xl p-4 border border-gray-100 space-y-3">
+                                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
+                                                Quantity Summary
+                                            </span>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="bg-white rounded-xl p-3 border border-blue-100 shadow-xs">
+                                                    <span className="text-[10px] font-bold text-blue-600 uppercase block">Purchased</span>
+                                                    <span className="text-sm font-black text-blue-700">
+                                                        {purchaseQty.toLocaleString('en-IN')} {unitLabel}
+                                                    </span>
+                                                </div>
+                                                <div className="bg-white rounded-xl p-3 border border-green-100 shadow-xs">
+                                                    <span className="text-[10px] font-bold text-green-600 uppercase block">Received</span>
+                                                    <span className="text-sm font-black text-green-700">
+                                                        {receiveQty.toLocaleString('en-IN')} {unitLabel}
+                                                    </span>
+                                                </div>
+                                                <div className="bg-white rounded-xl p-3 border border-amber-100 shadow-xs">
+                                                    <span className="text-[10px] font-bold text-amber-600 uppercase block">Remaining</span>
+                                                    <span className="text-sm font-black text-amber-700">
+                                                        {remaining.toLocaleString('en-IN')} {unitLabel}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Deal Receives Recorded Against This Purchase Deal */}
+                                        <div className="space-y-3 pt-1">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                                        Deal Receives Against This Purchase Deal
+                                                    </h4>
+                                                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-200/60">
+                                                        {matchingReceives.length} {matchingReceives.length === 1 ? 'Entry' : 'Entries'}
+                                                    </span>
+                                                </div>
+                                                {matchingReceives.length > 0 && (
+                                                    <div className="flex items-center gap-2 text-xs">
+                                                        <span className="text-gray-500 font-medium">Total Received:</span>
+                                                        <span className="px-2 py-0.5 rounded-md bg-green-50 text-green-700 font-black text-xs border border-green-200/60">
+                                                            {totalReceivedFromEntries.toLocaleString('en-IN')} KG
+                                                        </span>
+                                                        <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold text-xs border border-blue-200/60">
+                                                            {totalTrucksFromEntries} {totalTrucksFromEntries === 1 ? 'Truck' : 'Trucks'}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {matchingReceives.length === 0 ? (
+                                                <div className="bg-gray-50/70 rounded-xl p-6 text-center border border-dashed border-gray-200 text-gray-400 space-y-1">
+                                                    <p className="text-xs font-semibold text-gray-500">No deal receives recorded against this purchase deal yet.</p>
+                                                    <p className="text-[11px] text-gray-400">
+                                                        Entries created under &ldquo;Deal Receive&rdquo; with Purchase ID <span className="font-bold text-blue-600">{(viewData.purchaseId || '').replace(/-/g, '')}</span> will automatically appear here.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-white rounded-xl border border-gray-200 shadow-2xs overflow-hidden">
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-left border-collapse">
+                                                            <thead>
+                                                                <tr className="border-b border-gray-100 bg-gray-50/80 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                                                    <th className="px-3.5 py-2.5 text-center whitespace-nowrap">#</th>
+                                                                    <th className="px-3.5 py-2.5 whitespace-nowrap">Date</th>
+                                                                    <th className="px-3.5 py-2.5 whitespace-nowrap">Receive ID</th>
+                                                                    <th className="px-3.5 py-2.5 whitespace-nowrap">Invoice No</th>
+                                                                    <th className="px-3.5 py-2.5 text-center whitespace-nowrap">Trucks</th>
+                                                                    <th className="px-3.5 py-2.5 text-center whitespace-nowrap">Received Qty</th>
+                                                                    <th className="px-3.5 py-2.5 whitespace-nowrap">Truck No</th>
+                                                                    <th className="px-3.5 py-2.5 text-right whitespace-nowrap">Costing/kg</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-gray-100 text-xs">
+                                                                {matchingReceives.map((rec, rIdx) => {
+                                                                    const rQty = parseFloat(rec.quantity) || 0;
+                                                                    const rCost = parseFloat(rec.costingKg) || 0;
+                                                                    const rTruckCount = parseFloat(rec.trucks) || (Array.isArray(rec.truckNumbers) && rec.truckNumbers.length ? rec.truckNumbers.length : 1);
+
+                                                                    let rTruckNo = rec.truckNo || '';
+                                                                    if (Array.isArray(rec.truckNumbers) && rec.truckNumbers.length > 0) {
+                                                                        const validTrucks = rec.truckNumbers.filter(t => t && String(t).trim());
+                                                                        if (validTrucks.length > 0) {
+                                                                            rTruckNo = validTrucks.join(', ');
+                                                                        }
+                                                                    }
+                                                                    if (!rTruckNo) rTruckNo = '—';
+
+                                                                    return (
+                                                                        <tr key={rec._id || rIdx} className="hover:bg-blue-50/30 transition-colors">
+                                                                            <td className="px-3.5 py-2.5 text-center text-gray-400 font-bold whitespace-nowrap">
+                                                                                {rIdx + 1}
+                                                                            </td>
+                                                                            <td className="px-3.5 py-2.5 font-semibold text-gray-700 whitespace-nowrap">
+                                                                                {formatDate(rec.date)}
+                                                                            </td>
+                                                                            <td className="px-3.5 py-2.5 font-bold text-blue-600 whitespace-nowrap">
+                                                                                {rec.receiveId || `DR${String(rIdx + 1).padStart(4, '0')}`}
+                                                                            </td>
+                                                                            <td className="px-3.5 py-2.5 font-semibold text-gray-800 whitespace-nowrap">
+                                                                                {rec.invoiceNo || '—'}
+                                                                            </td>
+                                                                            <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
+                                                                                <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold text-[11px] border border-blue-200/60">
+                                                                                    {rTruckCount} {rTruckCount === 1 ? 'Truck' : 'Trucks'}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
+                                                                                <span className="px-2 py-0.5 rounded-md bg-green-50 text-green-700 font-bold text-[11px] border border-green-200/60">
+                                                                                    {rQty.toLocaleString('en-IN')} KG
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="px-3.5 py-2.5 font-semibold text-gray-700 whitespace-nowrap">
+                                                                                {rTruckNo}
+                                                                            </td>
+                                                                            <td className="px-3.5 py-2.5 text-right font-bold text-gray-900 whitespace-nowrap">
+                                                                                {rCost ? `${rCost.toFixed(2)} BDT` : '—'}
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Additional Details */}
+                                        {viewData.remarks && (
+                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Remarks</span>
+                                                <p className="text-xs font-medium text-gray-700 mt-1 whitespace-pre-wrap">{viewData.remarks}</p>
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center justify-between text-[11px] text-gray-400 pt-2 border-t border-gray-100">
+                                            <span>Created By: <strong className="text-gray-600">{viewData.createdBy || 'Admin'}</strong></span>
+                                            {viewData.createdAt && (
+                                                <span>Created: {formatDate(viewData.createdAt)}</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Modal Actions */}
+                                    <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50/40">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const deal = viewData;
+                                                setViewData(null);
+                                                handleEditRecord(deal);
+                                            }}
+                                            className="px-5 py-2.5 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                                        >
+                                            <EditIcon className="w-3.5 h-3.5" />
+                                            Edit Deal
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setViewData(null)}
+                                            className="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-bold text-xs hover:bg-gray-800 transition-colors"
+                                        >
+                                            Close
+                                        </button>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>,
                 document.body
