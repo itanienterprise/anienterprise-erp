@@ -11,6 +11,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import PaginationBar, { ALL_PAGE_SIZE } from '../../shared/PaginationBar';
 import '../Sale/SaleManagement.css';
+import PurchaseDealReport from './PurchaseDealReport';
 
 /**
  * Reusable Table Header Sort Indicator
@@ -2184,6 +2185,14 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                 </div>,
                 document.body
             )}
+        {/* Purchase Deal Report Modal */}
+            <PurchaseDealReport
+                isOpen={showReportModal}
+                onClose={() => setShowReportModal(false)}
+                deals={records}
+                dealReceives={dealReceivesList}
+                costOfGoods={costOfGoodsList}
+            />
         </div>
     );
 };

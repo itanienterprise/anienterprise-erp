@@ -13685,6 +13685,581 @@ export const generatePurchaseReceiveReportPDF = async (purchaseReceives = [], fi
     }
 };
 
+export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, dateStr = '', reportType = 'summary', costOfGoodsList = []) => {
+    try {
+        const doc = new jsPDF('l', 'mm', 'a4');
+
+        const formatDateStr = (d) => {
+            if (!d) return '-';
+            const parts = d.split('-');
+            if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            const dt = new Date(d);
+            if (isNaN(dt.getTime())) return '-';
+            return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+        };
+
+        const resolveLcNo = (r, deal, cogList = []) => {
+            if (!r) return '';
+            if (r.lcNo) return String(r.lcNo).trim();
+            if (r.lcNumber) return String(r.lcNumber).trim();
+            if (r.lc) return String(r.lc).trim();
+
+            if (deal) {
+                if (deal.lcNo) return String(deal.lcNo).trim();
+                if (deal.lcNumber) return String(deal.lcNumber).trim();
+                if (deal.lc) return String(deal.lc).trim();
+            }
+
+            if (Array.isArray(cogList) && cogList.length > 0) {
+                const recId = String(r._id || '').trim();
+                const recReceiveId = String(r.receiveId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const recInvoice = String(r.invoiceNo || '').trim().toLowerCase();
+                const recProduct = String(r.product || r.productName || deal?.productName || '').trim().toLowerCase();
+
+                const matched = cogList.find(cog => {
+                    const cogDrId = String(cog.dealReceiveId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    const cogDrRef = String(cog.dealReceiveRefId || '').trim();
+                    if (recReceiveId && cogDrId && cogDrId === recReceiveId) return true;
+                    if (recId && cogDrRef && cogDrRef === recId) return true;
+                    if (recId && cogDrId && cogDrId === recId) return true;
+                    return false;
+                }) || (recInvoice ? cogList.find(cog => {
+                    const cogInv = String(cog.invoiceNo || '').trim().toLowerCase();
+                    const cogProd = String(cog.product || '').trim().toLowerCase();
+                    return cogInv && cogInv === recInvoice && (!recProduct || !cogProd || recProduct === cogProd);
+                }) : null);
+
+                if (matched && matched.lcNo) return String(matched.lcNo).trim();
+            }
+
+            return '';
+        };
+
+        const formatLcLast6 = (val) => {
+            if (!val) return '—';
+            const str = String(val).trim();
+            if (!str) return '—';
+            return str.length > 6 ? str.slice(-6) : str;
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 9;
+
+        // Load company logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        // --- Header (ANI ENTERPRISE & Address) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // Drop shadow behind title
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // Main text: orange fill (#f97316)
+        doc.setTextColor(249, 115, 22);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
+
+        // Title badge
+        const badgeTitle = reportType === 'deal_wise' ? "PURCHASE DEAL WISE REPORT" : "PURCHASE DEAL REPORT";
+        const badgeWidth = reportType === 'deal_wise' ? 104 : 96;
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - (badgeWidth / 2), y, badgeWidth, 7, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text(badgeTitle, pageWidth / 2, y + 5, { align: 'center' });
+
+        y += 9;
+
+        // Filter info pill in center
+        const printDate = dateStr || formatDateStr(new Date().toISOString().split('T')[0]);
+        const dateRange = `${formatDate(filters?.startDate) === '-' ? 'Start' : formatDate(filters?.startDate)} — ${formatDate(filters?.endDate) === '-' ? 'Present' : formatDate(filters?.endDate)}`;
+        const filterParts = [`Date: ${dateRange}`];
+        if (filters?.supplier || filters?.supplierName) filterParts.push(`Supplier: ${filters.supplier || filters.supplierName}`);
+        if (filters?.product || filters?.productName) filterParts.push(`Product: ${filters.product || filters.productName}`);
+        if (filters?.brand) filterParts.push(`Brand: ${filters.brand}`);
+        if (filters?.status && filters.status !== 'All') filterParts.push(`Status: ${filters.status}`);
+        const filterText = filterParts.join('   |   ');
+
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        const filterTW = doc.getTextWidth(filterText);
+        const pillW = Math.min(filterTW + 12, pageWidth - margin * 2 - 40);
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth / 2) - (pillW / 2), y, pillW, 6, 1.5, 1.5, 'FD');
+        doc.setTextColor(30, 41, 59);
+        doc.text(filterText, pageWidth / 2, y + 4.2, { align: 'center' });
+
+        // Right: Printed on
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed: ${printDate}`, pageWidth - margin, y + 4.2, { align: 'right' });
+
+        // Left: Total Records
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text(`Total Records: ${deals.length}`, margin, y + 4.2);
+
+        let yPos = y + 8;
+
+        let grandTotalPurQty = 0;
+        let grandTotalRecvQty = 0;
+        let grandTotalRemQty = 0;
+
+        const sorted = [...deals].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+        if (reportType === 'deal_wise') {
+            let currentY = yPos;
+            sorted.forEach((d, dIdx) => {
+                const purId = String(d.purchaseId || '').replace(/-/g, '') || '—';
+                const purQty = parseFloat(d.qty || d._totalQty || 0);
+                const recvQty = parseFloat(d.receivedQty ?? d._totalReceived ?? 0);
+                const remQty = parseFloat(d.remainingQty ?? d._remaining ?? Math.max(0, purQty - recvQty));
+                const unit = d.uom === 'Truck' ? (purQty === 1 ? 'Truck' : 'Trucks') : 'KG';
+                const recvUnit = d.uom === 'Truck' ? (recvQty === 1 ? 'Truck' : 'Trucks') : 'KG';
+                const remUnit = d.uom === 'Truck' ? (remQty === 1 ? 'Truck' : 'Trucks') : 'KG';
+
+                grandTotalPurQty += purQty;
+                grandTotalRecvQty += recvQty;
+                grandTotalRemQty += remQty;
+
+                let statusStr = 'Active';
+                if (purQty > 0 && remQty <= 0.001) statusStr = 'Completed';
+                else if (purQty > 0 && recvQty > 0 && remQty > 0.001) statusStr = 'Not Completed';
+
+                const receives = d._relatedReceives || d.receives || [];
+                const dealTotalNetBill = receives.reduce((sum, r) => sum + (parseFloat(r.netBill !== undefined && r.netBill !== '' ? r.netBill : r.totalBill) || 0), 0);
+
+                if (currentY + 36 > pageHeight - margin) {
+                    doc.addPage();
+                    currentY = margin + 10;
+                }
+
+                const subTableRows = [];
+                if (receives.length > 0) {
+                    receives.forEach((r, rIdx) => {
+                        const isTruck = d.uom === 'Truck' || d._isTruck;
+                        const rTrucks = parseFloat(r.trucks) || (Array.isArray(r.truckNumbers) && r.truckNumbers.length ? r.truckNumbers.length : 1);
+                        const rQtyStr = isTruck ? `${rTrucks} ${rTrucks === 1 ? 'Truck' : 'Trucks'}` : `${Math.round(parseFloat(r.quantity || r.receiveQty) || 0).toLocaleString('en-US')} KG`;
+                        const truckStr = Array.isArray(r.truckNumbers) && r.truckNumbers.length > 0
+                            ? r.truckNumbers.filter(Boolean).join(', ')
+                            : (r.truckNo || '—');
+                        const rawLc = resolveLcNo(r, d, costOfGoodsList);
+                        const lcStr = formatLcLast6(rawLc);
+                        const netBillVal = parseFloat(r.netBill !== undefined && r.netBill !== '' ? r.netBill : r.totalBill) || 0;
+                        const netBillStr = netBillVal > 0 ? `Tk ${Math.round(netBillVal).toLocaleString('en-IN')}` : '—';
+                        const dollarRateStr = r.dollarRateBdt ? `Tk ${Number(r.dollarRateBdt).toFixed(2)}` : '—';
+                        const costStr = r.costingKg ? `Tk ${Number(r.costingKg).toFixed(2)}` : '—';
+
+                        subTableRows.push([
+                            rIdx + 1,
+                            formatDateStr(r.date),
+                            lcStr,
+                            r.invoiceNo || '—',
+                            truckStr,
+                            rQtyStr,
+                            netBillStr,
+                            dollarRateStr,
+                            costStr
+                        ]);
+                    });
+
+                    subTableRows.push([
+                        { content: 'DEAL RECEIVE SUBTOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                        { content: `${recvQty} ${recvUnit}`, styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                        { content: dealTotalNetBill > 0 ? `Tk ${Math.round(dealTotalNetBill).toLocaleString('en-IN')}` : '—', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                        { content: '—', styles: { halign: 'center', fontStyle: 'bold', textColor: [150, 150, 150], fillColor: [240, 240, 240] } },
+                        { content: '—', styles: { halign: 'center', fontStyle: 'bold', textColor: [150, 150, 150], fillColor: [240, 240, 240] } }
+                    ]);
+                } else {
+                    subTableRows.push([
+                        { content: 'No receive records entered for this deal yet.', colSpan: 9, styles: { halign: 'center', fontStyle: 'italic', textColor: [120, 120, 120] } }
+                    ]);
+                }
+
+                // 1. Deal Master Header Table (Header on TOP, Value on BOTTOM)
+                autoTable(doc, {
+                    startY: currentY,
+                    head: [['SL', 'Date', 'Pur. ID', 'Supplier', 'Product', 'Brand', 'Pur. Rate', 'Pur. Truck / KG', 'Receive Truck / KG', 'Remaining', 'Status']],
+                    body: [[
+                        `#${dIdx + 1}`,
+                        formatDateStr(d.date),
+                        purId,
+                        d.supplierName || d.supplier || '—',
+                        (d.productName || d.product || '—').toUpperCase(),
+                        d.brand || '—',
+                        d.rate ? `Tk ${Number(d.rate).toLocaleString('en-IN')}/kg` : '—',
+                        `${purQty} ${unit}`,
+                        `${recvQty} ${recvUnit}`,
+                        `${remQty} ${remUnit}`,
+                        statusStr
+                    ]],
+                    theme: 'plain',
+                    styles: {
+                        fontSize: 8,
+                        cellPadding: { top: 1.8, bottom: 1.8, left: 1.2, right: 1.2 },
+                        lineColor: [0, 0, 0],
+                        lineWidth: 0.1,
+                        textColor: [0, 0, 0],
+                        valign: 'middle'
+                    },
+                    headStyles: {
+                        fillColor: [240, 245, 255],
+                        textColor: [15, 23, 42],
+                        fontStyle: 'bold',
+                        lineWidth: 0.1,
+                        fontSize: 7.5,
+                        cellPadding: { top: 2, bottom: 2, left: 1, right: 1 }
+                    },
+                    columnStyles: {
+                        0: { halign: 'center', cellWidth: 9 },
+                        1: { halign: 'center', cellWidth: 20 },
+                        2: { halign: 'center', cellWidth: 22 },
+                        3: { halign: 'left', cellWidth: 46 },
+                        4: { halign: 'left', cellWidth: 36 },
+                        5: { halign: 'left', cellWidth: 26 },
+                        6: { halign: 'right', cellWidth: 24 },
+                        7: { halign: 'center', cellWidth: 24 },
+                        8: { halign: 'center', cellWidth: 24 },
+                        9: { halign: 'center', cellWidth: 24 },
+                        10: { halign: 'center', cellWidth: 24 }
+                    },
+                    margin: { left: margin, right: margin }
+                });
+
+                const subStartY = doc.lastAutoTable.finalY + 2.5;
+
+                // 2. Receive Entries Sub-Table
+                autoTable(doc, {
+                    startY: subStartY,
+                    head: [
+                        ['SL', 'Receive Date', 'LC No', 'Invoice No', 'Truck No / Vehicle', 'Received Qty', 'Net Bill', 'Dollar Rate BDT', 'Costing / KG']
+                    ],
+                    body: subTableRows,
+                    theme: 'plain',
+                    styles: {
+                        fontSize: 7.8,
+                        cellPadding: { top: 1.5, bottom: 1.5, left: 1, right: 1 },
+                        lineColor: [0, 0, 0],
+                        lineWidth: 0.1,
+                        textColor: [0, 0, 0],
+                        valign: 'middle',
+                        overflow: 'linebreak'
+                    },
+                    headStyles: {
+                        fillColor: [248, 250, 252],
+                        textColor: [51, 65, 85],
+                        fontStyle: 'bold',
+                        lineWidth: 0.1,
+                        fontSize: 7.2,
+                        cellPadding: { top: 1.8, bottom: 1.8, left: 0.8, right: 0.8 }
+                    },
+                    columnStyles: {
+                        0: { halign: 'center', cellWidth: 9 },   // SL
+                        1: { halign: 'center', cellWidth: 24 },  // Receive Date
+                        2: { halign: 'center', cellWidth: 26 },  // LC No
+                        3: { halign: 'center', cellWidth: 28 },  // Invoice No
+                        4: { halign: 'left', cellWidth: 58 },    // Truck No / Vehicle
+                        5: { halign: 'center', cellWidth: 30 },  // Received Qty
+                        6: { halign: 'right', cellWidth: 36 },   // Net Bill
+                        7: { halign: 'right', cellWidth: 34 },   // Dollar Rate BDT
+                        8: { halign: 'right', cellWidth: 34 }    // Costing / KG
+                    },
+                    margin: { left: margin, right: margin }
+                });
+
+                currentY = doc.lastAutoTable.finalY + 5;
+            });
+        } else {
+            const tableRows = [];
+
+            sorted.forEach((d, idx) => {
+                const purId = String(d.purchaseId || '').replace(/-/g, '') || '—';
+                const purQty = parseFloat(d.qty || d._totalQty || 0);
+                const recvQty = parseFloat(d.receivedQty ?? d._totalReceived ?? 0);
+                const remQty = parseFloat(d.remainingQty ?? d._remaining ?? Math.max(0, purQty - recvQty));
+                const unit = d.uom === 'Truck' ? (purQty === 1 ? 'Truck' : 'Trucks') : 'KG';
+                const recvUnit = d.uom === 'Truck' ? (recvQty === 1 ? 'Truck' : 'Trucks') : 'KG';
+                const remUnit = d.uom === 'Truck' ? (remQty === 1 ? 'Truck' : 'Trucks') : 'KG';
+
+                grandTotalPurQty += purQty;
+                grandTotalRecvQty += recvQty;
+                grandTotalRemQty += remQty;
+
+                let statusStr = 'Active';
+                if (purQty > 0 && remQty <= 0.001) statusStr = 'Completed';
+                else if (purQty > 0 && recvQty > 0 && remQty > 0.001) statusStr = 'Not Completed';
+
+                tableRows.push([
+                    idx + 1,
+                    formatDateStr(d.date),
+                    purId,
+                    d.supplierName || d.supplier || '—',
+                    d.productName || d.product || '—',
+                    d.brand || '—',
+                    d.rate ? `Tk ${Number(d.rate).toLocaleString('en-IN')}/kg` : '—',
+                    `${purQty} ${unit}`,
+                    `${recvQty} ${recvUnit}`,
+                    `${remQty} ${remUnit}`,
+                    statusStr
+                ]);
+            });
+
+            tableRows.push([
+                { content: `GRAND TOTAL (${deals.length} DEALS)`, colSpan: 7, styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: `${Math.round(grandTotalPurQty).toLocaleString('en-US')}`, styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: `${Math.round(grandTotalRecvQty).toLocaleString('en-US')}`, styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: `${Math.round(grandTotalRemQty).toLocaleString('en-US')}`, styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: '', styles: { fillColor: [240, 240, 240] } }
+            ]);
+
+            autoTable(doc, {
+                startY: yPos,
+                head: [['SL', 'DATE', 'PUR. ID', 'SUPPLIER', 'PRODUCT', 'BRAND', 'PUR. RATE', 'PUR. TR / KG', 'RECEIVE TR / KG', 'REMAINING', 'STATUS']],
+                body: tableRows,
+                theme: 'plain',
+                styles: {
+                    fontSize: 8.5,
+                    cellPadding: { top: 1.8, bottom: 1.8, left: 1.2, right: 1.2 },
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.1,
+                    textColor: [0, 0, 0],
+                    valign: 'middle',
+                    overflow: 'linebreak'
+                },
+                headStyles: {
+                    fillColor: [245, 245, 245],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    halign: 'center',
+                    lineWidth: 0.1,
+                    fontSize: 8,
+                    cellPadding: { top: 2, bottom: 2, left: 0.8, right: 0.8 },
+                    overflow: 'visible'
+                },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 9 },
+                    1: { halign: 'center', cellWidth: 20 },
+                    2: { halign: 'center', cellWidth: 22 },
+                    3: { halign: 'left', cellWidth: 44 },
+                    4: { halign: 'left', cellWidth: 34 },
+                    5: { halign: 'left', cellWidth: 26 },
+                    6: { halign: 'right', cellWidth: 22 },
+                    7: { halign: 'center', cellWidth: 26 },
+                    8: { halign: 'center', cellWidth: 26 },
+                    9: { halign: 'center', cellWidth: 24 },
+                    10: { halign: 'center', cellWidth: 24 }
+                },
+                margin: { left: margin, right: margin },
+                didParseCell: (data) => {
+                    if (data.row.section === 'body') {
+                        if (data.row.index === tableRows.length - 1) {
+                            data.row.pageBreak = 'avoid';
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Summary Metric Cards below the table ---
+        let cardY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : yPos) + 6;
+        const numCards = 4;
+        const cardGap = 4;
+        const totalCardGaps = cardGap * (numCards - 1);
+        const cardWidth = (pageWidth - (margin * 2) - totalCardGaps) / numCards;
+        const cardHeight = 15;
+
+        if (cardY + cardHeight + 25 > pageHeight - 10) {
+            doc.addPage();
+            cardY = 20;
+        }
+
+        const pdfSummaryCards = [
+            {
+                title: 'TOTAL DEALS',
+                sub: `RECORDS: ${deals.length}`,
+                value: `${deals.length} Deals`,
+                bg: [248, 250, 252],
+                border: [203, 213, 225],
+                titleColor: [100, 116, 139],
+                subColor: [71, 85, 105],
+                valColor: [15, 23, 42]
+            },
+            {
+                title: 'TOTAL PUR. QTY',
+                sub: 'PURCHASED',
+                value: `${Math.round(grandTotalPurQty).toLocaleString('en-US')}`,
+                bg: [248, 250, 252],
+                border: [203, 213, 225],
+                titleColor: [100, 116, 139],
+                subColor: [71, 85, 105],
+                valColor: [29, 78, 216]
+            },
+            {
+                title: 'TOTAL RECEIVED',
+                sub: 'RECEIVED QTY',
+                value: `${Math.round(grandTotalRecvQty).toLocaleString('en-US')}`,
+                bg: [248, 250, 252],
+                border: [203, 213, 225],
+                titleColor: [22, 101, 52],
+                subColor: [71, 85, 105],
+                valColor: [22, 101, 52]
+            },
+            {
+                title: 'TOTAL REMAINING',
+                sub: 'PENDING BALANCE',
+                value: `${Math.round(grandTotalRemQty).toLocaleString('en-US')}`,
+                bg: [255, 255, 255],
+                border: [249, 115, 22],
+                titleColor: [234, 88, 12],
+                subColor: [71, 85, 105],
+                valColor: [234, 88, 12]
+            }
+        ];
+
+        pdfSummaryCards.forEach((c, i) => {
+            const cx = margin + i * (cardWidth + cardGap);
+            doc.setFillColor(...c.bg);
+            doc.setDrawColor(...c.border);
+            doc.setLineWidth(c.border[0] === 249 ? 0.5 : 0.2);
+            doc.roundedRect(cx, cardY, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+            // Title
+            doc.setFontSize(6.8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...c.titleColor);
+            doc.text(c.title, cx + (cardWidth / 2), cardY + 3.8, { align: 'center' });
+
+            // Subtext
+            doc.setFontSize(6.2);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...c.subColor);
+            doc.text(c.sub, cx + (cardWidth / 2), cardY + 7.0, { align: 'center' });
+
+            // Divider inside card
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.1);
+            doc.line(cx + 4, cardY + 8.5, cx + cardWidth - 4, cardY + 8.5);
+
+            // Primary Value
+            doc.setFontSize(9.0);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...c.valColor);
+            doc.text(c.value, cx + (cardWidth / 2), cardY + 13.0, { align: 'center' });
+        });
+
+        // --- Signature Section ---
+        let sigY = cardY + cardHeight + 14;
+        if (sigY + 12 > pageHeight - 10) {
+            doc.addPage();
+            sigY = 25;
+        }
+        const sigWidth = 50;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.2);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, sigY, margin + sigWidth + sigGap + sigWidth, sigY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
+
+        // Page Numbers Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - PURCHASE DEAL REPORT', margin, pageHeight - 5);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        const newTab = window.open(blobURL, '_blank');
+        if (!newTab) {
+            const fileName = `Purchase_Deal_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(fileName);
+        }
+    } catch (err) {
+        console.error("Error generating Purchase Deal Report PDF:", err);
+        alert("Failed to generate Purchase Deal Report PDF: " + err.message);
+    }
+};
+
 
 
 

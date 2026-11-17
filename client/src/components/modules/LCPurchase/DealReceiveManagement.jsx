@@ -11,6 +11,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import PaginationBar, { ALL_PAGE_SIZE } from '../../shared/PaginationBar';
 import '../Sale/SaleManagement.css';
+import PurchaseDealReport from './PurchaseDealReport';
 
 /**
  * Reusable Table Header Sort Indicator
@@ -18,9 +19,8 @@ import '../Sale/SaleManagement.css';
 const SortIndicator = ({ sortKey, currentSortKey, direction, align = 'left' }) => {
     const isActive = sortKey === currentSortKey;
     return (
-        <span className={`inline-flex items-center ${align === 'center' ? 'ml-1' : align === 'right' ? 'ml-1' : 'ml-1.5'} transition-opacity ${
-            isActive ? 'opacity-100 text-blue-600' : 'opacity-25 group-hover:opacity-60 text-gray-400'
-        }`}>
+        <span className={`inline-flex items-center ${align === 'center' ? 'ml-1' : align === 'right' ? 'ml-1' : 'ml-1.5'} transition-opacity ${isActive ? 'opacity-100 text-blue-600' : 'opacity-25 group-hover:opacity-60 text-gray-400'
+            }`}>
             {isActive ? (
                 direction === 'asc' ? (
                     <ChevronUpIcon className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -2025,7 +2025,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                                     <td className="px-4 py-3.5 text-sm font-semibold text-gray-700 whitespace-nowrap">{item.brand || '—'}</td>
                                                     <td className="px-4 py-3.5 text-sm font-bold text-gray-800 text-center whitespace-nowrap">
                                                         <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold text-xs inline-block whitespace-nowrap border border-blue-200/60">
-                                                            {item.trucks || (Array.isArray(item.truckNumbers) && item.truckNumbers.length ? item.truckNumbers.length : 1)} { (item.trucks === 1 || (!item.trucks && (!item.truckNumbers || item.truckNumbers.length <= 1))) ? 'Truck' : 'Trucks' }
+                                                            {item.trucks || (Array.isArray(item.truckNumbers) && item.truckNumbers.length ? item.truckNumbers.length : 1)} {(item.trucks === 1 || (!item.trucks && (!item.truckNumbers || item.truckNumbers.length <= 1))) ? 'Truck' : 'Trucks'}
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-3.5 text-sm font-bold text-gray-800 text-center whitespace-nowrap">
@@ -2098,51 +2098,13 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                 </div>
             )}
 
-            {/* Quick Report Summary Modal */}
-            {showReportModal && typeof document !== 'undefined' && document.body && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-overlay">
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowReportModal(false)} />
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-gray-100 relative z-10 animate-in zoom-in duration-200">
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
-                            <div className="flex items-center gap-2">
-                                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                                    <BarChartIcon className="w-5 h-5" />
-                                </div>
-                                <h3 className="text-lg font-black text-gray-900">Deal Receive Summary</h3>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setShowReportModal(false)}
-                                className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"
-                            >
-                                <XIcon className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="space-y-3 py-2 text-sm text-gray-700">
-                            <div className="flex justify-between p-3 bg-gray-50 rounded-xl">
-                                <span className="font-semibold text-gray-600">Total Receives Recorded:</span>
-                                <span className="font-bold text-gray-900">{filteredRecords.length}</span>
-                            </div>
-                            <div className="flex justify-between p-3 bg-green-50 rounded-xl">
-                                <span className="font-semibold text-green-700">Total Quantity:</span>
-                                <span className="font-black text-green-800">
-                                    {filteredRecords.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0).toLocaleString('en-IN')}
-                                </span>
-                            </div>
-                        </div>
-                        <div className="pt-4 mt-2 border-t border-gray-100 text-right">
-                            <button
-                                type="button"
-                                onClick={() => setShowReportModal(false)}
-                                className="px-5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition-colors"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
+            {/* Purchase Deal Report Modal */}
+            <PurchaseDealReport
+                isOpen={showReportModal}
+                onClose={() => setShowReportModal(false)}
+                deals={dealsList}
+                dealReceives={records}
+            />
 
             {/* View Detail Modal */}
             {viewData && typeof document !== 'undefined' && document.body && createPortal(
