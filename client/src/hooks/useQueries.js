@@ -8,6 +8,8 @@ export const QUERY_KEYS = {
     products: ['products'],
     stock: ['stock'],
     stockBaseline: ['stockBaseline'],
+    purchases: ['purchases'],
+    lcPurchases: ['lcPurchases'],
     warehouses: ['warehouses'],
     sales: ['sales'],
     damages: ['damages'],

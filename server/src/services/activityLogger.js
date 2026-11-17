@@ -12,6 +12,7 @@ const MODULE_PATH_MAP = [
     { pattern: /^\/api\/packing-lists/i, module: 'Packing List' },
     { pattern: /^\/api\/tr-setups/i, module: 'TR Setup' },
     { pattern: /^\/api\/margin-returns/i, module: 'Margin Return' },
+    { pattern: /^\/api\/lc-purchases/i, module: 'LC Purchase' },
     { pattern: /^\/api\/purchase-receives/i, module: 'Purchase Receive' },
     { pattern: /^\/api\/purchase/i, module: 'Purchase' },
     { pattern: /^\/api\/stock-baseline/i, module: 'Stock Baseline' },

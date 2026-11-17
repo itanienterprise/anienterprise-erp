@@ -468,6 +468,7 @@ const Damage = require('./models/Damage');
 const Sale = require('./models/Sale');
 const Purchase = require('./models/Purchase');
 const PurchaseReceive = require('./models/PurchaseReceive');
+const LCPurchase = require('./models/LCPurchase');
 const Return = require('./models/Return');
 const Token = require('./models/Token');
 const User = require('./models/User');
@@ -1986,6 +1987,7 @@ const ROUTE_MODEL_MAP = {
   'products': Product,
   'purchases': Purchase,
   'purchase-receives': PurchaseReceive,
+  'lc-purchases': LCPurchase,
   'employees': Employee,
   'importers': Importer,
   'exporters': Exporter,
@@ -4560,6 +4562,73 @@ apiRouter.get('/api/purchase-receives', async (req, res) => {
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
     memoryCache.purchaseReceives = decrypted;
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// LC Purchase APIs
+apiRouter.post('/api/lc-purchases', async (req, res) => {
+  try {
+    if (!req.body.purchaseId) {
+      const count = await LCPurchase.countDocuments();
+      req.body.purchaseId = `LCP${String(count + 1).padStart(4, '0')}`;
+    }
+    const encryptedData = encryptData(req.body);
+    const newLCPurchase = new LCPurchase({ data: encryptedData });
+    await newLCPurchase.save();
+    invalidateMemoryCache('lc-purchases');
+    broadcastUpdate('lc-purchases', 'create', { _id: newLCPurchase._id, purchaseId: req.body.purchaseId });
+    req._broadcastDone = true;
+    res.status(201).json({ ...req.body, _id: newLCPurchase._id, createdAt: newLCPurchase.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/lc-purchases/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updated = await LCPurchase.findByIdAndUpdate(req.params.id, {
+      data: encryptedData
+    }, { returnDocument: 'after' });
+    if (!updated) return res.status(404).json({ message: 'LC Purchase record not found' });
+    invalidateMemoryCache('lc-purchases');
+    broadcastUpdate('lc-purchases', 'update', { _id: updated._id, purchaseId: req.body.purchaseId });
+    req._broadcastDone = true;
+    res.json({ ...req.body, _id: updated._id, createdAt: updated.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/lc-purchases/:id', async (req, res) => {
+  try {
+    await LCPurchase.findByIdAndDelete(req.params.id);
+    invalidateMemoryCache('lc-purchases');
+    broadcastUpdate('lc-purchases', 'delete', { _id: req.params.id });
+    req._broadcastDone = true;
+    res.json({ message: 'LC Purchase deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/lc-purchases', async (req, res) => {
+  try {
+    if (memoryCache.lcPurchases && !req.query._t && !req.query._nocache) {
+      return res.json(memoryCache.lcPurchases);
+    }
+    const records = await LCPurchase.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      let d = decryptData(r.data);
+      if (d && d.data && typeof d.data === 'string') {
+        try { d = decryptData(d.data); } catch (e) { }
+      }
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    memoryCache.lcPurchases = decrypted;
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });

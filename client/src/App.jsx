@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useDeferredValue } from 'r
 import axios from './utils/api';
 import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
-  BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
+  BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon, ShoppingBagIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon, TruckIcon,
   GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon, ActivityLogIcon, TicketIcon, WalletIcon, MapPinIcon
 } from './components/Icons';
@@ -57,6 +57,7 @@ import ProductHistoryReport from './components/modules/StockManagement/ProductHi
 import SalesReport from './components/modules/Sale/SalesReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
 import PurchaseManagement from './components/modules/Purchase/PurchaseManagement';
+import LCPurchaseManagement from './components/modules/LCPurchase/LCPurchaseManagement';
 import PurchaseReceiveManagement from './components/modules/PurchaseReceive/PurchaseReceiveManagement';
 import OrderManagement from './components/modules/Order/OrderManagement';
 import ProfitLoss from './components/modules/Sale/ProfitLoss';
@@ -312,6 +313,7 @@ function App() {
     }
 
     // Collapse all sidebar dropdowns on login
+    setPurchaseDropdownOpen(false);
     setStockDropdownOpen(false);
     setSaleDropdownOpen(false);
     setHrmsDropdownOpen(false);
@@ -359,6 +361,7 @@ function App() {
       }
 
       // Collapse all sidebar dropdowns on logout
+      setPurchaseDropdownOpen(false);
       setStockDropdownOpen(false);
       setSaleDropdownOpen(false);
       setHrmsDropdownOpen(false);
@@ -610,7 +613,7 @@ function App() {
         lc: hasRequestedLC,
         stock: hasRequestedStockMgmt || hasRequestedTransfer,
         transfer: hasRequestedTransfer,
-        sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder || hasRequestedPurchase || hasRequestedPurchaseReceive,
+        sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder,
         crm: false,
         paymentCollection: hasRequestedPaymentCollection,
         payToCustomer: hasRequestedPayToCustomer,
@@ -1070,6 +1073,10 @@ function App() {
   const [currentView, setCurrentView] = useState(() => {
     return localStorage.getItem('currentView') || 'dashboard';
   });
+  const [purchaseDropdownOpen, setPurchaseDropdownOpen] = useState(() => {
+    const saved = localStorage.getItem('currentView');
+    return saved === 'purchase-section' || saved === 'purchase-sale-section' || saved === 'purchase-receive-sale-section' || saved === 'lc-purchase-section';
+  });
   const [stockDropdownOpen, setStockDropdownOpen] = useState(false);
   const [saleDropdownOpen, setSaleDropdownOpen] = useState(false);
   const [hrmsDropdownOpen, setHrmsDropdownOpen] = useState(() => {
@@ -1097,6 +1104,7 @@ function App() {
   }, [isAuthenticated, currentUser, currentView]);
 
   const toggleSidebarDropdown = (dropdownName) => {
+    setPurchaseDropdownOpen(dropdownName === 'purchase' ? !purchaseDropdownOpen : false);
     setStockDropdownOpen(dropdownName === 'stock' ? !stockDropdownOpen : false);
     setSaleDropdownOpen(dropdownName === 'sale' ? !saleDropdownOpen : false);
     setHrmsDropdownOpen(dropdownName === 'hrms' ? !hrmsDropdownOpen : false);
@@ -3103,6 +3111,7 @@ function App() {
             refreshPendingIndicators={fetchPendingEntries}
           />
         );
+      case 'purchase-section':
       case 'purchase-sale-section':
         return (
           <PurchaseManagement
@@ -3111,6 +3120,14 @@ function App() {
             currentUser={currentUser}
             addNotification={addNotification}
             fetchStockRecords={fetchStockRecords}
+            refreshPendingIndicators={fetchPendingEntries}
+          />
+        );
+      case 'lc-purchase-section':
+        return (
+          <LCPurchaseManagement
+            currentUser={currentUser}
+            addNotification={addNotification}
             refreshPendingIndicators={fetchPendingEntries}
           />
         );
@@ -4186,19 +4203,90 @@ function App() {
                 </div>
               )}
 
-              {/* Sale */}
-              {(hasPermission(currentUser, 'sales', 'view') || hasPermission(currentUser, 'borderSale', 'view') || hasPermission(currentUser, 'order', 'view') || hasPermission(currentUser, 'purchase', 'view')) && (
+              {/* Purchase */}
+              {(hasPermission(currentUser, 'purchase', 'view') || hasPermission(currentUser, 'purchaseReceive', 'view') || (currentUser?.role || '').toLowerCase().trim() === 'admin' || currentUser?.username === 'admin') && (
                 <div>
                   <button
                     onClick={() => {
                       if (isMini) {
-                        handleViewChange(hasPermission(currentUser, 'sales', 'view') ? 'general-sale-section' : hasPermission(currentUser, 'borderSale', 'view') ? 'border-sale-section' : 'purchase-sale-section');
+                        handleViewChange(hasPermission(currentUser, 'purchase', 'view') ? 'purchase-sale-section' : 'purchase-receive-sale-section');
+                      } else {
+                        toggleSidebarDropdown('purchase');
+                      }
+                    }}
+                    title={isMini ? 'Purchase' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['purchase-section', 'purchase-sale-section', 'purchase-receive-sale-section', 'lc-purchase-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <div className="relative flex-shrink-0">
+                        <ShoppingBagIcon className="w-5 h-5 flex-shrink-0" />
+                        {(pendingModules?.purchase || pendingModules?.purchaseReceive) && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                        )}
+                      </div>
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        Purchase
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${purchaseDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && purchaseDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      {(hasPermission(currentUser, 'purchase', 'view') || hasPermission(currentUser, 'lcManagement', 'view') || (currentUser?.role || '').toLowerCase().trim() === 'admin' || currentUser?.username === 'admin') && (
+                        <button
+                          onClick={() => { handleViewChange('lc-purchase-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-purchase-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Purchase Deal</span>
+                          </div>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'purchase', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('purchase-sale-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'purchase-sale-section' || currentView === 'purchase-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Local Purchase</span>
+                          </div>
+                          {pendingModules?.purchase && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                      {(hasPermission(currentUser, 'purchaseReceive', 'view') || hasPermission(currentUser, 'purchase', 'view')) && (
+                        <button
+                          onClick={() => { handleViewChange('purchase-receive-sale-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'purchase-receive-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Purchase Receive</span>
+                          </div>
+                          {pendingModules?.purchaseReceive && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sale */}
+              {(hasPermission(currentUser, 'sales', 'view') || hasPermission(currentUser, 'borderSale', 'view') || hasPermission(currentUser, 'order', 'view') || hasPermission(currentUser, 'returnProduct', 'view')) && (
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange(hasPermission(currentUser, 'sales', 'view') ? 'general-sale-section' : hasPermission(currentUser, 'borderSale', 'view') ? 'border-sale-section' : 'order-sale-section');
                       } else {
                         toggleSidebarDropdown('sale');
                       }
                     }}
                     title={isMini ? 'Sale' : undefined}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView.includes('sale-section') ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['order-sale-section', 'general-sale-section', 'border-sale-section', 'return-product-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
                     <div className="flex items-center min-w-0">
                       <div className="relative flex-shrink-0">
@@ -4217,30 +4305,6 @@ function App() {
                   </button>
                   <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && saleDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                     <div className="pl-7 pr-2 space-y-1">
-                      {hasPermission(currentUser, 'purchase', 'view') && (
-                        <button
-                          onClick={() => { handleViewChange('purchase-sale-section'); }}
-                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'purchase-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                        >
-                          <div className="flex items-center">
-                            <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                            <span>Purchase</span>
-                          </div>
-                          {pendingModules?.purchase && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                        </button>
-                      )}
-                      {(hasPermission(currentUser, 'purchaseReceive', 'view') || hasPermission(currentUser, 'purchase', 'view')) && (
-                        <button
-                          onClick={() => { handleViewChange('purchase-receive-sale-section'); }}
-                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'purchase-receive-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                        >
-                          <div className="flex items-center">
-                            <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                            <span>Purchase Receive</span>
-                          </div>
-                          {pendingModules?.purchaseReceive && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                        </button>
-                      )}
                       {hasPermission(currentUser, 'order', 'view') && (
                         <button
                           onClick={() => { handleViewChange('order-sale-section'); }}
