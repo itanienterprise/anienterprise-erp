@@ -442,11 +442,12 @@ const CostOfGoods = ({
     };
 
     const handleLcSelect = (lc) => {
-        // Auto fill only importer when LC No is selected
+        // Auto fill importer and exporter when LC No is selected
         setFormData(prev => ({
             ...prev,
             lcNo: lc.lcNo || '',
-            importer: lc.importerName || lc.importer || prev.importer || ''
+            importer: lc.importerName || lc.importer || prev.importer || '',
+            exporter: lc.exporterName || lc.exporter || prev.exporter || ''
         }));
 
         setLcDropdownOpen(false);
@@ -485,7 +486,8 @@ const CostOfGoods = ({
             lcNo: prev.lcNo || '',
             // Do not show importer name from deal receive as requested
             importer: prev.lcNo ? (prev.importer || '') : '',
-            exporter: dr.exporter || prev.exporter,
+            // Do not auto-fill exporter from deal receive as requested
+            exporter: prev.lcNo ? (prev.exporter || '') : '',
             supplier: dr.supplier || dr.supplierName || prev.supplier,
             invoiceNo: dr.invoiceNo || prev.invoiceNo,
             truckNo: truckStr || prev.truckNo,
@@ -497,7 +499,8 @@ const CostOfGoods = ({
             truckChangeFare: dr.truckChangeFare !== undefined && dr.truckChangeFare !== '' ? dr.truckChangeFare : prev.truckChangeFare,
             slofCf: dr.slofCf !== undefined && dr.slofCf !== '' ? dr.slofCf : prev.slofCf,
             rebate: dr.rebate !== undefined && dr.rebate !== '' ? dr.rebate : (prev.rebate || '2.9'),
-            rsToDollar: dr.rsToDollar !== undefined && dr.rsToDollar !== '' ? dr.rsToDollar : prev.rsToDollar,
+            // Do not auto-fill rsToDollar as requested
+            rsToDollar: prev.rsToDollar || '',
             dollarRateBdt: dr.dollarRateBdt !== undefined && dr.dollarRateBdt !== '' ? dr.dollarRateBdt : prev.dollarRateBdt,
             cfOtherExpense: autoCnfExpense,
             country: dr.country || prev.country || 'INDIA',
@@ -621,27 +624,31 @@ const CostOfGoods = ({
         }
     }, [formData.product, products, editingId]);
 
-    // Filter suppliers where supplier.exporter or supplier.exporters includes selected exporter
-    const filteredSuppliersForExporter = suppliers.filter(s => {
-        if (!formData.exporter) return false;
+    // Filter suppliers where supplier.exporter or supplier.exporters includes selected exporter if available, otherwise return all suppliers
+    const filteredSuppliersForExporter = useMemo(() => {
+        if (!formData.exporter) return suppliers;
         const targetExp = (formData.exporter || '').trim().toLowerCase();
-        if (!targetExp) return false;
+        if (!targetExp) return suppliers;
 
-        if (Array.isArray(s.exporters) && s.exporters.length > 0) {
-            if (s.exporters.some(exp => (exp || '').trim().toLowerCase() === targetExp)) {
-                return true;
+        const filtered = suppliers.filter(s => {
+            if (Array.isArray(s.exporters) && s.exporters.length > 0) {
+                if (s.exporters.some(exp => (exp || '').trim().toLowerCase() === targetExp)) {
+                    return true;
+                }
             }
-        }
 
-        if (s.exporter) {
-            const list = s.exporter.split(',').map(str => str.trim().toLowerCase()).filter(Boolean);
-            if (list.includes(targetExp)) {
-                return true;
+            if (s.exporter) {
+                const list = s.exporter.split(',').map(str => str.trim().toLowerCase()).filter(Boolean);
+                if (list.includes(targetExp)) {
+                    return true;
+                }
             }
-        }
 
-        return false;
-    });
+            return false;
+        });
+
+        return filtered.length > 0 ? filtered : suppliers;
+    }, [suppliers, formData.exporter]);
 
     // Get products for the currently selected LC
     const getSelectedLcProducts = () => {
@@ -862,8 +869,8 @@ const CostOfGoods = ({
         }
         if (data.lcNo) {
             check(data.importer, 'Importer');
+            check(data.exporter, 'Exporter');
         }
-        check(data.exporter, 'Exporter');
         check(data.supplier, 'Supplier');
         check(data.invoiceNo, 'Invoice No');
         check(data.truckNo, 'Truck No');
@@ -2044,9 +2051,9 @@ const CostOfGoods = ({
                             <div className="grid grid-cols-2 gap-2">
                                 {/* 1st: Deal Receive ID Dropdown */}
                                 <div className="space-y-1.5 relative" ref={dealReceiveDropdownRef}>
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="DEAL RECEIVE ID">
-                                        Deal Receive ID
-                                    </label>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="DEAL RECEIVE ID">
+                                    Deal Receive ID
+                                </label>
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -2135,13 +2142,13 @@ const CostOfGoods = ({
                                             )}
                                         </div>
                                     )}
-                                </div>
+                            </div>
 
-                                {/* 2nd: LC No Searchable Dropdown */}
-                                <div className="space-y-1.5 relative" ref={lcDropdownRef}>
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="LC NO">
-                                        LC No
-                                    </label>
+                            {/* LC No Searchable Dropdown */}
+                            <div className="space-y-1.5 relative" ref={lcDropdownRef}>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="LC NO">
+                                    LC No
+                                </label>
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -2230,7 +2237,7 @@ const CostOfGoods = ({
                                     type="text"
                                     value={formData.exporter}
                                     readOnly
-                                    placeholder={formData.exporter ? '' : 'Select Deal Receive ID first'}
+                                    placeholder={formData.exporter ? '' : 'Select LC No first'}
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 cursor-not-allowed outline-none"
                                 />
                             </div>
@@ -2241,7 +2248,7 @@ const CostOfGoods = ({
                                 <div className="relative">
                                     <input
                                         type="text"
-                                        placeholder={formData.exporter ? "Search & Select Supplier..." : "Select Deal Receive ID first"}
+                                        placeholder="Search & Select Supplier..."
                                         value={supplierDropdownOpen ? supplierSearchQuery : (formData.supplier || '')}
                                         onChange={(e) => {
                                             const val = e.target.value;
@@ -2251,21 +2258,18 @@ const CostOfGoods = ({
                                             if (!supplierDropdownOpen) setSupplierDropdownOpen(true);
                                         }}
                                         onFocus={() => {
-                                            if (!formData.exporter) return;
                                             setSupplierDropdownOpen(true);
                                             setSupplierSearchQuery('');
                                             setHighlightedSupplierIndex(-1);
                                         }}
                                         onKeyDown={handleSupplierKeyDown}
                                         autoComplete="off"
-                                        disabled={!formData.exporter}
-                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10 ${!formData.exporter ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-100' : ''
-                                            }`}
+                                        className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10"
                                         required
                                     />
                                     <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 </div>
-                                {supplierDropdownOpen && formData.exporter && (
+                                {supplierDropdownOpen && (
                                     <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] max-h-56 overflow-y-auto py-1">
                                         {filteredSuppliersForExporter.filter(s => (s.name || '').toLowerCase().includes(supplierSearchQuery.toLowerCase())).length > 0 ? (
                                             filteredSuppliersForExporter.filter(s => (s.name || '').toLowerCase().includes(supplierSearchQuery.toLowerCase())).map((sup, idx) => (
@@ -2292,7 +2296,7 @@ const CostOfGoods = ({
                                         ) : (
                                             <div className="px-5 py-6 text-center text-gray-400">
                                                 <BoxIcon className="w-7 h-7 mb-2 mx-auto opacity-20" />
-                                                <p className="text-xs font-medium">No suppliers found for "{formData.exporter}"</p>
+                                                <p className="text-xs font-medium">No suppliers found</p>
                                             </div>
                                         )}
                                     </div>
