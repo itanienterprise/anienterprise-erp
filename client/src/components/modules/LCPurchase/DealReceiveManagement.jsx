@@ -7,6 +7,7 @@ import {
     SearchIcon, PlusIcon, FunnelIcon, BarChartIcon, XIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, BoxIcon, TrashIcon, EditIcon, EyeIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
+import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import PaginationBar, { ALL_PAGE_SIZE } from '../../shared/PaginationBar';
 import '../Sale/SaleManagement.css';
@@ -260,6 +261,11 @@ const SearchableFilterSelect = ({
 };
 
 const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingIndicators }) => {
+    const canAdd = hasPermission(currentUser, 'dealReceive', 'add');
+    const canEdit = hasPermission(currentUser, 'dealReceive', 'edit');
+    const canDelete = hasPermission(currentUser, 'dealReceive', 'delete');
+    const canShowEntryBy = hasPermission(currentUser, 'dealReceive', 'showEntryBy') || currentUser?.role === 'Admin' || currentUser?.role === 'Incharge';
+
     const [searchQuery, setSearchQuery] = useState('');
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
@@ -937,7 +943,11 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                 rateKg: calc.rateKg,
                 rateKgUsd: calc.rateKgUsd,
                 rateKgBdt: calc.rateKgBdt,
-                costingKg: calc.costingKg
+                costingKg: calc.costingKg,
+                ...(editingId
+                    ? { updatedBy: currentUser?.name || currentUser?.username || 'Admin' }
+                    : { createdBy: currentUser?.name || currentUser?.username || 'Admin' }
+                )
             };
 
             if (editingId) {
@@ -1175,13 +1185,15 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                     </button>
 
                     {/* Add Deal Receive Button */}
-                    <button
-                        type="button"
-                        onClick={handleOpenAddForm}
-                        className="flex-1 md:flex-none w-full md:w-auto justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 flex items-center gap-2 text-sm h-[42px]"
-                    >
-                        <PlusIcon className="w-4 h-4" /> <span>Add Deal Receive</span>
-                    </button>
+                    {canAdd && (
+                        <button
+                            type="button"
+                            onClick={handleOpenAddForm}
+                            className="flex-1 md:flex-none w-full md:w-auto justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 flex items-center gap-2 text-sm h-[42px]"
+                        >
+                            <PlusIcon className="w-4 h-4" /> <span>Add Deal Receive</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -2098,22 +2110,26 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                                             >
                                                                 <EyeIcon className="w-4 h-4" />
                                                             </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleEdit(item)}
-                                                                className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
-                                                                title="Edit Record"
-                                                            >
-                                                                <EditIcon className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleDelete(item._id)}
-                                                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                                                                title="Delete Record"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
+                                                            {canEdit && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleEdit(item)}
+                                                                    className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                                                                    title="Edit Record"
+                                                                >
+                                                                    <EditIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            {canDelete && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDelete(item._id)}
+                                                                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                                                                    title="Delete Record"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -2398,23 +2414,34 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                         </span>
                                     </div>
                                 </div>
+
+                                {canShowEntryBy && (viewData.createdBy || viewData.createdAt) && (
+                                    <div className="flex items-center justify-between text-[11px] text-gray-400 pt-3 border-t border-gray-100 mt-4">
+                                        <span>Created By: <strong className="text-gray-600">{viewData.createdBy || 'Admin'}</strong></span>
+                                        {viewData.createdAt && (
+                                            <span>Created: {formatDate(viewData.createdAt)}</span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
                         {/* Modal Actions */}
                         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50/40">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const rec = viewData;
-                                    setViewData(null);
-                                    handleEdit(rec);
-                                }}
-                                className="px-5 py-2.5 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs hover:bg-blue-100 transition-colors flex items-center gap-1.5"
-                            >
-                                <EditIcon className="w-3.5 h-3.5" />
-                                Edit Record
-                            </button>
+                            {canEdit && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const rec = viewData;
+                                        setViewData(null);
+                                        handleEdit(rec);
+                                    }}
+                                    className="px-5 py-2.5 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                                >
+                                    <EditIcon className="w-3.5 h-3.5" />
+                                    Edit Record
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => setViewData(null)}

@@ -4243,7 +4243,7 @@ function App() {
                   </button>
                   <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && purchaseDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                     <div className="pl-7 pr-2 space-y-1">
-                      {(hasPermission(currentUser, 'purchase', 'view') || hasPermission(currentUser, 'lcManagement', 'view') || (currentUser?.role || '').toLowerCase().trim() === 'admin' || currentUser?.username === 'admin') && (
+                      {hasPermission(currentUser, 'lcPurchase', 'view') && (
                         <button
                           onClick={() => { handleViewChange('lc-purchase-section'); }}
                           className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-purchase-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
@@ -4254,13 +4254,13 @@ function App() {
                           </div>
                         </button>
                       )}
-                      {(hasPermission(currentUser, 'purchase', 'view') || hasPermission(currentUser, 'lcManagement', 'view') || (currentUser?.role || '').toLowerCase().trim() === 'admin' || currentUser?.username === 'admin') && (
+                      {hasPermission(currentUser, 'dealReceive', 'view') && (
                         <button
                           onClick={() => { handleViewChange('deal-receive-section'); }}
                           className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'deal-receive-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                         >
                           <div className="flex items-center">
-                            <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <TruckIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                             <span>Deal Receive</span>
                           </div>
                         </button>

@@ -115,6 +115,20 @@ export const MODULES_LIST = [
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
+    {
+        key: 'lcPurchase',
+        label: 'Purchase Deal',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
+    {
+        key: 'dealReceive',
+        label: 'Deal Receive',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     { key: 'product', label: 'Product Management' },
     { key: 'customer', label: 'Customer Management' },
     {
@@ -368,7 +382,7 @@ export const getDefaultPermissionsForRole = (role) => {
         });
     } else if (roleLower === 'lc manager') {
         // LC Manager can access port, cnf, ip, pi, packing list, tr, lc, warehouse, lcManagement, purchase, transfer
-        const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'transfer', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods', 'purchase', 'purchaseReceive'];
+        const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'transfer', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods', 'purchase', 'purchaseReceive', 'lcPurchase', 'dealReceive'];
         lcModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -381,7 +395,7 @@ export const getDefaultPermissionsForRole = (role) => {
         });
     } else if (roleLower === 'sales manager') {
         // Sales Manager can access products, customers, sales, borderSale, order, purchase, payment, bank, deposit, withdrawal, bankStatement, pattyCash, insurance, insurancePayment, returnProduct, transfer
-        const salesModules = ['product', 'customer', 'sales', 'borderSale', 'order', 'purchase', 'purchaseReceive', 'transfer', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'bankStatement', 'pattyCash', 'insurance', 'insurancePayment', 'returnProduct'];
+        const salesModules = ['product', 'customer', 'sales', 'borderSale', 'order', 'purchase', 'purchaseReceive', 'transfer', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'bankStatement', 'pattyCash', 'insurance', 'insurancePayment', 'returnProduct', 'lcPurchase', 'dealReceive'];
         salesModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -410,7 +424,7 @@ export const getDefaultPermissionsForRole = (role) => {
         });
     } else if (roleLower === 'accounts manager') {
         // Accounts Manager can access paymentCollection, payToCustomer, bank, deposit, withdrawal, bankStatement, pattyCash, insurance, insurancePayment, cnfPayment, returnProduct, purchase
-        const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'bankStatement', 'pattyCash', 'insurance', 'insurancePayment', 'cnfPayment', 'returnProduct', 'costOfGoods', 'purchase', 'purchaseReceive'];
+        const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'bankStatement', 'pattyCash', 'insurance', 'insurancePayment', 'cnfPayment', 'returnProduct', 'costOfGoods', 'purchase', 'purchaseReceive', 'lcPurchase', 'dealReceive'];
         accModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -427,7 +441,7 @@ export const getDefaultPermissionsForRole = (role) => {
         defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false };
     } else if (roleLower === 'border manager') {
         // Border Manager can access port, cnf, ip, lcReceive, warehouse, lcManagement, purchase, transfer, borderSale
-        const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'transfer', 'lcManagement', 'lcGp', 'lcExpense', 'purchase', 'purchaseReceive', 'borderSale'];
+        const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'transfer', 'lcManagement', 'lcGp', 'lcExpense', 'purchase', 'purchaseReceive', 'borderSale', 'lcPurchase', 'dealReceive'];
         borderModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -649,6 +663,37 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
             if (defaults.transfer && (defaults.transfer.approve || defaults.transfer.special)) return true;
             if (defaults.warehouse && (defaults.warehouse.approve || defaults.warehouse.special)) return true;
         }
+    }
+
+    // Special fallback for lcPurchase and dealReceive if not explicitly defined in custom permissions
+    if (moduleName === 'lcPurchase' || moduleName === 'purchaseDeal') {
+        if (currentUser.permissions) {
+            if (currentUser.permissions.lcPurchase && currentUser.permissions.lcPurchase[checkAction] !== undefined) {
+                return !!currentUser.permissions.lcPurchase[checkAction];
+            }
+            if (currentUser.permissions.purchaseDeal && currentUser.permissions.purchaseDeal[checkAction] !== undefined) {
+                return !!currentUser.permissions.purchaseDeal[checkAction];
+            }
+        }
+        const defaults = getDefaultPermissionsForRole(currentUser.role);
+        if (defaults.lcPurchase && defaults.lcPurchase[checkAction] !== undefined) {
+            return !!defaults.lcPurchase[checkAction];
+        }
+        if (defaults.purchaseDeal && defaults.purchaseDeal[checkAction] !== undefined) {
+            return !!defaults.purchaseDeal[checkAction];
+        }
+        return hasPermission(currentUser, 'purchase', action) || hasPermission(currentUser, 'lcManagement', action);
+    }
+
+    if (moduleName === 'dealReceive') {
+        if (currentUser.permissions && currentUser.permissions.dealReceive && currentUser.permissions.dealReceive[checkAction] !== undefined) {
+            return !!currentUser.permissions.dealReceive[checkAction];
+        }
+        const defaults = getDefaultPermissionsForRole(currentUser.role);
+        if (defaults.dealReceive && defaults.dealReceive[checkAction] !== undefined) {
+            return !!defaults.dealReceive[checkAction];
+        }
+        return hasPermission(currentUser, 'purchase', action) || hasPermission(currentUser, 'lcManagement', action);
     }
 
     // 2. Custom permission check
