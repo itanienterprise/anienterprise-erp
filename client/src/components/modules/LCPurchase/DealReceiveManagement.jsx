@@ -571,14 +571,13 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
         const autoProduct = deal.productName || '';
         const autoBrand = deal.brand || '';
         const autoSupplier = deal.supplierName || '';
-        const autoExporter = deal.exporter || '';
 
         setFormData(prev => ({
             ...prev,
             purchaseId: cleanPId,
             dealRefId: deal._id,
             importer: deal.importer || 'ANI ENTERPRISE',
-            exporter: autoExporter,
+            exporter: '',
             supplier: autoSupplier,
             product: autoProduct,
             brand: autoBrand,
@@ -612,14 +611,12 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
         }
     };
 
-    // Filter suppliers for Exporter
-    const filteredSuppliersForExporter = useMemo(() => {
-        if (!formData.exporter) return suppliersList;
-        const target = formData.exporter.trim().toLowerCase();
-        return suppliersList.filter(s =>
-            (s.exporter || s.exporterName || '').trim().toLowerCase() === target
-        );
-    }, [suppliersList, formData.exporter]);
+    // Filter suppliers for searchable dropdown
+    const filteredSuppliers = useMemo(() => {
+        if (!supplierSearchQuery.trim()) return suppliersList;
+        const q = supplierSearchQuery.toLowerCase().trim();
+        return suppliersList.filter(s => (s.name || '').toLowerCase().includes(q));
+    }, [suppliersList, supplierSearchQuery]);
 
     // Filter brands for selected product
     const filteredBrands = useMemo(() => {
@@ -774,7 +771,6 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
         let count = 0;
         if (filters.quickRange !== 'all' || filters.startDate || filters.endDate) count += 1;
         if (filters.purchaseId && filters.purchaseId.length > 0) count += filters.purchaseId.length;
-        if (filters.exporter && filters.exporter.length > 0) count += filters.exporter.length;
         if (filters.supplierName && filters.supplierName.length > 0) count += filters.supplierName.length;
         if (filters.productName && filters.productName.length > 0) count += filters.productName.length;
         if (filters.brand && filters.brand.length > 0) count += filters.brand.length;
@@ -1130,16 +1126,6 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                         multiple={true}
                                     />
 
-                                    {/* Multi-select Exporter Filter */}
-                                    <SearchableFilterSelect
-                                        label="Exporter"
-                                        value={filters.exporter}
-                                        onChange={(val) => setFilters(prev => ({ ...prev, exporter: val }))}
-                                        options={filterOptions.exporters}
-                                        placeholder="All Exporters"
-                                        multiple={true}
-                                    />
-
                                     {/* Multi-select Supplier Filter */}
                                     <SearchableFilterSelect
                                         label="Supplier"
@@ -1336,7 +1322,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                                             </span>
                                                         </div>
                                                         <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">
-                                                            {deal.productName || '—'} ({deal.brand || 'No Brand'}) • {deal.supplierName || deal.exporter || '—'}
+                                                            {deal.productName || '—'} ({deal.brand || 'No Brand'}) • {deal.supplierName || '—'}
                                                         </div>
                                                     </button>
                                                 );
@@ -1368,37 +1354,13 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                 />
                             </div>
 
-                            {/* Importer (Auto Fill) */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Importer (Auto fill)</label>
-                                <input
-                                    type="text"
-                                    value={formData.importer}
-                                    readOnly
-                                    placeholder="Select Purchase Deal first"
-                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 cursor-not-allowed outline-none"
-                                />
-                            </div>
-
-                            {/* Exporter (Auto Fill) */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Exporter (Auto fill)</label>
-                                <input
-                                    type="text"
-                                    value={formData.exporter}
-                                    readOnly
-                                    placeholder="Select Purchase Deal first"
-                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 cursor-not-allowed outline-none"
-                                />
-                            </div>
-
                             {/* Supplier Searchable Dropdown */}
                             <div className="space-y-1.5 relative" ref={supplierDropdownRef}>
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Supplier</label>
                                 <div className="relative">
                                     <input
                                         type="text"
-                                        placeholder={formData.exporter ? "Search & Select Supplier..." : "Select Deal / Exporter first"}
+                                        placeholder="Search & Select Supplier..."
                                         value={supplierDropdownOpen ? supplierSearchQuery : (formData.supplier || '')}
                                         onChange={(e) => {
                                             const val = e.target.value;
@@ -1408,22 +1370,19 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                             if (!supplierDropdownOpen) setSupplierDropdownOpen(true);
                                         }}
                                         onFocus={() => {
-                                            if (!formData.exporter) return;
                                             setSupplierDropdownOpen(true);
                                             setSupplierSearchQuery('');
                                             setHighlightedSupplierIndex(-1);
                                         }}
                                         autoComplete="off"
-                                        disabled={!formData.exporter}
-                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10 ${!formData.exporter ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-100' : ''
-                                            }`}
+                                        className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10"
                                     />
                                     <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 </div>
-                                {supplierDropdownOpen && formData.exporter && (
+                                {supplierDropdownOpen && (
                                     <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] max-h-56 overflow-y-auto py-1">
-                                        {filteredSuppliersForExporter.filter(s => (s.name || '').toLowerCase().includes(supplierSearchQuery.toLowerCase())).length > 0 ? (
-                                            filteredSuppliersForExporter.filter(s => (s.name || '').toLowerCase().includes(supplierSearchQuery.toLowerCase())).map((sup, idx) => (
+                                        {filteredSuppliers.length > 0 ? (
+                                            filteredSuppliers.map((sup, idx) => (
                                                 <button
                                                     key={sup._id}
                                                     type="button"
@@ -1447,7 +1406,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                         ) : (
                                             <div className="px-5 py-6 text-center text-gray-400">
                                                 <BoxIcon className="w-7 h-7 mb-2 mx-auto opacity-20" />
-                                                <p className="text-xs font-medium">No suppliers found for "{formData.exporter}"</p>
+                                                <p className="text-xs font-medium">No suppliers found</p>
                                             </div>
                                         )}
                                     </div>
@@ -1904,19 +1863,6 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                 </span>
                             ))}
 
-                            {filters.exporter && filters.exporter.map((exp) => (
-                                <span key={exp} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-700 font-bold shadow-xs">
-                                    Exporter: {exp}
-                                    <button
-                                        type="button"
-                                        onClick={() => setFilters(prev => ({ ...prev, exporter: prev.exporter.filter(x => x !== exp) }))}
-                                        className="p-0.5 hover:bg-blue-100 rounded-full transition-colors"
-                                    >
-                                        <XIcon className="w-3 h-3" />
-                                    </button>
-                                </span>
-                            ))}
-
                             {filters.supplierName && filters.supplierName.map((sup) => (
                                 <span key={sup} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-700 font-bold shadow-xs">
                                     Supplier: {sup}
@@ -1990,12 +1936,6 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                                 <SortIndicator sortKey="purchaseId" currentSortKey={sortConfig.key} direction={sortConfig.direction} />
                                             </div>
                                         </th>
-                                        <th onClick={() => requestSort('exporter')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
-                                            <div className="flex items-center">
-                                                <span>Exporter</span>
-                                                <SortIndicator sortKey="exporter" currentSortKey={sortConfig.key} direction={sortConfig.direction} />
-                                            </div>
-                                        </th>
                                         <th onClick={() => requestSort('supplier')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
                                             <div className="flex items-center">
                                                 <span>Supplier</span>
@@ -2044,13 +1984,13 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                 <tbody className="divide-y divide-gray-100">
                                     {isLoading ? (
                                         <tr>
-                                            <td colSpan={13} className="px-6 py-12 text-center text-gray-400 font-medium text-sm whitespace-nowrap">
+                                            <td colSpan={12} className="px-6 py-12 text-center text-gray-400 font-medium text-sm whitespace-nowrap">
                                                 Loading Deal Receive records...
                                             </td>
                                         </tr>
                                     ) : filteredRecords.length === 0 ? (
                                         <tr>
-                                            <td colSpan={13} className="px-6 py-16 text-center text-gray-400">
+                                            <td colSpan={12} className="px-6 py-16 text-center text-gray-400">
                                                 <div className="flex flex-col items-center justify-center gap-2">
                                                     <BoxIcon className="w-10 h-10 text-gray-300 stroke-1" />
                                                     <span className="font-semibold text-gray-500">No Deal Receive records found</span>
@@ -2080,7 +2020,6 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                                         </button>
                                                     </td>
                                                     <td className="px-4 py-3.5 text-sm font-bold text-blue-600 whitespace-nowrap">{(item.purchaseId || '').replace(/-/g, '') || '—'}</td>
-                                                    <td className="px-4 py-3.5 text-sm font-semibold text-gray-800 whitespace-nowrap">{item.exporter || '—'}</td>
                                                     <td className="px-4 py-3.5 text-sm font-semibold text-gray-800 whitespace-nowrap">{item.supplier || item.supplierName || '—'}</td>
                                                     <td className="px-4 py-3.5 text-sm font-bold text-gray-900 whitespace-nowrap">{item.product || item.productName || '—'}</td>
                                                     <td className="px-4 py-3.5 text-sm font-semibold text-gray-700 whitespace-nowrap">{item.brand || '—'}</td>
@@ -2263,14 +2202,6 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                     <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase block">Invoice No</span>
                                         <span className="text-sm font-semibold text-gray-800">{viewData.invoiceNo || '—'}</span>
-                                    </div>
-                                    <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Importer</span>
-                                        <span className="text-sm font-semibold text-gray-800">{viewData.importer || 'ANI ENTERPRISE'}</span>
-                                    </div>
-                                    <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Exporter</span>
-                                        <span className="text-sm font-semibold text-gray-800">{viewData.exporter || '—'}</span>
                                     </div>
                                     <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase block">Supplier</span>

@@ -476,37 +476,15 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
         });
     }, [exportersList, exporterSearch]);
 
-    // Filter suppliers where supplier.exporter or supplier.exporters includes selected exporter
-    const suppliersForSelectedExporter = useMemo(() => {
-        if (!formData.exporter) return [];
-        const targetExp = (formData.exporter || '').trim().toLowerCase();
-        if (!targetExp) return [];
-
-        return suppliersList.filter(s => {
-            if (Array.isArray(s.exporters) && s.exporters.length > 0) {
-                if (s.exporters.some(exp => (exp || '').trim().toLowerCase() === targetExp)) {
-                    return true;
-                }
-            }
-            if (s.exporter) {
-                const list = String(s.exporter).split(',').map(str => str.trim().toLowerCase()).filter(Boolean);
-                if (list.includes(targetExp)) {
-                    return true;
-                }
-            }
-            return false;
-        });
-    }, [suppliersList, formData.exporter]);
-
-    // Search within suppliers filtered for the selected exporter
+    // Search within all suppliers
     const filteredSuppliers = useMemo(() => {
         const q = (supplierSearch || '').toLowerCase().trim();
-        return suppliersForSelectedExporter.filter(s => {
-            const name = (s.name || s.companyName || '').toLowerCase();
+        return suppliersList.filter(s => {
+            const name = (s.name || s.companyName || s.customerName || '').toLowerCase();
             const contact = (s.contactPerson || '').toLowerCase();
-            return name.includes(q) || contact.includes(q);
+            return !q || name.includes(q) || contact.includes(q);
         });
-    }, [suppliersForSelectedExporter, supplierSearch]);
+    }, [suppliersList, supplierSearch]);
 
     const filteredProducts = useMemo(() => {
         const q = (productSearch || '').toLowerCase().trim();
@@ -1010,7 +988,6 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
         filters.startDate ||
         filters.endDate ||
         (filters.quickRange && filters.quickRange !== 'all') ||
-        isFilterActive(filters.exporter) ||
         isFilterActive(filters.supplierName) ||
         isFilterActive(filters.productName) ||
         isFilterActive(filters.brand) ||
@@ -1021,7 +998,6 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
         (filters.startDate ? 1 : 0) +
         (filters.endDate ? 1 : 0) +
         (filters.quickRange && filters.quickRange !== 'all' && !filters.startDate && !filters.endDate ? 1 : 0) +
-        (isFilterActive(filters.exporter) ? 1 : 0) +
         (isFilterActive(filters.supplierName) ? 1 : 0) +
         (isFilterActive(filters.productName) ? 1 : 0) +
         (isFilterActive(filters.brand) ? 1 : 0) +
@@ -1169,15 +1145,6 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                         </div>
                                     </div>
 
-                                    {/* Exporter Filter */}
-                                    <SearchableFilterSelect
-                                        label="Exporter"
-                                        value={filters.exporter}
-                                        onChange={(val) => handleFilterChange('exporter', val)}
-                                        options={uniqueExporters}
-                                        placeholder="All Exporters"
-                                    />
-
                                     {/* Supplier Filter */}
                                     <SearchableFilterSelect
                                         label="Supplier"
@@ -1263,12 +1230,6 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                         <SortIndicator sortKey="purchaseId" currentSortKey={sortConfig.key} direction={sortConfig.direction} />
                                     </div>
                                 </th>
-                                <th onClick={() => requestSort('exporter')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
-                                    <div className="flex items-center">
-                                        <span>Exporter</span>
-                                        <SortIndicator sortKey="exporter" currentSortKey={sortConfig.key} direction={sortConfig.direction} />
-                                    </div>
-                                </th>
                                 <th onClick={() => requestSort('supplierName')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
                                     <div className="flex items-center">
                                         <span>Supplier</span>
@@ -1323,13 +1284,13 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                         <tbody className="divide-y divide-gray-100">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={13} className="px-6 py-12 text-center text-gray-400 font-medium text-sm whitespace-nowrap">
+                                    <td colSpan={12} className="px-6 py-12 text-center text-gray-400 font-medium text-sm whitespace-nowrap">
                                         Loading Purchase Deal records...
                                     </td>
                                 </tr>
                             ) : filteredRecords.length === 0 ? (
                                 <tr>
-                                    <td colSpan={13} className="px-6 py-16 text-center text-gray-400">
+                                    <td colSpan={12} className="px-6 py-16 text-center text-gray-400">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <BoxIcon className="w-10 h-10 text-gray-300 stroke-1" />
                                             <span className="font-semibold text-gray-500">No Purchase Deal records found</span>
@@ -1364,7 +1325,6 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                                     {(item.purchaseId || '').replace(/-/g, '') || '—'}
                                                 </button>
                                             </td>
-                                            <td className="px-4 py-3.5 text-sm font-semibold text-gray-800 whitespace-nowrap">{item.exporter || '—'}</td>
                                             <td className="px-4 py-3.5 text-sm font-semibold text-gray-800 whitespace-nowrap">{item.supplierName || '—'}</td>
                                             <td className="px-4 py-3.5 text-sm font-bold text-gray-900 whitespace-nowrap">{item.productName || '—'}</td>
                                             <td className="px-4 py-3.5 text-sm font-semibold text-gray-700 whitespace-nowrap">{item.brand || '—'}</td>
@@ -1482,7 +1442,7 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
 
                         {/* Modal Form */}
                         <form onSubmit={handleFormSubmit} className="space-y-5">
-                            {/* Row 1: Date & Exporter */}
+                            {/* Row 1: Date & Supplier Name */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="relative font-sans [&_.date-picker-input]:h-[42px] [&_.date-picker-input]:py-2.5 [&_.date-picker-input]:px-3.5 [&_.date-picker-input]:rounded-xl [&_.date-picker-input]:text-sm [&_.date-picker-input]:font-semibold [&_.date-picker-container>label]:mb-1">
                                     <CustomDatePicker
@@ -1497,83 +1457,74 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                 </div>
 
                                 <div className="relative font-sans">
-                                    <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Exporter</label>
+                                    <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Supplier Name</label>
                                     <div className="relative">
                                         <input
                                             type="text"
-                                            value={formData.exporter}
+                                            value={formData.supplierName}
                                             onChange={(e) => {
                                                 const val = e.target.value;
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    exporter: val,
-                                                    supplierName: prev.exporter !== val ? '' : prev.supplierName
-                                                }));
-                                                setExporterSearch(val);
-                                                setIsExporterDropdownOpen(true);
+                                                setFormData({ ...formData, supplierName: val });
+                                                setSupplierSearch(val);
+                                                setIsSupplierDropdownOpen(true);
                                             }}
                                             onFocus={() => {
-                                                setExporterSearch(formData.exporter || '');
-                                                setIsExporterDropdownOpen(true);
+                                                setSupplierSearch(formData.supplierName || '');
+                                                setIsSupplierDropdownOpen(true);
                                             }}
-                                            placeholder="Select or enter Exporter"
+                                            placeholder="Select or enter Supplier Name"
                                             required
-                                            className="w-full h-[42px] px-3.5 py-2.5 pr-14 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20 bg-white"
+                                            className="w-full h-[42px] px-3.5 py-2.5 pr-14 border border-gray-200 rounded-xl text-sm font-semibold outline-none transition-all bg-white text-gray-900 focus:ring-2 focus:ring-blue-500/20"
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                            {formData.exporter && (
+                                            {formData.supplierName && (
                                                 <button
                                                     type="button"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setFormData(prev => ({ ...prev, exporter: '', supplierName: '' }));
-                                                        setExporterSearch('');
+                                                        setFormData(prev => ({ ...prev, supplierName: '' }));
                                                         setSupplierSearch('');
                                                     }}
                                                     className="p-0.5 text-gray-400 hover:text-red-500 rounded-full transition-colors"
-                                                    title="Clear Exporter"
+                                                    title="Clear Supplier"
                                                 >
                                                     <XIcon className="w-3.5 h-3.5" />
                                                 </button>
                                             )}
                                             <button
                                                 type="button"
-                                                onClick={() => setIsExporterDropdownOpen(!isExporterDropdownOpen)}
+                                                onClick={() => setIsSupplierDropdownOpen(!isSupplierDropdownOpen)}
                                                 className="text-gray-400 hover:text-blue-600 transition-colors"
                                             >
-                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${isExporterDropdownOpen ? 'rotate-180' : ''}`} />
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${isSupplierDropdownOpen ? 'rotate-180' : ''}`} />
                                             </button>
                                         </div>
                                     </div>
 
-                                    {isExporterDropdownOpen && (
+                                    {isSupplierDropdownOpen && (
                                         <>
-                                            <div className="fixed inset-0 z-10" onClick={() => setIsExporterDropdownOpen(false)} />
+                                            <div className="fixed inset-0 z-10" onClick={() => setIsSupplierDropdownOpen(false)} />
                                             <div className="absolute z-20 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1 animate-in fade-in duration-150">
-                                                {filteredExporters.length > 0 ? (
-                                                    filteredExporters.map((exp, expIdx) => {
-                                                        const expName = exp.name || '';
+                                                {filteredSuppliers.length > 0 ? (
+                                                    filteredSuppliers.map((s, sIdx) => {
+                                                        const sName = s.name || s.companyName || s.customerName || '';
                                                         return (
                                                             <button
-                                                                key={exp._id || expIdx}
+                                                                key={s._id || sIdx}
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setFormData(prev => ({
-                                                                        ...prev,
-                                                                        exporter: expName,
-                                                                        supplierName: prev.exporter !== expName ? '' : prev.supplierName
-                                                                    }));
+                                                                    setFormData({ ...formData, supplierName: sName });
                                                                     setSupplierSearch('');
-                                                                    setIsExporterDropdownOpen(false);
+                                                                    setIsSupplierDropdownOpen(false);
                                                                 }}
-                                                                className={`w-full px-4 py-2 text-left text-sm font-semibold hover:bg-blue-50/80 transition-colors border-b border-gray-50 last:border-0 flex items-center justify-between ${
-                                                                    formData.exporter === expName ? 'bg-blue-50/60 text-blue-600' : 'text-gray-800'
+                                                                className={`w-full px-4 py-2.5 text-left text-sm font-semibold hover:bg-blue-50/80 transition-colors border-b border-gray-50 last:border-0 flex items-center justify-between ${
+                                                                    formData.supplierName === sName ? 'bg-blue-50/60 text-blue-600' : 'text-gray-800'
                                                                 }`}
                                                             >
-                                                                <span>{expName}</span>
-                                                                {exp.contactPerson && (
+                                                                <span>{sName}</span>
+                                                                {s.contactPerson && (
                                                                     <span className="text-[11px] font-normal text-gray-400">
-                                                                        {exp.contactPerson}
+                                                                        {s.contactPerson} {s.phone ? `(${s.phone})` : ''}
                                                                     </span>
                                                                 )}
                                                             </button>
@@ -1581,122 +1532,15 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                                     })
                                                 ) : (
                                                     <div className="px-4 py-3 text-xs text-gray-400 text-center font-medium">
-                                                        {exporterSearch ? `Press Enter to use "${exporterSearch}"` : 'No exporters found'}
+                                                        {supplierSearch
+                                                            ? `Press Enter to use "${supplierSearch}"`
+                                                            : 'No suppliers found. Enter custom supplier name.'}
                                                     </div>
                                                 )}
                                             </div>
                                         </>
                                     )}
                                 </div>
-                            </div>
-
-                            {/* Row 2: Supplier Name (Filtered for Selected Exporter) */}
-                            <div className="relative font-sans">
-                                <div className="flex items-center justify-between mb-1">
-                                    <label className="text-xs font-bold text-gray-600 uppercase">Supplier Name</label>
-                                    {formData.exporter ? (
-                                        <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                            For Exporter: <span className="font-bold truncate max-w-[220px]">{formData.exporter}</span>
-                                        </span>
-                                    ) : (
-                                        <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
-                                            Select Exporter first
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        disabled={!formData.exporter}
-                                        value={formData.supplierName}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            setFormData({ ...formData, supplierName: val });
-                                            setSupplierSearch(val);
-                                            setIsSupplierDropdownOpen(true);
-                                        }}
-                                        onFocus={() => {
-                                            if (!formData.exporter) return;
-                                            setSupplierSearch(formData.supplierName || '');
-                                            setIsSupplierDropdownOpen(true);
-                                        }}
-                                        placeholder={formData.exporter ? `Select or enter Supplier for ${formData.exporter}` : "Please select an Exporter first..."}
-                                        required
-                                        className={`w-full h-[42px] px-3.5 py-2.5 pr-14 border rounded-xl text-sm font-semibold outline-none transition-all ${
-                                            !formData.exporter
-                                                ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                : 'bg-white text-gray-900 border-gray-200 focus:ring-2 focus:ring-blue-500/20'
-                                        }`}
-                                    />
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                        {formData.supplierName && formData.exporter && (
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setFormData(prev => ({ ...prev, supplierName: '' }));
-                                                    setSupplierSearch('');
-                                                }}
-                                                className="p-0.5 text-gray-400 hover:text-red-500 rounded-full transition-colors"
-                                                title="Clear Supplier"
-                                            >
-                                                <XIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                        <button
-                                            type="button"
-                                            disabled={!formData.exporter}
-                                            onClick={() => {
-                                                if (!formData.exporter) return;
-                                                setIsSupplierDropdownOpen(!isSupplierDropdownOpen);
-                                            }}
-                                            className={`transition-colors ${
-                                                !formData.exporter ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-blue-600'
-                                            }`}
-                                        >
-                                            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${isSupplierDropdownOpen ? 'rotate-180' : ''}`} />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {isSupplierDropdownOpen && formData.exporter && (
-                                    <>
-                                        <div className="fixed inset-0 z-10" onClick={() => setIsSupplierDropdownOpen(false)} />
-                                        <div className="absolute z-20 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1 animate-in fade-in duration-150">
-                                            {filteredSuppliers.length > 0 ? (
-                                                filteredSuppliers.map((s, sIdx) => {
-                                                    const sName = s.name || s.companyName || s.customerName || '';
-                                                    return (
-                                                        <button
-                                                            key={s._id || sIdx}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setFormData({ ...formData, supplierName: sName });
-                                                                setIsSupplierDropdownOpen(false);
-                                                            }}
-                                                            className={`w-full px-4 py-2.5 text-left text-sm font-semibold hover:bg-blue-50/80 transition-colors border-b border-gray-50 last:border-0 flex items-center justify-between ${
-                                                                formData.supplierName === sName ? 'bg-blue-50/60 text-blue-600' : 'text-gray-800'
-                                                            }`}
-                                                        >
-                                                            <span>{sName}</span>
-                                                            {s.contactPerson && (
-                                                                <span className="text-[11px] font-normal text-gray-400">
-                                                                    {s.contactPerson} {s.phone ? `(${s.phone})` : ''}
-                                                                </span>
-                                                            )}
-                                                        </button>
-                                                    );
-                                                })
-                                            ) : (
-                                                <div className="px-4 py-3 text-xs text-gray-400 text-center font-medium">
-                                                    {supplierSearch
-                                                        ? `Press Enter to use "${supplierSearch}"`
-                                                        : `No suppliers registered under ${formData.exporter}. Enter custom supplier name.`}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
                             </div>
 
                             {/* Row 3: Product & Brand */}
@@ -2009,10 +1853,6 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                                             <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase block">Purchase Rate</span>
                                                 <span className="text-sm font-bold text-gray-900">৳{Number(viewData.rate || 0).toLocaleString('en-IN')}/kg</span>
-                                            </div>
-                                            <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">Exporter</span>
-                                                <span className="text-sm font-semibold text-gray-800">{viewData.exporter || '—'}</span>
                                             </div>
                                             <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase block">Supplier</span>
