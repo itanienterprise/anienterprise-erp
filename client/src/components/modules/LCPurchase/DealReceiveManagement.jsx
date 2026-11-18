@@ -11,7 +11,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import PaginationBar, { ALL_PAGE_SIZE } from '../../shared/PaginationBar';
 import '../Sale/SaleManagement.css';
-import PurchaseDealReport from './PurchaseDealReport';
+import DealReceiveReport, { resolveLcReceiveInfo, formatLcLast6 } from './DealReceiveReport';
 
 /**
  * Reusable Table Header Sort Indicator
@@ -279,7 +279,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
     const [filters, setFilters] = useState({
         startDate: '',
         endDate: '',
-        quickRange: 'all',
+        status: 'All',
         purchaseId: [],
         exporter: [],
         supplierName: [],
@@ -350,6 +350,8 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
     const [dealsList, setDealsList] = useState([]);
     const [suppliersList, setSuppliersList] = useState([]);
     const [productsList, setProductsList] = useState([]);
+    const [cogsList, setCogsList] = useState([]);
+    const [stocksList, setStocksList] = useState([]);
 
     // Records list state
     const [records, setRecords] = useState([]);
@@ -413,7 +415,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
     // Load initial dependencies
     const loadDependencies = async () => {
         try {
-            const [dealsRes, supRes, prodRes] = await Promise.all([
+            const [dealsRes, supRes, prodRes, cogsRes, stocksRes] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['lc-purchases'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/lc-purchases?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
@@ -425,11 +427,21 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                 queryClient.fetchQuery({
                     queryKey: ['products'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/products?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['cost-of-goods'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
                 })
             ]);
             if (Array.isArray(dealsRes)) setDealsList(dealsRes);
             if (Array.isArray(supRes)) setSuppliersList(supRes);
             if (Array.isArray(prodRes)) setProductsList(prodRes);
+            if (Array.isArray(cogsRes)) setCogsList(cogsRes);
+            if (Array.isArray(stocksRes)) setStocksList(stocksRes);
         } catch (err) {
             console.error('Error loading dependencies for Deal Receive:', err);
         }
@@ -439,11 +451,23 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
-            const res = await queryClient.fetchQuery({
-                queryKey: ['deal-receives'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/deal-receives?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
-            });
+            const [res, cogsRes, stocksRes] = await Promise.all([
+                queryClient.fetchQuery({
+                    queryKey: ['deal-receives'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/deal-receives?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['cost-of-goods'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                }),
+                queryClient.fetchQuery({
+                    queryKey: ['stock'],
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                })
+            ]);
             setRecords(Array.isArray(res) ? res : []);
+            if (Array.isArray(cogsRes)) setCogsList(cogsRes);
+            if (Array.isArray(stocksRes)) setStocksList(stocksRes);
         } catch (err) {
             console.error('Error fetching Deal Receive records:', err);
             if (addNotification) {
@@ -665,44 +689,11 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
         };
     }, [records, dealsList]);
 
-    // Handle Quick Range selection
-    const handleQuickRange = (range) => {
-        const today = new Date();
-        let startDate = '';
-        let endDate = today.toISOString().split('T')[0];
-
-        if (range === 'today') {
-            startDate = endDate;
-        } else if (range === 'weekly') {
-            const d = new Date();
-            d.setDate(d.getDate() - 7);
-            startDate = d.toISOString().split('T')[0];
-        } else if (range === 'monthly') {
-            const d = new Date();
-            d.setMonth(d.getMonth() - 1);
-            startDate = d.toISOString().split('T')[0];
-        } else if (range === 'yearly') {
-            const d = new Date();
-            d.setFullYear(d.getFullYear() - 1);
-            startDate = d.toISOString().split('T')[0];
-        } else if (range === 'all') {
-            startDate = '';
-            endDate = '';
-        }
-
-        setFilters(prev => ({
-            ...prev,
-            quickRange: range,
-            startDate,
-            endDate
-        }));
-    };
-
     const resetFilters = () => {
         setFilters({
             startDate: '',
             endDate: '',
-            quickRange: 'all',
+            status: 'All',
             purchaseId: [],
             exporter: [],
             supplierName: [],
@@ -712,9 +703,32 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
         setCurrentPage(1);
     };
 
+    // Enrich records with LC Receive and Stock info
+    const enrichedRecords = useMemo(() => {
+        return (records || []).map((r, idx) => {
+            const rawDeal = (dealsList || []).find(d => {
+                const dPId = String(d.purchaseId || '').replace(/-/g, '').toLowerCase();
+                const rPId = String(r.purchaseId || '').replace(/-/g, '').toLowerCase();
+                if (dPId && rPId && dPId === rPId) return true;
+                const dId = String(d._id || '');
+                const rRef = String(r.dealRefId || r.dealId || '');
+                return dId && rRef && dId === rRef;
+            });
+            const lcInfo = resolveLcReceiveInfo(r, rawDeal, cogsList, stocksList);
+            return {
+                ...r,
+                _idx: idx,
+                _lcInfo: lcInfo,
+                _lcRecDate: lcInfo.lcReceiveDate,
+                _lcNo: lcInfo.lcNo,
+                _status: lcInfo.status
+            };
+        });
+    }, [records, dealsList, cogsList, stocksList]);
+
     // Filter records
     const filteredRecords = useMemo(() => {
-        return records.filter(r => {
+        return enrichedRecords.filter(r => {
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase().trim();
                 const receiveId = String(r.receiveId || '').toLowerCase();
@@ -725,6 +739,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                 const brand = String(r.brand || '').toLowerCase();
                 const truckNo = String(r.truckNo || '').toLowerCase();
                 const invoiceNo = String(r.invoiceNo || '').toLowerCase();
+                const lcNo = String(r._lcNo || r.lcNo || '').toLowerCase();
 
                 const match = receiveId.includes(q) ||
                     purchaseId.includes(q) ||
@@ -733,7 +748,8 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                     product.includes(q) ||
                     brand.includes(q) ||
                     truckNo.includes(q) ||
-                    invoiceNo.includes(q);
+                    invoiceNo.includes(q) ||
+                    lcNo.includes(q);
 
                 if (!match) return false;
             }
@@ -745,6 +761,15 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
             if (filters.endDate) {
                 const rDate = (r.date || '').split('T')[0];
                 if (rDate > filters.endDate) return false;
+            }
+
+            // Status Filter
+            if (filters.status && filters.status !== 'All') {
+                if (filters.status === 'Received') {
+                    if (r._status !== 'Received' && r._status !== 'In Stock') return false;
+                } else if (filters.status === 'Not Received') {
+                    if (r._status !== 'Not Received' && r._status !== 'Pending') return false;
+                }
             }
 
             if (filters.purchaseId && filters.purchaseId.length > 0) {
@@ -766,11 +791,12 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
 
             return true;
         });
-    }, [records, searchQuery, filters]);
+    }, [enrichedRecords, searchQuery, filters]);
 
     const activeFilterCount = useMemo(() => {
         let count = 0;
-        if (filters.quickRange !== 'all' || filters.startDate || filters.endDate) count += 1;
+        if (filters.startDate || filters.endDate) count += 1;
+        if (filters.status && filters.status !== 'All') count += 1;
         if (filters.purchaseId && filters.purchaseId.length > 0) count += filters.purchaseId.length;
         if (filters.supplierName && filters.supplierName.length > 0) count += filters.supplierName.length;
         if (filters.productName && filters.productName.length > 0) count += filters.productName.length;
@@ -828,6 +854,15 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
             } else if (sortConfig.key === 'costingKg') {
                 aVal = parseFloat(a.costingKg) || 0;
                 bVal = parseFloat(b.costingKg) || 0;
+            } else if (sortConfig.key === 'lcRecDate') {
+                aVal = a._lcRecDate ? new Date(a._lcRecDate).getTime() : 0;
+                bVal = b._lcRecDate ? new Date(b._lcRecDate).getTime() : 0;
+            } else if (sortConfig.key === 'lcNo') {
+                aVal = String(a._lcNo || '').toLowerCase();
+                bVal = String(b._lcNo || '').toLowerCase();
+            } else if (sortConfig.key === 'status') {
+                aVal = String(a._status || '').toLowerCase();
+                bVal = String(b._status || '').toLowerCase();
             }
 
             if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -1084,21 +1119,25 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                 </div>
 
                                 <div className="space-y-4">
-                                    {/* Quick Date Range */}
+                                    {/* Status Filter */}
                                     <div>
-                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Quick Range</label>
+                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Status</label>
                                         <div className="flex flex-wrap gap-1.5">
-                                            {['all', 'today', 'weekly', 'monthly', 'yearly'].map((rng) => (
+                                            {[
+                                                { value: 'All', label: 'All' },
+                                                { value: 'Received', label: 'Received' },
+                                                { value: 'Not Received', label: 'Not Received' }
+                                            ].map((s) => (
                                                 <button
-                                                    key={rng}
+                                                    key={s.value}
                                                     type="button"
-                                                    onClick={() => handleQuickRange(rng)}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all ${filters.quickRange === rng
+                                                    onClick={() => setFilters(prev => ({ ...prev, status: s.value }))}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filters.status === s.value
                                                         ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                                                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                                         }`}
                                                 >
-                                                    {rng}
+                                                    {s.label}
                                                 </button>
                                             ))}
                                         </div>
@@ -1112,7 +1151,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                                 labelClassName="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1"
                                                 name="filterStartDate"
                                                 value={filters.startDate}
-                                                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
+                                                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
                                                 compact={false}
                                             />
                                         </div>
@@ -1122,7 +1161,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                                 labelClassName="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1"
                                                 name="filterEndDate"
                                                 value={filters.endDate}
-                                                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
+                                                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
                                                 compact={false}
                                             />
                                         </div>
@@ -1823,12 +1862,12 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                         <div className="flex flex-wrap items-center gap-2 p-3 bg-blue-50/50 rounded-xl border border-blue-100 text-xs text-blue-900">
                             <span className="font-bold text-gray-500 uppercase tracking-wider text-[10px]">Active Filters:</span>
 
-                            {filters.quickRange !== 'all' && (
+                            {filters.status && filters.status !== 'All' && (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-700 font-bold shadow-xs">
-                                    Range: {filters.quickRange}
+                                    Status: {filters.status}
                                     <button
                                         type="button"
-                                        onClick={() => handleQuickRange('all')}
+                                        onClick={() => setFilters(prev => ({ ...prev, status: 'All' }))}
                                         className="p-0.5 hover:bg-blue-100 rounded-full transition-colors"
                                     >
                                         <XIcon className="w-3 h-3" />
@@ -1990,19 +2029,37 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                                 <SortIndicator sortKey="costingKg" currentSortKey={sortConfig.key} direction={sortConfig.direction} align="right" />
                                             </div>
                                         </th>
+                                        <th onClick={() => requestSort('lcRecDate')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                            <div className="flex items-center justify-center">
+                                                <span>LC Rec. Date</span>
+                                                <SortIndicator sortKey="lcRecDate" currentSortKey={sortConfig.key} direction={sortConfig.direction} align="center" />
+                                            </div>
+                                        </th>
+                                        <th onClick={() => requestSort('lcNo')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                            <div className="flex items-center justify-center">
+                                                <span>LC No</span>
+                                                <SortIndicator sortKey="lcNo" currentSortKey={sortConfig.key} direction={sortConfig.direction} align="center" />
+                                            </div>
+                                        </th>
+                                        <th onClick={() => requestSort('status')} className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors group select-none">
+                                            <div className="flex items-center justify-center">
+                                                <span>Status</span>
+                                                <SortIndicator sortKey="status" currentSortKey={sortConfig.key} direction={sortConfig.direction} align="center" />
+                                            </div>
+                                        </th>
                                         <th className="px-4 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {isLoading ? (
                                         <tr>
-                                            <td colSpan={12} className="px-6 py-12 text-center text-gray-400 font-medium text-sm whitespace-nowrap">
+                                            <td colSpan={15} className="px-6 py-12 text-center text-gray-400 font-medium text-sm whitespace-nowrap">
                                                 Loading Deal Receive records...
                                             </td>
                                         </tr>
                                     ) : filteredRecords.length === 0 ? (
                                         <tr>
-                                            <td colSpan={12} className="px-6 py-16 text-center text-gray-400">
+                                            <td colSpan={15} className="px-6 py-16 text-center text-gray-400">
                                                 <div className="flex flex-col items-center justify-center gap-2">
                                                     <BoxIcon className="w-10 h-10 text-gray-300 stroke-1" />
                                                     <span className="font-semibold text-gray-500">No Deal Receive records found</span>
@@ -2050,6 +2107,24 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                                     </td>
                                                     <td className="px-4 py-3.5 text-sm font-bold text-gray-900 text-right whitespace-nowrap">
                                                         {costingVal ? `${costingVal.toFixed(2)} BDT` : '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3.5 text-sm font-semibold text-gray-700 text-center whitespace-nowrap">
+                                                        {item._lcRecDate ? formatDate(item._lcRecDate) : '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3.5 text-sm font-bold text-gray-900 text-center whitespace-nowrap">
+                                                        {formatLcLast6(item._lcNo)}
+                                                    </td>
+                                                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                                                            item._status === 'Received' || item._status === 'In Stock'
+                                                                ? 'bg-green-50 text-green-700 border border-green-200/60'
+                                                                : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                                        }`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${
+                                                                item._status === 'Received' || item._status === 'In Stock' ? 'bg-green-500' : 'bg-amber-500'
+                                                            }`} />
+                                                            {item._status === 'Received' || item._status === 'In Stock' ? 'Received' : 'Not Received'}
+                                                        </span>
                                                     </td>
                                                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
                                                         <div className="flex items-center justify-center gap-1.5">
@@ -2110,12 +2185,14 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                 </div>
             )}
 
-            {/* Purchase Deal Report Modal */}
-            <PurchaseDealReport
+            {/* Deal Receive Report Modal */}
+            <DealReceiveReport
                 isOpen={showReportModal}
                 onClose={() => setShowReportModal(false)}
-                deals={dealsList}
-                dealReceives={records}
+                records={records}
+                dealsList={dealsList}
+                cogsList={cogsList}
+                stocksList={stocksList}
             />
 
             {/* View Detail Modal */}
@@ -2193,6 +2270,25 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                         <span className="text-[10px] font-bold text-gray-400 uppercase block">Received Qty</span>
                                         <span className="text-sm font-black text-green-700">
                                             {Number(viewData.quantity || 0).toLocaleString('en-IN')} KG
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">LC Rec. Date</span>
+                                        <span className="text-sm font-semibold text-gray-800">{viewData._lcRecDate ? formatDate(viewData._lcRecDate) : '—'}</span>
+                                    </div>
+                                    <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">LC No</span>
+                                        <span className="text-sm font-bold text-gray-900">{formatLcLast6(viewData._lcNo)}</span>
+                                    </div>
+                                    <div className="bg-gray-50/70 rounded-xl p-3 border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Status</span>
+                                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 mt-0.5 rounded-full text-xs font-bold ${
+                                            viewData._status === 'Received' || viewData._status === 'In Stock'
+                                                ? 'bg-green-50 text-green-700 border border-green-200/60'
+                                                : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                        }`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${viewData._status === 'Received' || viewData._status === 'In Stock' ? 'bg-green-500' : 'bg-amber-500'}`} />
+                                            {viewData._status === 'Received' || viewData._status === 'In Stock' ? 'Received' : 'Not Received'}
                                         </span>
                                     </div>
                                 </div>

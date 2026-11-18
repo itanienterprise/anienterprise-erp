@@ -13764,20 +13764,18 @@ export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, da
                 return cogInv && cogInv === recInvoice && (!recProduct || !cogProd || recProduct === cogProd);
             }) : null);
 
-            if (!matchedCog) {
-                return { lcReceiveDate: null, status: 'Not Received', lcNo: '' };
-            }
+            const baseLcNo = (matchedCog && matchedCog.lcNo) || r.lcNo || r.lcNumber || r.lc || deal?.lcNo || deal?.lcNumber || deal?.lc || '';
 
             let matchedStock = null;
             if (Array.isArray(stList) && stList.length > 0) {
-                const cogIdStr = String(matchedCog._id || '');
-                const targetLc = String(matchedCog.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                const targetInv = String(matchedCog.invoiceNo || r.invoiceNo || '').trim().toLowerCase();
-                const targetProd = String(matchedCog.product || recProduct || '').trim().toLowerCase();
-                const targetBrand = String(matchedCog.brand || recBrand || '').trim().toLowerCase();
+                const cogIdStr = String(matchedCog?._id || '');
+                const targetLc = String(matchedCog?.lcNo || baseLcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const targetInv = String(matchedCog?.invoiceNo || r.invoiceNo || '').trim().toLowerCase();
+                const targetProd = String(matchedCog?.product || recProduct || '').trim().toLowerCase();
+                const targetBrand = String(matchedCog?.brand || recBrand || '').trim().toLowerCase();
 
                 matchedStock = stList.find(st => {
-                    if (st.matchedCogId && String(st.matchedCogId) === cogIdStr) return true;
+                    if (cogIdStr && st.matchedCogId && String(st.matchedCogId) === cogIdStr) return true;
                     const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                     const stInv = String(st.invoiceNo || '').trim().toLowerCase();
                     const stProd = String(st.productName || st.product || '').trim().toLowerCase();
@@ -13791,19 +13789,29 @@ export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, da
                         return prodMatches && brandMatches;
                     }
                     return false;
-                }) || stList.find(st => {
-                    const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                }) || (targetInv ? stList.find(st => {
                     const stInv = String(st.invoiceNo || '').trim().toLowerCase();
-                    return targetLc && stLc && targetLc === stLc && targetInv && stInv && targetInv === stInv;
-                }) || stList.find(st => {
+                    const stProd = String(st.productName || st.product || '').trim().toLowerCase();
+                    const stBrand = String(st.brand || '').trim().toLowerCase();
+                    if (stInv && stInv === targetInv) {
+                        const prodMatches = !targetProd || !stProd || targetProd === stProd;
+                        const brandMatches = !targetBrand || !stBrand || targetBrand === stBrand;
+                        return prodMatches && brandMatches;
+                    }
+                    return false;
+                }) : null) || (targetLc ? stList.find(st => {
                     const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                     const stTruck = String(st.truckNo || '').trim().toLowerCase();
-                    return targetLc && stLc && targetLc === stLc && targetTruck && stTruck && targetTruck === stTruck;
-                });
+                    return stLc && targetLc === stLc && targetTruck && stTruck && targetTruck === stTruck;
+                }) : null);
             }
 
             if (!matchedStock) {
-                return { lcReceiveDate: null, status: 'Not Received', lcNo: '' };
+                return {
+                    lcReceiveDate: null,
+                    status: 'Not Received',
+                    lcNo: baseLcNo
+                };
             }
 
             const lcReceiveDate = matchedStock.date || matchedStock.receivedDate || (Array.isArray(matchedStock.entries) ? matchedStock.entries[0]?.date : null) || null;
@@ -13823,7 +13831,7 @@ export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, da
             return {
                 lcReceiveDate,
                 status: displayStatus,
-                lcNo: matchedStock.lcNo || matchedCog.lcNo || ''
+                lcNo: matchedStock.lcNo || baseLcNo || ''
             };
         };
 
@@ -14358,7 +14366,504 @@ export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, da
         }
     } catch (err) {
         console.error("Error generating Purchase Deal Report PDF:", err);
-        alert("Failed to generate Purchase Deal Report PDF: " + err.message);
+    }
+};
+
+/**
+ * ============================================================================
+ * DEAL RECEIVE REPORT PDF GENERATOR
+ * ============================================================================
+ */
+export const generateDealReceiveReportPDF = async (records = [], filters = {}, dateStr = '', dealsList = [], costOfGoodsList = [], stockList = []) => {
+    try {
+        const doc = new jsPDF('l', 'mm', 'a4');
+
+        const formatDateStr = (d) => {
+            if (!d) return '—';
+            const parts = String(d).split('T')[0].split('-');
+            if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            const dt = new Date(d);
+            if (isNaN(dt.getTime())) return '—';
+            return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+        };
+
+        const resolveLcReceiveInfo = (r, deal, cogList = [], stList = []) => {
+            if (!r) return { lcReceiveDate: null, status: 'Not Received', lcNo: '' };
+
+            const recReceiveId = String(r.receiveId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const recId = String(r._id || '').trim();
+            const recInvoice = String(r.invoiceNo || '').trim().toLowerCase();
+            const recProduct = String(r.product || r.productName || deal?.productName || '').trim().toLowerCase();
+            const recBrand = String(r.brand || deal?.brand || '').trim().toLowerCase();
+            const targetTruck = String(r.truckNo || '').trim().toLowerCase();
+
+            const matchedCog = (cogList || []).find(cog => {
+                const cogDrId = String(cog.dealReceiveId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const cogDrRef = String(cog.dealReceiveRefId || '').trim();
+                if (recReceiveId && cogDrId && cogDrId === recReceiveId) return true;
+                if (recId && cogDrRef && cogDrRef === recId) return true;
+                if (recId && cogDrId && cogDrId === recId) return true;
+                return false;
+            }) || (recInvoice ? (cogList || []).find(cog => {
+                const cogInv = String(cog.invoiceNo || '').trim().toLowerCase();
+                const cogProd = String(cog.product || '').trim().toLowerCase();
+                return cogInv && cogInv === recInvoice && (!recProduct || !cogProd || recProduct === cogProd);
+            }) : null);
+
+            const baseLcNo = (matchedCog && matchedCog.lcNo) || r.lcNo || r.lcNumber || r.lc || deal?.lcNo || deal?.lcNumber || deal?.lc || '';
+
+            let matchedStock = null;
+            if (Array.isArray(stList) && stList.length > 0) {
+                const cogIdStr = String(matchedCog?._id || '');
+                const targetLc = String(matchedCog?.lcNo || baseLcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const targetInv = String(matchedCog?.invoiceNo || r.invoiceNo || '').trim().toLowerCase();
+                const targetProd = String(matchedCog?.product || recProduct || '').trim().toLowerCase();
+                const targetBrand = String(matchedCog?.brand || recBrand || '').trim().toLowerCase();
+
+                matchedStock = stList.find(st => {
+                    if (cogIdStr && st.matchedCogId && String(st.matchedCogId) === cogIdStr) return true;
+                    const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    const stInv = String(st.invoiceNo || '').trim().toLowerCase();
+                    const stProd = String(st.productName || st.product || '').trim().toLowerCase();
+                    const stBrand = String(st.brand || '').trim().toLowerCase();
+
+                    const lcMatches = targetLc && stLc && targetLc === stLc;
+                    const invMatches = targetInv && stInv && targetInv === stInv;
+                    if (lcMatches && invMatches) {
+                        const prodMatches = !targetProd || !stProd || targetProd === stProd;
+                        const brandMatches = !targetBrand || !stBrand || targetBrand === stBrand;
+                        return prodMatches && brandMatches;
+                    }
+                    return false;
+                }) || (targetInv ? stList.find(st => {
+                    const stInv = String(st.invoiceNo || '').trim().toLowerCase();
+                    const stProd = String(st.productName || st.product || '').trim().toLowerCase();
+                    const stBrand = String(st.brand || '').trim().toLowerCase();
+                    if (stInv && stInv === targetInv) {
+                        const prodMatches = !targetProd || !stProd || targetProd === stProd;
+                        const brandMatches = !targetBrand || !stBrand || targetBrand === stBrand;
+                        return prodMatches && brandMatches;
+                    }
+                    return false;
+                }) : null) || (targetLc ? stList.find(st => {
+                    const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    const stTruck = String(st.truckNo || '').trim().toLowerCase();
+                    return stLc && targetLc === stLc && targetTruck && stTruck && targetTruck === stTruck;
+                }) : null);
+            }
+
+            if (!matchedStock) {
+                return {
+                    lcReceiveDate: null,
+                    status: 'Not Received',
+                    lcNo: baseLcNo
+                };
+            }
+
+            const lcReceiveDate = matchedStock.date || matchedStock.receivedDate || (Array.isArray(matchedStock.entries) ? matchedStock.entries[0]?.date : null) || null;
+            const rawStatus = matchedStock.status || (Array.isArray(matchedStock.entries) ? matchedStock.entries[0]?.status : null) || 'Received';
+            const s = String(rawStatus).toLowerCase();
+            let displayStatus = 'Received';
+            if (s.includes('pending') || s.includes('request')) {
+                displayStatus = 'Pending';
+            } else if (s.includes('reject')) {
+                displayStatus = 'Rejected';
+            } else if (s.includes('stock') || s.includes('accept') || s.includes('received')) {
+                displayStatus = 'Received';
+            } else {
+                displayStatus = rawStatus;
+            }
+
+            return {
+                lcReceiveDate,
+                status: displayStatus,
+                lcNo: matchedStock.lcNo || baseLcNo || ''
+            };
+        };
+
+        const formatLcLast6 = (val) => {
+            if (!val) return '—';
+            const str = String(val).trim();
+            if (!str) return '—';
+            return str.length > 6 ? str.slice(-6) : str;
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 9;
+
+        // Load company logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        // --- Header (ANI ENTERPRISE & Address) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // Drop shadow behind title
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // Main text: orange fill (#f97316)
+        doc.setTextColor(249, 115, 22);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
+
+        // Title badge
+        const badgeTitle = "DEAL RECEIVE REPORT";
+        const badgeWidth = 78;
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - (badgeWidth / 2), y, badgeWidth, 7, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text(badgeTitle, pageWidth / 2, y + 5, { align: 'center' });
+
+        y += 9;
+
+        // Filter info pill in center
+        const printDate = dateStr || formatDateStr(new Date().toISOString().split('T')[0]);
+        const dateRange = `${formatDateStr(filters?.startDate) === '—' ? 'Start' : formatDateStr(filters?.startDate)} — ${formatDateStr(filters?.endDate) === '—' ? 'Present' : formatDateStr(filters?.endDate)}`;
+        const filterParts = [`Date: ${dateRange}`];
+        if (filters?.supplier || filters?.supplierName) filterParts.push(`Supplier: ${filters.supplier || filters.supplierName}`);
+        if (filters?.product || filters?.productName) filterParts.push(`Product: ${filters.product || filters.productName}`);
+        if (filters?.brand) filterParts.push(`Brand: ${filters.brand}`);
+        if (filters?.status && filters.status !== 'All') filterParts.push(`Status: ${filters.status}`);
+
+        const filterText = filterParts.join('  |  ');
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'bold');
+        const filterTextWidth = doc.getTextWidth(filterText);
+        const pillWidth = Math.max(filterTextWidth + 8, 40);
+        const pillX = (pageWidth / 2) - (pillWidth / 2);
+
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(pillX, y, pillWidth, 5.5, 1.5, 1.5, 'FD');
+
+        doc.setTextColor(71, 85, 105);
+        doc.text(filterText, pageWidth / 2, y + 3.8, { align: 'center' });
+
+        // Printed on (right aligned)
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed on: ${printDate}`, pageWidth - margin, y + 3.8, { align: 'right' });
+
+        y += 8;
+
+        // Table Rows Construction
+        let totalTrucks = 0;
+        let totalQty = 0;
+        let totalNetBill = 0;
+        let receivedCount = 0;
+
+        const tableBody = records.map((r, idx) => {
+            const rawDeal = (dealsList || []).find(d => {
+                const dPId = String(d.purchaseId || '').replace(/-/g, '').toLowerCase();
+                const rPId = String(r.purchaseId || '').replace(/-/g, '').toLowerCase();
+                if (dPId && rPId && dPId === rPId) return true;
+                const dId = String(d._id || '');
+                const rRef = String(r.dealRefId || r.dealId || '');
+                return dId && rRef && dId === rRef;
+            });
+
+            const lcInfo = resolveLcReceiveInfo(r, rawDeal, costOfGoodsList, stockList);
+            if (lcInfo.status === 'Received') {
+                receivedCount++;
+            }
+
+            const trucksCount = Number(r.trucks || (Array.isArray(r.truckNumbers) && r.truckNumbers.length ? r.truckNumbers.length : 1)) || 1;
+            const qtyVal = parseFloat(r.quantity) || 0;
+            const netBillVal = parseFloat(r.netBill || r.totalBill) || 0;
+            const dollarRateVal = parseFloat(r.dollarRateBdt || r.dollarRate) || 0;
+            const costingVal = parseFloat(r.costingKg) || 0;
+
+            totalTrucks += trucksCount;
+            totalQty += qtyVal;
+            totalNetBill += netBillVal;
+
+            const recIdStr = r.receiveId || `DR${String(idx + 1).padStart(4, '0')}`;
+            const purIdStr = (r.purchaseId || '').replace(/-/g, '') || '—';
+            const supplierStr = r.supplier || r.supplierName || '—';
+            const productStr = (r.product || r.productName || '—').toUpperCase();
+            const brandStr = r.brand || '—';
+            const invoiceStr = r.invoiceNo || '—';
+            const truckNoStr = r.truckNo || (Array.isArray(r.truckNumbers) ? r.truckNumbers.filter(Boolean).join(', ') : '—') || '—';
+            const trucksStr = `${trucksCount} ${trucksCount === 1 ? 'Truck' : 'Trucks'}`;
+            const qtyStr = qtyVal ? qtyVal.toLocaleString('en-IN') : '0';
+            const costingStr = costingVal ? `Tk ${costingVal.toFixed(2)}` : '—';
+            const lcRecDateStr = lcInfo.lcReceiveDate ? formatDateStr(lcInfo.lcReceiveDate) : '—';
+            const lcNoStr = formatLcLast6(lcInfo.lcNo);
+            const statusStr = lcInfo.status || 'Not Received';
+
+            return [
+                idx + 1,
+                formatDateStr(r.date),
+                recIdStr,
+                purIdStr,
+                supplierStr,
+                productStr,
+                brandStr,
+                invoiceStr,
+                truckNoStr,
+                trucksStr,
+                qtyStr,
+                costingStr,
+                lcRecDateStr,
+                lcNoStr,
+                statusStr
+            ];
+        });
+
+        // Foot Summary Row
+        const tableFoot = [
+            [
+                { content: 'TOTAL SUMMARY:', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 245, 255] } },
+                { content: `${totalTrucks} Trucks`, styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 245, 255] } },
+                { content: `${Math.round(totalQty).toLocaleString('en-IN')} KG`, styles: { halign: 'center', fontStyle: 'bold', textColor: [22, 101, 52], fillColor: [240, 245, 255] } },
+                { content: '—', styles: { halign: 'center', fillColor: [240, 245, 255] } },
+                { content: '—', styles: { halign: 'center', fillColor: [240, 245, 255] } },
+                { content: '—', styles: { halign: 'center', fillColor: [240, 245, 255] } },
+                { content: '—', styles: { halign: 'center', fillColor: [240, 245, 255] } }
+            ]
+        ];
+
+        autoTable(doc, {
+            startY: y,
+            head: [
+                ['SL', 'Date', 'Receive ID', 'Pur. ID', 'Supplier', 'Product', 'Brand', 'Invoice No', 'Truck No', 'Trucks', 'Qty (KG)', 'Costing/KG', 'LC Rec. Date', 'LC No', 'Status']
+            ],
+            body: tableBody,
+            foot: tableFoot,
+            theme: 'plain',
+            styles: {
+                fontSize: 8,
+                cellPadding: { top: 1.5, bottom: 1.5, left: 0.6, right: 0.6 },
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0],
+                valign: 'middle',
+                overflow: 'linebreak'
+            },
+            headStyles: {
+                fillColor: [248, 250, 252],
+                textColor: [51, 65, 85],
+                fontStyle: 'bold',
+                halign: 'center',
+                lineWidth: 0.1,
+                fontSize: 8,
+                cellPadding: { top: 1.8, bottom: 1.8, left: 0.5, right: 0.5 }
+            },
+            footStyles: {
+                fillColor: [240, 245, 255],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.1,
+                fontSize: 8
+            },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 7 },
+                1: { halign: 'center', cellWidth: 17 },
+                2: { halign: 'center', cellWidth: 16 },
+                3: { halign: 'center', cellWidth: 14 },
+                4: { halign: 'left', cellWidth: 38 },
+                5: { halign: 'left', cellWidth: 24 },
+                6: { halign: 'left', cellWidth: 19 },
+                7: { halign: 'center', cellWidth: 25 },
+                8: { halign: 'left', cellWidth: 18 },
+                9: { halign: 'center', cellWidth: 13 },
+                10: { halign: 'center', cellWidth: 19 },
+                11: { halign: 'right', cellWidth: 17 },
+                12: { halign: 'center', cellWidth: 19 },
+                13: { halign: 'center', cellWidth: 15 },
+                14: { halign: 'center', cellWidth: 19 }
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        let cardY = doc.lastAutoTable.finalY + 6;
+        if (cardY + 22 > pageHeight - 15) {
+            doc.addPage();
+            cardY = 20;
+        }
+
+        // Summary Metric Cards
+        const cardWidth = 66;
+        const cardHeight = 15;
+        const cardGap = (pageWidth - (margin * 2) - (cardWidth * 4)) / 3;
+
+        const summaryCards = [
+            {
+                title: 'TOTAL RECEIVES',
+                sub: 'RECORD COUNT',
+                value: `${records.length}`,
+                bg: [248, 250, 252],
+                border: [203, 213, 225],
+                titleColor: [100, 116, 139],
+                subColor: [71, 85, 105],
+                valColor: [15, 23, 42]
+            },
+            {
+                title: 'TOTAL TRUCKS',
+                sub: 'VEHICLES',
+                value: `${totalTrucks} Trucks`,
+                bg: [248, 250, 252],
+                border: [203, 213, 225],
+                titleColor: [100, 116, 139],
+                subColor: [71, 85, 105],
+                valColor: [29, 78, 216]
+            },
+            {
+                title: 'TOTAL RECEIVED QTY',
+                sub: 'IN KILOGRAMS',
+                value: `${Math.round(totalQty).toLocaleString('en-US')} KG`,
+                bg: [248, 250, 252],
+                border: [203, 213, 225],
+                titleColor: [22, 101, 52],
+                subColor: [71, 85, 105],
+                valColor: [22, 101, 52]
+            },
+            {
+                title: 'RECEIVED IN STOCK',
+                sub: 'ARRIVED AT WAREHOUSE',
+                value: `${receivedCount} / ${records.length}`,
+                bg: [248, 250, 252],
+                border: [203, 213, 225],
+                titleColor: [29, 78, 216],
+                subColor: [71, 85, 105],
+                valColor: [29, 78, 216]
+            }
+        ];
+
+        summaryCards.forEach((c, i) => {
+            const cx = margin + i * (cardWidth + cardGap);
+            doc.setFillColor(...c.bg);
+            doc.setDrawColor(...c.border);
+            doc.setLineWidth(c.border[0] === 249 ? 0.5 : 0.2);
+            doc.roundedRect(cx, cardY, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+            doc.setFontSize(6.8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...c.titleColor);
+            doc.text(c.title, cx + (cardWidth / 2), cardY + 3.8, { align: 'center' });
+
+            doc.setFontSize(6.2);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...c.subColor);
+            doc.text(c.sub, cx + (cardWidth / 2), cardY + 7.0, { align: 'center' });
+
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.1);
+            doc.line(cx + 4, cardY + 8.5, cx + cardWidth - 4, cardY + 8.5);
+
+            doc.setFontSize(9.0);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...c.valColor);
+            doc.text(c.value, cx + (cardWidth / 2), cardY + 13.0, { align: 'center' });
+        });
+
+        // Signatures Section
+        let sigY = cardY + cardHeight + 14;
+        if (sigY + 12 > pageHeight - 10) {
+            doc.addPage();
+            sigY = 25;
+        }
+        const sigWidth = 50;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.2);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, sigY, margin + sigWidth + sigGap + sigWidth, sigY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
+
+        // Page Numbers Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - DEAL RECEIVE REPORT', margin, pageHeight - 5);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        const newTab = window.open(blobURL, '_blank');
+        if (!newTab) {
+            const fileName = `Deal_Receive_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(fileName);
+        }
+    } catch (err) {
+        console.error("Error generating Deal Receive Report PDF:", err);
     }
 };
 
