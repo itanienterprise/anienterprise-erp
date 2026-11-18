@@ -2617,10 +2617,14 @@ const StockManagement = ({
         unit
     } = stockData;
 
-    const minWidthClass = displayUnit === 'BOTH' ? 'min-w-[1200px]' : 'min-w-[900px]';
+    const minWidthClass = effectiveShowRate
+        ? (displayUnit === 'BOTH' ? 'min-w-[1300px]' : 'min-w-[1000px]')
+        : (displayUnit === 'BOTH' ? 'min-w-[1200px]' : 'min-w-[900px]');
 
     const gridClass = effectiveShowRate
-        ? "grid grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1fr)] gap-3"
+        ? (displayUnit === 'BOTH'
+            ? "grid grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)_minmax(0,1fr)_repeat(6,minmax(0,1fr))_minmax(0,0.9fr)] gap-2"
+            : "grid grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)_minmax(0,1fr)_repeat(3,minmax(0,1fr))_minmax(0,0.9fr)] gap-3")
         : displayUnit === 'BOTH'
             ? "grid grid-cols-[minmax(0,1.8fr)_repeat(10,minmax(0,1fr))_minmax(0,0.9fr)] gap-2"
             : "grid grid-cols-[minmax(0,2.2fr)_repeat(5,minmax(0,1fr))_minmax(0,0.9fr)] gap-3";
@@ -3718,33 +3722,29 @@ const StockManagement = ({
                                                                                             {(Math.round(brand.inHousePacket) || 0).toLocaleString('en-US')} BAG • {(Math.round(brand.inHouseQuantity) || 0).toLocaleString('en-US')} {group.unit || 'kg'}
                                                                                         </span>
 
-                                                                                        {!effectiveShowRate && (
-                                                                                            <>
-                                                                                                <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">ORDER</span>
-                                                                                                <span className="text-purple-400 font-bold">:</span>
-                                                                                                <span className="font-bold text-purple-700 break-words">
-                                                                                                    {(() => {
-                                                                                                        const pktSize = brand.packetSize || brandGroup.packetSize || group.packetSize || 30;
-                                                                                                        const orderQty = brand.orderQuantity || 0;
-                                                                                                        const { whole: orderWhole } = calculatePktRemainder(orderQty, pktSize);
-                                                                                                        const orderPkt = brand.orderPacket !== undefined ? Math.round(brand.orderPacket) : orderWhole;
-                                                                                                        return `${(orderPkt || 0).toLocaleString('en-US')} BAG • ${(Math.round(orderQty) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
-                                                                                                    })()}
-                                                                                                </span>
+                                                                                        <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">ORDER</span>
+                                                                                        <span className="text-purple-400 font-bold">:</span>
+                                                                                        <span className="font-bold text-purple-700 break-words">
+                                                                                            {(() => {
+                                                                                                const pktSize = brand.packetSize || brandGroup.packetSize || group.packetSize || 30;
+                                                                                                const orderQty = brand.orderQuantity || 0;
+                                                                                                const { whole: orderWhole } = calculatePktRemainder(orderQty, pktSize);
+                                                                                                const orderPkt = brand.orderPacket !== undefined ? Math.round(brand.orderPacket) : orderWhole;
+                                                                                                return `${(orderPkt || 0).toLocaleString('en-US')} BAG • ${(Math.round(orderQty) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
+                                                                                            })()}
+                                                                                        </span>
 
-                                                                                                <span className="text-xs font-bold text-teal-600 uppercase tracking-wider">SALEABLE</span>
-                                                                                                <span className="text-teal-400 font-bold">:</span>
-                                                                                                <span className="font-bold text-teal-700 break-words">
-                                                                                                    {(() => {
-                                                                                                        const pktSize = brand.packetSize || brandGroup.packetSize || group.packetSize || 30;
-                                                                                                        const saleableQty = brand.saleableQuantity !== undefined ? brand.saleableQuantity : Math.max(0, (brand.inHouseQuantity || 0) - (brand.orderQuantity || 0));
-                                                                                                        const { whole: saleableWhole } = calculatePktRemainder(saleableQty, pktSize);
-                                                                                                        const saleablePkt = brand.saleablePacket !== undefined ? Math.round(brand.saleablePacket) : saleableWhole;
-                                                                                                        return `${(saleablePkt || 0).toLocaleString('en-US')} BAG • ${(Math.round(saleableQty) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
-                                                                                                    })()}
-                                                                                                </span>
-                                                                                            </>
-                                                                                        )}
+                                                                                        <span className="text-xs font-bold text-teal-600 uppercase tracking-wider">SALEABLE</span>
+                                                                                        <span className="text-teal-400 font-bold">:</span>
+                                                                                        <span className="font-bold text-teal-700 break-words">
+                                                                                            {(() => {
+                                                                                                const pktSize = brand.packetSize || brandGroup.packetSize || group.packetSize || 30;
+                                                                                                const saleableQty = brand.saleableQuantity !== undefined ? brand.saleableQuantity : Math.max(0, (brand.inHouseQuantity || 0) - (brand.orderQuantity || 0));
+                                                                                                const { whole: saleableWhole } = calculatePktRemainder(saleableQty, pktSize);
+                                                                                                const saleablePkt = brand.saleablePacket !== undefined ? Math.round(brand.saleablePacket) : saleableWhole;
+                                                                                                return `${(saleablePkt || 0).toLocaleString('en-US')} BAG • ${(Math.round(saleableQty) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
+                                                                                            })()}
+                                                                                        </span>
                                                                                     </div>
                                                                                 </div>
                                                                             ))}
@@ -3828,14 +3828,10 @@ const StockManagement = ({
                                             {showQty && <div className="text-center text-green-800 truncate min-w-0" title="Closing Stock QTY (KG)">{displayUnit === 'BOTH' ? 'Closing QTY (KG)' : 'Closing Stock QTY (KG)'}</div>}
 
                                             {/* Order & Saleable Headers */}
-                                            {!effectiveShowRate && (
-                                                <>
-                                                    {showBag && <div className="text-center text-purple-800 truncate min-w-0" title="Order Bag">Order Bag</div>}
-                                                    {showQty && <div className="text-center text-purple-800 truncate min-w-0" title="Order Qty (KG)">Order Qty (KG)</div>}
-                                                    {showBag && <div className="text-center text-teal-800 truncate min-w-0" title="Saleable Bag">Saleable Bag</div>}
-                                                    {showQty && <div className="text-center text-teal-800 truncate min-w-0" title="Saleable Qty (KG)">Saleable Qty (KG)</div>}
-                                                </>
-                                            )}
+                                            {showBag && <div className="text-center text-purple-800 truncate min-w-0" title="Order Bag">Order Bag</div>}
+                                            {showQty && <div className="text-center text-purple-800 truncate min-w-0" title="Order Qty (KG)">Order Qty (KG)</div>}
+                                            {showBag && <div className="text-center text-teal-800 truncate min-w-0" title="Saleable Bag">Saleable Bag</div>}
+                                            {showQty && <div className="text-center text-teal-800 truncate min-w-0" title="Saleable Qty (KG)">Saleable Qty (KG)</div>}
 
                                             <div className="text-center text-gray-500 truncate min-w-0">Status</div>
                                         </div>
@@ -3960,35 +3956,31 @@ const StockManagement = ({
                                                                             )}
 
                                                                             {/* Order & Saleable Cells */}
-                                                                            {!effectiveShowRate && (
-                                                                                <>
-                                                                                    {showBag && (
-                                                                                        <div className="text-sm text-purple-800 bg-purple-50/50 px-2 py-1 rounded-lg text-center font-bold">
-                                                                                            {(() => {
-                                                                                                const { whole, remainder } = calculatePktRemainder(brand.orderQuantity, brand.packetSize);
-                                                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
-                                                                                            })()}
-                                                                                        </div>
-                                                                                    )}
-                                                                                    {showQty && (
-                                                                                        <div className="text-sm text-purple-900 bg-purple-50/50 px-2 py-1 rounded-lg text-center font-bold">
-                                                                                            {Math.round(brand.orderQuantity || 0).toLocaleString('en-US')}
-                                                                                        </div>
-                                                                                    )}
-                                                                                    {showBag && (
-                                                                                        <div className="text-sm text-teal-800 bg-teal-50/50 px-2 py-1 rounded-lg text-center font-bold border border-teal-100/50">
-                                                                                            {(() => {
-                                                                                                const { whole, remainder } = calculatePktRemainder(brand.saleableQuantity, brand.packetSize);
-                                                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
-                                                                                            })()}
-                                                                                        </div>
-                                                                                    )}
-                                                                                    {showQty && (
-                                                                                        <div className="text-sm text-teal-900 bg-teal-50/50 px-2 py-1 rounded-lg text-center font-black border border-teal-100/50">
-                                                                                            {Math.round(brand.saleableQuantity || 0).toLocaleString('en-US')}
-                                                                                        </div>
-                                                                                    )}
-                                                                                </>
+                                                                            {showBag && (
+                                                                                <div className="text-sm text-purple-800 bg-purple-50/50 px-2 py-1 rounded-lg text-center font-bold">
+                                                                                    {(() => {
+                                                                                        const { whole, remainder } = calculatePktRemainder(brand.orderQuantity, brand.packetSize);
+                                                                                        return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                    })()}
+                                                                                </div>
+                                                                            )}
+                                                                            {showQty && (
+                                                                                <div className="text-sm text-purple-900 bg-purple-50/50 px-2 py-1 rounded-lg text-center font-bold">
+                                                                                    {Math.round(brand.orderQuantity || 0).toLocaleString('en-US')}
+                                                                                </div>
+                                                                            )}
+                                                                            {showBag && (
+                                                                                <div className="text-sm text-teal-800 bg-teal-50/50 px-2 py-1 rounded-lg text-center font-bold border border-teal-100/50">
+                                                                                    {(() => {
+                                                                                        const { whole, remainder } = calculatePktRemainder(brand.saleableQuantity, brand.packetSize);
+                                                                                        return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                    })()}
+                                                                                </div>
+                                                                            )}
+                                                                            {showQty && (
+                                                                                <div className="text-sm text-teal-900 bg-teal-50/50 px-2 py-1 rounded-lg text-center font-black border border-teal-100/50">
+                                                                                    {Math.round(brand.saleableQuantity || 0).toLocaleString('en-US')}
+                                                                                </div>
                                                                             )}
 
                                                                             <div className="text-center overflow-hidden">
@@ -4002,22 +3994,73 @@ const StockManagement = ({
                                                                                 <div className="text-xs text-purple-950 font-black uppercase tracking-wider">{(brand.brand || '-').trim()} Total</div>
                                                                                 <div></div>
                                                                                 <div></div>
-                                                                                <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
-                                                                                    {(() => {
-                                                                                        const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
-                                                                                        const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
-                                                                                        const pktSize = brand.packetSize || 30;
-                                                                                        const { whole, remainder = 0 } = calculatePktRemainder(totalQty, pktSize);
-                                                                                        return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
-                                                                                    })()}
-                                                                                </div>
-                                                                                <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
-                                                                                    {(() => {
-                                                                                        const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
-                                                                                        const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
-                                                                                        return Math.round(totalQty).toLocaleString('en-US');
-                                                                                    })()}
-                                                                                </div>
+                                                                                {/* Closing Bag */}
+                                                                                {showBag && (
+                                                                                    <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
+                                                                                        {(() => {
+                                                                                            const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
+                                                                                            const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                                                                                            const pktSize = brand.packetSize || 30;
+                                                                                            const { whole, remainder = 0 } = calculatePktRemainder(totalQty, pktSize);
+                                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                        })()}
+                                                                                    </div>
+                                                                                )}
+                                                                                {/* Closing Qty */}
+                                                                                {showQty && (
+                                                                                    <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
+                                                                                        {(() => {
+                                                                                            const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
+                                                                                            const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                                                                                            return Math.round(totalQty).toLocaleString('en-US');
+                                                                                        })()}
+                                                                                    </div>
+                                                                                )}
+                                                                                {/* Order Bag */}
+                                                                                {showBag && (
+                                                                                    <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
+                                                                                        {(() => {
+                                                                                            const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
+                                                                                            const totalOrder = brandGroup.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
+                                                                                            const pktSize = brand.packetSize || 30;
+                                                                                            const { whole, remainder = 0 } = calculatePktRemainder(totalOrder, pktSize);
+                                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                        })()}
+                                                                                    </div>
+                                                                                )}
+                                                                                {/* Order Qty */}
+                                                                                {showQty && (
+                                                                                    <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
+                                                                                        {(() => {
+                                                                                            const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
+                                                                                            const totalOrder = brandGroup.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
+                                                                                            return Math.round(totalOrder).toLocaleString('en-US');
+                                                                                        })()}
+                                                                                    </div>
+                                                                                )}
+                                                                                {/* Saleable Bag */}
+                                                                                {showBag && (
+                                                                                    <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
+                                                                                        {(() => {
+                                                                                            const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
+                                                                                            const totalSaleable = brandGroup.reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0);
+                                                                                            const pktSize = brand.packetSize || 30;
+                                                                                            const { whole, remainder = 0 } = calculatePktRemainder(totalSaleable, pktSize);
+                                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                        })()}
+                                                                                    </div>
+                                                                                )}
+                                                                                {/* Saleable Qty */}
+                                                                                {showQty && (
+                                                                                    <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
+                                                                                        {(() => {
+                                                                                            const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
+                                                                                            const totalSaleable = brandGroup.reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0);
+                                                                                            return Math.round(totalSaleable).toLocaleString('en-US');
+                                                                                        })()}
+                                                                                    </div>
+                                                                                )}
+                                                                                <div></div>
                                                                             </div>
                                                                         )}
                                                                     </React.Fragment>
@@ -4104,56 +4147,52 @@ const StockManagement = ({
                                                                 )}
 
                                                                 {/* Total Order & Saleable */}
-                                                                {!effectiveShowRate && (
-                                                                    <>
-                                                                        {showBag && (
-                                                                            <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
-                                                                                {(() => {
-                                                                                    const grouped = getGroupedBrandList(group.brandList || []);
-                                                                                    let totalWhole = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).whole, 0);
-                                                                                    let totalRem = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).remainder, 0);
-                                                                                    const pktSize = group.packetSize || group.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
-                                                                                    if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
-                                                                                        const extra = Math.floor(Math.abs(totalRem) / pktSize);
-                                                                                        totalWhole += totalRem >= 0 ? extra : -extra;
-                                                                                        totalRem = totalRem % pktSize;
-                                                                                    }
-                                                                                    return `${totalWhole.toLocaleString('en-US')}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem)).toLocaleString('en-US')} kg` : ''}`;
-                                                                                })()}
-                                                                            </div>
-                                                                        )}
-                                                                        {showQty && (
-                                                                            <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
-                                                                                {Math.round(group.orderQuantity || 0).toLocaleString('en-US')}
-                                                                            </div>
-                                                                        )}
-                                                                        {showBag && (
-                                                                            <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
-                                                                                {(() => {
-                                                                                    const grouped = getGroupedBrandList(group.brandList || []);
-                                                                                    let totalWhole = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).whole, 0);
-                                                                                    let totalRem = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).remainder, 0);
-                                                                                    const pktSize = group.packetSize || group.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
-                                                                                    if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
-                                                                                        const extra = Math.floor(Math.abs(totalRem) / pktSize);
-                                                                                        totalWhole += totalRem >= 0 ? extra : -extra;
-                                                                                        totalRem = totalRem % pktSize;
-                                                                                    }
-                                                                                    return `${totalWhole.toLocaleString('en-US')}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem)).toLocaleString('en-US')} kg` : ''}`;
-                                                                                })()}
-                                                                            </div>
-                                                                        )}
-                                                                        {showQty && (
-                                                                            <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
-                                                                                {(() => {
-                                                                                    const grouped = getGroupedBrandList(group.brandList || []);
-                                                                                    const totalQty = grouped.reduce((sum, ent) => sum + Math.max(0, ent.saleableQuantity || 0), 0);
-                                                                                    return Math.round(totalQty).toLocaleString('en-US');
-                                                                                })()}
-                                                                            </div>
-                                                                        )}
-                                                                    </>
-                                                                )}
+                                                                    {showBag && (
+                                                                        <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
+                                                                            {(() => {
+                                                                                const grouped = getGroupedBrandList(group.brandList || []);
+                                                                                let totalWhole = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).whole, 0);
+                                                                                let totalRem = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).remainder, 0);
+                                                                                const pktSize = group.packetSize || group.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                                                if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
+                                                                                    const extra = Math.floor(Math.abs(totalRem) / pktSize);
+                                                                                    totalWhole += totalRem >= 0 ? extra : -extra;
+                                                                                    totalRem = totalRem % pktSize;
+                                                                                }
+                                                                                return `${totalWhole.toLocaleString('en-US')}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem)).toLocaleString('en-US')} kg` : ''}`;
+                                                                            })()}
+                                                                        </div>
+                                                                    )}
+                                                                    {showQty && (
+                                                                        <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
+                                                                            {Math.round(group.orderQuantity || 0).toLocaleString('en-US')}
+                                                                        </div>
+                                                                    )}
+                                                                    {showBag && (
+                                                                        <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
+                                                                            {(() => {
+                                                                                const grouped = getGroupedBrandList(group.brandList || []);
+                                                                                let totalWhole = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).whole, 0);
+                                                                                let totalRem = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).remainder, 0);
+                                                                                const pktSize = group.packetSize || group.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                                                if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
+                                                                                    const extra = Math.floor(Math.abs(totalRem) / pktSize);
+                                                                                    totalWhole += totalRem >= 0 ? extra : -extra;
+                                                                                    totalRem = totalRem % pktSize;
+                                                                                }
+                                                                                return `${totalWhole.toLocaleString('en-US')}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem)).toLocaleString('en-US')} kg` : ''}`;
+                                                                            })()}
+                                                                        </div>
+                                                                    )}
+                                                                    {showQty && (
+                                                                        <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
+                                                                            {(() => {
+                                                                                const grouped = getGroupedBrandList(group.brandList || []);
+                                                                                const totalQty = grouped.reduce((sum, ent) => sum + Math.max(0, ent.saleableQuantity || 0), 0);
+                                                                                return Math.round(totalQty).toLocaleString('en-US');
+                                                                            })()}
+                                                                        </div>
+                                                                    )}
                                                                 <div className="text-center"></div>
                                                             </div>
                                                         </div>

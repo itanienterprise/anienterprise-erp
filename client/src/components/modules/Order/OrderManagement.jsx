@@ -2655,6 +2655,18 @@ const OrderManagement = ({
             } else if (sortConfig.key === 'invoiceNo') {
                 aVal = (a.invoiceNo || a.orderNo || '').toLowerCase();
                 bVal = (b.invoiceNo || b.orderNo || '').toLowerCase();
+            } else if (sortConfig.key === 'lcNo') {
+                const getOrderLc = (order) => {
+                    for (const item of (order.items || [])) {
+                        for (const be of (item.brandEntries || [])) {
+                            if (be.lcNo) return be.lcNo.toLowerCase();
+                        }
+                        if (item.lcNo) return item.lcNo.toLowerCase();
+                    }
+                    return (order.lcNo || '').toLowerCase();
+                };
+                aVal = getOrderLc(a);
+                bVal = getOrderLc(b);
             }
 
             if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -4190,6 +4202,9 @@ const OrderManagement = ({
                                     <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('companyName')}>
                                         <div className="flex items-center">Customer {renderSortIcon('companyName')}</div>
                                     </th>
+                                    <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('lcNo')}>
+                                        <div className="flex items-center">LC No {renderSortIcon('lcNo')}</div>
+                                    </th>
                                     <th className="sale-mgmt-th">Product</th>
                                     <th className="sale-mgmt-th">Brand</th>
                                     <th className="sale-mgmt-th">Warehouse</th>
@@ -4211,9 +4226,9 @@ const OrderManagement = ({
 
                                 <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan={15 + (canShowEntryBy ? 1 : 0)} className="px-3 py-20 text-center text-gray-400 font-medium">Loading orders...</td></tr>
+                                    <tr><td colSpan={16 + (canShowEntryBy ? 1 : 0)} className="px-3 py-20 text-center text-gray-400 font-medium">Loading orders...</td></tr>
                                 ) : getFilteredData.length === 0 ? (
-                                    <tr><td colSpan={15 + (canShowEntryBy ? 1 : 0)} className="px-3 py-20 text-center text-gray-400 font-medium">No order records found</td></tr>
+                                    <tr><td colSpan={16 + (canShowEntryBy ? 1 : 0)} className="px-3 py-20 text-center text-gray-400 font-medium">No order records found</td></tr>
                                 ) : paginatedOrders.map((order, index) => {
                                     const sl = (currentPage - 1) * pageSize + index + 1;
                                     const { deliveryMap, totalOrderedQty, totalDeliveredQty, statusText, statusBadgeClass } = computeOrderFulfillment(order, allSalesRecords, returnsList);
@@ -4265,6 +4280,26 @@ const OrderManagement = ({
 
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-semibold text-gray-800">{order.companyName || order.customerName || '-'}</div>
+                                            </td>
+
+                                            <td className="px-3 py-4">
+                                                <div className="flex flex-col gap-2">
+                                                    {(order.items || []).map((item, i) => (
+                                                        <div key={i} className="flex flex-col gap-1">
+                                                            {(item.brandEntries || []).length > 0 ? (
+                                                                item.brandEntries.map((b, bIdx) => (
+                                                                    <div key={bIdx} className={`text-[13px] whitespace-nowrap ${b.lcNo || item.lcNo || order.lcNo ? 'font-bold text-purple-700' : 'font-medium text-gray-400'}`}>
+                                                                        {b.lcNo || item.lcNo || order.lcNo || '-'}
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <div className={`text-[13px] whitespace-nowrap ${item.lcNo || order.lcNo ? 'font-bold text-purple-700' : 'font-medium text-gray-400'}`}>
+                                                                    {item.lcNo || order.lcNo || '-'}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </td>
 
                                             <td className="px-3 py-4">
@@ -4472,7 +4507,7 @@ const OrderManagement = ({
                                             </td>
 
                                             {canShowEntryBy && (
-                                                <td className="px-3 py-4 whitespace-nowrap text-center align-middle">
+                                                <td className="px-3 py-4 whitespace-nowrap text-center">
                                                     <div className="flex flex-col items-center gap-0.5">
                                                         <span className="text-xs font-semibold text-gray-700">
                                                             {getEntryByFirstName(order)}
@@ -4608,6 +4643,7 @@ const OrderManagement = ({
                                         orderEntries.push({
                                             productName: pName,
                                             brand: b.brandName || b.brand || '—',
+                                            lcNo: b.lcNo || item.lcNo || order.lcNo || '',
                                             warehouse: b.warehouseName || b.warehouse || order.warehouse || '—',
                                             bag: bBag,
                                             qty: bQty,
@@ -4705,6 +4741,12 @@ const OrderManagement = ({
                                                                 <span className="text-gray-500 font-medium">Product:</span>
                                                                 <span className="font-bold text-gray-900 text-right">{e.productName}</span>
                                                             </div>
+                                                            {e.lcNo && (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">LC No:</span>
+                                                                    <span className="font-bold text-purple-700 text-right">{e.lcNo}</span>
+                                                                </div>
+                                                            )}
                                                             {e.brand && e.brand !== '—' && (
                                                                 <div className="flex justify-between items-center">
                                                                     <span className="text-gray-500 font-medium">Brand:</span>
@@ -5011,6 +5053,9 @@ const OrderManagement = ({
                                                             <td className="px-6 py-4 align-middle">
                                                                 <div className="flex flex-col gap-0.5">
                                                                     <div className="text-[12px] font-bold text-gray-800">{entry.brand || entry.brandName || '-'}</div>
+                                                                    {(entry.lcNo || product.lcNo || viewRecord.lcNo) && (
+                                                                        <div className="text-[10px] font-bold text-purple-700">LC: {entry.lcNo || product.lcNo || viewRecord.lcNo}</div>
+                                                                    )}
                                                                     <div className="text-[9px] font-black text-blue-500 uppercase tracking-wider flex items-center gap-1">
                                                                         <div className="w-1 h-1 rounded-full bg-blue-400"></div>
                                                                         {entry.warehouseName || '-'}

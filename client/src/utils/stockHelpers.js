@@ -440,7 +440,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             openingQuantity: safeOpeningQty,
                             openingPacket: safeOpeningPkt,
                             totalInHouseQuantity: safeOpeningQty,
-                            totalInHousePacket: safeOpeningPkt
+                            totalInHousePacket: safeOpeningPkt,
+                            orderQuantity: b.orderQuantity || 0,
+                            orderPacket: b.orderPacket || 0,
+                            saleableQuantity: b.saleableQuantity !== undefined ? b.saleableQuantity : Math.max(0, safeInHouseQty - (b.orderQuantity || 0)),
+                            saleablePacket: b.saleablePacket !== undefined ? b.saleablePacket : Math.max(0, safeInHousePkt - (b.orderPacket || 0))
                         });
                     });
                 });
@@ -453,7 +457,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     : getGroupedBrandList(recBrands);
 
                 if (isPriceReport) {
-                    groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001);
+                    groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001);
                 } else if (stockFilters?.reportType === 'short') {
                     groupedBrands = groupedBrands.filter(b =>
                         Math.abs(b.inHouseQuantity || 0) > 0.001 ||
@@ -1278,10 +1282,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 const isChappanBoguraMatch = normBrand === 'chappan' && (sale.invoiceNo === 'GS0497' || sale.orderNo === 'ORD0176');
                                 const isPrakashMediumBoguraMatch = normBrand === 'prakash medium' && (sale.invoiceNo === 'GS0519' || sale.orderNo === 'ORD0148') && stockLc === '087326010601';
 
-                                if (!isOrderSale && !isChappanBoguraMatch && !isPrakashMediumBoguraMatch) {
-                                    if (hasStockLc && !hasSaleLc) return;
-                                    if (!hasStockLc && hasSaleLc) return;
+                                if (!isChappanBoguraMatch && !isPrakashMediumBoguraMatch) {
                                     if (hasStockLc && hasSaleLc && !isLcMatch(effSaleLc, stockLc) && !isLcMatch(stockLc, effSaleLc)) return;
+                                    if (!isOrderSale) {
+                                        if (hasStockLc && !hasSaleLc) return;
+                                        if (!hasStockLc && hasSaleLc) return;
+                                    } else {
+                                        if (hasSaleLc && !hasStockLc) return;
+                                    }
                                 }
                                 if (stockFilters.lcNo && (!isOrderSale || hasSaleLc) && !isLcMatch(effSaleLc, stockFilters.lcNo)) return;
                                 if (stockSearchQuery) {
@@ -1747,7 +1755,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const sale = Math.abs(b.saleQuantity || 0);
 
             if (isPriceReport && !stockFilters?._isSubCall) {
-                return Math.abs(b.inHouseQuantity || 0) > 0.001;
+                return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
             }
 
             // If closing, order, saleable, opening, and sale are 0, do not show
@@ -1839,8 +1847,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         }
 
         if (isPriceReport && !stockFilters?._isSubCall) {
-            // In Price Report mode, keep all LC entries with non-zero remaining stock
-            filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001);
+            // In Price Report mode, keep all LC entries with non-zero remaining stock or active orders
+            filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001);
         } else if (stockFilters?.reportType === 'short') {
             // In Short Report mode, keep items with non-zero closing stock, active pending orders, opening or sales
             filteredBrands = filteredBrands.filter(b =>
