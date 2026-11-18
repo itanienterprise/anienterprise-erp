@@ -201,13 +201,20 @@ const ProductHistoryReport = ({
         ...(rawTransferHistory || []).map(t => t.lcNo),
         ...matchingBaselineSnapshots.map(s => s.lcNo)
     ].map(l => (l || '').trim()).filter(v => !isLcPlaceholder(v)))].sort();
-    const warehouseOptions = [...new Set([
+    const rawWarehouseOptions = [...new Set([
         ...(rawPurchaseHistory || []).map(p => p.warehouse || p.whName),
         ...(rawSaleHistory || []).map(s => s.itemWarehouse || s.warehouse || s.whName),
         ...(rawDamageHistory || []).map(d => d.warehouse || d.whName),
         ...(rawTransferHistory || []).flatMap(t => [t.fromWh, t.toWh]),
         ...matchingBaselineSnapshots.map(s => s.warehouse || s.whName)
-    ].map(w => (w || '').trim()).filter(Boolean))].sort();
+    ].map(w => (w || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    const warehouseOptions = (() => {
+        const hili = rawWarehouseOptions.filter(o => o.toUpperCase().includes('HILI'));
+        const bogura = rawWarehouseOptions.filter(o => o.toUpperCase().includes('BOGURA'));
+        const others = rawWarehouseOptions.filter(o => !o.toUpperCase().includes('HILI') && !o.toUpperCase().includes('BOGURA'));
+        return [...hili, ...bogura, ...others];
+    })();
 
     const purchaseHistory = (rawPurchaseHistory || []).filter(p => {
         if ((parseFloat(p.itemQty) || 0) <= 0 && (parseFloat(p.itemInHouseQty) || 0) <= 0) return false;

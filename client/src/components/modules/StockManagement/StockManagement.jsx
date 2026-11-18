@@ -413,7 +413,7 @@ const StockManagement = ({
 
     const uniqueWarehouses = useMemo(() => {
         if (!warehouseData || !Array.isArray(warehouseData)) return [];
-        return warehouseData.reduce((acc, current) => {
+        const list = warehouseData.reduce((acc, current) => {
             if (current?.whName && !acc.find(item => item.whName === current.whName)) {
                 acc.push({
                     _id: current._id,
@@ -425,6 +425,12 @@ const StockManagement = ({
             }
             return acc;
         }, []).sort((a, b) => a.whName.localeCompare(b.whName, undefined, { sensitivity: 'base' }));
+
+        // Priority: HILI first, then BOGURA, then others in alphabetical order
+        const hili = list.filter(w => w.whName.toUpperCase().includes('HILI'));
+        const bogura = list.filter(w => w.whName.toUpperCase().includes('BOGURA'));
+        const others = list.filter(w => !w.whName.toUpperCase().includes('HILI') && !w.whName.toUpperCase().includes('BOGURA'));
+        return [...hili, ...bogura, ...others];
     }, [warehouseData]);
 
     const activePurchaseHistory = useMemo(() => {
@@ -2384,6 +2390,60 @@ const StockManagement = ({
         return calculateStockData(stockRecords, { ...stockFilters, showRate: effectiveShowRate }, deferredStockSearch, warehouseData, salesRecords, products, damages, activeBaseline, returnsList);
     }, [stockRecords, stockFilters, effectiveShowRate, deferredStockSearch, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
 
+    const warehouseOptions = useMemo(() => {
+        const fromStock = (stockRecords || []).map(item => (item.warehouse || item.whName || '').trim()).filter(Boolean);
+        const fromWh = (warehouseData || []).flatMap(item => [item.whName, item.warehouse, item.fromWh, item.toWh].map(x => (x || '').trim())).filter(Boolean);
+        const fromBaseline = (activeBaseline && Array.isArray(activeBaseline.snapshotRecords))
+            ? activeBaseline.snapshotRecords.map(s => (s.warehouse || s.whName || '').trim()).filter(Boolean)
+            : [];
+        const options = [...new Set([...fromStock, ...fromWh, ...fromBaseline])].filter(w => w && w !== 'Inventory Adjustment').sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+        // Priority: HILI first, then BOGURA, then others in alphabetical order
+        const hili = options.filter(o => o.toUpperCase().includes('HILI'));
+        const bogura = options.filter(o => o.toUpperCase().includes('BOGURA'));
+        const others = options.filter(o => !o.toUpperCase().includes('HILI') && !o.toUpperCase().includes('BOGURA'));
+        return [...hili, ...bogura, ...others];
+    }, [stockRecords, warehouseData, activeBaseline]);
+
+    const formatWarehouseName = (name) => {
+        if (!name) return '';
+        return String(name)
+            .split(' ')
+            .map(word => {
+                if (!word) return '';
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            })
+            .join(' ');
+    };
+
+    const multiWarehouseData = useMemo(() => {
+        const isAll = !stockFilters.warehouse || stockFilters.warehouse === "All Warehouses" || stockFilters.warehouse === "All";
+        if (!isAll) {
+            return [{
+                warehouseName: stockFilters.warehouse,
+                data: stockData
+            }].filter(item => item.data?.displayRecords?.length > 0);
+        }
+
+        return warehouseOptions.map(wh => {
+            const filters = { ...stockFilters, warehouse: wh, showRate: effectiveShowRate, _isSubCall: true };
+            return {
+                warehouseName: wh,
+                data: calculateStockData(stockRecords, filters, deferredStockSearch, warehouseData, salesRecords, products, damages, activeBaseline, returnsList)
+            };
+        }).filter(item => item.data?.displayRecords?.length > 0);
+    }, [stockFilters, warehouseOptions, stockRecords, deferredStockSearch, warehouseData, salesRecords, products, damages, effectiveShowRate, activeBaseline, returnsList, stockData]);
+
+    const hasAnyDisplayRecords = useMemo(() => {
+        return multiWarehouseData.some(whItem => {
+            return (whItem.data?.displayRecords || []).some(group => {
+                const matchesExpanded = !expandedProducts || expandedProducts === `${whItem.warehouseName}_${group.productName}` || expandedProducts === group.productName;
+                const matchesRate = !effectiveShowRate || (group.brandList && group.brandList.some(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001));
+                return matchesExpanded && matchesRate;
+            });
+        });
+    }, [multiWarehouseData, expandedProducts, effectiveShowRate]);
+
     // Function to calculate raw in-house snapshot across all warehouses for baseline
     const generateCurrentStockSnapshot = () => {
         const whSet = new Set();
@@ -2754,8 +2814,7 @@ const StockManagement = ({
                                                         </div>
                                                     </div>
                                                     {filterDropdownOpen.warehouse && (() => {
-                                                        const rawOptions = [...new Set(uniqueWarehouses.map(w => w.whName).filter(Boolean))].sort();
-                                                        const options = ["All Warehouses", ...rawOptions];
+                                                        const options = ["All Warehouses", ...warehouseOptions];
                                                         const filtered = options.filter(wh => wh.toLowerCase().includes(filterSearchInputs.warehouseSearch.toLowerCase()));
                                                         return filtered.length > 0 ? (
                                                             <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
@@ -3588,290 +3647,342 @@ const StockManagement = ({
             )}
 
             {(!showStockForm && !showAddWarehouseStockForm) && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <>
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
 
-                    {/* Mobile View: Cards */}
-                    <div className="md:hidden divide-y divide-gray-100">
-                        {stockData.displayRecords.length === 0 ? (
-                            <div className="p-8 text-center text-gray-400 font-medium italic">No stock records found</div>
-                        ) : (
-                            stockData.displayRecords
-                                .filter(group => !expandedProducts || group.productName === expandedProducts)
-                                .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)))
-                                .map((group, gIdx) => {
-                                    const isExpanded = expandedProducts === group.productName;
-                                    const effectiveBrandList = effectiveShowRate
-                                        ? group.brandList.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)
-                                        : group.brandList;
+                        {/* Mobile View: Cards */}
+                        <div className="md:hidden divide-y divide-gray-100">
+                            {!hasAnyDisplayRecords ? (
+                                <div className="p-8 text-center text-gray-400 font-medium italic">No stock records found</div>
+                            ) : (
+                                multiWarehouseData.map((whItem, whIdx) => {
+                                    const warehouseRecords = (whItem.data?.displayRecords || [])
+                                        .filter(group => !expandedProducts || expandedProducts === `${whItem.warehouseName}_${group.productName}` || expandedProducts === group.productName)
+                                        .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)));
+
+                                    if (warehouseRecords.length === 0) return null;
 
                                     return (
-                                        <div key={group.productName || gIdx} className="p-4 space-y-4 hover:bg-gray-50/50 transition-colors">
-                                            <div
-                                                className="w-full cursor-pointer select-none space-y-2.5"
-                                                onClick={() => toggleProductExpansion(group.productName)}
-                                            >
-                                                <div className="flex justify-between items-center w-full">
-                                                    <h3 className="text-base font-black text-gray-900 leading-tight truncate flex-1 min-w-0 pr-3">{group.productName}</h3>
-                                                    <div className="shrink-0 flex items-center">
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${Math.round(group.inHouseQuantity) > 0 ? 'bg-emerald-100 text-emerald-700' : Math.round(group.inHouseQuantity) < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                            {Math.round(group.inHouseQuantity) > 0 ? 'In Stock' : Math.round(group.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex justify-between items-center w-full">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">INHOUSE</span>
-                                                        <span className="text-gray-400 font-bold">:</span>
-                                                    </div>
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border whitespace-nowrap ${group.inHouseQuantity > 0 ? 'bg-emerald-50 border-emerald-100 text-gray-900' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
-                                                        {(Math.round(group.inHousePacket) || 0).toLocaleString('en-US')} BAG • {(Math.round(group.inHouseQuantity) || 0).toLocaleString('en-US')} {group.unit || 'kg'}
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between items-center w-full">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-xs font-bold text-teal-700 uppercase tracking-wider">SALEABLE</span>
-                                                        <span className="text-teal-400 font-bold">:</span>
-                                                    </div>
-                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border whitespace-nowrap bg-teal-50 border-teal-100 text-teal-900">
-                                                        {(() => {
-                                                            const pktSize = group.packetSize || group.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
-                                                            const { whole: sWhole } = calculatePktRemainder(group.saleableQuantity || 0, pktSize);
-                                                            const sPkt = Math.round(group.saleablePacket) || sWhole || 0;
-                                                            return `${sPkt.toLocaleString('en-US')} BAG • ${(Math.round(group.saleableQuantity) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
-                                                        })()}
-                                                    </span>
-                                                </div>
+                                        <div key={whItem.warehouseName || whIdx} className="divide-y divide-gray-100">
+                                            <div className="bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-blue-50/70 px-4 py-2.5 border-y border-blue-100 flex items-center justify-center sticky top-0 z-10">
+                                                <span className="inline-flex items-center px-4 py-1 rounded-lg text-xs font-black tracking-wider bg-blue-600 text-white shadow-sm">
+                                                    Warehouse - {formatWarehouseName(whItem.warehouseName)}
+                                                </span>
                                             </div>
 
-                                            {isExpanded && (
-                                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            {warehouseRecords.map((group, gIdx) => {
+                                                const productKey = `${whItem.warehouseName}_${group.productName}`;
+                                                const isExpanded = expandedProducts === productKey || expandedProducts === group.productName;
+                                                const effectiveBrandList = effectiveShowRate
+                                                    ? group.brandList.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)
+                                                    : group.brandList;
 
-                                                    {/* Brands List Mobile */}
-                                                    <div className="space-y-3 pl-2 border-l-2 border-blue-100">
-                                                        {(() => {
-                                                            const mobileBrandGroups = [];
-                                                            effectiveBrandList.forEach((brand) => {
-                                                                const bName = (brand.brand || '-').trim();
-                                                                let groupItem = mobileBrandGroups.find(g => g.brand.toLowerCase() === bName.toLowerCase());
-                                                                if (!groupItem) {
-                                                                    groupItem = {
-                                                                        brand: bName,
-                                                                        packetSize: brand.packetSize || group.packetSize || 30,
-                                                                        entries: []
-                                                                    };
-                                                                    mobileBrandGroups.push(groupItem);
-                                                                }
-                                                                groupItem.entries.push(brand);
-                                                            });
-
-                                                            return mobileBrandGroups.map((brandGroup, bgIdx) => {
-                                                                const totalInHouseQty = brandGroup.entries.reduce((sum, b) => sum + (parseFloat(b.inHouseQuantity) || 0), 0);
-                                                                const totalInHousePkt = brandGroup.entries.reduce((sum, b) => sum + (parseFloat(b.inHousePacket) || 0), 0);
-                                                                const hasMultipleLcs = brandGroup.entries.length > 1;
-                                                                const effectiveShowRate = canShowRate && showRate;
-
-                                                                return (
-                                                                    <div key={bgIdx} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100 space-y-2.5 transition-all">
-                                                                        {/* Row 1: Brand Name & Status + Action */}
-                                                                        <div className="flex justify-between items-center w-full select-none">
-                                                                            <span className="font-black text-gray-900 text-base truncate flex-1 min-w-0 pr-2">
-                                                                                {brandGroup.brand}
-                                                                            </span>
-                                                                            <div className="shrink-0 flex items-center gap-2">
-                                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${Math.round(totalInHouseQty) > 0 ? 'bg-emerald-100 text-emerald-700' : Math.round(totalInHouseQty) < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                                                    {Math.round(totalInHouseQty) > 0 ? 'In Stock' : Math.round(totalInHouseQty) < 0 ? 'Pre-Sold' : 'Out of Stock'}
-                                                                                </span>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        const filterBrand = (brandGroup.brand && brandGroup.brand !== '-') ? brandGroup.brand.trim() : '';
-                                                                                        setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: filterBrand, warehouse: '' });
-                                                                                        setViewRecord({ data: group });
-                                                                                    }}
-                                                                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                                                                    title={`View ${brandGroup.brand} History`}
-                                                                                >
-                                                                                    <EyeIcon className="w-4 h-4" />
-                                                                                </button>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {/* LC Entries for this brand */}
-                                                                        <div className="space-y-2.5 pt-2 border-t border-gray-100">
-                                                                            {brandGroup.entries.map((brand, entryIdx) => (
-                                                                                <div key={entryIdx} className={`${entryIdx !== 0 ? 'pt-2.5 border-t border-gray-200/50' : ''}`}>
-                                                                                    <div className="grid grid-cols-[85px_8px_1fr] gap-y-1.5 text-xs items-baseline text-left">
-                                                                                        {effectiveShowRate && (
-                                                                                            <>
-                                                                                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">LC NO</span>
-                                                                                                <span className="text-gray-400 font-bold">:</span>
-                                                                                                <span className="font-bold text-blue-600 font-mono tracking-tight break-all">{brand.lcNo || '—'}</span>
-
-                                                                                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">RATE</span>
-                                                                                                <span className="text-gray-400 font-bold">:</span>
-                                                                                                <span className="font-bold text-purple-700 break-words">
-                                                                                                    {brand.purchasedPrice ? `৳${parseFloat(brand.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
-                                                                                                </span>
-                                                                                            </>
-                                                                                        )}
-
-                                                                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">INHOUSE</span>
-                                                                                        <span className="text-gray-400 font-bold">:</span>
-                                                                                        <span className="font-bold text-gray-900 break-words">
-                                                                                            {(Math.round(brand.inHousePacket) || 0).toLocaleString('en-US')} BAG • {(Math.round(brand.inHouseQuantity) || 0).toLocaleString('en-US')} {group.unit || 'kg'}
-                                                                                        </span>
-
-                                                                                        <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">ORDER</span>
-                                                                                        <span className="text-purple-400 font-bold">:</span>
-                                                                                        <span className="font-bold text-purple-700 break-words">
-                                                                                            {(() => {
-                                                                                                const pktSize = brand.packetSize || brandGroup.packetSize || group.packetSize || 30;
-                                                                                                const orderQty = brand.orderQuantity || 0;
-                                                                                                const { whole: orderWhole } = calculatePktRemainder(orderQty, pktSize);
-                                                                                                const orderPkt = brand.orderPacket !== undefined ? Math.round(brand.orderPacket) : orderWhole;
-                                                                                                return `${(orderPkt || 0).toLocaleString('en-US')} BAG • ${(Math.round(orderQty) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
-                                                                                            })()}
-                                                                                        </span>
-
-                                                                                        <span className="text-xs font-bold text-teal-600 uppercase tracking-wider">SALEABLE</span>
-                                                                                        <span className="text-teal-400 font-bold">:</span>
-                                                                                        <span className="font-bold text-teal-700 break-words">
-                                                                                            {(() => {
-                                                                                                const pktSize = brand.packetSize || brandGroup.packetSize || group.packetSize || 30;
-                                                                                                const saleableQty = brand.saleableQuantity !== undefined ? brand.saleableQuantity : Math.max(0, (brand.inHouseQuantity || 0) - (brand.orderQuantity || 0));
-                                                                                                const { whole: saleableWhole } = calculatePktRemainder(saleableQty, pktSize);
-                                                                                                const saleablePkt = brand.saleablePacket !== undefined ? Math.round(brand.saleablePacket) : saleableWhole;
-                                                                                                return `${(saleablePkt || 0).toLocaleString('en-US')} BAG • ${(Math.round(saleableQty) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
-                                                                                            })()}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-
-                                                                        {/* Brand Total if multiple LCs */}
-                                                                        {effectiveShowRate && hasMultipleLcs && (
-                                                                            <div className="bg-purple-50/20 rounded-xl p-2.5 border border-dashed border-purple-200 mt-2">
-                                                                                <div className="grid grid-cols-[85px_8px_1fr] gap-y-1 text-xs items-baseline text-left">
-                                                                                    <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">TOTAL</span>
-                                                                                    <span className="text-purple-400 font-bold">:</span>
-                                                                                    <span className="font-black text-purple-950 break-words">
-                                                                                        {(() => {
-                                                                                            const pktSize = brandGroup.packetSize || group.packetSize || 30;
-                                                                                            const { whole, remainder = 0 } = calculatePktRemainder(totalInHouseQty, pktSize);
-                                                                                            return `${whole.toLocaleString('en-US')} BAG • ${Math.round(totalInHouseQty).toLocaleString('en-US')} ${group.unit || 'kg'}`;
-                                                                                        })()}
-                                                                                    </span>
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            });
-                                                        })()}
-                                                    </div>
-
-                                                    {/* Card Actions - Bottom Round Shape Buttons */}
-                                                    <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1 mt-2">
-                                                        {/* View */}
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', warehouse: '' });
-                                                                setViewRecord({ data: group });
-                                                            }}
-                                                            className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
-                                                            title={`View Stock History (${group.productName || ''})`}
+                                                return (
+                                                    <div key={productKey} className="p-4 space-y-4 hover:bg-gray-50/50 transition-colors">
+                                                        <div
+                                                            className="w-full cursor-pointer select-none space-y-2.5"
+                                                            onClick={() => toggleProductExpansion(productKey)}
                                                         >
-                                                            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-blue-600 shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 group-hover:scale-105 group-active:scale-95 shrink-0">
-                                                                <EyeIcon className="w-5 h-5 transition-transform duration-150" />
+                                                            <div className="flex justify-between items-center w-full">
+                                                                <h3 className="text-base font-black text-gray-900 leading-tight truncate flex-1 min-w-0 pr-3">{group.productName}</h3>
+                                                                <div className="shrink-0 flex items-center">
+                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${Math.round(group.inHouseQuantity) > 0 ? 'bg-emerald-100 text-emerald-700' : Math.round(group.inHouseQuantity) < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                                        {Math.round(group.inHouseQuantity) > 0 ? 'In Stock' : Math.round(group.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                    </span>
+                                                                </div>
                                                             </div>
-                                                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-blue-700">
-                                                                View
-                                                            </span>
-                                                        </button>
+                                                            <div className="flex justify-between items-center w-full">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">INHOUSE</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                </div>
+                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border whitespace-nowrap ${group.inHouseQuantity > 0 ? 'bg-emerald-50 border-emerald-100 text-gray-900' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
+                                                                    {(Math.round(group.inHousePacket) || 0).toLocaleString('en-US')} BAG • {(Math.round(group.inHouseQuantity) || 0).toLocaleString('en-US')} {group.unit || 'kg'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center w-full">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-xs font-bold text-teal-700 uppercase tracking-wider">SALEABLE</span>
+                                                                    <span className="text-teal-400 font-bold">:</span>
+                                                                </div>
+                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border whitespace-nowrap bg-teal-50 border-teal-100 text-teal-900">
+                                                                    {(() => {
+                                                                        const pktSize = group.packetSize || group.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                                        const { whole: sWhole } = calculatePktRemainder(group.saleableQuantity || 0, pktSize);
+                                                                        const sPkt = Math.round(group.saleablePacket) || sWhole || 0;
+                                                                        return `${sPkt.toLocaleString('en-US')} BAG • ${(Math.round(group.saleableQuantity) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
+                                                                    })()}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {isExpanded && (
+                                                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+
+                                                                {/* Brands List Mobile */}
+                                                                <div className="space-y-3 pl-2 border-l-2 border-blue-100">
+                                                                    {(() => {
+                                                                        const mobileBrandGroups = [];
+                                                                        effectiveBrandList.forEach((brand) => {
+                                                                            const bName = (brand.brand || '-').trim();
+                                                                            let groupItem = mobileBrandGroups.find(g => g.brand.toLowerCase() === bName.toLowerCase());
+                                                                            if (!groupItem) {
+                                                                                groupItem = {
+                                                                                    brand: bName,
+                                                                                    packetSize: brand.packetSize || group.packetSize || 30,
+                                                                                    entries: []
+                                                                                };
+                                                                                mobileBrandGroups.push(groupItem);
+                                                                            }
+                                                                            groupItem.entries.push(brand);
+                                                                        });
+
+                                                                        return mobileBrandGroups.map((brandGroup, bgIdx) => {
+                                                                            const totalInHouseQty = brandGroup.entries.reduce((sum, b) => sum + (parseFloat(b.inHouseQuantity) || 0), 0);
+                                                                            const totalInHousePkt = brandGroup.entries.reduce((sum, b) => sum + (parseFloat(b.inHousePacket) || 0), 0);
+                                                                            const hasMultipleLcs = brandGroup.entries.length > 1;
+                                                                            const effectiveShowRate = canShowRate && showRate;
+
+                                                                            return (
+                                                                                <div key={bgIdx} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100 space-y-2.5 transition-all">
+                                                                                    {/* Row 1: Brand Name & Status + Action */}
+                                                                                    <div className="flex justify-between items-center w-full select-none">
+                                                                                        <span className="font-black text-gray-900 text-base truncate flex-1 min-w-0 pr-2">
+                                                                                            {brandGroup.brand}
+                                                                                        </span>
+                                                                                        <div className="shrink-0 flex items-center gap-2">
+                                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${Math.round(totalInHouseQty) > 0 ? 'bg-emerald-100 text-emerald-700' : Math.round(totalInHouseQty) < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                                                                {Math.round(totalInHouseQty) > 0 ? 'In Stock' : Math.round(totalInHouseQty) < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                                            </span>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    const filterBrand = (brandGroup.brand && brandGroup.brand !== '-') ? brandGroup.brand.trim() : '';
+                                                                                                    setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: filterBrand, warehouse: whItem.warehouseName });
+                                                                                                    setViewRecord({ data: group, warehouse: whItem.warehouseName });
+                                                                                                }}
+                                                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                                                                title={`View ${brandGroup.brand} History`}
+                                                                                            >
+                                                                                                <EyeIcon className="w-4 h-4" />
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {/* LC Entries for this brand */}
+                                                                                    <div className="space-y-2.5 pt-2 border-t border-gray-100">
+                                                                                        {brandGroup.entries.map((brand, entryIdx) => (
+                                                                                            <div key={entryIdx} className={`${entryIdx !== 0 ? 'pt-2.5 border-t border-gray-200/50' : ''}`}>
+                                                                                                <div className="grid grid-cols-[85px_8px_1fr] gap-y-1.5 text-xs items-baseline text-left">
+                                                                                                    {effectiveShowRate && (
+                                                                                                        <>
+                                                                                                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">LC NO</span>
+                                                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                                                            <span className="font-bold text-blue-600 font-mono tracking-tight break-all">{brand.lcNo || '—'}</span>
+
+                                                                                                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">RATE</span>
+                                                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                                                            <span className="font-bold text-purple-700 break-words">
+                                                                                                                {brand.purchasedPrice ? `৳${parseFloat(brand.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                                                                            </span>
+                                                                                                        </>
+                                                                                                    )}
+
+                                                                                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">INHOUSE</span>
+                                                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                                                    <span className="font-bold text-gray-900 break-words">
+                                                                                                        {(Math.round(brand.inHousePacket) || 0).toLocaleString('en-US')} BAG • {(Math.round(brand.inHouseQuantity) || 0).toLocaleString('en-US')} {group.unit || 'kg'}
+                                                                                                    </span>
+
+                                                                                                    <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">ORDER</span>
+                                                                                                    <span className="text-purple-400 font-bold">:</span>
+                                                                                                    <span className="font-bold text-purple-700 break-words">
+                                                                                                        {(() => {
+                                                                                                            const pktSize = brand.packetSize || brandGroup.packetSize || group.packetSize || 30;
+                                                                                                            const orderQty = brand.orderQuantity || 0;
+                                                                                                            const { whole: orderWhole } = calculatePktRemainder(orderQty, pktSize);
+                                                                                                            const orderPkt = brand.orderPacket !== undefined ? Math.round(brand.orderPacket) : orderWhole;
+                                                                                                            return `${(orderPkt || 0).toLocaleString('en-US')} BAG • ${(Math.round(orderQty) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
+                                                                                                        })()}
+                                                                                                    </span>
+
+                                                                                                    <span className="text-xs font-bold text-teal-600 uppercase tracking-wider">SALEABLE</span>
+                                                                                                    <span className="text-teal-400 font-bold">:</span>
+                                                                                                    <span className="font-bold text-teal-700 break-words">
+                                                                                                        {(() => {
+                                                                                                            const pktSize = brand.packetSize || brandGroup.packetSize || group.packetSize || 30;
+                                                                                                            const saleableQty = brand.saleableQuantity !== undefined ? brand.saleableQuantity : Math.max(0, (brand.inHouseQuantity || 0) - (brand.orderQuantity || 0));
+                                                                                                            const { whole: saleableWhole } = calculatePktRemainder(saleableQty, pktSize);
+                                                                                                            const saleablePkt = brand.saleablePacket !== undefined ? Math.round(brand.saleablePacket) : saleableWhole;
+                                                                                                            return `${(saleablePkt || 0).toLocaleString('en-US')} BAG • ${(Math.round(saleableQty) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
+                                                                                                        })()}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+
+                                                                                    {/* Brand Total if multiple LCs */}
+                                                                                    {effectiveShowRate && hasMultipleLcs && (
+                                                                                        <div className="bg-purple-50/20 rounded-xl p-2.5 border border-dashed border-purple-200 mt-2">
+                                                                                            <div className="grid grid-cols-[85px_8px_1fr] gap-y-1 text-xs items-baseline text-left">
+                                                                                                <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">TOTAL</span>
+                                                                                                <span className="text-purple-400 font-bold">:</span>
+                                                                                                <span className="font-black text-purple-950 break-words">
+                                                                                                    {(() => {
+                                                                                                        const pktSize = brandGroup.packetSize || group.packetSize || 30;
+                                                                                                        const { whole, remainder = 0 } = calculatePktRemainder(totalInHouseQty, pktSize);
+                                                                                                        return `${whole.toLocaleString('en-US')} BAG • ${Math.round(totalInHouseQty).toLocaleString('en-US')} ${group.unit || 'kg'}`;
+                                                                                                    })()}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        });
+                                                                    })()}
+                                                                </div>
+
+                                                                {/* Card Actions - Bottom Round Shape Buttons */}
+                                                                <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1 mt-2">
+                                                                    {/* View */}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', warehouse: whItem.warehouseName });
+                                                                            setViewRecord({ data: group, warehouse: whItem.warehouseName });
+                                                                        }}
+                                                                        className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
+                                                                        title={`View Stock History (${group.productName || ''})`}
+                                                                    >
+                                                                        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-blue-600 shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                            <EyeIcon className="w-5 h-5 transition-transform duration-150" />
+                                                                        </div>
+                                                                        <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-blue-700">
+                                                                            View
+                                                                        </span>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                </div>
-                                            )}
+                                                );
+                                            })}
                                         </div>
                                     );
                                 })
-                        )}
-                    </div>
+                            )}
+                        </div>
 
-                    {/* Desktop View: Table */}
+                        {/* Desktop View: Table */}
 
                     < div className="overflow-x-auto hidden md:block" >
                         <table className="w-full text-left">
-                            <thead>
-                                <tr className="bg-gray-50/50 border-b border-gray-100">
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Product Name</th>
-                                    <th colSpan="8" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                        <div className={`${gridClass} ${minWidthClass} whitespace-nowrap`}>
-                                            <div className="text-left text-gray-900 pr-2 truncate min-w-0">Brand</div>
-                                            {effectiveShowRate ? (
-                                                <>
-                                                    <div className="text-center text-purple-800 truncate min-w-0">LC No</div>
-                                                    <div className="text-center text-purple-800 truncate min-w-0">Rate</div>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    {showBag && <div className="text-center text-blue-800 truncate min-w-0" title="Opening Stock Bag">{displayUnit === 'BOTH' ? 'Opening Bag' : 'Opening Stock Bag'}</div>}
-                                                    {showQty && <div className="text-center text-blue-800 truncate min-w-0" title="Opening Stock QTY (KG)">{displayUnit === 'BOTH' ? 'Opening QTY (KG)' : 'Opening Stock QTY (KG)'}</div>}
-                                                    {showBag && <div className="text-center text-orange-800 truncate min-w-0" title="Sale Bag">Sale BAG</div>}
-                                                    {showQty && <div className="text-center text-orange-800 truncate min-w-0" title="Sale QTY (KG)">Sale QTY (KG)</div>}
-                                                </>
-                                            )}
-                                            {showBag && <div className="text-center text-green-800 truncate min-w-0" title="Closing Stock Bag">{displayUnit === 'BOTH' ? 'Closing Bag' : 'Closing Stock Bag'}</div>}
-                                            {showQty && <div className="text-center text-green-800 truncate min-w-0" title="Closing Stock QTY (KG)">{displayUnit === 'BOTH' ? 'Closing QTY (KG)' : 'Closing Stock QTY (KG)'}</div>}
-
-                                            {/* Order & Saleable Headers */}
-                                            {showBag && <div className="text-center text-purple-800 truncate min-w-0" title="Order Bag">Order Bag</div>}
-                                            {showQty && <div className="text-center text-purple-800 truncate min-w-0" title="Order Qty (KG)">Order Qty (KG)</div>}
-                                            {showBag && <div className="text-center text-teal-800 truncate min-w-0" title="Saleable Bag">Saleable Bag</div>}
-                                            {showQty && <div className="text-center text-teal-800 truncate min-w-0" title="Saleable Qty (KG)">Saleable Qty (KG)</div>}
-
-                                            <div className="text-center text-gray-500 truncate min-w-0">Status</div>
-                                        </div>
-                                    </th>
-                                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {stockData.displayRecords.length === 0 ? (
+                                {!hasAnyDisplayRecords ? (
                                     <tr>
-                                        <td colSpan="8" className="px-6 py-12 text-center text-gray-400 font-medium italic">No stock records found</td>
+                                        <td colSpan="10" className="px-6 py-12 text-center text-gray-400 font-medium italic">No stock records found</td>
                                     </tr>
                                 ) : (
-                                    stockData.displayRecords
-                                        .filter(group => !expandedProducts || group.productName === expandedProducts)
-                                        .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)))
-                                        .map((group, gIdx) => {
-                                            const effectiveBrandList = effectiveShowRate
-                                                ? group.brandList.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)
-                                                : group.brandList;
+                                    multiWarehouseData.map((whItem, whIdx) => {
+                                        const warehouseRecords = (whItem.data?.displayRecords || [])
+                                            .filter(group => !expandedProducts || expandedProducts === `${whItem.warehouseName}_${group.productName}` || expandedProducts === group.productName)
+                                            .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)));
 
-                                            // Calculate brand spans for this group's brandList
-                                            const brandSpans = [];
-                                            effectiveBrandList.forEach((ent, i) => {
-                                                const bName = (ent.brand || 'No Brand').trim().toLowerCase();
-                                                const prevB = i > 0 ? (effectiveBrandList[i - 1].brand || 'No Brand').trim().toLowerCase() : null;
-                                                if (bName === prevB) {
-                                                    brandSpans.push({ name: bName, span: 0 });
-                                                    let parentIdx = i - 1;
-                                                    while (parentIdx >= 0 && brandSpans[parentIdx].span === 0) {
-                                                        parentIdx--;
-                                                    }
-                                                    if (parentIdx >= 0) brandSpans[parentIdx].span++;
-                                                } else {
-                                                    brandSpans.push({ name: bName, span: 1 });
-                                                }
-                                            });
+                                        if (warehouseRecords.length === 0) return null;
 
-                                            return (
-                                                <tr key={group.productName || gIdx} className="hover:bg-gray-50/30 transition-colors group">
+                                        return (
+                                            <React.Fragment key={whItem.warehouseName || whIdx}>
+                                                {/* Warehouse Tag Row (Sticky at top: 0) */}
+                                                <tr className="bg-blue-50/95 backdrop-blur-md border-b border-blue-100 h-10 sticky top-0 z-20" style={{ position: 'sticky', top: 0, zIndex: 20 }}>
+                                                    <td
+                                                        colSpan="10"
+                                                        className="px-6 py-1.5 text-center sticky top-0 z-20 bg-blue-50/95 backdrop-blur-md shadow-xs"
+                                                        style={{ position: 'sticky', top: 0, zIndex: 20 }}
+                                                    >
+                                                        <div className="flex items-center justify-center">
+                                                            <span className="inline-flex items-center px-4 py-1 rounded-lg text-xs font-black tracking-wider bg-blue-600 text-white shadow-sm">
+                                                                Warehouse - {formatWarehouseName(whItem.warehouseName)}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+
+                                                {/* Column Header Row for this warehouse (Sticky at top: 40px) */}
+                                                <tr className="bg-gray-50/95 backdrop-blur-md border-b border-gray-200 sticky top-10 z-10" style={{ position: 'sticky', top: '40px', zIndex: 10 }}>
+                                                    <th
+                                                        className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap bg-gray-50/95 backdrop-blur-md border-b border-gray-200 shadow-xs"
+                                                        style={{ position: 'sticky', top: '40px', zIndex: 10 }}
+                                                    >
+                                                        Product Name
+                                                    </th>
+                                                    <th
+                                                        colSpan="8"
+                                                        className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider bg-gray-50/95 backdrop-blur-md border-b border-gray-200 shadow-xs"
+                                                        style={{ position: 'sticky', top: '40px', zIndex: 10 }}
+                                                    >
+                                                        <div className={`${gridClass} ${minWidthClass} whitespace-nowrap`}>
+                                                            <div className="text-left text-gray-900 pr-2 truncate min-w-0">Brand</div>
+                                                            {effectiveShowRate ? (
+                                                                <>
+                                                                    <div className="text-center text-purple-800 truncate min-w-0">LC No</div>
+                                                                    <div className="text-center text-purple-800 truncate min-w-0">Rate</div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    {showBag && <div className="text-center text-blue-800 truncate min-w-0" title="Opening Stock Bag">{displayUnit === 'BOTH' ? 'Opening Bag' : 'Opening Stock Bag'}</div>}
+                                                                    {showQty && <div className="text-center text-blue-800 truncate min-w-0" title="Opening Stock QTY (KG)">{displayUnit === 'BOTH' ? 'Opening QTY (KG)' : 'Opening Stock QTY (KG)'}</div>}
+                                                                    {showBag && <div className="text-center text-orange-800 truncate min-w-0" title="Sale Bag">Sale BAG</div>}
+                                                                    {showQty && <div className="text-center text-orange-800 truncate min-w-0" title="Sale QTY (KG)">Sale QTY (KG)</div>}
+                                                                </>
+                                                            )}
+                                                            {showBag && <div className="text-center text-green-800 truncate min-w-0" title="Closing Stock Bag">{displayUnit === 'BOTH' ? 'Closing Bag' : 'Closing Stock Bag'}</div>}
+                                                            {showQty && <div className="text-center text-green-800 truncate min-w-0" title="Closing Stock QTY (KG)">{displayUnit === 'BOTH' ? 'Closing QTY (KG)' : 'Closing Stock QTY (KG)'}</div>}
+
+                                                            {/* Order & Saleable Headers */}
+                                                            {showBag && <div className="text-center text-purple-800 truncate min-w-0" title="Order Bag">Order Bag</div>}
+                                                            {showQty && <div className="text-center text-purple-800 truncate min-w-0" title="Order Qty (KG)">Order Qty (KG)</div>}
+                                                            {showBag && <div className="text-center text-teal-800 truncate min-w-0" title="Saleable Bag">Saleable Bag</div>}
+                                                            {showQty && <div className="text-center text-teal-800 truncate min-w-0" title="Saleable Qty (KG)">Saleable Qty (KG)</div>}
+
+                                                            <div className="text-center text-gray-500 truncate min-w-0">Status</div>
+                                                        </div>
+                                                    </th>
+                                                    <th
+                                                        className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider bg-gray-50/95 backdrop-blur-md border-b border-gray-200 shadow-xs"
+                                                        style={{ position: 'sticky', top: '40px', zIndex: 10 }}
+                                                    >
+                                                        Actions
+                                                    </th>
+                                                </tr>
+
+                                                {warehouseRecords.map((group, gIdx) => {
+                                                    const effectiveBrandList = effectiveShowRate
+                                                        ? group.brandList.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)
+                                                        : group.brandList;
+
+                                                    // Calculate brand spans for this group's brandList
+                                                    const brandSpans = [];
+                                                    effectiveBrandList.forEach((ent, i) => {
+                                                        const bName = (ent.brand || 'No Brand').trim().toLowerCase();
+                                                        const prevB = i > 0 ? (effectiveBrandList[i - 1].brand || 'No Brand').trim().toLowerCase() : null;
+                                                        if (bName === prevB) {
+                                                            brandSpans.push({ name: bName, span: 0 });
+                                                            let parentIdx = i - 1;
+                                                            while (parentIdx >= 0 && brandSpans[parentIdx].span === 0) {
+                                                                parentIdx--;
+                                                            }
+                                                            if (parentIdx >= 0) brandSpans[parentIdx].span++;
+                                                        } else {
+                                                            brandSpans.push({ name: bName, span: 1 });
+                                                        }
+                                                    });
+
+                                                    return (
+                                                        <tr key={`${whItem.warehouseName}_${group.productName || gIdx}`} className="hover:bg-gray-50/30 transition-colors group">
                                                     <td className="px-6 py-4 align-top">
                                                         <div className="text-sm font-semibold text-gray-900 mt-1 whitespace-nowrap">{group.productName}</div>
                                                     </td>
@@ -4199,18 +4310,31 @@ const StockManagement = ({
                                                     </td>
                                                     <td className="px-6 py-4 align-top text-right">
                                                         <div className="flex items-center justify-end gap-3 mt-1">
-                                                            <button onClick={() => setViewRecord({ data: group })} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><EyeIcon className="w-5 h-5" /></button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', warehouse: whItem.warehouseName });
+                                                                    setViewRecord({ data: group, warehouse: whItem.warehouseName });
+                                                                }}
+                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                                title={`View Stock History (${group.productName || ''})`}
+                                                            >
+                                                                <EyeIcon className="w-5 h-5" />
+                                                            </button>
                                                         </div>
                                                     </td>
                                                 </tr>
                                             );
-                                        })
-                                )}
-                            </tbody>
+                                        })}
+                                    </React.Fragment>
+                                );
+                            })
+                        )}
+                    </tbody>
                         </table>
                     </div >
                     <TableScrollNav className="hidden md:flex" count={stockData.displayRecords?.length} />
                 </div >
+                </>
             )}
 
             {
