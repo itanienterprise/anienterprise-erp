@@ -326,6 +326,13 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
     const [viewData, setViewData] = useState(null);
     const [deleteConfirmState, setDeleteConfirmState] = useState({ show: false, id: null, title: '' });
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [expandedMobileRows, setExpandedMobileRows] = useState([]);
+
+    const toggleMobileRowExpansion = (id) => {
+        setExpandedMobileRows(prev =>
+            prev.includes(id) ? prev.filter(rowId => rowId !== id) : [...prev, id]
+        );
+    };
 
     // Filter states
     const [filters, setFilters] = useState({
@@ -1058,7 +1065,7 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                         <button
                             ref={filterButtonRef}
                             onClick={() => setShowFilterPanel(!showFilterPanel)}
-                            className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border ${showFilterPanel || hasActiveFilters ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'} h-[42px] font-semibold text-sm`}
+                            className={`w-full md:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl transition-all border ${showFilterPanel || hasActiveFilters ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'} h-[42px] font-semibold text-xs sm:text-sm`}
                         >
                             <FunnelIcon className={`w-4 h-4 ${showFilterPanel || hasActiveFilters ? 'text-white' : 'text-gray-400'}`} />
                             <span>Filter</span>
@@ -1073,7 +1080,7 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                         {showFilterPanel && (
                             <div
                                 ref={filterPanelRef}
-                                className="fixed inset-x-4 top-[140px] md:absolute md:inset-auto md:right-0 md:mt-3 md:top-auto w-auto md:w-[420px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-[60] p-5 opacity-100 scale-100 transform transform-gpu transition-all duration-200 ease-out origin-top-right text-left"
+                                className="fixed inset-x-4 top-[140px] md:absolute md:inset-auto md:right-0 md:mt-3 md:top-auto w-auto md:w-[420px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-[60] p-5 opacity-100 scale-100 transform transform-gpu transition-all duration-200 ease-out origin-top-right text-left max-h-[85vh] overflow-y-auto"
                             >
                                 <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
                                     <div className="flex items-center gap-2">
@@ -1214,7 +1221,7 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                     <button
                         type="button"
                         onClick={() => setShowReportModal(true)}
-                        className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 h-[42px] font-semibold text-sm"
+                        className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 h-[42px] font-semibold text-xs sm:text-sm"
                     >
                         <BarChartIcon className="w-4 h-4 text-blue-600" />
                         <span>Report</span>
@@ -1225,9 +1232,9 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                         <button
                             type="button"
                             onClick={handleOpenModal}
-                            className="flex-1 md:flex-none w-full md:w-auto justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 flex items-center gap-2 text-sm h-[42px]"
+                            className="flex-1 md:flex-none w-full md:w-auto justify-center px-2.5 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm h-[42px] whitespace-nowrap"
                         >
-                            <PlusIcon className="w-4 h-4" /> <span>Add Purchase Deal</span>
+                            <PlusIcon className="w-4 h-4 shrink-0" /> <span>Add Purchase Deal</span>
                         </button>
                     )}
                 </div>
@@ -1236,7 +1243,8 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
 
             {/* LC Purchases Data Table */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div ref={tableContainerRef} className="overflow-x-auto">
+                {/* Desktop Table View */}
+                <div ref={tableContainerRef} className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-gray-100 bg-gray-50/80">
@@ -1420,6 +1428,185 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
 
 
                     </table>
+                </div>
+
+                {/* Mobile Card View (< 768px) */}
+                <div className="block md:hidden px-3 py-3 space-y-3">
+                    {isLoading ? (
+                        Array(3).fill(0).map((_, i) => (
+                            <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
+                                <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                                <div className="h-6 bg-gray-200 rounded w-full"></div>
+                                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                            </div>
+                        ))
+                    ) : filteredRecords.length === 0 ? (
+                        <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-400">
+                            <div className="flex flex-col items-center justify-center gap-2">
+                                <BoxIcon className="w-10 h-10 text-gray-300 stroke-1" />
+                                <span className="font-semibold text-gray-500">No Purchase Deal records found</span>
+                                <span className="text-xs text-gray-400">Click &ldquo;+ Add Purchase Deal&rdquo; above to create a new record</span>
+                            </div>
+                        </div>
+                    ) : (
+                        paginatedRecords.map((item, idx) => {
+                            const isAll = pageSize === 'all' || Number(pageSize) >= ALL_PAGE_SIZE;
+                            const sl = (isAll ? 0 : (currentPage - 1) * (Number(pageSize) || 15)) + idx + 1;
+                            const purchaseQty = parseFloat(item.qty) || 0;
+                            const receiveQty = parseFloat(item.receivedQty) || 0;
+                            const remaining = Math.max(0, purchaseQty - receiveQty);
+                            const unitLabel = item.uom === 'Truck' ? 'Trucks' : 'KG';
+                            const dealStatus = getDealStatus(purchaseQty, remaining);
+                            const isExpanded = expandedMobileRows.includes(item._id || idx);
+
+                            return (
+                                <div
+                                    key={item._id || idx}
+                                    onClick={() => toggleMobileRowExpansion(item._id || idx)}
+                                    className={`bg-white border rounded-2xl overflow-hidden shadow-2xs select-none transition-all duration-200 cursor-pointer ${
+                                        isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-200/80 hover:border-gray-300'
+                                    }`}
+                                >
+                                    {/* Card Header (Always Visible) */}
+                                    <div className={`bg-gray-50/70 px-3.5 py-2.5 flex flex-col gap-1.5 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-blue-50/20' : ''}`}>
+                                        {/* Line 1: #{sl} & Pur. ID on left, Date on right */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                                    #{sl}
+                                                </span>
+                                                <span className="text-xs font-black text-blue-600 truncate">
+                                                    {(item.purchaseId || '').replace(/-/g, '') || '—'}
+                                                </span>
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <span className="text-xs font-semibold text-gray-400 tracking-wider">
+                                                    {formatDate(item.date)}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Line 2: Supplier on left, Status Badge on right */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex-1 min-w-0 pr-2">
+                                                <div className="font-black text-gray-900 text-sm tracking-tight truncate">
+                                                    {item.supplierName || '—'}
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${dealStatus.badgeClass}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${dealStatus.dotClass}`} />
+                                                    {dealStatus.status}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Line 3: Product & Brand on left, Rate on right */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex-1 min-w-0 pr-2">
+                                                <span className="text-xs font-semibold text-gray-600 truncate block">
+                                                    {item.productName || '—'}{item.brand ? ` • ${item.brand}` : ''}
+                                                </span>
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <span className="text-xs font-bold text-gray-900">
+                                                    ৳{Number(item.rate || 0).toLocaleString('en-IN')}/kg
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Card Body (Expanded View) */}
+                                    {isExpanded && (
+                                        <div className="p-3.5 space-y-3 animate-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+                                            {/* Quantities Progression Grid */}
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <div className="bg-blue-50/60 border border-blue-100/70 rounded-xl p-2.5 text-center">
+                                                    <span className="text-[10px] font-bold text-blue-600/80 uppercase block">Pur. Qty</span>
+                                                    <span className="text-xs font-black text-blue-800 block mt-0.5">
+                                                        {purchaseQty.toLocaleString('en-IN')} {unitLabel}
+                                                    </span>
+                                                </div>
+                                                <div className="bg-green-50/60 border border-green-100/70 rounded-xl p-2.5 text-center">
+                                                    <span className="text-[10px] font-bold text-green-600/80 uppercase block">Received</span>
+                                                    <span className="text-xs font-black text-green-800 block mt-0.5">
+                                                        {receiveQty.toLocaleString('en-IN')} {unitLabel}
+                                                    </span>
+                                                </div>
+                                                <div className={`rounded-xl p-2.5 text-center border ${
+                                                    remaining === 0
+                                                        ? 'bg-gray-50 border-gray-200/60'
+                                                        : 'bg-amber-50/60 border-amber-100/70'
+                                                }`}>
+                                                    <span className={`text-[10px] font-bold uppercase block ${
+                                                        remaining === 0 ? 'text-gray-500' : 'text-amber-600/80'
+                                                    }`}>Remaining</span>
+                                                    <span className={`text-xs font-black block mt-0.5 ${
+                                                        remaining === 0 ? 'text-gray-600' : 'text-amber-800'
+                                                    }`}>
+                                                        {remaining.toLocaleString('en-IN')} {unitLabel}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Extra details (Truck No / Vehicle, Notes) */}
+                                            {(item.truckNo || item.remarks || item.notes) && (
+                                                <div className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                    {item.truckNo && (
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">Truck No / Vehicle:</span>
+                                                            <span className="font-bold text-gray-800 text-right">{item.truckNo}</span>
+                                                        </div>
+                                                    )}
+                                                    {(item.remarks || item.notes) && (
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">Note:</span>
+                                                            <span className="font-semibold text-gray-700 text-right">{item.remarks || item.notes}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Action Buttons Toolbar */}
+                                            <div className="pt-2 border-t border-gray-100 flex items-center justify-center gap-2.5 w-full" onClick={(e) => e.stopPropagation()}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setViewData(item);
+                                                        fetchDealReceives();
+                                                    }}
+                                                    className="flex-1 max-w-[80px] h-9 flex items-center justify-center text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-100 rounded-xl transition-colors shadow-2xs"
+                                                    title="View Deal Details"
+                                                >
+                                                    <EyeIcon className="w-4.5 h-4.5" />
+                                                </button>
+                                                {canEdit && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleEditRecord(item)}
+                                                        className="flex-1 max-w-[80px] h-9 flex items-center justify-center text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-100 rounded-xl transition-colors shadow-2xs"
+                                                        title="Edit Deal"
+                                                    >
+                                                        <EditIcon className="w-4.5 h-4.5" />
+                                                    </button>
+                                                )}
+                                                {canDelete && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteRecord(item._id)}
+                                                        className="flex-1 max-w-[80px] h-9 flex items-center justify-center text-rose-500 bg-rose-50/80 hover:bg-rose-100 border border-rose-100 rounded-xl transition-colors shadow-2xs"
+                                                        title="Delete Entry"
+                                                    >
+                                                        <TrashIcon className="w-4.5 h-4.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
 
                 {/* Table Footer with Pagination Controls & Horizontal Scroll Arrows */}

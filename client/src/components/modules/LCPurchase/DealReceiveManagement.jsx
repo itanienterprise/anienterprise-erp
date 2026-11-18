@@ -274,6 +274,13 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
     const [viewData, setViewData] = useState(null);
     const [deleteConfirmState, setDeleteConfirmState] = useState({ show: false, id: null, title: '' });
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [expandedMobileRows, setExpandedMobileRows] = useState([]);
+
+    const toggleMobileRowExpansion = (id) => {
+        setExpandedMobileRows(prev =>
+            prev.includes(id) ? prev.filter(rowId => rowId !== id) : [...prev, id]
+        );
+    };
 
     // Filter states
     const [filters, setFilters] = useState({
@@ -1074,7 +1081,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                         <button
                             ref={filterButtonRef}
                             onClick={() => setShowFilterPanel(!showFilterPanel)}
-                            className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border ${showFilterPanel || hasActiveFilters ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'} h-[42px] font-semibold text-sm`}
+                            className={`w-full md:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl transition-all border ${showFilterPanel || hasActiveFilters ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'} h-[42px] font-semibold text-xs sm:text-sm`}
                         >
                             <FunnelIcon className={`w-4 h-4 ${showFilterPanel || hasActiveFilters ? 'text-white' : 'text-gray-400'}`} />
                             <span>Filter</span>
@@ -1089,7 +1096,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                         {showFilterPanel && (
                             <div
                                 ref={filterPanelRef}
-                                className="fixed inset-x-4 top-[140px] md:absolute md:inset-auto md:right-0 md:mt-3 md:top-auto w-auto md:w-[420px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-[60] p-5 opacity-100 scale-100 transform transform-gpu transition-all duration-200 ease-out origin-top-right text-left"
+                                className="fixed inset-x-4 top-[140px] md:absolute md:inset-auto md:right-0 md:mt-3 md:top-auto w-auto md:w-[420px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-[60] p-5 opacity-100 scale-100 transform transform-gpu transition-all duration-200 ease-out origin-top-right text-left max-h-[85vh] overflow-y-auto"
                             >
                                 <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
                                     <div className="flex items-center gap-2">
@@ -1215,7 +1222,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                     <button
                         type="button"
                         onClick={() => setShowReportModal(true)}
-                        className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 h-[42px] font-semibold text-sm"
+                        className="flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 h-[42px] font-semibold text-xs sm:text-sm"
                     >
                         <BarChartIcon className="w-4 h-4 text-blue-600" />
                         <span>Report</span>
@@ -1226,9 +1233,9 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                         <button
                             type="button"
                             onClick={handleOpenAddForm}
-                            className="flex-1 md:flex-none w-full md:w-auto justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 flex items-center gap-2 text-sm h-[42px]"
+                            className="flex-1 md:flex-none w-full md:w-auto justify-center px-2.5 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm h-[42px] whitespace-nowrap"
                         >
-                            <PlusIcon className="w-4 h-4" /> <span>Add Deal Receive</span>
+                            <PlusIcon className="w-4 h-4 shrink-0" /> <span>Add Deal Receive</span>
                         </button>
                     )}
                 </div>
@@ -1964,7 +1971,8 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                     )}
 
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div ref={tableContainerRef} className="overflow-x-auto">
+                        {/* Desktop Table View */}
+                        <div ref={tableContainerRef} className="hidden md:block overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="border-b border-gray-100 bg-gray-50/80">
@@ -2164,6 +2172,188 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Mobile Card View (< 768px) */}
+                        <div className="block md:hidden px-3 py-3 space-y-3">
+                            {isLoading ? (
+                                Array(3).fill(0).map((_, i) => (
+                                    <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
+                                        <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                                        <div className="h-6 bg-gray-200 rounded w-full"></div>
+                                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                                    </div>
+                                ))
+                            ) : filteredRecords.length === 0 ? (
+                                <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-400">
+                                    <div className="flex flex-col items-center justify-center gap-2">
+                                        <BoxIcon className="w-10 h-10 text-gray-300 stroke-1" />
+                                        <span className="font-semibold text-gray-500">No Deal Receive records found</span>
+                                        <span className="text-xs text-gray-400">Click &ldquo;+ Add Deal Receive&rdquo; above to record a receive</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                paginatedRecords.map((item, idx) => {
+                                    const isAll = pageSize === 'all' || Number(pageSize) >= ALL_PAGE_SIZE;
+                                    const sl = (isAll ? 0 : (currentPage - 1) * (Number(pageSize) || 15)) + idx + 1;
+                                    const qtyNum = parseFloat(item.quantity) || 0;
+                                    const costingVal = parseFloat(item.costingKg) || 0;
+                                    const trucksCount = item.trucks || (Array.isArray(item.truckNumbers) && item.truckNumbers.length ? item.truckNumbers.length : 1);
+                                    const trucksLabel = (item.trucks === 1 || (!item.trucks && (!item.truckNumbers || item.truckNumbers.length <= 1))) ? 'Truck' : 'Trucks';
+                                    const isReceived = item._status === 'Received' || item._status === 'In Stock';
+                                    const isExpanded = expandedMobileRows.includes(item._id || idx);
+
+                                    return (
+                                        <div
+                                            key={item._id || idx}
+                                            onClick={() => toggleMobileRowExpansion(item._id || idx)}
+                                            className={`bg-white border rounded-2xl overflow-hidden shadow-2xs select-none transition-all duration-200 cursor-pointer ${
+                                                isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-200/80 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            {/* Card Header (Always Visible) */}
+                                            <div className={`bg-gray-50/70 px-3.5 py-2.5 flex flex-col gap-1.5 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-blue-50/20' : ''}`}>
+                                                {/* Line 1: #{sl} & Receive ID on left, Date on right */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                                            #{sl}
+                                                        </span>
+                                                        <span className="text-xs font-black text-blue-600 truncate">
+                                                            {item.receiveId || `DR${String(sl).padStart(4, '0')}`}
+                                                        </span>
+                                                    </div>
+                                                    <div className="shrink-0 text-right">
+                                                        <span className="text-xs font-semibold text-gray-400 tracking-wider">
+                                                            {formatDate(item.date)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Line 2: Supplier on left, Status Badge on right */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex-1 min-w-0 pr-2">
+                                                        <div className="font-black text-gray-900 text-sm tracking-tight truncate">
+                                                            {item.supplier || item.supplierName || '—'}
+                                                        </div>
+                                                    </div>
+                                                    <div className="shrink-0 text-right">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                                                            isReceived
+                                                                ? 'bg-green-50 text-green-700 border-green-200/60'
+                                                                : 'bg-amber-50 text-amber-700 border-amber-200/60'
+                                                        }`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${isReceived ? 'bg-green-500' : 'bg-amber-500'}`} />
+                                                            {isReceived ? 'Received' : 'Not Received'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Line 3: Product & Brand on left, Pur. ID on right */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex-1 min-w-0 pr-2">
+                                                        <span className="text-xs font-semibold text-gray-600 truncate block">
+                                                            {item.product || item.productName || '—'}{item.brand ? ` • ${item.brand}` : ''}
+                                                        </span>
+                                                    </div>
+                                                    <div className="shrink-0 text-right">
+                                                        <span className="text-xs font-bold text-blue-600">
+                                                            {(item.purchaseId || '').replace(/-/g, '') || '—'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Card Body (Expanded View) */}
+                                            {isExpanded && (
+                                                <div className="p-3.5 space-y-3 animate-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+                                                    {/* Quantities & Trucks Grid */}
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="bg-blue-50/60 border border-blue-100/70 rounded-xl p-2.5 text-center">
+                                                            <span className="text-[10px] font-bold text-blue-600/80 uppercase block">Trucks</span>
+                                                            <span className="text-xs font-black text-blue-800 block mt-0.5">
+                                                                {trucksCount} {trucksLabel}
+                                                            </span>
+                                                        </div>
+                                                        <div className="bg-green-50/60 border border-green-100/70 rounded-xl p-2.5 text-center">
+                                                            <span className="text-[10px] font-bold text-green-600/80 uppercase block">Received Quantity</span>
+                                                            <span className="text-xs font-black text-green-800 block mt-0.5">
+                                                                {qtyNum.toLocaleString('en-IN')} KG
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Breakdown details */}
+                                                    <div className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 text-xs space-y-1.5">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">Truck No:</span>
+                                                            <span className="font-bold text-gray-800 text-right">
+                                                                {item.truckNo || (Array.isArray(item.truckNumbers) ? item.truckNumbers.filter(Boolean).join(', ') : '—') || '—'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">Costing/kg:</span>
+                                                            <span className="font-bold text-gray-900 text-right">
+                                                                {costingVal ? `${costingVal.toFixed(2)} BDT` : '—'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">LC No:</span>
+                                                            <span className="font-bold text-gray-900 text-right">
+                                                                {formatLcLast6(item._lcNo)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-gray-500 font-medium">LC Rec. Date:</span>
+                                                            <span className="font-semibold text-gray-700 text-right">
+                                                                {item._lcRecDate ? formatDate(item._lcRecDate) : '—'}
+                                                            </span>
+                                                        </div>
+                                                        {item.invoiceNo && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-gray-500 font-medium">Invoice No:</span>
+                                                                <span className="font-semibold text-gray-700 text-right">{item.invoiceNo}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Action Buttons Toolbar */}
+                                                    <div className="pt-2 border-t border-gray-100 flex items-center justify-center gap-2.5 w-full" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setViewData(item)}
+                                                            className="flex-1 max-w-[80px] h-9 flex items-center justify-center text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-100 rounded-xl transition-colors shadow-2xs"
+                                                            title="View Details"
+                                                        >
+                                                            <EyeIcon className="w-4.5 h-4.5" />
+                                                        </button>
+                                                        {canEdit && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleEdit(item)}
+                                                                className="flex-1 max-w-[80px] h-9 flex items-center justify-center text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-100 rounded-xl transition-colors shadow-2xs"
+                                                                title="Edit Record"
+                                                            >
+                                                                <EditIcon className="w-4.5 h-4.5" />
+                                                            </button>
+                                                        )}
+                                                        {canDelete && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDelete(item._id)}
+                                                                className="flex-1 max-w-[80px] h-9 flex items-center justify-center text-rose-500 bg-rose-50/80 hover:bg-rose-100 border border-rose-100 rounded-xl transition-colors shadow-2xs"
+                                                                title="Delete Record"
+                                                            >
+                                                                <TrashIcon className="w-4.5 h-4.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
 
                         {/* Pagination */}
