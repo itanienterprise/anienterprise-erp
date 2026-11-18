@@ -362,6 +362,18 @@ const SaleManagement = ({
     const [submitError, setSubmitError] = useState('');
     const [viewData, setViewData] = useState(null);
     const [confirmModalConfig, setConfirmModalConfig] = useState(null);
+
+    const showNotificationModal = useCallback((title, message, type = 'danger') => {
+        setConfirmModalConfig({
+            title,
+            message,
+            type,
+            confirmText: 'OK',
+            cancelText: null,
+            onConfirm: () => setConfirmModalConfig(null),
+            onClose: () => setConfirmModalConfig(null)
+        });
+    }, []);
     const [_customerSearch, setCustomerSearch] = useState('');
     const [collapsedRows, setCollapsedRows] = useState([]);
     const [expandedMobileRows, setExpandedMobileRows] = useState([]);
@@ -469,7 +481,7 @@ const SaleManagement = ({
 
     const handleBulkRateUpdate = async () => {
         if (!bulkRate || isNaN(parseFloat(bulkRate))) {
-            alert('Please enter a valid rate');
+            showNotificationModal('Invalid Input', 'Please enter a valid rate', 'danger');
             return;
         }
 
@@ -574,7 +586,7 @@ const SaleManagement = ({
             setBulkRate('');
         } catch (err) {
             console.error('Bulk update error:', err);
-            alert('Failed to update sales in bulk');
+            showNotificationModal('Operation Failed', 'Failed to update sales in bulk', 'danger');
         } finally {
             setIsSubmitting(false);
         }
@@ -1071,11 +1083,11 @@ const SaleManagement = ({
                 }
             } else {
                 console.warn(`[handleStatusUpdate] Unexpected response status:`, response.status);
-                alert(`Status update returned unexpected status code: ${response.status}`);
+                showNotificationModal('Status Update Error', `Status update returned unexpected status code: ${response.status}`, 'danger');
             }
         } catch (error) {
             console.error(`Error updating sale status to ${newStatus}:`, error);
-            alert(`Failed to update status to ${newStatus}. See console for details: ${error.message || 'Unknown error'}`);
+            showNotificationModal('Status Update Error', `Failed to update status to ${newStatus}. See console for details: ${error.message || 'Unknown error'}`, 'danger');
         }
     };
     const saleFilterRef = useRef(null);
@@ -1641,27 +1653,77 @@ const SaleManagement = ({
         }
     };
 
+    const groupBrandEntries = (brandEntries) => {
+        if (!Array.isArray(brandEntries) || brandEntries.length <= 1) return brandEntries;
+        const groups = new Map();
+        const order = [];
+        brandEntries.forEach(entry => {
+            const brandKey = (entry.brand || entry.brandName || '').trim().toLowerCase();
+            if (!groups.has(brandKey)) {
+                groups.set(brandKey, []);
+                order.push(brandKey);
+            }
+            groups.get(brandKey).push(entry);
+        });
+        const nonBlankKeys = order.filter(k => k !== '');
+        const blankKey = order.includes('') ? [''] : [];
+        return [...nonBlankKeys, ...blankKey].flatMap(key => groups.get(key));
+    };
+
+    const isBrandEntriesGrouped = (brandEntries) => {
+        if (!Array.isArray(brandEntries) || brandEntries.length <= 1) return true;
+        const seen = new Set();
+        let lastBrand = null;
+        for (const entry of brandEntries) {
+            const b = (entry.brand || entry.brandName || '').trim().toLowerCase();
+            if (b !== lastBrand) {
+                if (b !== '' && seen.has(b)) return false;
+                if (b !== '') seen.add(b);
+                lastBrand = b;
+            }
+        }
+        return true;
+    };
+
     const [activeItemIndex, setActiveItemIndex] = useState(null);
     const [activeEntryIndex, setActiveEntryIndex] = useState(null);
 
+    // Filter out current order / invoice so live stock calculations are not self-deducted
+    const salesForCalc = useMemo(() => {
+        const currentOrderNo = (formData.orderNo || '').trim().toLowerCase();
+        const currentInvoiceNo = (formData.invoiceNo || '').trim().toLowerCase();
+        return allSalesRecords.filter(s => {
+            if (editingId && (s._id === editingId || (s._id && s._id.toString() === editingId.toString()))) return false;
+            const sInv = (s.invoiceNo || '').trim().toLowerCase();
+            if (currentInvoiceNo && sInv === currentInvoiceNo) return false;
+
+            const sType = (s.saleType || '').toLowerCase();
+            const isOrd = sType === 'order' || sInv.startsWith('ord') || s.isOrderEntry === true;
+            if (isOrd && currentOrderNo) {
+                const sOrd = (s.orderNo || '').trim().toLowerCase();
+                if (sInv === currentOrderNo || sOrd === currentOrderNo) return false;
+            }
+            return true;
+        });
+    }, [allSalesRecords, editingId, formData.orderNo, formData.invoiceNo]);
+
     // Helper to calculate inhouse and warehouse saleable stock for an entry
     const getStockForEntry = (pName, bName, lcNo, whName, isBagUom) => {
-        let inhouseSaleable = 0;
+        let inhouseVal = 0;
         let whSaleable = 0;
         const cleanPName = (pName || '').trim();
         if (!cleanPName) return { inhouseQty: '0', warehouseQty: '' };
 
-        const salesForCalc = editingId
-            ? allSalesRecords.filter(s => s._id !== editingId && s.invoiceNo !== formData.invoiceNo && s.orderNo !== formData.orderNo)
-            : allSalesRecords;
-
         const cleanBrand = (bName || '').trim();
         const cleanLc = (lcNo || '').trim();
+        const cleanWhName = (whName || '').trim();
+        const isAdvanceLc = cleanLc.toLowerCase() === 'advance';
 
-        // 1. Overall inhouse stock across all warehouses
+        // Calculate physical and saleable stock for selected warehouse if provided, otherwise across all warehouses
         const stockFilters = {
             productName: cleanPName,
             brand: cleanBrand || undefined,
+            ...(cleanWhName ? { warehouse: cleanWhName } : {}),
             reportType: 'price'
         };
         const stockRes = calculateStockData(
@@ -1685,55 +1747,21 @@ const SaleManagement = ({
                     return bBrand === targetBrandLower || bBrand.replace(/\s+/g, ' ') === targetBrandLower.replace(/\s+/g, ' ');
                 });
             }
-            if (cleanLc) {
+            if (cleanLc && !isAdvanceLc) {
                 targetBrands = targetBrands.filter(b => isLcMatch(b.lcNo, cleanLc));
             }
-            inhouseSaleable = targetBrands.reduce((sum, b) => {
-                return sum + (isBagUom ? (b.saleablePacket || 0) : (b.saleableQuantity || 0));
+            inhouseVal = targetBrands.reduce((sum, b) => {
+                const val = Math.max(0, isBagUom ? (b.inHousePacket ?? b.closingPacket ?? 0) : (b.inHouseQuantity ?? b.closingQuantity ?? 0));
+                return sum + val;
+            }, 0);
+            whSaleable = targetBrands.reduce((sum, b) => {
+                const val = Math.max(0, isBagUom ? (b.saleablePacket || 0) : (b.saleableQuantity || 0));
+                return sum + val;
             }, 0);
         }
 
-        // 2. Warehouse specific stock
-        const cleanWhName = (whName || '').trim();
-        if (cleanWhName) {
-            const whStockFilters = {
-                productName: cleanPName,
-                brand: cleanBrand || undefined,
-                warehouse: cleanWhName,
-                reportType: 'price'
-            };
-            const whStockRes = calculateStockData(
-                stockRecords,
-                whStockFilters,
-                '',
-                warehouses,
-                salesForCalc,
-                products,
-                damagesRecords,
-                activeBaseline
-            );
-            const calculatedWhStock = whStockRes?.displayRecords || [];
-            const matchedWhGroup = calculatedWhStock.find(g => (g.productName || '').trim().toLowerCase() === cleanPName.toLowerCase());
-            if (matchedWhGroup && matchedWhGroup.brandList) {
-                const targetBrandLower = cleanBrand.toLowerCase();
-                let targetBrands = matchedWhGroup.brandList;
-                if (targetBrandLower) {
-                    targetBrands = targetBrands.filter(b => {
-                        const bBrand = (b.brand || '').trim().toLowerCase();
-                        return bBrand === targetBrandLower || bBrand.replace(/\s+/g, ' ') === targetBrandLower.replace(/\s+/g, ' ');
-                    });
-                }
-                if (cleanLc) {
-                    targetBrands = targetBrands.filter(b => isLcMatch(b.lcNo, cleanLc));
-                }
-                whSaleable = targetBrands.reduce((sum, b) => {
-                    return sum + (isBagUom ? (b.saleablePacket || 0) : (b.saleableQuantity || 0));
-                }, 0);
-            }
-        }
-
         return {
-            inhouseQty: Number(Math.max(0, inhouseSaleable).toFixed(2)).toString(),
+            inhouseQty: Number(Math.max(0, inhouseVal).toFixed(2)).toString(),
             warehouseQty: cleanWhName ? Number(Math.max(0, whSaleable).toFixed(2)).toString() : ''
         };
     };
@@ -1742,9 +1770,6 @@ const SaleManagement = ({
     const productStockSummaries = useMemo(() => {
         if (!formData.items || formData.items.length === 0) return {};
         const map = {};
-        const salesForCalc = editingId
-            ? allSalesRecords.filter(s => s._id !== editingId && s.invoiceNo !== formData.invoiceNo && s.orderNo !== formData.orderNo)
-            : allSalesRecords;
 
         // Collect all (productName, warehouseName) pairs needed
         const pairs = [];
@@ -1955,21 +1980,41 @@ const SaleManagement = ({
 
                     const stockInfo = getStockForEntry(pName, bName, lcNo, whName, isBagUom);
 
-                    if (updatedEntry.inhouseQty !== stockInfo.inhouseQty) {
-                        updatedEntry.inhouseQty = stockInfo.inhouseQty;
+                    let effInhouse = stockInfo.inhouseQty;
+                    let effWarehouse = stockInfo.warehouseQty;
+
+                    if (!stockRecords || stockRecords.length === 0) {
+                        if ((!effWarehouse || effWarehouse === '0') && updatedEntry.warehouseQty && parseFloat(updatedEntry.warehouseQty) > 0) {
+                            effWarehouse = updatedEntry.warehouseQty;
+                        }
+                        if ((!effInhouse || effInhouse === '0') && updatedEntry.inhouseQty && parseFloat(updatedEntry.inhouseQty) > 0) {
+                            effInhouse = updatedEntry.inhouseQty;
+                        } else if ((!effInhouse || effInhouse === '0') && effWarehouse && parseFloat(effWarehouse) > 0) {
+                            effInhouse = effWarehouse;
+                        }
+                    }
+
+                    if (updatedEntry.inhouseQty !== effInhouse) {
+                        updatedEntry.inhouseQty = effInhouse;
                         itemChanged = true;
                     }
-                    if (updatedEntry.warehouseQty !== stockInfo.warehouseQty) {
-                        updatedEntry.warehouseQty = stockInfo.warehouseQty;
+                    if (updatedEntry.warehouseQty !== effWarehouse) {
+                        updatedEntry.warehouseQty = effWarehouse;
                         itemChanged = true;
                     }
 
                     return updatedEntry;
                 });
 
+                let finalEntries = newBrandEntries;
+                if (!isBrandEntriesGrouped(finalEntries)) {
+                    finalEntries = groupBrandEntries(finalEntries);
+                    itemChanged = true;
+                }
+
                 if (itemChanged) {
                     hasChanges = true;
-                    return { ...item, brandEntries: newBrandEntries };
+                    return { ...item, brandEntries: finalEntries };
                 }
                 return item;
             });
@@ -1981,7 +2026,7 @@ const SaleManagement = ({
         formData.items.map(i => i.brandEntries.map(e => `${e.brand}-${e.brandName}-${e.warehouseName}-${e.lcNo}`).join(',')).join('|'),
         stockRecords,
         warehouses,
-        allSalesRecords,
+        salesForCalc,
         damagesRecords,
         editingId
     ]);
@@ -2271,22 +2316,95 @@ const SaleManagement = ({
 
         const hasAccess = editingId ? (canEdit || isFullAdmin || isOwner) : canAdd;
         if (!hasAccess) {
-            alert(`Forbidden: You do not have permission to ${editingId ? 'edit' : 'add'} sales`);
+            const msg = `Forbidden: You do not have permission to ${editingId ? 'edit' : 'add'} sales`;
+            setSubmitStatus('error');
+            setSubmitError(msg);
+            showNotificationModal('Permission Denied', msg, 'danger');
             return;
         }
 
         if (saleType === 'Border') {
+            if (!formData.lcNo || !formData.lcNo.trim()) {
+                const msg = 'LC No is required';
+                setSubmitStatus('error');
+                setSubmitError(msg);
+                showNotificationModal('Validation Error', msg, 'danger');
+                return;
+            }
             if (!formData.indianCnF || !formData.indianCnF.trim()) {
-                alert('IND C&F is required');
+                const msg = 'IND C&F is required';
+                setSubmitStatus('error');
+                setSubmitError(msg);
+                showNotificationModal('Validation Error', msg, 'danger');
                 return;
             }
             if (!formData.bdCnf || !formData.bdCnf.trim()) {
-                alert('BD C&F is required');
+                const msg = 'BD C&F is required';
+                setSubmitStatus('error');
+                setSubmitError(msg);
+                showNotificationModal('Validation Error', msg, 'danger');
                 return;
             }
             if (!formData.companyName || !formData.companyName.trim()) {
-                alert('Company Name is required');
+                const msg = 'Company Name is required';
+                setSubmitStatus('error');
+                setSubmitError(msg);
+                showNotificationModal('Validation Error', msg, 'danger');
                 return;
+            }
+        } else {
+            // General Sale: validate LC No and ensure cumulative Saleable Wh Stock >= Quantity for all brand entries (scoped by LC)
+            const remainingStockMap = new Map();
+            (formData.items || []).forEach(it => {
+                const p = (it.productName || '').trim().toLowerCase();
+                (it.brandEntries || []).forEach(be => {
+                    const b = (be.brand || be.brandName || '').trim().toLowerCase();
+                    const w = (be.warehouseName || '').trim().toLowerCase();
+                    const l = (be.lcNo || '').trim().toLowerCase();
+                    const key = `${p}:::${b}:::${w}:::${l}`;
+                    const wh = parseFloat(be.warehouseQty) || 0;
+                    if (!remainingStockMap.has(key) || wh > (remainingStockMap.get(key) || 0)) {
+                        remainingStockMap.set(key, wh);
+                    }
+                });
+            });
+
+            for (let i = 0; i < (formData.items || []).length; i++) {
+                const item = formData.items[i];
+                const isBag = item.uom === 'BAG';
+                const unit = isBag ? 'BAG' : 'KG';
+                const p = (item.productName || '').trim().toLowerCase();
+                const brandEntries = item.brandEntries || [];
+                for (let j = 0; j < brandEntries.length; j++) {
+                    const entry = brandEntries[j];
+                    if (!entry.lcNo || !entry.lcNo.trim()) {
+                        const msg = `LC No is required for ${item.productName || `Product #${i + 1}`} (Row #${j + 1})`;
+                        setSubmitStatus('error');
+                        setSubmitError(msg);
+                        showNotificationModal('Validation Error', msg, 'danger');
+                        return;
+                    }
+
+                    const b = (entry.brand || entry.brandName || '').trim().toLowerCase();
+                    const w = (entry.warehouseName || '').trim().toLowerCase();
+                    const l = (entry.lcNo || '').trim().toLowerCase();
+                    const key = `${p}:::${b}:::${w}:::${l}`;
+
+                    const availableStock = remainingStockMap.has(key) ? remainingStockMap.get(key) : (parseFloat(entry.warehouseQty) || 0);
+                    const reqQty = isBag ? (parseFloat(entry.bag) || 0) : (parseFloat(entry.quantity) || 0);
+
+                    if (reqQty > 0 && availableStock < reqQty) {
+                        const pName = item.productName || `Product #${i + 1}`;
+                        const bName = entry.brand || entry.brandName || `Row #${j + 1}`;
+                        const msg = `Cannot confirm sale: Saleable Wh Stock (${availableStock.toLocaleString('en-IN')} ${unit}) is less than quantity (${reqQty.toLocaleString('en-IN')} ${unit}) for ${pName} (${bName}). Saleable Wh Stock must be greater than or equal to quantity.`;
+                        setSubmitStatus('error');
+                        setSubmitError(msg);
+                        showNotificationModal('Stock Deficit Error', msg, 'danger');
+                        return;
+                    }
+
+                    remainingStockMap.set(key, availableStock - reqQty);
+                }
             }
         }
 
@@ -2721,11 +2839,11 @@ const SaleManagement = ({
                     return {
                         ...item,
                         uom: itemUom,
-                        brandEntries: item.brandEntries.map(be => ({
+                        brandEntries: groupBrandEntries(item.brandEntries.map(be => ({
                             ...be,
                             lcNo: (be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : itemLcNo,
                             uom: be.uom || itemUom
-                        }))
+                        })))
                     };
                 }
                 // Migrate previous flat multi-item to nested brand entries
@@ -2776,7 +2894,7 @@ const SaleManagement = ({
 
     const handleDelete = (sale) => {
         if (!canDelete) {
-            alert('Forbidden: You do not have permission to delete sales');
+            showNotificationModal('Permission Denied', 'Forbidden: You do not have permission to delete sales', 'danger');
             return;
         }
         onDeleteConfirm({
@@ -2863,6 +2981,49 @@ const SaleManagement = ({
         });
     };
 
+    const getDeliveredQtyForOrder = (targetOrderNo, prodName, bName = '') => {
+        if (!targetOrderNo || !prodName) return 0;
+        const ordUpper = targetOrderNo.trim().toUpperCase();
+        const pLower = prodName.trim().toLowerCase();
+        const bLower = bName ? bName.trim().toLowerCase() : '';
+
+        let deliveredQty = 0;
+        allSalesRecords.forEach(s => {
+            if (editingId && (s._id === editingId || s._id?.toString() === editingId?.toString())) return;
+            const sInv = (s.invoiceNo || '').trim().toUpperCase();
+            const curInv = (formData.invoiceNo || '').trim().toUpperCase();
+            if (curInv && sInv === curInv) return;
+
+            const sType = (s.saleType || '').toLowerCase();
+            if (sType === 'order' || sInv.startsWith('ORD') || s.isOrderEntry === true) return;
+
+            const st = (s.status || '').toLowerCase();
+            if (st === 'cancelled' || st === 'rejected') return;
+
+            const sOrd = (s.orderNo || '').trim().toUpperCase();
+            if (sOrd === ordUpper) {
+                (s.items || []).forEach(it => {
+                    if ((it.productName || it.product || '').trim().toLowerCase() === pLower) {
+                        if (Array.isArray(it.brandEntries) && it.brandEntries.length > 0) {
+                            it.brandEntries.forEach(sbe => {
+                                const sbeBrand = (sbe.brand || sbe.brandName || '').trim().toLowerCase();
+                                if (!bLower || !sbeBrand || sbeBrand === bLower) {
+                                    deliveredQty += (parseFloat(sbe.quantity) || 0);
+                                }
+                            });
+                        } else {
+                            deliveredQty += (parseFloat(it.quantity) || 0);
+                        }
+                    }
+                });
+                if ((!s.items || s.items.length === 0) && (s.productName || s.product || '').trim().toLowerCase() === pLower) {
+                    deliveredQty += (parseFloat(s.quantity) || 0);
+                }
+            }
+        });
+        return deliveredQty;
+    };
+
     const handleOrderSelect = (order) => {
         if (!order) {
             setFormData(prev => ({ ...prev, orderNo: '' }));
@@ -2879,16 +3040,32 @@ const SaleManagement = ({
 
             const mappedItems = (order.items && order.items.length > 0) ? order.items.map((item, pIdx) => {
                 const existingProduct = formData.items && formData.items[pIdx];
+                const prodName = item.productName || item.product || '';
                 const mappedBrandEntries = (item.brandEntries && item.brandEntries.length > 0) ? item.brandEntries.map((be, bIdx) => {
                     const existingBrand = existingProduct && existingProduct.brandEntries && existingProduct.brandEntries[bIdx];
                     const preservedLcNo = be.lcNo || (existingBrand ? existingBrand.lcNo : '') || '';
 
                     const pktSize = parseFloat(be.packetSize) || 30;
-                    const qty = parseFloat(be.quantity) || 0;
+                    const rawQty = parseFloat(be.quantity) || 0;
+                    const beBrand = be.brand || be.brandName || '';
+
+                    let deliveredForEntry = getDeliveredQtyForOrder(ordId, prodName, beBrand);
+                    if (deliveredForEntry === 0 && (!item.brandEntries || item.brandEntries.length <= 1)) {
+                        deliveredForEntry = getDeliveredQtyForOrder(ordId, prodName, '');
+                    }
+
+                    const isReused = deliveredForEntry > 0.0001;
+                    const remainQty = Math.max(0, rawQty - deliveredForEntry);
+                    const qty = isReused ? remainQty : rawQty;
+
                     const rawBag = (be.bag !== undefined && be.bag !== null && be.bag !== '') ? be.bag : (be.packet !== undefined && be.packet !== null && be.packet !== '') ? be.packet : '';
-                    const bagVal = rawBag !== '' ? rawBag : (pktSize > 0 && qty > 0 ? (qty / pktSize) : '');
+                    const bagVal = isReused
+                        ? (pktSize > 0 && qty > 0 ? (Number.isInteger(qty / pktSize) ? (qty / pktSize).toString() : (qty / pktSize).toFixed(2)) : '')
+                        : (rawBag !== '' ? rawBag : (pktSize > 0 && qty > 0 ? (qty / pktSize) : ''));
                     const rateVal = (be.unitPrice !== undefined && be.unitPrice !== null && be.unitPrice !== '') ? be.unitPrice : (be.rate !== undefined && be.rate !== null && be.rate !== '') ? be.rate : '';
-                    const totalVal = (be.totalAmount !== undefined && be.totalAmount !== null && be.totalAmount !== '') ? be.totalAmount : (qty > 0 && rateVal !== '' ? (qty * parseFloat(rateVal)) : '');
+                    const totalVal = isReused
+                        ? (qty > 0 && rateVal !== '' ? (item.uom === 'BAG' ? ((parseFloat(bagVal) || 0) * parseFloat(rateVal)).toFixed(2) : (qty * parseFloat(rateVal)).toFixed(2)) : '')
+                        : ((be.totalAmount !== undefined && be.totalAmount !== null && be.totalAmount !== '') ? be.totalAmount : (qty > 0 && rateVal !== '' ? (qty * parseFloat(rateVal)).toFixed(2) : ''));
 
                     return {
                         ...be,
@@ -2925,7 +3102,7 @@ const SaleManagement = ({
                     productId: item.productId || '',
                     productName: item.productName || item.product || '',
                     uom: item.uom || 'QTY',
-                    brandEntries: mappedBrandEntries
+                    brandEntries: groupBrandEntries(mappedBrandEntries)
                 };
             }) : (formData.items || []);
 
@@ -2975,8 +3152,23 @@ const SaleManagement = ({
         const targetOrderNo = formData.orderNo.trim().toUpperCase();
 
         const selectedOrder = allSalesRecords.find(s => {
-            const inv = (s.orderNo || s.invoiceNo || '').trim().toUpperCase();
-            return inv === targetOrderNo;
+            if (editingId && (s._id === editingId || s._id?.toString() === editingId?.toString())) return false;
+            const sInv = (s.invoiceNo || '').trim().toUpperCase();
+            const curInv = (formData.invoiceNo || '').trim().toUpperCase();
+            if (curInv && sInv === curInv) return false;
+
+            const sType = (s.saleType || '').toLowerCase();
+            const isOrd = sType === 'order' || sInv.startsWith('ORD') || s.isOrderEntry === true;
+            if (!isOrd) return false;
+
+            const sOrd = (s.orderNo || '').trim().toUpperCase();
+            return sInv === targetOrderNo || sOrd === targetOrderNo;
+        }) || allSalesRecords.find(s => {
+            const sType = (s.saleType || '').toLowerCase();
+            const sInv = (s.invoiceNo || '').trim().toUpperCase();
+            const isOrd = sType === 'order' || sInv.startsWith('ORD') || s.isOrderEntry === true;
+            const sOrd = (s.orderNo || '').trim().toUpperCase();
+            return isOrd && (sInv === targetOrderNo || sOrd === targetOrderNo);
         });
 
         if (!selectedOrder) return 0;
@@ -3336,18 +3528,31 @@ const SaleManagement = ({
         });
     };
 
-    const getFilteredLCs = () => {
+    const getFilteredLCs = (overrideItemIdx, overrideEntryIdx) => {
         const query = (lcSearch || '').toLowerCase().trim();
         let filtered = allAvailableLCs;
 
+        const itemIdx = (overrideItemIdx !== undefined && overrideItemIdx !== null) ? overrideItemIdx : activeItemIndex;
+        const entryIdx = (overrideEntryIdx !== undefined && overrideEntryIdx !== null) ? overrideEntryIdx : activeEntryIndex;
+
         let targetProd = '';
         let targetIpName = '';
-        if (saleType !== 'Border' && activeItemIndex !== null) {
-            const item = formData.items[activeItemIndex];
+        let targetBrand = '';
+        let targetWh = '';
+        let currentSelectedLc = '';
+
+        if (saleType !== 'Border' && itemIdx !== null && itemIdx !== undefined) {
+            const item = formData.items?.[itemIdx];
             if (item && item.productName) {
                 targetProd = item.productName.toLowerCase().trim();
                 const matchedProdDef = products.find(p => p.name.toLowerCase().trim() === targetProd);
                 targetIpName = matchedProdDef?.ipName?.toLowerCase().trim();
+            }
+            if (item && entryIdx !== null && entryIdx !== undefined && item.brandEntries?.[entryIdx]) {
+                const entry = item.brandEntries[entryIdx];
+                targetBrand = (entry.brandName || entry.brand || item.brand || item.brandName || '').trim();
+                targetWh = (entry.warehouseName || '').trim();
+                currentSelectedLc = (entry.lcNo || '').trim();
             }
         } else if (saleType === 'Border' && formData.items?.[0]?.productName) {
             targetProd = formData.items[0].productName.toLowerCase().trim();
@@ -3355,11 +3560,136 @@ const SaleManagement = ({
             targetIpName = matchedProdDef?.ipName?.toLowerCase().trim();
         }
 
+        // Collect LC numbers that are already selected in other rows so they are not shown again
+        const alreadySelectedLcs = new Set();
+        if (saleType !== 'Border') {
+            (formData.items || []).forEach((it, pIdx) => {
+                (it.brandEntries || []).forEach((be, bIdx) => {
+                    // Do not exclude the LC of the current row being edited
+                    if (itemIdx !== null && itemIdx !== undefined && entryIdx !== null && entryIdx !== undefined) {
+                        if (pIdx === itemIdx && bIdx === entryIdx) return;
+                    }
+                    const l = (be.lcNo || '').trim().toLowerCase();
+                    if (l && l !== 'advance') {
+                        alreadySelectedLcs.add(l);
+                    }
+                });
+            });
+        }
+
         if (targetProd) {
             filtered = filtered.filter(lc => isLcMatchingTargetProduct(lc, targetProd, targetIpName));
         }
 
-        if (!query) {
+        if (saleType !== 'Border' && targetProd) {
+            const cleanP = targetProd.toLowerCase();
+            const cleanWh = targetWh.toLowerCase();
+            const pSummary = cleanWh
+                ? (productStockSummaries[`${cleanP}:::${cleanWh}`] || getProductStockSummary(targetProd, targetWh))
+                : (productStockSummaries[cleanP] || getProductStockSummary(targetProd, ''));
+
+            let brandList = pSummary?.group?.brandList || pSummary?.brandList;
+
+            if (!brandList) {
+                try {
+                    const stockFilters = {
+                        productName: targetProd,
+                        ...(targetWh ? { warehouse: targetWh } : {}),
+                        reportType: 'price'
+                    };
+                    const stockRes = calculateStockData(
+                        stockRecords,
+                        stockFilters,
+                        '',
+                        warehouses,
+                        salesForCalc,
+                        products,
+                        damagesRecords,
+                        activeBaseline
+                    );
+                    const matchedGroup = (stockRes?.displayRecords || []).find(g => (g.productName || '').trim().toLowerCase() === cleanP);
+                    brandList = matchedGroup?.brandList;
+                } catch (e) {
+                    console.error('Error calculating stock for LC filtering:', e);
+                }
+            }
+
+            if (brandList && Array.isArray(brandList)) {
+                const norm = str => (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                const cleanTargetBrand = norm(targetBrand);
+
+                const lcStockTotals = new Map();
+                brandList.forEach(b => {
+                    const bLc = (b.lcNo || '').trim();
+                    if (!bLc || bLc === '-' || bLc === '—' || bLc === '--' || bLc === '0000') return;
+                    if (cleanTargetBrand) {
+                        const bBrand = norm(b.brand);
+                        if (bBrand !== cleanTargetBrand) return;
+                    }
+                    const inHouse = safeParse(b.inHouseQuantity);
+                    const closing = safeParse(b.closingQuantity);
+                    const saleable = safeParse(b.saleableQuantity);
+                    const q = Math.max(inHouse, closing, saleable);
+
+                    const key = bLc.toLowerCase();
+                    lcStockTotals.set(key, (lcStockTotals.get(key) || 0) + q);
+                });
+
+                const inStockLcs = new Set();
+                lcStockTotals.forEach((totalQty, key) => {
+                    if (totalQty > 0 || Math.round(totalQty) > 0) {
+                        inStockLcs.add(key);
+                    }
+                });
+
+                filtered = filtered.filter(lc => {
+                    const curLc = (lc.lcNo || lc.lcNumber || '').toString().trim().toLowerCase();
+                    if (currentSelectedLc && isLcMatch(curLc, currentSelectedLc)) return true;
+                    return Array.from(inStockLcs).some(stkLc => isLcMatch(curLc, stkLc));
+                });
+
+                inStockLcs.forEach(stkLc => {
+                    const alreadyInFiltered = filtered.some(lc => isLcMatch(lc.lcNo || lc.lcNumber, stkLc));
+                    if (!alreadyInFiltered) {
+                        const fromAll = allAvailableLCs.find(lc => isLcMatch(lc.lcNo || lc.lcNumber, stkLc));
+                        if (fromAll) {
+                            filtered.push(fromAll);
+                        } else {
+                            filtered.push({
+                                _id: `stock-lc-${stkLc}`,
+                                lcNo: stkLc,
+                                importerName: 'Stock Entry',
+                                productName: targetProd,
+                                brand: targetBrand
+                            });
+                        }
+                    }
+                });
+            }
+        }
+
+        // Filter out any LCs that are already selected in another row
+        if (alreadySelectedLcs.size > 0) {
+            filtered = filtered.filter(lc => {
+                const lcNum = (lc.lcNo || lc.lcNumber || '').toString().trim().toLowerCase();
+                if (!lcNum || lcNum === 'advance') return true;
+                return !Array.from(alreadySelectedLcs).some(sel => isLcMatch(lcNum, sel) || lcNum === sel);
+            });
+        }
+
+        if (saleType !== 'Border') {
+            const advanceOption = {
+                _id: 'advance-option',
+                lcNo: 'Advance',
+                importerName: 'Advance Sale',
+                productName: targetProd || '',
+                isAdvance: true
+            };
+            filtered = [advanceOption, ...filtered.filter(l => (l.lcNo || '').toLowerCase() !== 'advance')];
+        }
+
+        const isCurrentSelectionQuery = currentSelectedLc && query === currentSelectedLc.toLowerCase();
+        if (!query || isCurrentSelectionQuery) {
             return filtered.slice(0, 50);
         }
 
@@ -3664,7 +3994,9 @@ const SaleManagement = ({
         );
     };
 
-    const handleLcSelect = (lc) => {
+    const handleLcSelect = (lc, overrideItemIdx, overrideEntryIdx) => {
+        const itemIdx = (overrideItemIdx !== undefined && overrideItemIdx !== null) ? overrideItemIdx : activeItemIndex;
+        const entryIdx = (overrideEntryIdx !== undefined && overrideEntryIdx !== null) ? overrideEntryIdx : activeEntryIndex;
         const selectedLcNo = lc?.lcNo || (typeof lc === 'string' ? lc : '');
 
         if (saleType === 'Border') {
@@ -3728,15 +4060,15 @@ const SaleManagement = ({
             }
         } else {
             // General sale (brand-wise LC)
-            if (activeItemIndex === null || activeEntryIndex === null) return;
+            if (itemIdx === null || entryIdx === null) return;
 
             const lcProducts = getProductsForLc(selectedLcNo);
 
             setFormData(prev => {
                 const newItems = [...prev.items];
-                const item = { ...newItems[activeItemIndex] };
+                const item = { ...newItems[itemIdx] };
                 const newBrandEntries = [...item.brandEntries];
-                const entry = { ...newBrandEntries[activeEntryIndex] };
+                const entry = { ...newBrandEntries[entryIdx] };
 
                 if (!lc) {
                     entry.lcNo = '';
@@ -3753,10 +4085,20 @@ const SaleManagement = ({
                 }
 
                 const stockInfo = getStockForEntry(item.productName, entry.brand || entry.brandName, entry.lcNo, entry.warehouseName, item.uom === 'BAG');
-                entry.inhouseQty = stockInfo.inhouseQty;
-                entry.warehouseQty = stockInfo.warehouseQty;
+                let effInhouse = stockInfo.inhouseQty;
+                let effWarehouse = stockInfo.warehouseQty;
+                if ((!effWarehouse || effWarehouse === '0') && entry.warehouseQty && parseFloat(entry.warehouseQty) > 0) {
+                    effWarehouse = entry.warehouseQty;
+                }
+                if ((!effInhouse || effInhouse === '0') && entry.inhouseQty && parseFloat(entry.inhouseQty) > 0) {
+                    effInhouse = entry.inhouseQty;
+                } else if ((!effInhouse || effInhouse === '0') && effWarehouse && parseFloat(effWarehouse) > 0) {
+                    effInhouse = effWarehouse;
+                }
+                entry.inhouseQty = effInhouse;
+                entry.warehouseQty = effWarehouse;
 
-                newBrandEntries[activeEntryIndex] = entry;
+                newBrandEntries[entryIdx] = entry;
                 item.brandEntries = newBrandEntries;
 
                 // Auto-select product if there is ONLY 1 product for this LC and item doesn't have a product selected yet
@@ -3766,14 +4108,14 @@ const SaleManagement = ({
                     item.productName = singleProd.name;
                 }
 
-                newItems[activeItemIndex] = item;
+                newItems[itemIdx] = item;
 
                 const newData = {
                     ...prev,
                     items: newItems
                 };
 
-                if (lc) {
+                if (lc && !lc.isAdvance) {
                     if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
                     if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
                     if (!newData.port && lc.port) newData.port = lc.port;
@@ -3843,7 +4185,7 @@ const SaleManagement = ({
                 inhouseQty: stockInfo.inhouseQty,
                 warehouseQty: stockInfo.warehouseQty
             };
-            item.brandEntries = brandEntries;
+            item.brandEntries = groupBrandEntries(brandEntries);
             newItems[activeItemIndex] = item;
             return { ...prev, items: newItems };
         });
@@ -3867,7 +4209,7 @@ const SaleManagement = ({
                 inhouseQty: stockInfo.inhouseQty,
                 warehouseQty: stockInfo.warehouseQty
             };
-            item.brandEntries = brandEntries;
+            item.brandEntries = groupBrandEntries(brandEntries);
             newItems[activeItemIndex] = item;
             return { ...prev, items: newItems };
         });
@@ -5359,7 +5701,7 @@ const SaleManagement = ({
 
                             {saleType === 'Border' && (
                                 <div className="sale-mgmt-input-group relative lc-dropdown-container">
-                                    <label className="sale-mgmt-label">LC No</label>
+                                    <label className="sale-mgmt-label">LC No <span className="text-red-500">*</span></label>
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -5367,6 +5709,7 @@ const SaleManagement = ({
                                             placeholder={formData.lcNo || "Search LC..."}
                                             value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
                                             readOnly={isFieldReadOnly(originalData?.lcNo)}
+                                            required
                                             onChange={(e) => {
                                                 if (isFieldReadOnly(originalData?.lcNo)) return;
                                                 setLcSearch(e.target.value);
@@ -6054,7 +6397,7 @@ const SaleManagement = ({
                                             </button>
                                         )}
 
-                                        <div className="flex flex-wrap md:flex-nowrap items-center gap-4 mb-6 px-4">
+                                        <div className="flex flex-wrap items-center gap-3 mb-6 px-4">
                                             {/* Product Selection */}
                                             <div className="space-y-1.5 relative product-dropdown-container flex-1 min-w-[200px]">
                                                 <label className="sale-mgmt-item-label">Product</label>
@@ -6126,15 +6469,82 @@ const SaleManagement = ({
                                                 </div>
                                             </div>
 
-                                            {/* Order QTY Display after Product on same line - only for selected order no */}
-                                            {formData.orderNo && (
-                                                <div className="space-y-1.5 flex-1 md:max-w-[180px]">
-                                                    <label className="sale-mgmt-item-label">Order QTY</label>
-                                                    <div className="h-10 flex items-center justify-center bg-purple-50/50 border border-purple-100 rounded-xl text-sm font-bold text-purple-900 shadow-sm">
-                                                        {getOrderQtyForBrand(item.productName)} kg
-                                                    </div>
-                                                </div>
-                                            )}
+                                            {/* Order QTY, Delivered QTY, Remain QTY, Total QTY, and Next Remain Display */}
+                                            {(() => {
+                                                const orderQty = formData.orderNo ? getOrderQtyForBrand(item.productName) : 0;
+                                                const totalQty = (item.brandEntries || []).reduce((sum, be) => sum + (parseFloat(be.quantity) || 0), 0);
+                                                const totalBag = (item.brandEntries || []).reduce((sum, be) => sum + (parseFloat(be.bag) || 0), 0);
+                                                const isBagUom = item.uom === 'BAG';
+
+                                                // Quantity already delivered in other sales for this order (excluding current sale being edited)
+                                                const deliveredQty = formData.orderNo ? getDeliveredQtyForOrder(formData.orderNo, item.productName) : 0;
+
+                                                const isReusedOrder = deliveredQty > 0.0001;
+                                                const remainQty = orderQty - deliveredQty;
+                                                const nextRemain = orderQty - (deliveredQty + totalQty);
+                                                const singleRemainQty = orderQty - totalQty;
+
+                                                return (
+                                                    <React.Fragment>
+                                                        {formData.orderNo && (
+                                                            <div className="space-y-1.5 flex-1 min-w-[95px] md:max-w-[140px]">
+                                                                <label className="sale-mgmt-item-label">Order QTY</label>
+                                                                <div className="h-10 flex items-center justify-center bg-purple-50/50 border border-purple-100 rounded-xl text-sm font-bold text-purple-900 shadow-sm">
+                                                                    {Number(orderQty.toFixed(2)).toLocaleString('en-IN')} kg
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {formData.orderNo && isReusedOrder && (
+                                                            <div className="space-y-1.5 flex-1 min-w-[95px] md:max-w-[140px]">
+                                                                <label className="sale-mgmt-item-label">Delivered QTY</label>
+                                                                <div className="h-10 flex items-center justify-center bg-cyan-50/60 border border-cyan-200 rounded-xl text-sm font-bold text-cyan-900 shadow-sm">
+                                                                    {Number(deliveredQty.toFixed(2)).toLocaleString('en-IN')} kg
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {formData.orderNo && isReusedOrder && (
+                                                            <div className="space-y-1.5 flex-1 min-w-[95px] md:max-w-[140px]">
+                                                                <label className="sale-mgmt-item-label">Remain QTY</label>
+                                                                <div className="h-10 flex items-center justify-center bg-amber-50/60 border border-amber-200 rounded-xl text-sm font-bold text-amber-900 shadow-sm">
+                                                                    {Number(remainQty.toFixed(2)).toLocaleString('en-IN')} kg
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        <div className="space-y-1.5 flex-1 min-w-[95px] md:max-w-[140px]">
+                                                            <label className="sale-mgmt-item-label">Total QTY</label>
+                                                            <div className="h-10 flex flex-col items-center justify-center bg-blue-50/50 border border-blue-100 rounded-xl text-sm font-bold text-blue-900 shadow-sm">
+                                                                <span>{Number(totalQty.toFixed(2)).toLocaleString('en-IN')} kg</span>
+                                                                {isBagUom && totalBag > 0 && (
+                                                                    <span className="text-[10px] text-blue-600 font-semibold -mt-0.5">
+                                                                        ({Number(totalBag.toFixed(2)).toLocaleString('en-IN')} bag)
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {formData.orderNo && isReusedOrder && (
+                                                            <div className="space-y-1.5 flex-1 min-w-[95px] md:max-w-[140px]">
+                                                                <label className="sale-mgmt-item-label">Next Remain</label>
+                                                                <div className={`h-10 flex items-center justify-center rounded-xl text-sm font-bold shadow-sm border ${nextRemain < 0 ? 'bg-red-50/60 border-red-200 text-red-600' : nextRemain === 0 ? 'bg-green-50/60 border-green-200 text-green-700' : 'bg-emerald-50/60 border-emerald-200 text-emerald-800'}`}>
+                                                                    {Number(nextRemain.toFixed(2)).toLocaleString('en-IN')} kg
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {formData.orderNo && !isReusedOrder && (
+                                                            <div className="space-y-1.5 flex-1 min-w-[95px] md:max-w-[140px]">
+                                                                <label className="sale-mgmt-item-label">Remain QTY</label>
+                                                                <div className={`h-10 flex items-center justify-center rounded-xl text-sm font-bold shadow-sm border ${singleRemainQty < 0 ? 'bg-red-50/60 border-red-200 text-red-600' : singleRemainQty === 0 ? 'bg-green-50/60 border-green-200 text-green-700' : 'bg-amber-50/60 border-amber-200 text-amber-800'}`}>
+                                                                    {Number(singleRemainQty.toFixed(2)).toLocaleString('en-IN')} kg
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </React.Fragment>
+                                                );
+                                            })()}
 
                                             {/* UOM Selector for General Sales */}
                                             {saleType !== 'Border' && (
@@ -6237,7 +6647,7 @@ const SaleManagement = ({
                                             <div className="space-y-1">
                                                 {/* Header Row for Brands (Hidden on Mobile) */}
                                                 <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-1 border border-transparent">
-                                                    <div className="col-span-2 sale-mgmt-item-label text-center">LC No</div>
+                                                    <div className="col-span-2 sale-mgmt-item-label text-center">LC No <span className="text-red-500">*</span></div>
                                                     <div className="col-span-2 sale-mgmt-item-label text-center">Brand</div>
                                                     <div className="sale-mgmt-item-label text-center">Inhouse</div>
                                                     <div className="sale-mgmt-item-label text-center">Warehouse</div>
@@ -6248,17 +6658,36 @@ const SaleManagement = ({
                                                     <div className="col-span-2 sale-mgmt-item-label text-center">Total</div>
                                                 </div>
 
-                                                {item.brandEntries.map((entry, entryIndex) => (
-                                                    <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative">
+                                                {item.brandEntries.map((entry, entryIndex) => {
+                                                    const cleanBrand = (entry.brand || entry.brandName || '').trim().toLowerCase();
+                                                    const nextEntry = item.brandEntries[entryIndex + 1];
+                                                    const nextBrand = (nextEntry?.brand || nextEntry?.brandName || '').trim().toLowerCase();
+                                                    const isLastOfBrand = cleanBrand && cleanBrand !== nextBrand;
+                                                    const sameBrandEntries = cleanBrand ? item.brandEntries.filter(e => (e.brand || e.brandName || '').trim().toLowerCase() === cleanBrand) : [];
+                                                    const showSubtotal = isLastOfBrand && sameBrandEntries.length > 1;
+
+                                                    let totalQty = 0;
+                                                    let totalBag = 0;
+                                                    let totalAmount = 0;
+                                                    if (showSubtotal) {
+                                                        totalQty = sameBrandEntries.reduce((sum, e) => sum + (parseFloat(e.quantity) || 0), 0);
+                                                        totalBag = sameBrandEntries.reduce((sum, e) => sum + (parseFloat(e.bag) || 0), 0);
+                                                        totalAmount = sameBrandEntries.reduce((sum, e) => sum + (parseFloat(e.totalAmount) || 0), 0);
+                                                    }
+
+                                                    return (
+                                                        <React.Fragment key={entryIndex}>
+                                                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative">
                                                         {/* LC No Selection */}
                                                         <div className="col-span-2 space-y-1 relative lc-dropdown-container">
-                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block">LC No</label>
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block">LC No <span className="text-red-500">*</span></label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
                                                                     placeholder={entry.lcNo || "LC No"}
                                                                     value={activeDropdown === 'lcNo' && activeItemIndex === index && activeEntryIndex === entryIndex ? lcSearch : (entry.lcNo || '')}
                                                                     readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.lcNo)}
+                                                                    required
                                                                     onChange={(e) => {
                                                                         if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.lcNo)) return;
                                                                         setLcSearch(e.target.value);
@@ -6277,7 +6706,7 @@ const SaleManagement = ({
                                                                         setLcSearch(entry.lcNo || '');
                                                                         setHighlightedIndex(-1);
                                                                     }}
-                                                                    onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
+                                                                    onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(index, entryIndex), handleLcSelect)}
                                                                     className={`sale-mgmt-input pr-10 !text-xs ${entry.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.lcNo) ? 'bg-gray-50' : ''}`}
                                                                 />
                                                                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -6287,7 +6716,7 @@ const SaleManagement = ({
                                                                             onClick={() => {
                                                                                 setActiveItemIndex(index);
                                                                                 setActiveEntryIndex(entryIndex);
-                                                                                handleLcSelect(null);
+                                                                                handleLcSelect(null, index, entryIndex);
                                                                             }}
                                                                             className="text-gray-400 hover:text-red-500"
                                                                         >
@@ -6307,32 +6736,31 @@ const SaleManagement = ({
                                                                     </button>
                                                                 </div>
                                                             </div>
-                                                            {activeDropdown === 'lcNo' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredLCs().length > 0 && (
+                                                            {activeDropdown === 'lcNo' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredLCs(index, entryIndex).length > 0 && (
                                                                 <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                                    {getFilteredLCs().map((lc, idx) => (
+                                                                    {getFilteredLCs(index, entryIndex).map((lc, idx) => (
                                                                         <button
                                                                             key={lc._id || `lc-${idx}`}
                                                                             type="button"
-                                                                            onClick={() => handleLcSelect(lc)}
+                                                                            onClick={() => handleLcSelect(lc, index, entryIndex)}
                                                                             onMouseEnter={() => setHighlightedIndex(idx)}
                                                                             className={`w-full px-4 py-2 text-left text-xs font-medium transition-colors ${entry.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                         >
                                                                             <div className="flex flex-col">
                                                                                 <span className="font-bold text-[11px]">{lc.lcNo}</span>
                                                                                 <span className="text-[9px] text-gray-500">
-                                                                                    {lc.importerName} | {
-                                                                                        (() => {
-                                                                                            const lcProds = getLcProductNames(lc);
-                                                                                            const dispNames = lcProds.map(pName => {
-                                                                                                const matched = products.find(p =>
-                                                                                                    (p.name || '').toLowerCase().trim() === (pName || '').toLowerCase().trim() ||
-                                                                                                    (p.ipName || '').toLowerCase().trim() === (pName || '').toLowerCase().trim()
-                                                                                                );
-                                                                                                return matched ? matched.name : pName;
-                                                                                            }).filter(Boolean);
-                                                                                            return dispNames.length > 0 ? Array.from(new Set(dispNames)).join(', ') : (lc.productName || '');
-                                                                                        })()
-                                                                                    }
+                                                                                    {(() => {
+                                                                                        const lcProds = getLcProductNames(lc);
+                                                                                        const dispNames = lcProds.map(pName => {
+                                                                                            const matched = products.find(p =>
+                                                                                                (p.name || '').toLowerCase().trim() === (pName || '').toLowerCase().trim() ||
+                                                                                                (p.ipName || '').toLowerCase().trim() === (pName || '').toLowerCase().trim()
+                                                                                            );
+                                                                                            return matched ? matched.name : pName;
+                                                                                        }).filter(Boolean);
+                                                                                        const prodStr = dispNames.length > 0 ? Array.from(new Set(dispNames)).join(', ') : (lc.productName || '');
+                                                                                        return [lc.importerName, prodStr].filter(Boolean).join(' | ');
+                                                                                    })()}
                                                                                 </span>
                                                                             </div>
                                                                         </button>
@@ -6500,9 +6928,82 @@ const SaleManagement = ({
                                                         {/* Wh Stock */}
                                                         <div>
                                                             <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block text-center leading-tight">Saleable Wh Stock ({item.uom === 'BAG' ? 'BAG' : 'KG'})</label>
-                                                            <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-bold text-gray-900">
-                                                                {entry.warehouseQty || '0'}
-                                                            </div>
+                                                            {(() => {
+                                                                const currentBrand = (entry.brand || entry.brandName || '').trim().toLowerCase();
+                                                                const currentWh = (entry.warehouseName || '').trim().toLowerCase();
+                                                                const currentProd = (item.productName || '').trim().toLowerCase();
+                                                                const currentLc = (entry.lcNo || '').trim().toLowerCase();
+
+                                                                // 1. Determine base warehouse stock for this brand + warehouse + LC
+                                                                let baseWhStock = parseFloat(entry.warehouseQty) || 0;
+                                                                if (baseWhStock === 0 && currentBrand) {
+                                                                    for (let pIdx = 0; pIdx < (formData.items || []).length; pIdx++) {
+                                                                        const it = formData.items[pIdx];
+                                                                        if (!it) continue;
+                                                                        const itProd = (it.productName || '').trim().toLowerCase();
+                                                                        if (currentProd && itProd && currentProd !== itProd) continue;
+                                                                        for (const be of (it.brandEntries || [])) {
+                                                                            const b = (be.brand || be.brandName || '').trim().toLowerCase();
+                                                                            const w = (be.warehouseName || '').trim().toLowerCase();
+                                                                            const l = (be.lcNo || '').trim().toLowerCase();
+                                                                            const sameBrand = b === currentBrand;
+                                                                            const sameWh = (!currentWh || !w || currentWh === w);
+                                                                            const sameLc = currentLc ? (l === currentLc) : (!l);
+                                                                            if (sameBrand && sameWh && sameLc) {
+                                                                                const whVal = parseFloat(be.warehouseQty) || 0;
+                                                                                if (whVal > 0) {
+                                                                                    baseWhStock = whVal;
+                                                                                    break;
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        if (baseWhStock > 0) break;
+                                                                    }
+                                                                }
+
+                                                                // 2. Sum up quantities from prior rows matching the exact same brand + warehouse + LC
+                                                                let priorQty = 0;
+                                                                for (let pIdx = 0; pIdx <= index; pIdx++) {
+                                                                    const it = formData.items[pIdx];
+                                                                    if (!it) continue;
+                                                                    const itProd = (it.productName || '').trim().toLowerCase();
+                                                                    if (currentProd && itProd && currentProd !== itProd) continue;
+
+                                                                    const bEntries = it.brandEntries || [];
+                                                                    const maxEIdx = (pIdx === index) ? entryIndex : bEntries.length;
+                                                                    for (let eIdx = 0; eIdx < maxEIdx; eIdx++) {
+                                                                        const prevEntry = bEntries[eIdx];
+                                                                        if (!prevEntry) continue;
+                                                                        const prevBrand = (prevEntry.brand || prevEntry.brandName || '').trim().toLowerCase();
+                                                                        const prevWh = (prevEntry.warehouseName || '').trim().toLowerCase();
+                                                                        const prevLc = (prevEntry.lcNo || '').trim().toLowerCase();
+
+                                                                        const sameBrand = currentBrand && prevBrand === currentBrand;
+                                                                        const sameWh = (!currentWh || !prevWh || currentWh === prevWh);
+                                                                        const sameLc = currentLc ? (prevLc === currentLc) : (!prevLc);
+
+                                                                        if (sameBrand && sameWh && sameLc) {
+                                                                            const prevVal = (item.uom === 'BAG')
+                                                                                ? (parseFloat(prevEntry.bag) || 0)
+                                                                                : (parseFloat(prevEntry.quantity) || 0);
+                                                                            priorQty += prevVal;
+                                                                        }
+                                                                    }
+                                                                }
+
+                                                                // 3. Current row's entered quantity
+                                                                const subVal = item.uom === 'BAG' ? (parseFloat(entry.bag) || 0) : (parseFloat(entry.quantity) || 0);
+
+                                                                // 4. Starting stock from prior rows, and display stock after current row's qty
+                                                                const startingWhStock = baseWhStock - priorQty;
+                                                                const displayVal = Number((startingWhStock - subVal).toFixed(2));
+
+                                                                return (
+                                                                    <div className={`w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-bold ${displayVal < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                                                        {displayVal}
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </div>
 
                                                         {/* Bag */}
@@ -6580,7 +7081,59 @@ const SaleManagement = ({
                                                             </div>
                                                         </div>
                                                     </div>
-                                                ))}
+
+                                                    {showSubtotal && (
+                                                        <React.Fragment>
+                                                            {/* Desktop Subtotal Line */}
+                                                            <div className="hidden md:grid grid-cols-12 gap-4 items-center px-6 py-2 my-1.5 bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-blue-50/80 rounded-xl border border-blue-200/90 shadow-xs">
+                                                                <div className="col-span-2"></div>
+                                                                <div className="col-span-2 text-center text-xs font-black text-blue-950 uppercase tracking-wider truncate">
+                                                                    {entry.brand || entry.brandName} Total
+                                                                </div>
+                                                                <div className="col-span-1 text-center text-[11px] font-bold text-gray-400">—</div>
+                                                                <div className="col-span-1 text-center text-[11px] font-bold text-gray-400">—</div>
+                                                                <div className="col-span-1 text-center text-[11px] font-bold text-gray-400">—</div>
+                                                                <div className="col-span-1 text-center">
+                                                                    {totalBag > 0 ? (
+                                                                        <span className="text-[12px] font-black text-blue-800">
+                                                                            {Number(totalBag.toFixed(2)).toLocaleString('en-IN')} <span className="text-[9px] text-gray-500 font-semibold">BAG</span>
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-[11px] font-bold text-gray-400">—</span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="col-span-1 text-center">
+                                                                    <span className="text-[13px] font-black text-blue-900 bg-white px-2.5 py-1 rounded-lg border border-blue-300 shadow-xs inline-block">
+                                                                        {Number(totalQty.toFixed(2)).toLocaleString('en-IN')} <span className="text-[10px] text-blue-600 font-bold">{item.uom === 'BAG' ? 'BAG' : 'KG'}</span>
+                                                                    </span>
+                                                                </div>
+                                                                <div className="col-span-1 text-center text-[11px] font-bold text-gray-400">—</div>
+                                                                <div className="col-span-2 text-center text-[13px] font-black text-blue-800">
+                                                                    ৳{Number(totalAmount.toFixed(2)).toLocaleString('en-IN')}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Mobile Subtotal Line */}
+                                                            <div className="md:hidden flex justify-between items-center px-4 py-2.5 my-1.5 bg-blue-50/90 border border-blue-200 rounded-xl text-xs font-bold text-blue-950 shadow-xs">
+                                                                <span className="uppercase tracking-wider font-extrabold text-blue-950">
+                                                                    {entry.brand || entry.brandName} Total:
+                                                                </span>
+                                                                <div className="flex items-center gap-2">
+                                                                    {totalBag > 0 && (
+                                                                        <span className="text-gray-600 font-bold text-[11px]">
+                                                                            {Number(totalBag.toFixed(2)).toLocaleString('en-IN')} BAG
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="text-blue-900 font-black px-2.5 py-1 bg-white border border-blue-300 rounded-lg text-xs shadow-xs">
+                                                                        {Number(totalQty.toFixed(2)).toLocaleString('en-IN')} {item.uom === 'BAG' ? 'BAG' : 'KG'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </React.Fragment>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
                                             </div>
                                         )}
                                     </div>
@@ -7048,6 +7601,61 @@ const SaleManagement = ({
                                             {submitError || 'Failed to save sale. Please try again.'}
                                         </p>
                                     )}
+                                    {(() => {
+                                        if (saleType === 'Border') return null;
+                                        const runningStockMap = new Map();
+                                        (formData.items || []).forEach(it => {
+                                            const p = (it.productName || '').trim().toLowerCase();
+                                            (it.brandEntries || []).forEach(be => {
+                                                const b = (be.brand || be.brandName || '').trim().toLowerCase();
+                                                const w = (be.warehouseName || '').trim().toLowerCase();
+                                                const l = (be.lcNo || '').trim().toLowerCase();
+                                                const key = `${p}:::${b}:::${w}:::${l}`;
+                                                const wh = parseFloat(be.warehouseQty) || 0;
+                                                if (!runningStockMap.has(key) || wh > (runningStockMap.get(key) || 0)) {
+                                                    runningStockMap.set(key, wh);
+                                                }
+                                            });
+                                        });
+
+                                        let deficitEntry = null;
+                                        for (let pIdx = 0; pIdx < (formData.items || []).length; pIdx++) {
+                                            const it = formData.items[pIdx];
+                                            const isBag = it.uom === 'BAG';
+                                            const unit = isBag ? 'BAG' : 'KG';
+                                            const p = (it.productName || '').trim().toLowerCase();
+                                            for (let bIdx = 0; bIdx < (it.brandEntries || []).length; bIdx++) {
+                                                const be = it.brandEntries[bIdx];
+                                                const b = (be.brand || be.brandName || '').trim().toLowerCase();
+                                                const w = (be.warehouseName || '').trim().toLowerCase();
+                                                const l = (be.lcNo || '').trim().toLowerCase();
+                                                const key = `${p}:::${b}:::${w}:::${l}`;
+
+                                                const available = runningStockMap.has(key) ? runningStockMap.get(key) : (parseFloat(be.warehouseQty) || 0);
+                                                const q = isBag ? (parseFloat(be.bag) || 0) : (parseFloat(be.quantity) || 0);
+
+                                                if (q > 0 && available < q) {
+                                                    deficitEntry = {
+                                                        product: it.productName || `Product #${pIdx + 1}`,
+                                                        brand: be.brand || be.brandName || `Row #${bIdx + 1}`,
+                                                        wh: available,
+                                                        q,
+                                                        unit
+                                                    };
+                                                    break;
+                                                }
+                                                runningStockMap.set(key, available - q);
+                                            }
+                                            if (deficitEntry) break;
+                                        }
+
+                                        if (!deficitEntry) return null;
+                                        return (
+                                            <p className="text-red-600 text-xs font-bold text-center mb-2 px-4 py-1.5 bg-red-50 border border-red-200 rounded-lg">
+                                                ⚠️ Saleable Wh Stock ({deficitEntry.wh.toLocaleString('en-IN')} {deficitEntry.unit}) is less than Qty ({deficitEntry.q.toLocaleString('en-IN')} {deficitEntry.unit}) for {deficitEntry.product} ({deficitEntry.brand}). It must be ≥ Qty to confirm.
+                                            </p>
+                                        );
+                                    })()}
                                     <div className="flex items-center justify-center w-full relative z-10">
                                         <button
                                             type="submit"

@@ -370,7 +370,10 @@ const StockReport = ({
         const records = (rawRecords || []).map(item => {
             const validBrands = (item.brandList || []).filter(b => {
                 if (reportType === 'short') {
-                    return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
+                    return Math.abs(b.inHouseQuantity || 0) > 0.001 ||
+                        (b.orderQuantity || 0) > 0.001 ||
+                        (b.openingQuantity || 0) > 0.001 ||
+                        (b.saleQuantity || 0) > 0.001;
                 }
                 if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
                     return Math.abs(b.inHouseQuantity || 0) > 0.001;

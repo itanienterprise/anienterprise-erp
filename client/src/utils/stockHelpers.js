@@ -250,10 +250,23 @@ export const reconcilePriceReportBrandList = (brandList) => {
                 }
             } else if (closing > 0.001) {
                 positiveEntries.push({ ...e, inHouseQuantity: closing, closingQuantity: closing });
+            } else {
+                const hasActivity = Math.abs(e.openingQuantity || 0) > 0.001 ||
+                    Math.abs(e.saleQuantity || 0) > 0.001 ||
+                    Math.abs(e.periodArrivalQuantity || 0) > 0.001 ||
+                    Math.abs(e.damageQuantity || 0) > 0.001 ||
+                    Math.abs(e.orderQuantity || 0) > 0.001;
+                if (hasActivity) {
+                    positiveEntries.push({
+                        ...e,
+                        inHouseQuantity: 0,
+                        closingQuantity: 0
+                    });
+                }
             }
         });
 
-        // Add positive entries
+        // Add positive and active zero-stock entries
         for (const entry of positiveEntries) {
             const remainingQty = Math.max(0, entry.inHouseQuantity || 0);
             if (remainingQty > 0.001) {
@@ -269,6 +282,16 @@ export const reconcilePriceReportBrandList = (brandList) => {
                     closingPacket: inHousePacket,
                     saleableQuantity: Math.max(0, remainingQty - (entry.orderQuantity || 0)),
                     saleablePacket: Math.max(0, inHousePacket - (entry.orderPacket || 0))
+                });
+            } else {
+                result.push({
+                    ...entry,
+                    inHouseQuantity: 0,
+                    closingQuantity: 0,
+                    inHousePacket: 0,
+                    closingPacket: 0,
+                    saleableQuantity: 0,
+                    saleablePacket: 0
                 });
             }
         }
@@ -434,7 +457,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 } else if (stockFilters?.reportType === 'short') {
                     groupedBrands = groupedBrands.filter(b =>
                         Math.abs(b.inHouseQuantity || 0) > 0.001 ||
-                        (b.orderQuantity || 0) > 0.001
+                        (b.orderQuantity || 0) > 0.001 ||
+                        (b.openingQuantity || 0) > 0.001 ||
+                        (b.saleQuantity || 0) > 0.001
                     );
                 }
                 const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
@@ -1817,10 +1842,12 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             // In Price Report mode, keep all LC entries with non-zero remaining stock
             filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001);
         } else if (stockFilters?.reportType === 'short') {
-            // In Short Report mode, keep items with non-zero closing stock or active pending orders
+            // In Short Report mode, keep items with non-zero closing stock, active pending orders, opening or sales
             filteredBrands = filteredBrands.filter(b =>
                 Math.abs(b.inHouseQuantity || 0) > 0.001 ||
-                (b.orderQuantity || 0) > 0.001
+                (b.orderQuantity || 0) > 0.001 ||
+                (b.openingQuantity || 0) > 0.001 ||
+                (b.saleQuantity || 0) > 0.001
             );
         } else {
             // Standard / Detailed view: keep items with non-zero in-house stock, opening, sale, or active pending orders
