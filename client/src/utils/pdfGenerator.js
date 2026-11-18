@@ -10444,37 +10444,43 @@ export const generateProfitLossPDF = async (params) => {
         // SECTION 6: LC Receive History
         if (selectedLcStocks.length > 0) {
             renderTableTag("LC RECEIVE HISTORY", [85, 105, 125]);
+            const totalRecvQty = Math.round(selectedLcStocks.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0)).toLocaleString();
+            const totalShortQty = Math.round(selectedLcStocks.reduce((s, i) => s + (parseFloat(i.sweepedQuantity) || 0), 0)).toLocaleString();
+            const totalInhouseQty = Math.round(selectedLcStocks.reduce((s, i) => s + Math.max(0, (parseFloat(i.quantity) || 0) - (parseFloat(i.sweepedQuantity) || 0)), 0)).toLocaleString();
+            const totalRecvVal = Math.round(totalLcReceiveAmount).toLocaleString('en-IN');
+
+            const lcReceiveHistoryRows = selectedLcStocks.map(item => {
+                const qty = parseFloat(item.quantity) || 0;
+                const shortQty = parseFloat(item.sweepedQuantity) || 0;
+                const inhouseQty = (item.inHouseQuantity !== undefined && item.inHouseQuantity !== null) ? (parseFloat(item.inHouseQuantity) || 0) : Math.max(0, qty - shortQty);
+                const prodName = item.productName || item.product || '-';
+                const brandName = item.brand || item.brandName || '-';
+                const price = parseFloat(item.purchasedPrice) || 0;
+                const totalVal = inhouseQty * price;
+                return [
+                    formatDate(item.date || item.createdAt),
+                    item.invoiceNo || '-',
+                    `${prodName} (${brandName})`,
+                    `${Math.round(qty).toLocaleString()} KG`,
+                    `${Math.round(shortQty).toLocaleString()} KG`,
+                    `${Math.round(inhouseQty).toLocaleString()} KG`,
+                    `Tk ${Math.round(totalVal).toLocaleString('en-IN')}`
+                ];
+            });
+
+            lcReceiveHistoryRows.push([
+                { content: 'Total Received', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } },
+                { content: `${totalRecvQty} KG`, styles: { fontStyle: 'bold' } },
+                { content: `${totalShortQty} KG`, styles: { fontStyle: 'bold' } },
+                { content: `${totalInhouseQty} KG`, styles: { fontStyle: 'bold' } },
+                { content: `Tk ${totalRecvVal}`, styles: { fontStyle: 'bold' } }
+            ]);
+
             autoTable(doc, {
                 startY: currentY,
                 margin: { left: margin, right: margin },
                 head: [['Date', 'Invoice No', 'Product & Brand', 'Arrival Qty', 'Short Qty', 'Inhouse Qty', 'Total Value (BDT)']],
-                body: [
-                    ...selectedLcStocks.map(item => {
-                        const qty = parseFloat(item.quantity) || 0;
-                        const shortQty = parseFloat(item.sweepedQuantity) || 0;
-                        const inhouseQty = (item.inHouseQuantity !== undefined && item.inHouseQuantity !== null) ? (parseFloat(item.inHouseQuantity) || 0) : Math.max(0, qty - shortQty);
-                        const prodName = item.productName || item.product || '-';
-                        const brandName = item.brand || item.brandName || '-';
-                        const price = parseFloat(item.purchasedPrice) || 0;
-                        const totalVal = inhouseQty * price;
-                        return [
-                            formatDate(item.date || item.createdAt),
-                            item.invoiceNo || '-',
-                            `${prodName} (${brandName})`,
-                            `${Math.round(qty).toLocaleString()} KG`,
-                            `${Math.round(shortQty).toLocaleString()} KG`,
-                            `${Math.round(inhouseQty).toLocaleString()} KG`,
-                            `Tk ${Math.round(totalVal).toLocaleString('en-IN')}`
-                        ];
-                    }),
-                    [
-                        { content: 'Total Received', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } },
-                        { content: `${Math.round(selectedLcStocks.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0)).toLocaleString()} KG`, styles: { fontStyle: 'bold' } },
-                        { content: `${Math.round(selectedLcStocks.reduce((s, i) => s + (parseFloat(i.sweepedQuantity) || 0), 0)).toLocaleString()} KG`, styles: { fontStyle: 'bold' } },
-                        { content: `${Math.round(selectedLcStocks.reduce((s, i) => s + Math.max(0, (parseFloat(i.quantity) || 0) - (parseFloat(i.sweepedQuantity) || 0)), 0)).toLocaleString()} KG`, styles: { fontStyle: 'bold' } },
-                        { content: `Tk ${Math.round(totalLcReceiveAmount).toLocaleString('en-IN')}`, styles: { fontStyle: 'bold' } }
-                    ]
-                ],
+                body: lcReceiveHistoryRows,
                 theme: 'grid',
                 headStyles: { fillColor: [85, 105, 125], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
                 bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
@@ -13685,7 +13691,7 @@ export const generatePurchaseReceiveReportPDF = async (purchaseReceives = [], fi
     }
 };
 
-export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, dateStr = '', reportType = 'summary', costOfGoodsList = []) => {
+export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, dateStr = '', reportType = 'deal_wise', costOfGoodsList = [], stockList = []) => {
     try {
         const doc = new jsPDF('l', 'mm', 'a4');
 
@@ -13733,6 +13739,92 @@ export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, da
             }
 
             return '';
+        };
+
+        const resolveLcReceiveInfo = (r, deal, cogList = [], stList = []) => {
+            if (!r) return { lcReceiveDate: null, status: 'Not Received', lcNo: '' };
+
+            const recReceiveId = String(r.receiveId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const recId = String(r._id || '').trim();
+            const recInvoice = String(r.invoiceNo || '').trim().toLowerCase();
+            const recProduct = String(r.product || r.productName || deal?.productName || '').trim().toLowerCase();
+            const recBrand = String(r.brand || deal?.brand || '').trim().toLowerCase();
+            const targetTruck = String(r.truckNo || '').trim().toLowerCase();
+
+            const matchedCog = (cogList || []).find(cog => {
+                const cogDrId = String(cog.dealReceiveId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const cogDrRef = String(cog.dealReceiveRefId || '').trim();
+                if (recReceiveId && cogDrId && cogDrId === recReceiveId) return true;
+                if (recId && cogDrRef && cogDrRef === recId) return true;
+                if (recId && cogDrId && cogDrId === recId) return true;
+                return false;
+            }) || (recInvoice ? (cogList || []).find(cog => {
+                const cogInv = String(cog.invoiceNo || '').trim().toLowerCase();
+                const cogProd = String(cog.product || '').trim().toLowerCase();
+                return cogInv && cogInv === recInvoice && (!recProduct || !cogProd || recProduct === cogProd);
+            }) : null);
+
+            if (!matchedCog) {
+                return { lcReceiveDate: null, status: 'Not Received', lcNo: '' };
+            }
+
+            let matchedStock = null;
+            if (Array.isArray(stList) && stList.length > 0) {
+                const cogIdStr = String(matchedCog._id || '');
+                const targetLc = String(matchedCog.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const targetInv = String(matchedCog.invoiceNo || r.invoiceNo || '').trim().toLowerCase();
+                const targetProd = String(matchedCog.product || recProduct || '').trim().toLowerCase();
+                const targetBrand = String(matchedCog.brand || recBrand || '').trim().toLowerCase();
+
+                matchedStock = stList.find(st => {
+                    if (st.matchedCogId && String(st.matchedCogId) === cogIdStr) return true;
+                    const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    const stInv = String(st.invoiceNo || '').trim().toLowerCase();
+                    const stProd = String(st.productName || st.product || '').trim().toLowerCase();
+                    const stBrand = String(st.brand || '').trim().toLowerCase();
+
+                    const lcMatches = targetLc && stLc && targetLc === stLc;
+                    const invMatches = targetInv && stInv && targetInv === stInv;
+                    if (lcMatches && invMatches) {
+                        const prodMatches = !targetProd || !stProd || targetProd === stProd;
+                        const brandMatches = !targetBrand || !stBrand || targetBrand === stBrand;
+                        return prodMatches && brandMatches;
+                    }
+                    return false;
+                }) || stList.find(st => {
+                    const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    const stInv = String(st.invoiceNo || '').trim().toLowerCase();
+                    return targetLc && stLc && targetLc === stLc && targetInv && stInv && targetInv === stInv;
+                }) || stList.find(st => {
+                    const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    const stTruck = String(st.truckNo || '').trim().toLowerCase();
+                    return targetLc && stLc && targetLc === stLc && targetTruck && stTruck && targetTruck === stTruck;
+                });
+            }
+
+            if (!matchedStock) {
+                return { lcReceiveDate: null, status: 'Not Received', lcNo: '' };
+            }
+
+            const lcReceiveDate = matchedStock.date || matchedStock.receivedDate || (Array.isArray(matchedStock.entries) ? matchedStock.entries[0]?.date : null) || null;
+            const rawStatus = matchedStock.status || (Array.isArray(matchedStock.entries) ? matchedStock.entries[0]?.status : null) || 'Received';
+            const s = String(rawStatus).toLowerCase();
+            let displayStatus = 'Received';
+            if (s.includes('pending') || s.includes('request')) {
+                displayStatus = 'Pending';
+            } else if (s.includes('reject')) {
+                displayStatus = 'Rejected';
+            } else if (s.includes('stock') || s.includes('accept') || s.includes('received')) {
+                displayStatus = 'Received';
+            } else {
+                displayStatus = rawStatus;
+            }
+
+            return {
+                lcReceiveDate,
+                status: displayStatus,
+                lcNo: matchedStock.lcNo || matchedCog.lcNo || ''
+            };
         };
 
         const formatLcLast6 = (val) => {
@@ -13911,93 +14003,100 @@ export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, da
                         const rawLc = resolveLcNo(r, d, costOfGoodsList);
                         const lcStr = formatLcLast6(rawLc);
                         const netBillVal = parseFloat(r.netBill !== undefined && r.netBill !== '' ? r.netBill : r.totalBill) || 0;
-                        const netBillStr = netBillVal > 0 ? `Tk ${Math.round(netBillVal).toLocaleString('en-IN')}` : '—';
+                        const netBillStr = netBillVal > 0 ? `Rs ${Math.round(netBillVal).toLocaleString('en-IN')}` : '—';
                         const dollarRateStr = r.dollarRateBdt ? `Tk ${Number(r.dollarRateBdt).toFixed(2)}` : '—';
                         const costStr = r.costingKg ? `Tk ${Number(r.costingKg).toFixed(2)}` : '—';
+                        const lcInfo = resolveLcReceiveInfo(r, d, costOfGoodsList, stockList);
+                        const lcRecDateStr = lcInfo.lcReceiveDate ? formatDateStr(lcInfo.lcReceiveDate) : '—';
+                        let receiveStatusStr = 'Not Received';
+                        if (lcInfo.status) {
+                            const s = String(lcInfo.status).toLowerCase();
+                            if (s.includes('stock') || s.includes('accept') || s === 'received') {
+                                receiveStatusStr = 'Received';
+                            } else if (s.includes('pending') || s.includes('request')) {
+                                receiveStatusStr = 'Pending';
+                            } else {
+                                receiveStatusStr = 'Not Received';
+                            }
+                        }
 
                         subTableRows.push([
                             rIdx + 1,
                             formatDateStr(r.date),
-                            lcStr,
                             r.invoiceNo || '—',
                             truckStr,
                             rQtyStr,
                             netBillStr,
                             dollarRateStr,
-                            costStr
+                            costStr,
+                            lcRecDateStr,
+                            lcStr,
+                            receiveStatusStr
                         ]);
                     });
 
                     subTableRows.push([
-                        { content: 'DEAL RECEIVE SUBTOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                        { content: 'DEAL RECEIVE SUBTOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                         { content: `${recvQty} ${recvUnit}`, styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                        { content: dealTotalNetBill > 0 ? `Tk ${Math.round(dealTotalNetBill).toLocaleString('en-IN')}` : '—', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                        { content: '—', styles: { halign: 'center', fontStyle: 'bold', textColor: [150, 150, 150], fillColor: [240, 240, 240] } },
-                        { content: '—', styles: { halign: 'center', fontStyle: 'bold', textColor: [150, 150, 150], fillColor: [240, 240, 240] } }
+                        { content: dealTotalNetBill > 0 ? `Rs ${Math.round(dealTotalNetBill).toLocaleString('en-IN')}` : '—', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                        { content: '', colSpan: 5, styles: { fillColor: [240, 240, 240] } }
                     ]);
                 } else {
                     subTableRows.push([
-                        { content: 'No receive records entered for this deal yet.', colSpan: 9, styles: { halign: 'center', fontStyle: 'italic', textColor: [120, 120, 120] } }
+                        { content: 'No receive records entered for this deal yet.', colSpan: 11, styles: { halign: 'center', fontStyle: 'italic', textColor: [120, 120, 120] } }
                     ]);
                 }
 
-                // 1. Deal Master Header Table (Header on TOP, Value on BOTTOM)
+                // 1. Deal Master Header Table (Combined Header Top & Value Bottom in a single cell row)
                 autoTable(doc, {
                     startY: currentY,
-                    head: [['SL', 'Date', 'Pur. ID', 'Supplier', 'Product', 'Brand', 'Pur. Rate', 'Pur. Truck / KG', 'Receive Truck / KG', 'Remaining', 'Status']],
                     body: [[
-                        `#${dIdx + 1}`,
-                        formatDateStr(d.date),
-                        purId,
-                        d.supplierName || d.supplier || '—',
-                        (d.productName || d.product || '—').toUpperCase(),
-                        d.brand || '—',
-                        d.rate ? `Tk ${Number(d.rate).toLocaleString('en-IN')}/kg` : '—',
-                        `${purQty} ${unit}`,
-                        `${recvQty} ${recvUnit}`,
-                        `${remQty} ${remUnit}`,
-                        statusStr
+                        `SL\n${dIdx + 1}`,
+                        `Deal Date\n${formatDateStr(d.date)}`,
+                        `Pur. ID\n${purId}`,
+                        `Supplier\n${d.supplierName || d.supplier || '—'}`,
+                        `Product\n${(d.productName || d.product || '—').toUpperCase()}`,
+                        `Brand\n${d.brand || '—'}`,
+                        `Pur. Rate / KG\n${d.rate ? `Tk ${Number(d.rate).toLocaleString('en-IN')}` : '—'}`,
+                        `Pur. Truck / KG\n${purQty} ${unit}`,
+                        `Receive Truck / KG\n${recvQty} ${recvUnit}`,
+                        `Remaining\n${remQty} ${remUnit}`,
+                        `Status\n${statusStr}`
                     ]],
                     theme: 'plain',
                     styles: {
-                        fontSize: 8,
-                        cellPadding: { top: 1.8, bottom: 1.8, left: 1.2, right: 1.2 },
+                        fontSize: 7.2,
+                        cellPadding: { top: 1.8, bottom: 1.8, left: 1, right: 1 },
                         lineColor: [0, 0, 0],
-                        lineWidth: 0.1,
+                        lineWidth: { top: 0.1, bottom: 0.1, left: 0, right: 0 },
                         textColor: [0, 0, 0],
-                        valign: 'middle'
-                    },
-                    headStyles: {
+                        valign: 'middle',
                         fillColor: [240, 245, 255],
-                        textColor: [15, 23, 42],
-                        fontStyle: 'bold',
-                        lineWidth: 0.1,
-                        fontSize: 7.5,
-                        cellPadding: { top: 2, bottom: 2, left: 1, right: 1 }
+                        fontStyle: 'bold'
                     },
                     columnStyles: {
-                        0: { halign: 'center', cellWidth: 9 },
-                        1: { halign: 'center', cellWidth: 20 },
-                        2: { halign: 'center', cellWidth: 22 },
-                        3: { halign: 'left', cellWidth: 46 },
-                        4: { halign: 'left', cellWidth: 36 },
-                        5: { halign: 'left', cellWidth: 26 },
-                        6: { halign: 'right', cellWidth: 24 },
-                        7: { halign: 'center', cellWidth: 24 },
-                        8: { halign: 'center', cellWidth: 24 },
+                        0: { halign: 'center', cellWidth: 10, lineWidth: { top: 0.1, bottom: 0.1, left: 0.1, right: 0 } },
+                        1: { halign: 'center', cellWidth: 26 },
+                        2: { halign: 'center', cellWidth: 26 },
+                        3: { halign: 'left', cellWidth: 41 },
+                        4: { halign: 'left', cellWidth: 28 },
+                        5: { halign: 'left', cellWidth: 22 },
+                        6: { halign: 'center', cellWidth: 23 },
+                        7: { halign: 'center', cellWidth: 25 },
+                        8: { halign: 'center', cellWidth: 30 },
                         9: { halign: 'center', cellWidth: 24 },
-                        10: { halign: 'center', cellWidth: 24 }
+                        10: { halign: 'center', cellWidth: 24, lineWidth: { top: 0.1, bottom: 0.1, left: 0, right: 0.1 } }
                     },
                     margin: { left: margin, right: margin }
                 });
 
-                const subStartY = doc.lastAutoTable.finalY + 2.5;
+                const subStartY = doc.lastAutoTable.finalY;
 
                 // 2. Receive Entries Sub-Table
                 autoTable(doc, {
                     startY: subStartY,
                     head: [
-                        ['SL', 'Receive Date', 'LC No', 'Invoice No', 'Truck No / Vehicle', 'Received Qty', 'Net Bill', 'Dollar Rate BDT', 'Costing / KG']
+                        ['SL', 'Deal Receive Date', 'Invoice No', 'Truck No / Vehicle', 'Received Qty', 'Net Bill', 'Dollar Rate BDT', 'Costing / KG', 'LC Rec. Date', 'LC No', 'Status']
                     ],
                     body: subTableRows,
                     theme: 'plain',
@@ -14014,20 +14113,23 @@ export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, da
                         fillColor: [248, 250, 252],
                         textColor: [51, 65, 85],
                         fontStyle: 'bold',
+                        halign: 'center',
                         lineWidth: 0.1,
                         fontSize: 7.2,
                         cellPadding: { top: 1.8, bottom: 1.8, left: 0.8, right: 0.8 }
                     },
                     columnStyles: {
-                        0: { halign: 'center', cellWidth: 9 },   // SL
-                        1: { halign: 'center', cellWidth: 24 },  // Receive Date
-                        2: { halign: 'center', cellWidth: 26 },  // LC No
-                        3: { halign: 'center', cellWidth: 28 },  // Invoice No
-                        4: { halign: 'left', cellWidth: 58 },    // Truck No / Vehicle
-                        5: { halign: 'center', cellWidth: 30 },  // Received Qty
-                        6: { halign: 'right', cellWidth: 36 },   // Net Bill
-                        7: { halign: 'right', cellWidth: 34 },   // Dollar Rate BDT
-                        8: { halign: 'right', cellWidth: 34 }    // Costing / KG
+                        0: { halign: 'center', cellWidth: 10 },
+                        1: { halign: 'center', cellWidth: 26 },
+                        2: { halign: 'center', cellWidth: 24 },
+                        3: { halign: 'left', cellWidth: 43 },
+                        4: { halign: 'center', cellWidth: 24 },
+                        5: { halign: 'right', cellWidth: 28 },
+                        6: { halign: 'right', cellWidth: 26 },
+                        7: { halign: 'right', cellWidth: 24 },
+                        8: { halign: 'center', cellWidth: 24 },
+                        9: { halign: 'center', cellWidth: 26 },
+                        10: { halign: 'center', cellWidth: 24 }
                     },
                     margin: { left: margin, right: margin }
                 });

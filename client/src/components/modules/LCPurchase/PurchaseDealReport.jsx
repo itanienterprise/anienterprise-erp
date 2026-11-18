@@ -53,6 +53,95 @@ export const resolveLcNo = (r, deal, cogList = []) => {
     return '';
 };
 
+export const resolveLcReceiveInfo = (r, deal, cogList = [], stockList = []) => {
+    if (!r) return { lcReceiveDate: null, status: 'Not Received', lcNo: '' };
+
+    const recReceiveId = String(r.receiveId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const recId = String(r._id || '').trim();
+    const recInvoice = String(r.invoiceNo || '').trim().toLowerCase();
+    const recProduct = String(r.product || r.productName || deal?.productName || '').trim().toLowerCase();
+    const recBrand = String(r.brand || deal?.brand || '').trim().toLowerCase();
+    const targetTruck = String(r.truckNo || '').trim().toLowerCase();
+
+    // 1. Match Cost of Goods entry for this Deal Receive
+    const matchedCog = (cogList || []).find(cog => {
+        const cogDrId = String(cog.dealReceiveId || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const cogDrRef = String(cog.dealReceiveRefId || '').trim();
+        if (recReceiveId && cogDrId && cogDrId === recReceiveId) return true;
+        if (recId && cogDrRef && cogDrRef === recId) return true;
+        if (recId && cogDrId && cogDrId === recId) return true;
+        return false;
+    }) || (recInvoice ? (cogList || []).find(cog => {
+        const cogInv = String(cog.invoiceNo || '').trim().toLowerCase();
+        const cogProd = String(cog.product || '').trim().toLowerCase();
+        return cogInv && cogInv === recInvoice && (!recProduct || !cogProd || recProduct === cogProd);
+    }) : null);
+
+    if (!matchedCog) {
+        return { lcReceiveDate: null, status: 'Not Received', lcNo: '' };
+    }
+
+    // 2. Match LC Receive (Stock) entry using the COG entry
+    let matchedStock = null;
+    if (Array.isArray(stockList) && stockList.length > 0) {
+        const cogIdStr = String(matchedCog._id || '');
+        const targetLc = String(matchedCog.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const targetInv = String(matchedCog.invoiceNo || r.invoiceNo || '').trim().toLowerCase();
+        const targetProd = String(matchedCog.product || recProduct || '').trim().toLowerCase();
+        const targetBrand = String(matchedCog.brand || recBrand || '').trim().toLowerCase();
+
+        matchedStock = stockList.find(st => {
+            if (st.matchedCogId && String(st.matchedCogId) === cogIdStr) return true;
+            const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const stInv = String(st.invoiceNo || '').trim().toLowerCase();
+            const stProd = String(st.productName || st.product || '').trim().toLowerCase();
+            const stBrand = String(st.brand || '').trim().toLowerCase();
+
+            const lcMatches = targetLc && stLc && targetLc === stLc;
+            const invMatches = targetInv && stInv && targetInv === stInv;
+            if (lcMatches && invMatches) {
+                const prodMatches = !targetProd || !stProd || targetProd === stProd;
+                const brandMatches = !targetBrand || !stBrand || targetBrand === stBrand;
+                return prodMatches && brandMatches;
+            }
+            return false;
+        }) || stockList.find(st => {
+            const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const stInv = String(st.invoiceNo || '').trim().toLowerCase();
+            return targetLc && stLc && targetLc === stLc && targetInv && stInv && targetInv === stInv;
+        }) || stockList.find(st => {
+            const stLc = String(st.lcNo || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const stTruck = String(st.truckNo || '').trim().toLowerCase();
+            return targetLc && stLc && targetLc === stLc && targetTruck && stTruck && targetTruck === stTruck;
+        });
+    }
+
+    // If this deal receive was NOT used in an LC Receive (Stock), status is "Not Received"
+    if (!matchedStock) {
+        return { lcReceiveDate: null, status: 'Not Received', lcNo: '' };
+    }
+
+    const lcReceiveDate = matchedStock.date || matchedStock.receivedDate || (Array.isArray(matchedStock.entries) ? matchedStock.entries[0]?.date : null) || null;
+    const rawStatus = matchedStock.status || (Array.isArray(matchedStock.entries) ? matchedStock.entries[0]?.status : null) || 'Received';
+    const s = String(rawStatus).toLowerCase();
+    let displayStatus = 'Received';
+    if (s.includes('pending') || s.includes('request')) {
+        displayStatus = 'Pending';
+    } else if (s.includes('reject')) {
+        displayStatus = 'Rejected';
+    } else if (s.includes('stock') || s.includes('accept') || s.includes('received')) {
+        displayStatus = 'Received';
+    } else {
+        displayStatus = rawStatus;
+    }
+
+    return {
+        lcReceiveDate,
+        status: displayStatus,
+        lcNo: matchedStock.lcNo || matchedCog.lcNo || ''
+    };
+};
+
 export const formatLcLast6 = (val) => {
     if (!val) return '—';
     const str = String(val).trim();
@@ -66,13 +155,16 @@ const PurchaseDealReport = ({
     deals = [],         // lc-purchases records
     dealReceives = [],  // deal-receive records
     costOfGoods = [],   // optional cost-of-goods list
-    initialFilters = {}
+    stockList = [],     // optional stock list
+    initialFilters = {},
+    initialReportType = 'deal_wise'
 }) => {
-    const [reportType, setReportType] = useState('summary'); // 'summary' or 'deal_wise'
+    const [reportType, setReportType] = useState(initialReportType || 'deal_wise'); // 'deal_wise' (default) or 'summary'
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [cogs, setCogs] = useState(costOfGoods || []);
+    const [stocks, setStocks] = useState(stockList || []);
 
     useEffect(() => {
         if (costOfGoods && costOfGoods.length > 0) {
@@ -86,6 +178,19 @@ const PurchaseDealReport = ({
                 .catch(() => {});
         }
     }, [isOpen, costOfGoods]);
+
+    useEffect(() => {
+        if (stockList && stockList.length > 0) {
+            setStocks(stockList);
+        } else if (isOpen) {
+            api.get('/api/stock')
+                .then(res => {
+                    const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+                    setStocks(data);
+                })
+                .catch(() => {});
+        }
+    }, [isOpen, stockList]);
 
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
@@ -129,6 +234,7 @@ const PurchaseDealReport = ({
             setSearchQuery('');
             setShowFilterPanel(false);
             setFilterDropdownOpen({ supplier: false, product: false, brand: false });
+            setReportType(initialReportType || 'deal_wise');
         }
     }, [isOpen]);
 
@@ -349,7 +455,7 @@ const PurchaseDealReport = ({
     const handleExportPdf = async () => {
         setShowReportFormatModal(false);
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        await generatePurchaseDealReportPDF(filteredDeals, filters, dateStr, reportType, cogs);
+        await generatePurchaseDealReportPDF(filteredDeals, filters, dateStr, reportType, cogs, stocks);
     };
 
     const handleExportExcel = () => {
@@ -498,75 +604,100 @@ const PurchaseDealReport = ({
 
                     return (
                         <div key={deal._id || dIdx} className="border border-gray-900 overflow-hidden shadow-xs">
-                            {/* Deal Master Info Table (Header on TOP, Value on BOTTOM) */}
+                            {/* Deal Master Info Table (Combined Header Top & Value Bottom in a single cell) */}
                             <div className="overflow-x-auto border-b border-gray-900 bg-blue-50/20">
                                 <table className="w-full border-collapse text-xs">
-                                    <thead>
-                                        <tr className="bg-gray-100 border-b border-gray-900 text-gray-900 font-bold uppercase">
-                                            <th className="border-r border-gray-900 px-2 py-2 text-center w-10">SL</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-center whitespace-nowrap">Date</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-center whitespace-nowrap">Pur. ID</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-left whitespace-nowrap">Supplier</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-left whitespace-nowrap">Product</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-left whitespace-nowrap">Brand</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-right whitespace-nowrap">Pur. Rate</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-center whitespace-nowrap">Pur. Truck / KG</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-center whitespace-nowrap">Receive Truck / KG</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-center whitespace-nowrap">Remaining</th>
-                                            <th className="px-2.5 py-2 text-center whitespace-nowrap">Status</th>
-                                        </tr>
-                                    </thead>
+                                    <colgroup>
+                                        <col style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }} />
+                                        <col style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }} />
+                                        <col style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }} />
+                                    </colgroup>
                                     <tbody>
-                                        <tr className="bg-white text-gray-900 font-bold">
-                                            <td className="border-r border-gray-900 px-2 py-2 text-center font-bold">#{dIdx + 1}</td>
-                                            <td className="border-r border-gray-900 px-2.5 py-2 text-center font-semibold whitespace-nowrap">{formatDate(deal.date)}</td>
-                                            <td className="border-r border-gray-900 px-2.5 py-2 text-center font-black text-blue-700 whitespace-nowrap">{deal._cleanPId}</td>
-                                            <td className="border-r border-gray-900 px-2.5 py-2 text-left font-bold whitespace-nowrap">{deal.supplierName || '—'}</td>
-                                            <td className="border-r border-gray-900 px-2.5 py-2 text-left font-bold uppercase whitespace-nowrap">{deal.productName || '—'}</td>
-                                            <td className="border-r border-gray-900 px-2.5 py-2 text-left font-medium text-gray-700 whitespace-nowrap">{deal.brand || '—'}</td>
-                                            <td className="border-r border-gray-900 px-2.5 py-2 text-right font-black whitespace-nowrap">৳{Number(deal.rate || 0).toLocaleString('en-IN')}/kg</td>
-                                            <td className="border-r border-gray-900 px-2.5 py-2 text-center whitespace-nowrap">
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">
-                                                    {deal._totalQty} {purUnit}
-                                                </span>
+                                        <tr className="bg-blue-50/40 text-gray-900">
+                                            <td style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }} className="px-2 py-1.5 text-center">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">SL</div>
+                                                <div className="text-xs font-bold text-gray-900 mt-0.5">{dIdx + 1}</div>
                                             </td>
-                                            <td className="border-r border-gray-900 px-2.5 py-2 text-center whitespace-nowrap">
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">
-                                                    {deal._totalReceived} {recvUnit}
-                                                </span>
+                                            <td style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }} className="px-2.5 py-1.5 text-center whitespace-nowrap">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Deal Date</div>
+                                                <div className="text-xs font-semibold text-gray-900 mt-0.5">{formatDate(deal.date)}</div>
                                             </td>
-                                            <td className="border-r border-gray-900 px-2.5 py-2 text-center whitespace-nowrap">
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">
-                                                    {deal._remaining} {remUnit}
-                                                </span>
+                                            <td style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }} className="px-2.5 py-1.5 text-center whitespace-nowrap">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Pur. ID</div>
+                                                <div className="text-xs font-black text-blue-700 mt-0.5">{deal._cleanPId}</div>
                                             </td>
-                                            <td className="px-2.5 py-2 text-center whitespace-nowrap">
-                                                <StatusBadge record={deal} />
+                                            <td className="px-2.5 py-1.5 text-left whitespace-nowrap">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Supplier</div>
+                                                <div className="text-xs font-bold text-gray-900 mt-0.5">{deal.supplierName || '—'}</div>
+                                            </td>
+                                            <td className="px-2.5 py-1.5 text-left whitespace-nowrap">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Product</div>
+                                                <div className="text-xs font-bold text-gray-900 uppercase mt-0.5">{deal.productName || '—'}</div>
+                                            </td>
+                                            <td className="px-2.5 py-1.5 text-left whitespace-nowrap">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Brand</div>
+                                                <div className="text-xs font-medium text-gray-700 mt-0.5">{deal.brand || '—'}</div>
+                                            </td>
+                                            <td className="px-2.5 py-1.5 text-center whitespace-nowrap">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Pur. Rate / KG</div>
+                                                <div className="text-xs font-black text-gray-900 mt-0.5">৳{Number(deal.rate || 0).toLocaleString('en-IN')}</div>
+                                            </td>
+                                            <td className="px-2.5 py-1.5 text-center whitespace-nowrap">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Pur. Truck / KG</div>
+                                                <div className="mt-0.5 flex justify-center">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">
+                                                        {deal._totalQty} {purUnit}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-2.5 py-1.5 text-center whitespace-nowrap">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Receive Truck / KG</div>
+                                                <div className="mt-0.5 flex justify-center">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                                                        {deal._totalReceived} {recvUnit}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-2.5 py-1.5 text-center whitespace-nowrap">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Remaining</div>
+                                                <div className="mt-0.5 flex justify-center">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">
+                                                        {deal._remaining} {remUnit}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-2.5 py-1.5 text-center whitespace-nowrap">
+                                                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Status</div>
+                                                <div className="mt-0.5 flex justify-center">
+                                                    <StatusBadge record={deal} />
+                                                </div>
                                             </td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
 
-                            {/* Sub-table Section Label */}
-                            <div className="bg-gray-100/90 px-3 py-1.5 border-b border-gray-900 flex items-center justify-between text-[11px] font-black uppercase text-gray-700 tracking-wider">
-                                <span>Receive Entries Breakdown ({receives.length} {receives.length === 1 ? 'Entry' : 'Entries'})</span>
-                            </div>
-
                             {/* Nested Sub-table for Receives */}
                             <div className="overflow-x-auto">
                                 <table className="w-full border-collapse text-xs">
+                                    <colgroup>
+                                        <col style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }} />
+                                        <col style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }} />
+                                        <col style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }} />
+                                    </colgroup>
                                     <thead>
                                         <tr className="bg-gray-50/90 border-b border-gray-900 text-gray-800">
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-center font-bold uppercase w-10">SL</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-center font-bold uppercase whitespace-nowrap">Receive Date</th>
-                                            <th className="border-r border-gray-900 px-2.5 py-2 text-center font-bold uppercase whitespace-nowrap">LC No</th>
+                                            <th style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }} className="border-r border-gray-900 px-2 py-2 text-center font-bold uppercase w-12 min-w-[48px] max-w-[48px]">SL</th>
+                                            <th style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }} className="border-r border-gray-900 px-2.5 py-2 text-center font-bold uppercase whitespace-nowrap w-36 min-w-[140px] max-w-[140px]">Deal Receive Date</th>
                                             <th className="border-r border-gray-900 px-2.5 py-2 text-center font-bold uppercase whitespace-nowrap">Invoice No</th>
                                             <th className="border-r border-gray-900 px-2.5 py-2 text-left font-bold uppercase whitespace-nowrap">Truck No / Vehicle</th>
                                             <th className="border-r border-gray-900 px-2.5 py-2 text-center font-bold uppercase whitespace-nowrap">Received Qty</th>
                                             <th className="border-r border-gray-900 px-2.5 py-2 text-right font-bold uppercase whitespace-nowrap">Net Bill</th>
                                             <th className="border-r border-gray-900 px-2.5 py-2 text-right font-bold uppercase whitespace-nowrap">Dollar Rate BDT</th>
-                                            <th className="px-2.5 py-2 text-right font-bold uppercase whitespace-nowrap">Costing / KG</th>
+                                            <th className="border-r border-gray-900 px-2.5 py-2 text-right font-bold uppercase whitespace-nowrap">Costing / KG</th>
+                                            <th className="border-r border-gray-900 px-2.5 py-2 text-center font-bold uppercase whitespace-nowrap">LC Rec. Date</th>
+                                            <th className="border-r border-gray-900 px-2.5 py-2 text-center font-bold uppercase whitespace-nowrap">LC No</th>
+                                            <th className="px-2.5 py-2 text-center font-bold uppercase whitespace-nowrap">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-300">
@@ -580,32 +711,69 @@ const PurchaseDealReport = ({
                                                 const rawLc = resolveLcNo(r, deal, cogs);
                                                 const lcStr = formatLcLast6(rawLc);
                                                 const rNetBill = parseFloat(r.netBill !== undefined && r.netBill !== '' ? r.netBill : r.totalBill) || 0;
+                                                const lcInfo = resolveLcReceiveInfo(r, deal, cogs, stocks);
 
                                                 return (
                                                     <tr key={r._id || rIdx} className="hover:bg-blue-50/20 transition-colors">
-                                                        <td className="border-r border-gray-900 px-2.5 py-2 text-center font-medium text-gray-500">{rIdx + 1}</td>
-                                                        <td className="border-r border-gray-900 px-2.5 py-2 text-center font-medium text-gray-800 whitespace-nowrap">{formatDate(r.date)}</td>
-                                                        <td className="border-r border-gray-900 px-2.5 py-2 text-center font-bold text-gray-900 whitespace-nowrap" title={rawLc ? `Full LC: ${rawLc}` : ''}>
-                                                            {lcStr}
-                                                        </td>
+                                                        <td style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }} className="border-r border-gray-900 px-2 py-2 text-center font-medium text-gray-500 w-12 min-w-[48px] max-w-[48px]">{rIdx + 1}</td>
+                                                        <td style={{ width: '140px', minWidth: '140px', maxWidth: '140px' }} className="border-r border-gray-900 px-2.5 py-2 text-center font-medium text-gray-800 whitespace-nowrap w-36 min-w-[140px] max-w-[140px]">{formatDate(r.date)}</td>
                                                         <td className="border-r border-gray-900 px-2.5 py-2 text-center font-bold text-blue-700 whitespace-nowrap">{r.invoiceNo || '—'}</td>
                                                         <td className="border-r border-gray-900 px-2.5 py-2 text-left font-medium text-gray-800">{truckStr}</td>
                                                         <td className="border-r border-gray-900 px-2.5 py-2 text-center font-black text-green-700 whitespace-nowrap">{rQty}</td>
                                                         <td className="border-r border-gray-900 px-2.5 py-2 text-right font-black text-gray-900 whitespace-nowrap">
-                                                            {rNetBill > 0 ? `৳${Math.round(rNetBill).toLocaleString('en-IN')}` : '—'}
+                                                            {rNetBill > 0 ? `₹${Math.round(rNetBill).toLocaleString('en-IN')}` : '—'}
                                                         </td>
                                                         <td className="border-r border-gray-900 px-2.5 py-2 text-right font-bold text-gray-900 whitespace-nowrap">
                                                             {r.dollarRateBdt ? `৳${Number(r.dollarRateBdt).toFixed(2)}` : '—'}
                                                         </td>
-                                                        <td className="px-2.5 py-2 text-right font-black text-gray-900 whitespace-nowrap">
+                                                        <td className="border-r border-gray-900 px-2.5 py-2 text-right font-black text-gray-900 whitespace-nowrap">
                                                             {r.costingKg ? `৳${Number(r.costingKg).toFixed(2)}` : '—'}
+                                                        </td>
+                                                        <td className="border-r border-gray-900 px-2.5 py-2 text-center font-semibold text-gray-800 whitespace-nowrap">
+                                                            {lcInfo.lcReceiveDate ? formatDate(lcInfo.lcReceiveDate) : '—'}
+                                                        </td>
+                                                        <td className="border-r border-gray-900 px-2.5 py-2 text-center font-bold text-gray-900 whitespace-nowrap" title={rawLc ? `Full LC: ${rawLc}` : ''}>
+                                                            {lcStr}
+                                                        </td>
+                                                        <td className="px-2.5 py-2 text-center whitespace-nowrap">
+                                                            {(() => {
+                                                                const s = String(lcInfo.status || 'Not Received').trim();
+                                                                const sLower = s.toLowerCase();
+                                                                const isReceived = sLower.includes('stock') || sLower.includes('accept') || sLower === 'received';
+                                                                const isPending = sLower.includes('pending') || sLower.includes('request');
+
+                                                                if (isReceived) {
+                                                                    return (
+                                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border bg-green-50 text-green-700 border-green-200">
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                                                            Received
+                                                                        </span>
+                                                                    );
+                                                                }
+
+                                                                if (isPending) {
+                                                                    return (
+                                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-200">
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                                                            Pending
+                                                                        </span>
+                                                                    );
+                                                                }
+
+                                                                return (
+                                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-200">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                                                        Not Received
+                                                                    </span>
+                                                                );
+                                                            })()}
                                                         </td>
                                                     </tr>
                                                 );
                                             })
                                         ) : (
                                             <tr>
-                                                <td colSpan={9} className="px-4 py-4 text-center text-gray-400 italic">
+                                                <td colSpan={11} className="px-4 py-4 text-center text-gray-400 italic">
                                                     No receive records entered for this deal yet.
                                                 </td>
                                             </tr>
@@ -614,17 +782,20 @@ const PurchaseDealReport = ({
                                     {receives.length > 0 && (
                                         <tfoot className="bg-gray-100/90 border-t border-gray-900 font-bold text-gray-900">
                                             <tr>
-                                                <td colSpan={5} className="border-r border-gray-900 px-3 py-1.5 text-right uppercase tracking-wider text-[11px]">
+                                                <td colSpan={4} className="border-r border-gray-900 px-3 py-1.5 text-right uppercase tracking-wider text-[11px]">
                                                     Deal Receive Subtotal:
                                                 </td>
                                                 <td className="border-r border-gray-900 px-2.5 py-1.5 text-center font-black text-green-700 text-xs whitespace-nowrap">
                                                     {deal._totalReceived} {recvUnit}
                                                 </td>
                                                 <td className="border-r border-gray-900 px-2.5 py-1.5 text-right font-black text-gray-900 text-xs whitespace-nowrap">
-                                                    {dealTotalNetBill > 0 ? `৳${Math.round(dealTotalNetBill).toLocaleString('en-IN')}` : '—'}
+                                                    {dealTotalNetBill > 0 ? `₹${Math.round(dealTotalNetBill).toLocaleString('en-IN')}` : '—'}
                                                 </td>
                                                 <td className="border-r border-gray-900 px-2.5 py-1.5 text-right text-gray-400 text-xs">—</td>
-                                                <td className="px-2.5 py-1.5 text-right text-gray-400 text-xs">—</td>
+                                                <td className="border-r border-gray-900 px-2.5 py-1.5 text-right text-gray-400 text-xs">—</td>
+                                                <td className="border-r border-gray-900 px-2.5 py-1.5 text-center text-gray-400 text-xs">—</td>
+                                                <td className="border-r border-gray-900 px-2.5 py-1.5 text-center text-gray-400 text-xs">—</td>
+                                                <td className="px-2.5 py-1.5 text-center text-gray-400 text-xs">—</td>
                                             </tr>
                                         </tfoot>
                                     )}
@@ -683,8 +854,8 @@ const PurchaseDealReport = ({
                                 onChange={(e) => setReportType(e.target.value)}
                                 className="appearance-none bg-white border border-gray-200 text-gray-700 py-1.5 sm:py-2.5 pl-2.5 sm:pl-4 pr-6 sm:pr-10 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all cursor-pointer hover:border-gray-300"
                             >
-                                <option value="summary">Summary Report</option>
                                 <option value="deal_wise">Deal Wise Report</option>
+                                <option value="summary">Summary Report</option>
                             </select>
                             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 sm:px-3 text-gray-400">
                                 <svg className="fill-current h-3.5 w-3.5 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">

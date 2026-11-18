@@ -272,6 +272,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [viewData, setViewData] = useState(null);
+    const [deleteConfirmState, setDeleteConfirmState] = useState({ show: false, id: null, title: '' });
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
 
     // Filter states
@@ -970,11 +971,20 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
         }
     };
 
-    const handleDelete = async (id) => {
+    const handleDelete = (id) => {
         const item = records.find(r => r._id === id);
-        if (!window.confirm(`Are you sure you want to delete Deal Receive for ${(item?.purchaseId || '').replace(/-/g, '')}?`)) {
-            return;
-        }
+        const pId = item ? String(item.purchaseId || '').replace(/-/g, '') : '';
+        setDeleteConfirmState({
+            show: true,
+            id,
+            title: pId ? `Deal Receive for ${pId}` : 'this Deal Receive entry'
+        });
+    };
+
+    const handleConfirmDelete = async () => {
+        const id = deleteConfirmState.id;
+        if (!id) return;
+        const item = records.find(r => r._id === id);
 
         try {
             await axios.delete(`${API_BASE_URL}/api/deal-receives/${id}`);
@@ -991,6 +1001,8 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
             if (addNotification) {
                 addNotification(err.response?.data?.message || 'Failed to delete Deal Receive', 'error');
             }
+        } finally {
+            setDeleteConfirmState({ show: false, id: null, title: '' });
         }
     };
 
@@ -2341,6 +2353,42 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
                                 className="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-bold text-xs hover:bg-gray-800 transition-colors"
                             >
                                 Close
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Custom In-App Deletion Confirmation Modal */}
+            {deleteConfirmState.show && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div
+                        className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+                        onClick={() => setDeleteConfirmState({ show: false, id: null, title: '' })}
+                    />
+                    <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-2xl shadow-2xl p-6 sm:p-8 max-w-md w-full animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 bg-red-100/60 rounded-full mx-auto mb-5 text-red-600">
+                            <TrashIcon className="w-7 h-7 sm:w-8 sm:h-8" />
+                        </div>
+                        <h3 className="text-lg sm:text-xl font-bold text-gray-900 text-center mb-2">Delete Confirmation</h3>
+                        <p className="text-gray-600 text-center text-sm mb-6">
+                            Are you sure you want to delete {deleteConfirmState.title}? This action cannot be undone.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteConfirmState({ show: false, id: null, title: '' })}
+                                className="flex-1 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-sm transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDelete}
+                                className="flex-1 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl text-sm shadow-lg shadow-red-500/25 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                            >
+                                Confirm Delete
                             </button>
                         </div>
                     </div>
