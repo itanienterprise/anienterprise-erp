@@ -48,6 +48,24 @@ const getSavedOrderStatusFilter = () => {
     }
 };
 
+export const isOrderMissingLc = (order) => {
+    if (!order) return true;
+    const items = Array.isArray(order.items) ? order.items : [];
+    if (items.length === 0) return true;
+    for (const item of items) {
+        const entries = (Array.isArray(item.brandEntries) && item.brandEntries.length > 0)
+            ? item.brandEntries
+            : [{ lcNo: item.lcNo || order.lcNo }];
+        for (const be of entries) {
+            const lc = (be.lcNo || item.lcNo || order.lcNo || '').toString().trim();
+            if (!lc || lc === '-' || lc === '—' || lc === '--' || lc === '0000' || lc.toLowerCase() === 'n/a' || lc.toLowerCase() === 'none' || lc.toLowerCase() === 'null') {
+                return true;
+            }
+        }
+    }
+    return false;
+};
+
 const OrderManagement = ({
     currentUser,
     addNotification,
@@ -246,6 +264,21 @@ const OrderManagement = ({
     const [originalData, setOriginalData] = useState(null);
     const [viewRecord, setViewRecord] = useState(null);
     const [confirmModalConfig, setConfirmModalConfig] = useState(null);
+
+    const showAlertModal = (title, message, type = 'danger') => {
+        setConfirmModalConfig({
+            title,
+            message,
+            type,
+            confirmText: 'OK',
+            cancelText: null,
+            onConfirm: () => setConfirmModalConfig(null),
+            onClose: () => setConfirmModalConfig(null)
+        });
+        if (addNotification) {
+            addNotification(message, type === 'danger' ? 'error' : type);
+        }
+    };
     const [searchQuery, setSearchQuery] = useState('');
     const [pageSize, setPageSize] = useState(() => {
         const saved = localStorage.getItem('order_page_size');
@@ -1133,7 +1166,8 @@ const OrderManagement = ({
                 const stockFilters = {
                     productName: productName,
                     ...(warehouseName ? { warehouse: warehouseName } : {}),
-                    reportType: 'price'
+                    reportType: 'price',
+                    includeUnacceptedOrders: true
                 };
                 const stockRes = calculateStockData(
                     stockRecords,
@@ -1213,7 +1247,8 @@ const OrderManagement = ({
             productName: cleanPName,
             brand: cleanBrand || undefined,
             ...(cleanWhName ? { warehouse: cleanWhName } : {}),
-            reportType: 'price'
+            reportType: 'price',
+            includeUnacceptedOrders: true
         };
         const stockRes = calculateStockData(
             stockRecords,
@@ -1253,6 +1288,104 @@ const OrderManagement = ({
             inhouseQty: Number(Math.max(0, inhouseVal).toFixed(2)).toString(),
             warehouseQty: cleanWhName ? Number(Math.max(0, whSaleable).toFixed(2)).toString() : ''
         };
+    };
+
+    const findDeficitEntry = (items = formData.items) => {
+        for (let pIdx = 0; pIdx < (items || []).length; pIdx++) {
+            const item = items[pIdx];
+            if (!item || !item.productName) continue;
+            const currentProd = (item.productName || '').trim().toLowerCase();
+            const isBagUom = item.uom === 'BAG';
+            const unit = isBagUom ? 'BAG' : 'KG';
+            const bEntries = item.brandEntries || [];
+
+            for (let bIdx = 0; bIdx < bEntries.length; bIdx++) {
+                const be = bEntries[bIdx];
+                if (!be) continue;
+                const currentBrand = (be.brand || be.brandName || '').trim().toLowerCase();
+                const currentWh = (be.warehouseName || '').trim().toLowerCase();
+                const currentLc = (be.lcNo || '').trim().toLowerCase();
+
+                // If LC No is "Advance", allow Saleable Wh Stock < Qty
+                if (currentLc === 'advance') {
+                    continue;
+                }
+
+                const subVal = isBagUom ? (parseFloat(be.packet) || 0) : (parseFloat(be.quantity) || 0);
+                if (subVal <= 0) continue;
+
+                let baseWhStock = parseFloat(be.warehouseQty) || 0;
+                if (baseWhStock === 0 && currentBrand) {
+                    for (let pI = 0; pI < items.length; pI++) {
+                        const it = items[pI];
+                        if (!it) continue;
+                        const itProd = (it.productName || '').trim().toLowerCase();
+                        if (currentProd && itProd && currentProd !== itProd) continue;
+                        for (const bEntry of (it.brandEntries || [])) {
+                            const b = (bEntry.brand || bEntry.brandName || '').trim().toLowerCase();
+                            const w = (bEntry.warehouseName || '').trim().toLowerCase();
+                            const l = (bEntry.lcNo || '').trim().toLowerCase();
+                            if (b === currentBrand && (!currentWh || !w || currentWh === w) && (currentLc ? l === currentLc : !l)) {
+                                const whVal = parseFloat(bEntry.warehouseQty) || 0;
+                                if (whVal > 0) {
+                                    baseWhStock = whVal;
+                                    break;
+                                }
+                            }
+                        }
+                        if (baseWhStock > 0) break;
+                    }
+                }
+
+                if (baseWhStock === 0 && currentProd) {
+                    const stockInfo = getStockForEntry(item.productName, be.brand || be.brandName, be.lcNo, be.warehouseName, isBagUom);
+                    baseWhStock = parseFloat(stockInfo?.warehouseQty) || 0;
+                }
+
+                let priorQty = 0;
+                for (let pI = 0; pI <= pIdx; pI++) {
+                    const it = items[pI];
+                    if (!it) continue;
+                    const itProd = (it.productName || '').trim().toLowerCase();
+                    if (currentProd && itProd && currentProd !== itProd) continue;
+
+                    const prevBEntries = it.brandEntries || [];
+                    const maxEIdx = (pI === pIdx) ? bIdx : prevBEntries.length;
+                    for (let eI = 0; eI < maxEIdx; eI++) {
+                        const prevEntry = prevBEntries[eI];
+                        if (!prevEntry) continue;
+                        const prevBrand = (prevEntry.brand || prevEntry.brandName || '').trim().toLowerCase();
+                        const prevWh = (prevEntry.warehouseName || '').trim().toLowerCase();
+                        const prevLc = (prevEntry.lcNo || '').trim().toLowerCase();
+
+                        if (currentBrand && prevBrand === currentBrand && (!currentWh || !prevWh || currentWh === prevWh) && (currentLc ? prevLc === currentLc : !prevLc)) {
+                            const prevVal = isBagUom
+                                ? (parseFloat(prevEntry.packet) || 0)
+                                : (parseFloat(prevEntry.quantity) || 0);
+                            priorQty += prevVal;
+                        }
+                    }
+                }
+
+                const startingWhStock = baseWhStock - priorQty;
+                const remainingWhStock = Number((startingWhStock - subVal).toFixed(2));
+
+                if (startingWhStock < subVal || remainingWhStock < 0) {
+                    return {
+                        exceeded: true,
+                        productName: item.productName || 'Product',
+                        brandName: be.brandName || be.brand || 'Brand',
+                        warehouseName: be.warehouseName || '',
+                        lcNo: be.lcNo || '',
+                        unit,
+                        available: Math.max(0, startingWhStock),
+                        requested: subVal,
+                        remaining: remainingWhStock
+                    };
+                }
+            }
+        }
+        return null;
     };
 
     const getFilteredLCs = (overridePIdx, overrideBIdx) => {
@@ -1688,7 +1821,7 @@ const OrderManagement = ({
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         if (!formData.companyName && !formData.customerName) {
-            alert('Please enter Company or Customer Name');
+            showAlertModal('Validation Error', 'Please enter Company or Customer Name', 'danger');
             return;
         }
 
@@ -1745,6 +1878,19 @@ const OrderManagement = ({
                 } : {})
             };
 
+            if ((payload.status || '').toLowerCase() === 'accepted' && isOrderMissingLc(payload)) {
+                showAlertModal('LC No Required', 'Cannot accept order: LC No is missing. Please select an LC No for all products before accepting.', 'danger');
+                setIsSubmitting(false);
+                return;
+            }
+
+            const deficit = findDeficitEntry(formData.items);
+            if (deficit) {
+                showAlertModal('Stock Deficit Error', `Cannot save order: Saleable Wh Stock (${deficit.available.toLocaleString('en-US')} ${deficit.unit}) is less than ordered quantity (${deficit.requested.toLocaleString('en-US')} ${deficit.unit}) for ${deficit.productName} (${deficit.brandName}). Only Advance LC allows exceeding stock.`, 'danger');
+                setIsSubmitting(false);
+                return;
+            }
+
             if (editingId) {
                 // For edits, preserve the existing invoice number
                 payload.invoiceNo = formData.invoiceNo;
@@ -1773,7 +1919,7 @@ const OrderManagement = ({
         } catch (err) {
             console.error('Error saving order:', err);
             const msg = err.response?.data?.message || 'Failed to save order. Please try again.';
-            alert(msg);
+            showAlertModal('Error Saving Order', msg, 'danger');
         } finally {
             setIsSubmitting(false);
         }
@@ -1781,6 +1927,11 @@ const OrderManagement = ({
 
     const handleStatusUpdate = async (order, newStatus) => {
         try {
+            if ((newStatus || '').toLowerCase() === 'accepted' && isOrderMissingLc(order)) {
+                showAlertModal('Cannot Accept Order', `Cannot accept order ${order.orderNo || order.invoiceNo || ''}: LC No is missing. Please edit the order to select an LC No before accepting.`, 'danger');
+                return;
+            }
+
             const actionBy = currentUser ? (currentUser.name || currentUser.username || 'Administrator') : 'Administrator';
             const actionUsername = currentUser ? (currentUser.username || 'admin') : 'admin';
             const orderId = String(order._id || order.id || '');
@@ -1875,7 +2026,7 @@ const OrderManagement = ({
         } catch (err) {
             console.error(`Error updating order status to ${newStatus}:`, err);
             const msg = err.response?.data?.message || 'Failed to update order status';
-            alert(msg);
+            showAlertModal('Status Update Error', msg, 'danger');
         }
     };
 
@@ -1883,6 +2034,13 @@ const OrderManagement = ({
         if (!selectedItems || selectedItems.size === 0) return;
         const targetOrders = (sales || []).filter(s => selectedItems.has(s._id));
         if (targetOrders.length === 0) return;
+
+        const missingLcOrders = targetOrders.filter(o => isOrderMissingLc(o));
+        if (missingLcOrders.length > 0) {
+            const missingNos = missingLcOrders.map(o => o.orderNo || o.invoiceNo || 'Unknown').join(', ');
+            showAlertModal('Cannot Bulk Accept', `Cannot accept order(s) [${missingNos}] because LC No is missing. Please edit and assign LC No first.`, 'danger');
+            return;
+        }
 
         const actionBy = currentUser ? (currentUser.name || currentUser.username || 'Administrator') : 'Administrator';
         const actionUsername = currentUser ? (currentUser.username || 'admin') : 'admin';
@@ -3486,10 +3644,10 @@ const OrderManagement = ({
                                     <div className="space-y-1">
                                         {/* Column Headers */}
                                         <div className="hidden md:grid grid-cols-12 gap-3 px-6 py-1 border border-transparent">
-                                            <div className="col-span-2 sale-mgmt-item-label text-center">LC No</div>
                                             <div className="col-span-2 sale-mgmt-item-label text-center">Brand</div>
-                                            <div className="sale-mgmt-item-label text-center">Inhouse</div>
                                             <div className="sale-mgmt-item-label text-center">Warehouse</div>
+                                            <div className="col-span-2 sale-mgmt-item-label text-center">LC No</div>
+                                            <div className="sale-mgmt-item-label text-center">Inhouse</div>
                                             <div className="sale-mgmt-item-label text-center leading-tight">Saleable Wh Stock ({item.uom === 'BAG' ? 'BAG' : 'KG'})</div>
                                             <div className="sale-mgmt-item-label text-center">Bag / Pkt</div>
                                             <div className="sale-mgmt-item-label text-center">Qty (kg)</div>
@@ -3517,6 +3675,87 @@ const OrderManagement = ({
                                             return (
                                                 <React.Fragment key={bIdx}>
                                                     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center px-6 group/entry hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative transition-all">
+
+                                                {/* Brand Searchable Dropdown */}
+                                                <div className="col-span-2 relative brand-dropdown-container">
+                                                    <label className="md:hidden sale-mgmt-item-label mb-1 block">Brand</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            placeholder={be.brandName || "Brand"}
+                                                            value={activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? brandSearch : (be.brandName || '')}
+                                                            onChange={(e) => { setBrandSearch(e.target.value); setActiveDropdown('brand'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); setHighlightedIndex(-1); updateBrandEntry(pIdx, bIdx, 'brandName', e.target.value); }}
+                                                            onFocus={() => {
+                                                                if (!products || products.length === 0) fetchProducts(true);
+                                                                setActiveDropdown('brand');
+                                                                setActiveItemIndex(pIdx);
+                                                                setActiveEntryIndex(bIdx);
+                                                                setBrandSearch('');
+                                                                setHighlightedIndex(-1);
+                                                            }}
+                                                            onKeyDown={(e) => handleDropdownKeyDown(e, getFilteredBrands(pIdx), (b) => handleBrandSelect(b, pIdx, bIdx))}
+                                                            autoComplete="off"
+                                                            className={`sale-mgmt-input !text-xs pr-8 ${be.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                        />
+                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                                                            {be.brandName && (<button type="button" onClick={() => { updateBrandEntry(pIdx, bIdx, 'brand', ''); updateBrandEntry(pIdx, bIdx, 'brandName', ''); setBrandSearch(''); }} className="text-gray-400 hover:text-red-500"><XIcon className="w-3 h-3" /></button>)}
+                                                            <button type="button" onClick={() => {
+                                                                if (activeDropdown !== 'brand' || activeItemIndex !== pIdx || activeEntryIndex !== bIdx) {
+                                                                    if (!products || products.length === 0) fetchProducts(true);
+                                                                    setBrandSearch('');
+                                                                }
+                                                                setActiveDropdown(activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? null : 'brand');
+                                                                setActiveItemIndex(pIdx);
+                                                                setActiveEntryIndex(bIdx);
+                                                            }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? 'rotate-180' : ''}`} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx && getFilteredBrands(pIdx).length > 0 && (
+                                                        <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                            {getFilteredBrands(pIdx).map((b, idx) => (
+                                                                <button key={idx} type="button" onMouseDown={(e) => { e.preventDefault(); handleBrandSelect(b, pIdx, bIdx); }} onClick={() => handleBrandSelect(b, pIdx, bIdx)} onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                    className={`w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${be.brandName === b ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}>
+                                                                    {b}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Warehouse Searchable Dropdown */}
+                                                <div className="relative warehouse-dropdown-container">
+                                                    <label className="md:hidden sale-mgmt-item-label mb-1 block">Warehouse</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            placeholder={be.warehouseName || "Warehouse"}
+                                                            value={activeDropdown === 'warehouse' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? warehouseSearch : (be.warehouseName || '')}
+                                                            onChange={(e) => { setWarehouseSearch(e.target.value); setActiveDropdown('warehouse'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); setHighlightedIndex(-1); updateBrandEntry(pIdx, bIdx, 'warehouseName', e.target.value); }}
+                                                            onFocus={() => { setActiveDropdown('warehouse'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); setWarehouseSearch(be.warehouseName || ''); setHighlightedIndex(-1); }}
+                                                            onKeyDown={(e) => handleDropdownKeyDown(e, getFilteredWarehouses(), (w) => handleWarehouseSelect(w, pIdx, bIdx))}
+                                                            autoComplete="off"
+                                                            className={`sale-mgmt-input !text-xs pr-8 ${be.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                        />
+                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                                                            {be.warehouseName && (<button type="button" onClick={() => { updateBrandEntry(pIdx, bIdx, 'warehouseName', ''); updateBrandEntry(pIdx, bIdx, 'warehouseId', ''); setWarehouseSearch(''); }} className="text-gray-400 hover:text-red-500"><XIcon className="w-3 h-3" /></button>)}
+                                                            <button type="button" onClick={() => { setActiveDropdown(activeDropdown === 'warehouse' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? null : 'warehouse'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'warehouse' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? 'rotate-180' : ''}`} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {activeDropdown === 'warehouse' && activeItemIndex === pIdx && activeEntryIndex === bIdx && getFilteredWarehouses().length > 0 && (
+                                                        <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
+                                                            {getFilteredWarehouses().map((w, idx) => (
+                                                                <button key={w._id || `wh-${idx}`} type="button" onMouseDown={(e) => { e.preventDefault(); handleWarehouseSelect(w, pIdx, bIdx); }} onClick={() => handleWarehouseSelect(w, pIdx, bIdx)} onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                    className={`w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${be.warehouseName === w.whName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}>
+                                                                    {w.whName}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
 
                                                 {/* LC No Selection */}
                                                 <div className="col-span-2 space-y-1 relative lc-dropdown-container">
@@ -3592,93 +3831,12 @@ const OrderManagement = ({
                                                     )}
                                                 </div>
 
-                                                {/* Brand Searchable Dropdown */}
-                                                <div className="col-span-2 relative brand-dropdown-container">
-                                                    <label className="md:hidden sale-mgmt-item-label mb-1 block">Brand</label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            placeholder={be.brandName || "Brand"}
-                                                            value={activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? brandSearch : (be.brandName || '')}
-                                                            onChange={(e) => { setBrandSearch(e.target.value); setActiveDropdown('brand'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); setHighlightedIndex(-1); updateBrandEntry(pIdx, bIdx, 'brandName', e.target.value); }}
-                                                            onFocus={() => {
-                                                                if (!products || products.length === 0) fetchProducts(true);
-                                                                setActiveDropdown('brand');
-                                                                setActiveItemIndex(pIdx);
-                                                                setActiveEntryIndex(bIdx);
-                                                                setBrandSearch('');
-                                                                setHighlightedIndex(-1);
-                                                            }}
-                                                            onKeyDown={(e) => handleDropdownKeyDown(e, getFilteredBrands(pIdx), (b) => handleBrandSelect(b, pIdx, bIdx))}
-                                                            autoComplete="off"
-                                                            className={`sale-mgmt-input !text-xs pr-8 ${be.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
-                                                        />
-                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-                                                            {be.brandName && (<button type="button" onClick={() => { updateBrandEntry(pIdx, bIdx, 'brand', ''); updateBrandEntry(pIdx, bIdx, 'brandName', ''); setBrandSearch(''); }} className="text-gray-400 hover:text-red-500"><XIcon className="w-3 h-3" /></button>)}
-                                                            <button type="button" onClick={() => {
-                                                                if (activeDropdown !== 'brand' || activeItemIndex !== pIdx || activeEntryIndex !== bIdx) {
-                                                                    if (!products || products.length === 0) fetchProducts(true);
-                                                                    setBrandSearch('');
-                                                                }
-                                                                setActiveDropdown(activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? null : 'brand');
-                                                                setActiveItemIndex(pIdx);
-                                                                setActiveEntryIndex(bIdx);
-                                                            }} className="text-gray-300 hover:text-blue-500 transition-colors">
-                                                                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? 'rotate-180' : ''}`} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    {activeDropdown === 'brand' && activeItemIndex === pIdx && activeEntryIndex === bIdx && getFilteredBrands(pIdx).length > 0 && (
-                                                        <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                            {getFilteredBrands(pIdx).map((b, idx) => (
-                                                                <button key={idx} type="button" onMouseDown={(e) => { e.preventDefault(); handleBrandSelect(b, pIdx, bIdx); }} onClick={() => handleBrandSelect(b, pIdx, bIdx)} onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                    className={`w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${be.brandName === b ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}>
-                                                                    {b}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-
                                                 {/* Inhouse Qty */}
                                                 <div>
                                                     <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Inhouse</label>
                                                     <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-bold text-gray-900">
                                                         {be.inhouseQty || '0'}
                                                     </div>
-                                                </div>
-
-                                                {/* Warehouse Searchable Dropdown */}
-                                                <div className="relative warehouse-dropdown-container">
-                                                    <label className="md:hidden sale-mgmt-item-label mb-1 block">Warehouse</label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            placeholder={be.warehouseName || "Warehouse"}
-                                                            value={activeDropdown === 'warehouse' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? warehouseSearch : (be.warehouseName || '')}
-                                                            onChange={(e) => { setWarehouseSearch(e.target.value); setActiveDropdown('warehouse'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); setHighlightedIndex(-1); updateBrandEntry(pIdx, bIdx, 'warehouseName', e.target.value); }}
-                                                            onFocus={() => { setActiveDropdown('warehouse'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); setWarehouseSearch(be.warehouseName || ''); setHighlightedIndex(-1); }}
-                                                            onKeyDown={(e) => handleDropdownKeyDown(e, getFilteredWarehouses(), (w) => handleWarehouseSelect(w, pIdx, bIdx))}
-                                                            autoComplete="off"
-                                                            className={`sale-mgmt-input !text-xs pr-8 ${be.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
-                                                        />
-                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-                                                            {be.warehouseName && (<button type="button" onClick={() => { updateBrandEntry(pIdx, bIdx, 'warehouseName', ''); updateBrandEntry(pIdx, bIdx, 'warehouseId', ''); setWarehouseSearch(''); }} className="text-gray-400 hover:text-red-500"><XIcon className="w-3 h-3" /></button>)}
-                                                            <button type="button" onClick={() => { setActiveDropdown(activeDropdown === 'warehouse' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? null : 'warehouse'); setActiveItemIndex(pIdx); setActiveEntryIndex(bIdx); }} className="text-gray-300 hover:text-blue-500 transition-colors">
-                                                                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'warehouse' && activeItemIndex === pIdx && activeEntryIndex === bIdx ? 'rotate-180' : ''}`} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    {activeDropdown === 'warehouse' && activeItemIndex === pIdx && activeEntryIndex === bIdx && getFilteredWarehouses().length > 0 && (
-                                                        <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
-                                                            {getFilteredWarehouses().map((w, idx) => (
-                                                                <button key={w._id || `wh-${idx}`} type="button" onMouseDown={(e) => { e.preventDefault(); handleWarehouseSelect(w, pIdx, bIdx); }} onClick={() => handleWarehouseSelect(w, pIdx, bIdx)} onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                    className={`w-full px-3 py-1.5 text-left text-xs font-medium transition-colors ${be.warehouseName === w.whName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}>
-                                                                    {w.whName}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    )}
                                                 </div>
 
                                                 {/* Wh Stock (Warehouse Qty with Live Deduction) */}
@@ -3793,11 +3951,11 @@ const OrderManagement = ({
                                                 <React.Fragment>
                                                     {/* Desktop Subtotal Line */}
                                                     <div className="hidden md:grid grid-cols-12 gap-3 items-center px-6 py-2 my-1.5 bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-blue-50/80 rounded-xl border border-blue-200/90 shadow-xs">
-                                                        <div className="col-span-2"></div>
                                                         <div className="col-span-2 text-center text-xs font-black text-blue-950 uppercase tracking-wider truncate">
                                                             {be.brand || be.brandName} Total
                                                         </div>
                                                         <div className="col-span-1 text-center text-[11px] font-bold text-gray-400">—</div>
+                                                        <div className="col-span-2 text-center text-[11px] font-bold text-gray-400">—</div>
                                                         <div className="col-span-1 text-center text-[11px] font-bold text-gray-400">—</div>
                                                         <div className="col-span-1 text-center text-[11px] font-bold text-gray-400">—</div>
                                                         <div className="col-span-1 text-center">
@@ -4135,6 +4293,16 @@ const OrderManagement = ({
                             />
                         </div>
 
+                        {(() => {
+                            const deficit = findDeficitEntry(formData.items);
+                            if (!deficit) return null;
+                            return (
+                                <div className="mt-3 px-4 py-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                                    <span>⚠️ Cannot save order: Saleable Wh Stock ({deficit.available.toLocaleString('en-US')} {deficit.unit}) is less than Qty ({deficit.requested.toLocaleString('en-US')} {deficit.unit}) for <strong>{deficit.productName} ({deficit.brandName})</strong>. Select LC No <strong>Advance</strong> to allow pre-orders.</span>
+                                </div>
+                            );
+                        })()}
+
                         <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                             <button
                                 type="button"
@@ -4143,13 +4311,19 @@ const OrderManagement = ({
                             >
                                 Cancel
                             </button>
-                            <button
-                                type="submit"
-                                disabled={isSubmitting}
-                                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg text-sm"
-                            >
-                                {isSubmitting ? 'Saving...' : editingId ? 'Update Order' : 'Save Order'}
-                            </button>
+                            {(() => {
+                                const deficit = findDeficitEntry(formData.items);
+                                return (
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        title={deficit ? `Cannot save: Saleable Wh Stock is less than Qty for ${deficit.productName} (${deficit.brandName}). Allowed only when LC No is Advance.` : undefined}
+                                        className={`px-6 py-2.5 text-white rounded-xl font-bold shadow-lg text-sm transition-all ${deficit ? 'bg-rose-600 hover:bg-rose-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                    >
+                                        {isSubmitting ? 'Saving...' : editingId ? 'Update Order' : 'Save Order'}
+                                    </button>
+                                );
+                            })()}
                         </div>
                     </form>
                 </div>
@@ -4316,15 +4490,25 @@ const OrderManagement = ({
                                                     {(order.items || []).map((item, i) => (
                                                         <div key={i} className="flex flex-col gap-1">
                                                             {(item.brandEntries || []).length > 0 ? (
-                                                                item.brandEntries.map((b, bIdx) => (
-                                                                    <div key={bIdx} className={`text-[13px] whitespace-nowrap ${b.lcNo || item.lcNo || order.lcNo ? 'font-bold text-purple-700' : 'font-medium text-gray-400'}`}>
-                                                                        {b.lcNo || item.lcNo || order.lcNo || '-'}
-                                                                    </div>
-                                                                ))
+                                                                item.brandEntries.map((b, bIdx) => {
+                                                                    const lc = (b.lcNo || item.lcNo || order.lcNo || '').toString().trim();
+                                                                    const isMissing = !lc || lc === '-' || lc === '—' || lc === '--' || lc === '0000' || lc.toLowerCase() === 'n/a';
+                                                                    return (
+                                                                        <div key={bIdx} className={`text-[13px] whitespace-nowrap ${!isMissing ? 'font-bold text-purple-700' : 'font-semibold text-rose-500'}`}>
+                                                                            {!isMissing ? lc : 'Missing LC'}
+                                                                        </div>
+                                                                    );
+                                                                })
                                                             ) : (
-                                                                <div className={`text-[13px] whitespace-nowrap ${item.lcNo || order.lcNo ? 'font-bold text-purple-700' : 'font-medium text-gray-400'}`}>
-                                                                    {item.lcNo || order.lcNo || '-'}
-                                                                </div>
+                                                                (() => {
+                                                                    const lc = (item.lcNo || order.lcNo || '').toString().trim();
+                                                                    const isMissing = !lc || lc === '-' || lc === '—' || lc === '--' || lc === '0000' || lc.toLowerCase() === 'n/a';
+                                                                    return (
+                                                                        <div className={`text-[13px] whitespace-nowrap ${!isMissing ? 'font-bold text-purple-700' : 'font-semibold text-rose-500'}`}>
+                                                                            {!isMissing ? lc : 'Missing LC'}
+                                                                        </div>
+                                                                    );
+                                                                })()
                                                             )}
                                                         </div>
                                                     ))}
@@ -4580,24 +4764,33 @@ const OrderManagement = ({
                                                             <EditIcon className="w-5 h-5" />
                                                         </button>
                                                     )}
-                                                    {(isRequested ? canApprove : (order.isEdited === true && (canApproveEditRequest || canApprove))) && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleStatusUpdate(order, 'Accepted')}
-                                                                className="text-gray-400 hover:text-emerald-600 transition-colors p-1"
-                                                                title="Accept Order / Edit"
-                                                            >
-                                                                <CheckIcon className="w-5 h-5" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleStatusUpdate(order, 'Rejected')}
-                                                                className="text-gray-400 hover:text-red-600 transition-colors p-1"
-                                                                title="Reject Order / Edit"
-                                                            >
-                                                                <XIcon className="w-5 h-5" />
-                                                            </button>
-                                                        </>
-                                                    )}
+                                                    {(isRequested ? canApprove : (order.isEdited === true && (canApproveEditRequest || canApprove))) && (() => {
+                                                        const missingLc = isOrderMissingLc(order);
+                                                        return (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (missingLc) {
+                                                                            showAlertModal('Cannot Accept Order', `Cannot accept order ${order.orderNo || order.invoiceNo || ''}: LC No is missing. Please edit the order to select an LC No before accepting.`, 'danger');
+                                                                            return;
+                                                                        }
+                                                                        handleStatusUpdate(order, 'Accepted');
+                                                                    }}
+                                                                    className={`p-1 transition-colors ${missingLc ? 'text-gray-300 hover:text-amber-500 cursor-not-allowed' : 'text-gray-400 hover:text-emerald-600'}`}
+                                                                    title={missingLc ? "Cannot accept: LC No is missing (Please edit to select LC No)" : "Accept Order / Edit"}
+                                                                >
+                                                                    <CheckIcon className="w-5 h-5" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleStatusUpdate(order, 'Rejected')}
+                                                                    className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                                                                    title="Reject Order / Edit"
+                                                                >
+                                                                    <XIcon className="w-5 h-5" />
+                                                                </button>
+                                                            </>
+                                                        );
+                                                    })()}
                                                     {!isRequested && !order.isEdited && canDelete && (
                                                         <button
                                                             onClick={() => handleDeleteOrder(order)}
@@ -4888,24 +5081,33 @@ const OrderManagement = ({
                                                                 <EditIcon className="w-4 h-4" />
                                                             </button>
                                                         )}
-                                                        {(isRequested ? canApprove : (order.isEdited === true && (canApproveEditRequest || canApprove))) && (
-                                                            <>
-                                                                <button
-                                                                    onClick={() => handleStatusUpdate(order, 'Accepted')}
-                                                                    className="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
-                                                                    title="Accept Order / Edit"
-                                                                >
-                                                                    <CheckIcon className="w-3.5 h-3.5" /> Accept
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleStatusUpdate(order, 'Rejected')}
-                                                                    className="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
-                                                                    title="Reject Order / Edit"
-                                                                >
-                                                                    <XIcon className="w-3.5 h-3.5" /> Reject
-                                                                </button>
-                                                            </>
-                                                        )}
+                                                        {(isRequested ? canApprove : (order.isEdited === true && (canApproveEditRequest || canApprove))) && (() => {
+                                                            const missingLc = isOrderMissingLc(order);
+                                                            return (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (missingLc) {
+                                                                                showAlertModal('Cannot Accept Order', `Cannot accept order ${order.orderNo || order.invoiceNo || ''}: LC No is missing. Please edit the order to select an LC No before accepting.`, 'danger');
+                                                                                return;
+                                                                            }
+                                                                            handleStatusUpdate(order, 'Accepted');
+                                                                        }}
+                                                                        className={`px-2.5 py-1 border rounded-lg text-xs font-bold transition-colors flex items-center gap-1 ${missingLc ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200'}`}
+                                                                        title={missingLc ? "Cannot accept: LC No is missing (Please edit to select LC No)" : "Accept Order / Edit"}
+                                                                    >
+                                                                        <CheckIcon className="w-3.5 h-3.5" /> Accept
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleStatusUpdate(order, 'Rejected')}
+                                                                        className="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                                                                        title="Reject Order / Edit"
+                                                                    >
+                                                                        <XIcon className="w-3.5 h-3.5" /> Reject
+                                                                    </button>
+                                                                </>
+                                                            );
+                                                        })()}
                                                         {!isRequested && !order.isEdited && canDelete && (
                                                             <button
                                                                 onClick={() => handleDeleteOrder(order)}
@@ -5156,8 +5358,8 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'dang
     if (!isOpen || typeof document === 'undefined' || !document.body) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200 z-10">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200 z-10" onClick={(e) => e.stopPropagation()}>
                 <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
                     type === 'danger' ? 'bg-red-100 text-red-600' :
                     type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
@@ -5175,15 +5377,17 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'dang
                 <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
                 <p className="text-sm text-gray-500 mb-6">{message}</p>
                 <div className="flex gap-3">
+                    {cancelText && (
+                        <button
+                            onClick={onClose}
+                            disabled={isSubmitting}
+                            className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-all text-sm disabled:opacity-50"
+                        >
+                            {cancelText}
+                        </button>
+                    )}
                     <button
-                        onClick={onClose}
-                        disabled={isSubmitting}
-                        className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-all text-sm disabled:opacity-50"
-                    >
-                        {cancelText}
-                    </button>
-                    <button
-                        onClick={onConfirm}
+                        onClick={onConfirm || onClose}
                         disabled={isSubmitting}
                         className={`flex-1 px-4 py-2 text-white rounded-xl font-bold transition-all text-sm shadow-md disabled:opacity-50 ${
                             type === 'danger' ? 'bg-red-600 hover:bg-red-700' :

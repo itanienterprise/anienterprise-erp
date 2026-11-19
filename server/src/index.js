@@ -4082,6 +4082,27 @@ apiRouter.post('/api/sales', async (req, res) => {
     const sType = saleData.saleType || 'General';
     const isOrderEntry = sType === 'Order' || sType === 'order' || saleData.isOrderEntry === true;
 
+    if ((saleData.status || '').toLowerCase() === 'accepted' && isOrderEntry) {
+      const items = Array.isArray(saleData.items) ? saleData.items : [];
+      let missingLc = items.length === 0;
+      for (const item of items) {
+        const entries = (Array.isArray(item.brandEntries) && item.brandEntries.length > 0)
+          ? item.brandEntries
+          : [{ lcNo: item.lcNo || saleData.lcNo }];
+        for (const be of entries) {
+          const lc = (be.lcNo || item.lcNo || saleData.lcNo || '').toString().trim();
+          if (!lc || lc === '-' || lc === '—' || lc === '--' || lc === '0000' || lc.toLowerCase() === 'n/a' || lc.toLowerCase() === 'none') {
+            missingLc = true;
+            break;
+          }
+        }
+        if (missingLc) break;
+      }
+      if (missingLc) {
+        return res.status(400).json({ message: 'Cannot accept order: LC No is missing. Please select an LC No before accepting.' });
+      }
+    }
+
     let newInvoiceNo = isOrderEntry ? (saleData.orderNo || saleData.invoiceNo) : saleData.invoiceNo;
 
     if (!isOrderEntry) {
@@ -4356,6 +4377,38 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
           // Mark as edited for non-admin
           req.body.isEdited = true;
           req.body.rateMissing = true; // Preserve the flag
+        }
+      }
+    }
+
+    const newStatusLower = (req.body.status || '').toLowerCase();
+    if (newStatusLower === 'accepted') {
+      const isOrder = req.body.isOrderEntry === true ||
+        (req.body.saleType || '').toLowerCase() === 'order' ||
+        existingData?.isOrderEntry === true ||
+        (existingData?.saleType || '').toLowerCase() === 'order' ||
+        Boolean(req.body.orderNo || existingData?.orderNo);
+
+      if (isOrder) {
+        const checkData = (Array.isArray(req.body.items) && req.body.items.length > 0) ? req.body : existingData;
+        const items = Array.isArray(checkData?.items) ? checkData.items : [];
+        let missingLc = items.length === 0;
+        for (const item of items) {
+          const entries = (Array.isArray(item.brandEntries) && item.brandEntries.length > 0)
+            ? item.brandEntries
+            : [{ lcNo: item.lcNo || checkData.lcNo }];
+          for (const be of entries) {
+            const lc = (be.lcNo || item.lcNo || checkData.lcNo || '').toString().trim();
+            if (!lc || lc === '-' || lc === '—' || lc === '--' || lc === '0000' || lc.toLowerCase() === 'n/a' || lc.toLowerCase() === 'none') {
+              missingLc = true;
+              break;
+            }
+          }
+          if (missingLc) break;
+        }
+
+        if (missingLc) {
+          return res.status(400).json({ message: 'Cannot accept order: LC No is missing. Please edit the order to select an LC No before accepting.' });
         }
       }
     }

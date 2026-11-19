@@ -6647,10 +6647,10 @@ const SaleManagement = ({
                                             <div className="space-y-1">
                                                 {/* Header Row for Brands (Hidden on Mobile) */}
                                                 <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-1 border border-transparent">
-                                                    <div className="col-span-2 sale-mgmt-item-label text-center">LC No <span className="text-red-500">*</span></div>
                                                     <div className="col-span-2 sale-mgmt-item-label text-center">Brand</div>
-                                                    <div className="sale-mgmt-item-label text-center">Inhouse</div>
                                                     <div className="sale-mgmt-item-label text-center">Warehouse</div>
+                                                    <div className="col-span-2 sale-mgmt-item-label text-center">LC No <span className="text-red-500">*</span></div>
+                                                    <div className="sale-mgmt-item-label text-center">Inhouse</div>
                                                     <div className="sale-mgmt-item-label text-center leading-tight">Saleable Wh Stock ({item.uom === 'BAG' ? 'BAG' : 'KG'})</div>
                                                     <div className="sale-mgmt-item-label text-center">Bag</div>
                                                     <div className="sale-mgmt-item-label text-center">Qty</div>
@@ -6678,6 +6678,155 @@ const SaleManagement = ({
                                                     return (
                                                         <React.Fragment key={entryIndex}>
                                                             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative">
+
+                                                        {/* Brand Selection */}
+                                                        <div className="col-span-2 space-y-1 relative brand-dropdown-container">
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block">Brand</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder={entry.brandName || "Brand"}
+                                                                    value={activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? brandSearch : (entry.brandName || '')}
+                                                                    readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)}
+                                                                    onChange={(e) => {
+                                                                        if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)) return;
+                                                                        setBrandSearch(e.target.value);
+                                                                        setActiveDropdown('brand');
+                                                                        setActiveItemIndex(index);
+                                                                        setActiveEntryIndex(entryIndex);
+                                                                        setHighlightedIndex(-1);
+                                                                        handleItemInputChange(index, entryIndex, { target: { name: 'brandName', value: e.target.value } });
+                                                                    }}
+                                                                    autoComplete="off"
+                                                                    onFocus={() => {
+                                                                        if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)) return;
+                                                                        setActiveDropdown('brand');
+                                                                        setActiveItemIndex(index);
+                                                                        setActiveEntryIndex(entryIndex);
+                                                                        setBrandSearch(entry.brandName || '');
+                                                                        setHighlightedIndex(-1);
+                                                                    }}
+                                                                    onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName) && handleDropdownKeyDown(e, 'brand', getFilteredBrands(), handleBrandSelect)}
+                                                                    className={`sale-mgmt-input pr-10 !text-xs ${entry.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName) ? 'bg-gray-50' : ''}`}
+                                                                />
+                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                    {entry.brandName && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                handleBrandSelect({ _id: '', brandName: '' });
+                                                                                setBrandSearch('');
+                                                                            }}
+                                                                            className="text-gray-400 hover:text-red-500"
+                                                                        >
+                                                                            <XIcon className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setActiveDropdown(activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? null : 'brand');
+                                                                            setActiveItemIndex(index);
+                                                                            setActiveEntryIndex(entryIndex);
+                                                                        }}
+                                                                        className="text-gray-300 hover:text-blue-500 transition-colors"
+                                                                    >
+                                                                        <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? 'rotate-180' : ''}`} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            {activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredBrands().length > 0 && (
+                                                                <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                                    {getFilteredBrands().map((sb, idx) => (
+                                                                        <button
+                                                                            key={idx}
+                                                                            type="button"
+                                                                            onClick={() => handleBrandSelect(sb)}
+                                                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                            className={`w-full px-4 py-2 text-left text-xs font-medium transition-colors ${entry.brandName === sb ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                        >
+                                                                            {sb}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Warehouse Selection */}
+                                                        <div className="">
+                                                            <div className="space-y-1 relative warehouse-dropdown-container">
+                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block">Warehouse</label>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder={entry.warehouseName || "Warehouse"}
+                                                                        value={activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? warehouseSearch : (entry.warehouseName || '')}
+                                                                        readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)}
+                                                                        onChange={(e) => {
+                                                                            if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)) return;
+                                                                            setWarehouseSearch(e.target.value);
+                                                                            setActiveDropdown('warehouse');
+                                                                            setActiveItemIndex(index);
+                                                                            setActiveEntryIndex(entryIndex);
+                                                                            setHighlightedIndex(-1);
+                                                                            handleItemInputChange(index, entryIndex, { target: { name: 'warehouseName', value: e.target.value } });
+                                                                        }}
+                                                                        autoComplete="off"
+                                                                        onFocus={() => {
+                                                                            if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)) return;
+                                                                            setActiveDropdown('warehouse');
+                                                                            setActiveItemIndex(index);
+                                                                            setActiveEntryIndex(entryIndex);
+                                                                            setWarehouseSearch(entry.warehouseName || '');
+                                                                            setHighlightedIndex(-1);
+                                                                        }}
+                                                                        onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName) && handleDropdownKeyDown(e, 'warehouse', getFilteredWarehouses(), handleWarehouseSelect)}
+                                                                        className={`sale-mgmt-input pr-10 !text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName) ? 'bg-gray-50' : ''}`}
+                                                                    />
+                                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                        {entry.warehouseName && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    handleWarehouseSelect({ _id: '', whName: '' });
+                                                                                    setWarehouseSearch('');
+                                                                                }}
+                                                                                className="text-gray-400 hover:text-red-500"
+                                                                            >
+                                                                                <XIcon className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        )}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setActiveDropdown(activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? null : 'warehouse');
+                                                                                setActiveItemIndex(index);
+                                                                                setActiveEntryIndex(entryIndex);
+                                                                            }}
+                                                                            className="text-gray-300 hover:text-blue-500 transition-colors"
+                                                                        >
+                                                                            <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? 'rotate-180' : ''}`} />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                {activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredWarehouses().length > 0 && (
+                                                                    <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
+                                                                        {getFilteredWarehouses().map((w, idx) => (
+                                                                            <button
+                                                                                key={w._id || `wh-${idx}`}
+                                                                                type="button"
+                                                                                onClick={() => handleWarehouseSelect(w)}
+                                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                                className={`w-full px-4 py-2 text-left text-xs font-medium transition-colors ${entry.warehouseName === w.whName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                            >
+                                                                                {w.whName}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
                                                         {/* LC No Selection */}
                                                         <div className="col-span-2 space-y-1 relative lc-dropdown-container">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block">LC No <span className="text-red-500">*</span></label>
@@ -6769,159 +6918,11 @@ const SaleManagement = ({
                                                             )}
                                                         </div>
 
-                                                        {/* Brand Selection */}
-                                                        <div className="col-span-2 space-y-1 relative brand-dropdown-container">
-                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block">Brand</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder={entry.brandName || "Brand"}
-                                                                    value={activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? brandSearch : (entry.brandName || '')}
-                                                                    readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)}
-                                                                    onChange={(e) => {
-                                                                        if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)) return;
-                                                                        setBrandSearch(e.target.value);
-                                                                        setActiveDropdown('brand');
-                                                                        setActiveItemIndex(index);
-                                                                        setActiveEntryIndex(entryIndex);
-                                                                        setHighlightedIndex(-1);
-                                                                        handleItemInputChange(index, entryIndex, { target: { name: 'brandName', value: e.target.value } });
-                                                                    }}
-                                                                    autoComplete="off"
-                                                                    onFocus={() => {
-                                                                        if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName)) return;
-                                                                        setActiveDropdown('brand');
-                                                                        setActiveItemIndex(index);
-                                                                        setActiveEntryIndex(entryIndex);
-                                                                        setBrandSearch(entry.brandName || '');
-                                                                        setHighlightedIndex(-1);
-                                                                    }}
-                                                                    onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName) && handleDropdownKeyDown(e, 'brand', getFilteredBrands(), handleBrandSelect)}
-                                                                    className={`sale-mgmt-input pr-10 !text-xs ${entry.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName) ? 'bg-gray-50' : ''}`}
-                                                                />
-                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                                    {entry.brandName && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                handleBrandSelect({ _id: '', brandName: '' });
-                                                                                setBrandSearch('');
-                                                                            }}
-                                                                            className="text-gray-400 hover:text-red-500"
-                                                                        >
-                                                                            <XIcon className="w-3.5 h-3.5" />
-                                                                        </button>
-                                                                    )}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            setActiveDropdown(activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? null : 'brand');
-                                                                            setActiveItemIndex(index);
-                                                                            setActiveEntryIndex(entryIndex);
-                                                                        }}
-                                                                        className="text-gray-300 hover:text-blue-500 transition-colors"
-                                                                    >
-                                                                        <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex ? 'rotate-180' : ''}`} />
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                            {activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredBrands().length > 0 && (
-                                                                <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                                    {getFilteredBrands().map((sb, idx) => (
-                                                                        <button
-                                                                            key={idx}
-                                                                            type="button"
-                                                                            onClick={() => handleBrandSelect(sb)}
-                                                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                            className={`w-full px-4 py-2 text-left text-xs font-medium transition-colors ${entry.brandName === sb ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                                        >
-                                                                            {sb}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
-
                                                         {/* Inhouse Qty */}
                                                         <div>
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Inhouse</label>
                                                             <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-bold text-gray-900">
                                                                 {entry.inhouseQty || '0'}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Warehouse Selection */}
-                                                        <div className="">
-                                                            <div className="space-y-1 relative warehouse-dropdown-container">
-                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block">Warehouse</label>
-                                                                <div className="relative">
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder={entry.warehouseName || "Warehouse"}
-                                                                        value={activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? warehouseSearch : (entry.warehouseName || '')}
-                                                                        readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)}
-                                                                        onChange={(e) => {
-                                                                            if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)) return;
-                                                                            setWarehouseSearch(e.target.value);
-                                                                            setActiveDropdown('warehouse');
-                                                                            setActiveItemIndex(index);
-                                                                            setActiveEntryIndex(entryIndex);
-                                                                            setHighlightedIndex(-1);
-                                                                            handleItemInputChange(index, entryIndex, { target: { name: 'warehouseName', value: e.target.value } });
-                                                                        }}
-                                                                        autoComplete="off"
-                                                                        onFocus={() => {
-                                                                            if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName)) return;
-                                                                            setActiveDropdown('warehouse');
-                                                                            setActiveItemIndex(index);
-                                                                            setActiveEntryIndex(entryIndex);
-                                                                            setWarehouseSearch(entry.warehouseName || '');
-                                                                            setHighlightedIndex(-1);
-                                                                        }}
-                                                                        onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName) && handleDropdownKeyDown(e, 'warehouse', getFilteredWarehouses(), handleWarehouseSelect)}
-                                                                        className={`sale-mgmt-input pr-10 !text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName) ? 'bg-gray-50' : ''}`}
-                                                                    />
-                                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                                                        {entry.warehouseName && (
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    handleWarehouseSelect({ _id: '', whName: '' });
-                                                                                    setWarehouseSearch('');
-                                                                                }}
-                                                                                className="text-gray-400 hover:text-red-500"
-                                                                            >
-                                                                                <XIcon className="w-3.5 h-3.5" />
-                                                                            </button>
-                                                                        )}
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setActiveDropdown(activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? null : 'warehouse');
-                                                                                setActiveItemIndex(index);
-                                                                                setActiveEntryIndex(entryIndex);
-                                                                            }}
-                                                                            className="text-gray-300 hover:text-blue-500 transition-colors"
-                                                                        >
-                                                                            <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex ? 'rotate-180' : ''}`} />
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                                {activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredWarehouses().length > 0 && (
-                                                                    <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
-                                                                        {getFilteredWarehouses().map((w, idx) => (
-                                                                            <button
-                                                                                key={w._id || `wh-${idx}`}
-                                                                                type="button"
-                                                                                onClick={() => handleWarehouseSelect(w)}
-                                                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                                className={`w-full px-4 py-2 text-left text-xs font-medium transition-colors ${entry.warehouseName === w.whName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                                            >
-                                                                                {w.whName}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
                                                             </div>
                                                         </div>
 
@@ -7086,11 +7087,11 @@ const SaleManagement = ({
                                                         <React.Fragment>
                                                             {/* Desktop Subtotal Line */}
                                                             <div className="hidden md:grid grid-cols-12 gap-4 items-center px-6 py-2 my-1.5 bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-blue-50/80 rounded-xl border border-blue-200/90 shadow-xs">
-                                                                <div className="col-span-2"></div>
                                                                 <div className="col-span-2 text-center text-xs font-black text-blue-950 uppercase tracking-wider truncate">
                                                                     {entry.brand || entry.brandName} Total
                                                                 </div>
                                                                 <div className="col-span-1 text-center text-[11px] font-bold text-gray-400">—</div>
+                                                                <div className="col-span-2 text-center text-[11px] font-bold text-gray-400">—</div>
                                                                 <div className="col-span-1 text-center text-[11px] font-bold text-gray-400">—</div>
                                                                 <div className="col-span-1 text-center text-[11px] font-bold text-gray-400">—</div>
                                                                 <div className="col-span-1 text-center">

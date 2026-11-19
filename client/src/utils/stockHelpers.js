@@ -1241,7 +1241,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     (sale.invoiceNo || sale.orderNo || '').toUpperCase().startsWith('ORD') ||
                     sale.isOrderEntry === true;
                 if (sStatus === 'rejected' || sStatus === 'cancelled' || (isOrderSale && (sStatus === 'return' || sStatus === 'returned'))) return;
-                if (isOrderSale && (sStatus === 'requested' || sStatus === 'pending')) return;
+                const includeUnacceptedOrders = Boolean(stockFilters?.includeUnacceptedOrders);
+                if (isOrderSale && !includeUnacceptedOrders && (sStatus === 'requested' || sStatus === 'pending')) return;
                 if (!isOrderSale && sStatus === 'requested') return;
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
@@ -1335,6 +1336,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 const bKeyName = (be.brand || '').trim().toLowerCase();
                                 if (isOrder) {
                                     if (isFulfilled || sStatus === 'rejected' || sStatus === 'return' || sStatus === 'returned' || sStatus === 'cancelled') return;
+                                    if (!Boolean(stockFilters?.includeUnacceptedOrders) && (sStatus === 'requested' || sStatus === 'pending')) return;
 
                                     const ordRefs = [inv, ordNo, ordId].filter(Boolean);
                                     const allocatedSoldQty = allocateFulfilledQtyForOrder(ordRefs, pKeyName, bKeyName, saleWH, sq);
@@ -1474,7 +1476,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
         const isOrderSale = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
         if (sStatus === 'rejected' || sStatus === 'cancelled' || (isOrderSale && (sStatus === 'return' || sStatus === 'returned'))) return;
-        if (isOrderSale && (sStatus === 'requested' || sStatus === 'pending')) return;
+        const includeUnacceptedOrders = Boolean(stockFilters?.includeUnacceptedOrders);
+        if (isOrderSale && !includeUnacceptedOrders && (sStatus === 'requested' || sStatus === 'pending')) return;
         if (!isOrderSale && sStatus === 'requested') return;
         if (!isOrderSale && isPreBaselineRecord(sale.date, sale.createdAt)) return;
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
@@ -1650,6 +1653,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     const bKeyName = (be.brand || '').trim().toLowerCase();
                     if (isOrder) {
                         if (isFulfilled || sStatus === 'rejected' || sStatus === 'return' || sStatus === 'returned' || sStatus === 'cancelled') return;
+                        if (!Boolean(stockFilters?.includeUnacceptedOrders) && (sStatus === 'requested' || sStatus === 'pending')) return;
 
                         const ordRefs = [inv, ordNo, ordId].filter(Boolean);
                         const allocatedSoldQty = allocateFulfilledQtyForOrder(ordRefs, pKeyName, bKeyName, saleWH, sq);
@@ -1756,7 +1760,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const sale = Math.abs(b.saleQuantity || 0);
 
             if (isPriceReport && !stockFilters?._isSubCall) {
-                return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                 return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001;
             }
 
