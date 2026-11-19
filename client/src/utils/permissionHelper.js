@@ -327,6 +327,7 @@ export const MODULES_LIST = [
         label: 'Dashboard Overview',
         specialLabels: [
             { key: 'profile', label: 'Profile & Weekly Activity' },
+            { key: 'bankDollarRates', label: 'Bank Dollar Rates' },
             { key: 'lcGraph', label: 'Weekly/Daily LC Line Graph' },
             { key: 'pieChart', label: 'Product & IP Pie Chart' },
             { key: 'orderSales', label: 'Order & Sales Donut' },
@@ -484,7 +485,7 @@ export const getDefaultPermissionsForRole = (role) => {
     if (!defaults['dashboard'] || defaults['dashboard'].view === false) {
         defaults['dashboard'] = {
             view: true, add: true, edit: true, delete: false, special: true,
-            profile: true, lcGraph: true, pieChart: true, orderSales: true,
+            profile: true, bankDollarRates: true, lcGraph: true, pieChart: true, orderSales: true,
             collectionSales: true, todoList: true, locationMap: true, recentActivity: true
         };
     }

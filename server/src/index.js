@@ -1767,7 +1767,7 @@ const getDefaultPermissionsForRole = (role) => {
       deviceMapping: false,
       addMapping: false, editMapping: false, deleteMapping: false,
       openingBalance: false,
-      profile: false, lcGraph: false, pieChart: false, orderSales: false, collectionSales: false, todoList: false, locationMap: false, recentActivity: false
+      profile: false, bankDollarRates: false, lcGraph: false, pieChart: false, orderSales: false, collectionSales: false, todoList: false, locationMap: false, recentActivity: false
     };
   });
 
@@ -1781,7 +1781,7 @@ const getDefaultPermissionsForRole = (role) => {
         deviceMapping: true,
         addMapping: true, editMapping: true, deleteMapping: true,
         openingBalance: true,
-        profile: true, lcGraph: true, pieChart: true, orderSales: true, collectionSales: true, todoList: true, locationMap: true, recentActivity: true
+        profile: true, bankDollarRates: true, lcGraph: true, pieChart: true, orderSales: true, collectionSales: true, todoList: true, locationMap: true, recentActivity: true
       };
     });
   } else if (roleLower === 'incharge') {
@@ -1841,7 +1841,7 @@ const getDefaultPermissionsForRole = (role) => {
   // Ensure dashboard is visible by default with core widgets unless explicitly overridden
   if (!defaults['dashboard'] || defaults['dashboard'].view === undefined) {
     defaults['dashboard'] = {
-      view: true, profile: true, lcGraph: true, pieChart: true,
+      view: true, profile: true, bankDollarRates: true, lcGraph: true, pieChart: true,
       orderSales: true, collectionSales: true, todoList: true,
       locationMap: true, recentActivity: true
     };
