@@ -472,8 +472,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     : getGroupedBrandList(recBrands);
 
                 if (isPriceReport) {
-                    groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001);
-                    groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
+                    if (stockFilters?.reportType === 'price' || stockFilters?.reportType === 'lc_price' || stockFilters?.reportType === 'group') {
+                        groupedBrands = groupedBrands.filter(b => (b.saleableQuantity || 0) > 0.001);
+                    } else {
+                        groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
+                    }
                 } else if (stockFilters?.reportType === 'short') {
                     groupedBrands = groupedBrands.filter(b =>
                         Math.abs(b.inHouseQuantity || 0) > 0.001 ||
@@ -1775,6 +1778,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const sale = Math.abs(b.saleQuantity || 0);
 
             if (isPriceReport && !stockFilters?._isSubCall) {
+                if (stockFilters?.reportType === 'price' || stockFilters?.reportType === 'lc_price' || stockFilters?.reportType === 'group') {
+                    return (b.saleableQuantity || 0) > 0.001;
+                }
                 return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001;
             }
 
@@ -1867,10 +1873,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         }
 
         if (isPriceReport && !stockFilters?._isSubCall) {
-            // In Price Report mode, keep all LC entries with non-zero remaining stock or active orders
-            filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001);
-            // In Price Report mode, keep all LC entries with non-zero remaining stock, active orders, or saleable stock
-            filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
+            if (stockFilters?.reportType === 'price' || stockFilters?.reportType === 'lc_price' || stockFilters?.reportType === 'group') {
+                filteredBrands = filteredBrands.filter(b => (b.saleableQuantity || 0) > 0.001);
+            } else {
+                filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
+            }
         } else if (stockFilters?.reportType === 'short') {
             // In Short Report mode, keep items with non-zero closing stock, active pending orders, opening or sales
             filteredBrands = filteredBrands.filter(b =>
