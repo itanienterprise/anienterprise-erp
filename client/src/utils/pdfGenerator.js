@@ -14867,6 +14867,305 @@ export const generateDealReceiveReportPDF = async (records = [], filters = {}, d
     }
 };
 
+/**
+ * Generates a PDF report for Bank-to-Bank Fund Transfers.
+ * @param {Array} transfers - List of fund transfer records
+ * @param {Object} meta - Active filters and metadata
+ */
+export const generateFundTransferPDF = async (transfers = [], meta = {}) => {
+    try {
+        const doc = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const pageWidth = doc.internal.pageSize.width;   // 297mm
+        const pageHeight = doc.internal.pageSize.height; // 210mm
+        const margin = 10;
+
+        // Load company logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        doc.setTextColor(249, 115, 22);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Company Address on right
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Divider Line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
+
+        // Title Badge
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        const titleText = "BANK TO BANK FUND TRANSFER REPORT";
+        const titleW = Math.max(90, doc.getTextWidth(titleText) + 20);
+        doc.roundedRect((pageWidth / 2) - (titleW / 2), y, titleW, 7, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text(titleText, pageWidth / 2, y + 5, { align: 'center' });
+
+        // Metadata Box
+        let infoY = y + 8.5;
+        const infoBoxWidth = pageWidth - (margin * 2);
+        const infoBoxHeight = 15;
+
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, infoY, infoBoxWidth, infoBoxHeight, 2, 2, 'FD');
+
+        const col1LabelX = margin + 4;
+        const col1ValX = margin + 28;
+        const col2LabelX = margin + (infoBoxWidth / 3) + 4;
+        const col2ValX = margin + (infoBoxWidth / 3) + 32;
+        const col3LabelX = margin + ((infoBoxWidth * 2) / 3) + 4;
+        const col3ValX = margin + ((infoBoxWidth * 2) / 3) + 28;
+
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const startStr = meta?.startDate ? formatDate(meta.startDate) : 'Start';
+        const endStr = meta?.endDate ? formatDate(meta.endDate) : 'Present';
+        const periodStr = meta?.startDate || meta?.endDate ? `${startStr} to ${endStr}` : 'All Records';
+        const totalAmount = transfers.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(71, 85, 105);
+
+        // Row 1
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date Range:", col1LabelX, infoY + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(periodStr, col1ValX, infoY + 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Source Bank:", col2LabelX, infoY + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(meta?.fromBankName || 'All Source Banks', col2ValX, infoY + 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Total Transfers:", col3LabelX, infoY + 5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${transfers.length} transfers`, col3ValX, infoY + 5);
+
+        // Row 2
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Generated:", col1LabelX, infoY + 11);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(dateStr, col1ValX, infoY + 11);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Dest. Bank:", col2LabelX, infoY + 11);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(meta?.toBankName || 'All Destination Banks', col2ValX, infoY + 11);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Total Transferred:", col3LabelX, infoY + 11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text(`TK ${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, col3ValX, infoY + 11);
+
+        // Table Rows
+        const tableRows = [];
+        transfers.forEach((t, idx) => {
+            const fromDetails = [
+                t.fromBankName || '-',
+                t.fromAccountNo ? `A/C: ${t.fromAccountNo}` : '',
+                t.fromBranch ? `Branch: ${t.fromBranch}` : '',
+                t.fromAccountName ? `Title: ${t.fromAccountName}` : ''
+            ].filter(Boolean).join('\n');
+
+            const toDetails = [
+                t.toBankName || '-',
+                t.toAccountNo ? `A/C: ${t.toAccountNo}` : '',
+                t.toBranch ? `Branch: ${t.toBranch}` : '',
+                t.toAccountName ? `Title: ${t.toAccountName}` : ''
+            ].filter(Boolean).join('\n');
+
+            const amt = Number(t.amount) || 0;
+            const refDetails = [
+                t.referenceNo ? `Ref: ${t.referenceNo}` : '',
+                t.remarks ? `Note: ${t.remarks}` : ''
+            ].filter(Boolean).join('\n') || '-';
+
+            const userDetails = [
+                t.transferredBy ? `By: ${t.transferredBy}` : '',
+                t.entryByName || t.entryBy ? `Rec: ${t.entryByName || t.entryBy}` : ''
+            ].filter(Boolean).join('\n') || 'Administrator';
+
+            tableRows.push([
+                { content: String(idx + 1), styles: { halign: 'center' } },
+                { content: formatDate(t.date || t.transferDate || t.createdAt), styles: { halign: 'center' } },
+                { content: fromDetails, styles: { halign: 'left' } },
+                { content: toDetails, styles: { halign: 'left' } },
+                { content: t.transferType || 'Online Banking', styles: { halign: 'center' } },
+                { content: refDetails, styles: { halign: 'left' } },
+                { content: userDetails, styles: { halign: 'left' } },
+                {
+                    content: amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                    styles: { halign: 'right', fontStyle: 'bold' }
+                }
+            ]);
+        });
+
+        // Total Row
+        tableRows.push([
+            { content: 'TOTAL AMOUNT TRANSFERRED', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } },
+            {
+                content: `TK ${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] }
+            }
+        ]);
+
+        autoTable(doc, {
+            startY: infoY + infoBoxHeight + 4.5,
+            head: [['SL', 'Date', 'Source Bank & Account (From)', 'Destination Bank & Account (To)', 'Mode / Type', 'Ref / Purpose', 'Transferred / Entry By', 'Amount (TK)']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 8,
+                cellPadding: 1.5,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0]
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                fontSize: 8,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 10, halign: 'center' },  // SL
+                1: { cellWidth: 20, halign: 'center' },  // Date
+                2: { cellWidth: 60, halign: 'left' },    // From
+                3: { cellWidth: 60, halign: 'left' },    // To
+                4: { cellWidth: 24, halign: 'center' },  // Mode
+                5: { cellWidth: 32, halign: 'left' },    // Ref
+                6: { cellWidth: 35, halign: 'left' },    // Transferred By
+                7: { cellWidth: 36, halign: 'right' }    // Amount
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // Signatures
+        let sigY = doc.lastAutoTable.finalY + 24;
+        if (sigY + 15 > pageHeight) {
+            doc.addPage();
+            sigY = 28;
+        }
+
+        const sigWidth = 50;
+        doc.setDrawColor(156, 163, 175);
+        doc.setLineWidth(0.4);
+        doc.setLineDashPattern([1, 1], 0);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.line(pageWidth / 2 - sigWidth / 2, sigY, pageWidth / 2 + sigWidth / 2, sigY);
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(55, 65, 81);
+        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 4, { align: 'center' });
+        doc.text("VERIFIED BY", pageWidth / 2, sigY + 4, { align: 'center' });
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 4, { align: 'center' });
+
+        // Page Numbering Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - BANK TO BANK FUND TRANSFER REPORT', margin, pageHeight - 5);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        const newTab = window.open(blobURL, '_blank');
+        if (!newTab) {
+            const fileName = `Fund_Transfer_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(fileName);
+        }
+    } catch (err) {
+        console.error("Error generating Fund Transfer Report PDF:", err);
+        alert(`Failed to generate PDF report: ${err.message}`);
+    }
+};
+
 
 
 

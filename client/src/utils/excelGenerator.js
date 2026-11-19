@@ -5911,6 +5911,143 @@ export const generatePurchaseReceiveReportExcel = (purchaseReceives = [], filter
     }
 };
 
+/**
+ * Generates an Excel report for Bank to Bank Fund Transfers.
+ * @param {Array} transfers - List of fund transfer records
+ * @param {Object} meta - Optional filter/search metadata
+ */
+export const generateFundTransferExcel = (transfers = [], meta = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['BANK-TO-BANK FUND TRANSFER REPORT']);
+        rows.push([]);
+
+        // 2. Metadata / Filters
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const startStr = meta?.startDate ? formatDate(meta.startDate) : 'Start';
+        const endStr = meta?.endDate ? formatDate(meta.endDate) : 'Present';
+        const periodStr = meta?.startDate || meta?.endDate ? `${startStr} to ${endStr}` : 'All Records';
+
+        rows.push(['Date Range:', periodStr, '', '', 'Generated Date:', dateStr]);
+        rows.push([
+            'Source Bank:', meta?.fromBankName || 'All Source Banks',
+            '',
+            '',
+            'Destination Bank:', meta?.toBankName || 'All Destination Banks'
+        ]);
+        rows.push([
+            'Transfer Mode:', meta?.transferType || 'All Modes',
+            '',
+            '',
+            'Currency:', 'BDT (Taka)'
+        ]);
+        rows.push([]);
+
+        // 3. Summary
+        const totalAmount = transfers.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        rows.push(['SUMMARY']);
+        rows.push(['Total Transfers Count:', transfers.length]);
+        rows.push(['Total Transferred Amount (TK):', totalAmount]);
+        rows.push([]);
+
+        // 4. Headers
+        const headers = [
+            'SL',
+            'Date',
+            'Source Bank (From)',
+            'Source Branch',
+            'Source Account No',
+            'Source Account Name',
+            'Destination Bank (To)',
+            'Destination Branch',
+            'Destination Account No',
+            'Destination Account Name',
+            'Transfer Mode',
+            'Ref / Cheque #',
+            'Amount (TK)',
+            'Transferred By',
+            'Recorded By',
+            'Remarks / Purpose'
+        ];
+        rows.push(headers);
+
+        // 5. Data rows
+        transfers.forEach((t, idx) => {
+            rows.push([
+                idx + 1,
+                formatDate(t.date || t.transferDate || t.createdAt),
+                t.fromBankName || '-',
+                t.fromBranch || '-',
+                t.fromAccountNo || '-',
+                t.fromAccountName || '-',
+                t.toBankName || '-',
+                t.toBranch || '-',
+                t.toAccountNo || '-',
+                t.toAccountName || '-',
+                t.transferType || 'Online Banking',
+                t.referenceNo || '-',
+                Number(t.amount) || 0,
+                t.transferredBy || '-',
+                t.entryByName || t.entryBy || 'Administrator',
+                t.remarks || t.note || '-'
+            ]);
+        });
+
+        // 6. Total Row
+        rows.push([]);
+        rows.push([
+            'TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            totalAmount,
+            '',
+            '',
+            ''
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 13 }, // Date
+            { wch: 24 }, // From Bank
+            { wch: 18 }, // From Branch
+            { wch: 22 }, // From Account No
+            { wch: 22 }, // From Account Name
+            { wch: 24 }, // To Bank
+            { wch: 18 }, // To Branch
+            { wch: 22 }, // To Account No
+            { wch: 22 }, // To Account Name
+            { wch: 16 }, // Mode
+            { wch: 18 }, // Ref #
+            { wch: 18 }, // Amount
+            { wch: 20 }, // Transferred By
+            { wch: 18 }, // Recorded By
+            { wch: 25 }  // Remarks
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Fund Transfers');
+        const fileName = `Fund_Transfer_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    } catch (err) {
+        console.error('Error generating Fund Transfer Report Excel:', err);
+        alert(`Failed to generate Excel report: ${err.message}`);
+    }
+};
+
 
 
 

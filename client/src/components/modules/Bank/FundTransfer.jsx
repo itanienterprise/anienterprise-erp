@@ -10,10 +10,13 @@ import {
   SearchIcon, PlusIcon, EditIcon, TrashIcon, XIcon,
   ChevronDownIcon, DollarSignIcon, BuildingIcon, CalendarIcon,
   ArrowLeftRightIcon, ArrowRightIcon, FileTextIcon, UserIcon, CheckCircle2Icon,
-  FunnelIcon, CheckIcon, RefreshIcon
+  FunnelIcon, CheckIcon, RefreshIcon, BarChartIcon
 } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import TableScrollNav from '../../shared/TableScrollNav';
+import ReportFormatModal from '../../shared/ReportFormatModal';
+import { generateFundTransferPDF } from '../../../utils/pdfGenerator';
+import { generateFundTransferExcel } from '../../../utils/excelGenerator';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import BankLogo from './BankLogo';
 import '../PaymentCollection/PaymentCollection.css';
@@ -358,11 +361,27 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
   const filterPanelRef = useRef(null);
   const filterButtonRef = useRef(null);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [showReportFormatModal, setShowReportFormatModal] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        filterPanelRef.current &&
+        !filterPanelRef.current.contains(e.target) &&
+        filterButtonRef.current &&
+        !filterButtonRef.current.contains(e.target)
+      ) {
+        setShowFilterPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const [isSocketConnected, setIsSocketConnected] = useState(() => {
@@ -555,8 +574,8 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
     return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
   }, [banks]);
 
-  // Extract branches for a specific bank
-  const getBranchesForBank = (bankName) => {
+  // Extract accounts & branches for a specific bank
+  const getAccountsForBank = (bankName) => {
     if (!bankName) return [];
     const target = bankName.trim().toLowerCase();
     const matchingDocs = banks.filter(b => (b.bankName || '').trim().toLowerCase() === target);
@@ -564,17 +583,17 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
     matchingDocs.forEach(b => {
       if (Array.isArray(b.branches) && b.branches.length > 0) {
         b.branches.forEach(br => {
-          if (br && br.branch) {
+          if (br) {
             list.push({
-              branch: br.branch.trim(),
+              branch: (br.branch || '').trim(),
               accountName: (br.accountName || b.accountName || '').trim(),
               accountNo: (br.accountNo || b.accountNo || '').trim()
             });
           }
         });
-      } else if (b.branch) {
+      } else if (b.branch || b.accountNo) {
         list.push({
-          branch: b.branch.trim(),
+          branch: (b.branch || '').trim(),
           accountName: (b.accountName || '').trim(),
           accountNo: (b.accountNo || '').trim()
         });
@@ -583,22 +602,22 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
 
     const seen = new Set();
     return list.filter(item => {
-      const key = `${item.branch.toLowerCase()}|${item.accountNo.toLowerCase()}`;
+      const key = `${item.accountNo.toLowerCase()}|${item.branch.toLowerCase()}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
   };
 
-  const fromAvailableBranches = useMemo(() => {
-    return getBranchesForBank(formData.fromBankName);
+  const fromAvailableAccounts = useMemo(() => {
+    return getAccountsForBank(formData.fromBankName);
   }, [banks, formData.fromBankName]);
 
-  const toAvailableBranches = useMemo(() => {
-    return getBranchesForBank(formData.toBankName);
+  const toAvailableAccounts = useMemo(() => {
+    return getAccountsForBank(formData.toBankName);
   }, [banks, formData.toBankName]);
 
-  // Handlers for Form Bank selection
+  // Handlers for Form Bank & Account selection
   const handleFromBankChange = (bName) => {
     if (!bName) {
       setFormData(prev => ({
@@ -610,24 +629,24 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
       }));
       return;
     }
-    const branches = getBranchesForBank(bName);
-    const firstBr = branches.length === 1 ? branches[0] : null;
+    const accounts = getAccountsForBank(bName);
+    const firstAcc = accounts.length === 1 ? accounts[0] : null;
     setFormData(prev => ({
       ...prev,
       fromBankName: bName,
-      fromBranch: firstBr ? firstBr.branch : '',
-      fromAccountName: firstBr ? firstBr.accountName : '',
-      fromAccountNo: firstBr ? firstBr.accountNo : ''
+      fromAccountNo: firstAcc ? firstAcc.accountNo : '',
+      fromAccountName: firstAcc ? firstAcc.accountName : '',
+      fromBranch: firstAcc ? firstAcc.branch : ''
     }));
   };
 
-  const handleFromBranchChange = (branchName) => {
-    const branchObj = fromAvailableBranches.find(b => b.branch === branchName);
+  const handleFromAccountChange = (accNo) => {
+    const accObj = fromAvailableAccounts.find(b => b.accountNo === accNo);
     setFormData(prev => ({
       ...prev,
-      fromBranch: branchName,
-      fromAccountName: branchObj ? branchObj.accountName : prev.fromAccountName,
-      fromAccountNo: branchObj ? branchObj.accountNo : prev.fromAccountNo
+      fromAccountNo: accNo,
+      fromAccountName: accObj ? accObj.accountName : prev.fromAccountName,
+      fromBranch: accObj ? accObj.branch : prev.fromBranch
     }));
   };
 
@@ -642,24 +661,24 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
       }));
       return;
     }
-    const branches = getBranchesForBank(bName);
-    const firstBr = branches.length === 1 ? branches[0] : null;
+    const accounts = getAccountsForBank(bName);
+    const firstAcc = accounts.length === 1 ? accounts[0] : null;
     setFormData(prev => ({
       ...prev,
       toBankName: bName,
-      toBranch: firstBr ? firstBr.branch : '',
-      toAccountName: firstBr ? firstBr.accountName : '',
-      toAccountNo: firstBr ? firstBr.accountNo : ''
+      toAccountNo: firstAcc ? firstAcc.accountNo : '',
+      toAccountName: firstAcc ? firstAcc.accountName : '',
+      toBranch: firstAcc ? firstAcc.branch : ''
     }));
   };
 
-  const handleToBranchChange = (branchName) => {
-    const branchObj = toAvailableBranches.find(b => b.branch === branchName);
+  const handleToAccountChange = (accNo) => {
+    const accObj = toAvailableAccounts.find(b => b.accountNo === accNo);
     setFormData(prev => ({
       ...prev,
-      toBranch: branchName,
-      toAccountName: branchObj ? branchObj.accountName : prev.toAccountName,
-      toAccountNo: branchObj ? branchObj.accountNo : prev.toAccountNo
+      toAccountNo: accNo,
+      toAccountName: accObj ? accObj.accountName : prev.toAccountName,
+      toBranch: accObj ? accObj.branch : prev.toBranch
     }));
   };
 
@@ -903,13 +922,28 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
     window.print();
   };
 
+  const handleExportPdf = () => {
+    generateFundTransferPDF(filteredTransfers, {
+      ...filters,
+      searchQuery
+    });
+  };
+
+  const handleExportExcel = () => {
+    generateFundTransferExcel(filteredTransfers, {
+      ...filters,
+      searchQuery
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner / Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-        <div>
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+        {/* Left: Title & Subtitle */}
+        <div className="shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
               <ArrowLeftRightIcon className="w-6 h-6" />
             </div>
             <div>
@@ -926,34 +960,148 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-stretch sm:self-auto">
-          {/* Socket indicator */}
-          <div
-            className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border ${
-              isSocketConnected
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-amber-50 text-amber-700 border-amber-200'
-            }`}
-            title={isSocketConnected ? 'Real-time sync connected' : 'Connecting real-time socket...'}
-          >
-            <span className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-            <span>{isSocketConnected ? 'Live' : 'Reconnecting'}</span>
+        {/* Center: Search Bar */}
+        <div className="w-full lg:flex-1 lg:max-w-md mx-auto relative group">
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search by bank, account, ref no, remarks..."
+            autoComplete="off"
+            className="h-10 block w-full pl-10 pr-9 bg-gray-50/80 border border-gray-200 rounded-xl text-xs sm:text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all shadow-xs"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              <XIcon className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Right: Filter, Report, New Transfer */}
+        <div className="flex items-center justify-end gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+          {/* Filter Button & Dropdown */}
+          <div className="relative">
+            <button
+              ref={filterButtonRef}
+              type="button"
+              onClick={() => setShowFilterPanel(prev => !prev)}
+              className={`h-10 flex items-center justify-center gap-1.5 px-3.5 rounded-xl border text-xs sm:text-sm font-semibold transition cursor-pointer active:scale-95 shadow-xs ${
+                isFilterActive || showFilterPanel
+                  ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-xs'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              <FunnelIcon className={`w-4 h-4 ${isFilterActive || showFilterPanel ? 'text-blue-600' : 'text-gray-400'}`} />
+              <span>Filter</span>
+              {isFilterActive && (
+                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse ml-0.5" />
+              )}
+            </button>
+
+            {/* Filter Dropdown Panel */}
+            {showFilterPanel && (
+              <div
+                ref={filterPanelRef}
+                className="absolute top-full right-0 mt-2 w-80 sm:w-96 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-150 text-left"
+              >
+                <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                  <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                    <FunnelIcon className="w-4 h-4 text-blue-600" />
+                    Filter Fund Transfers
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowFilterPanel(false)}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer"
+                  >
+                    <XIcon className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <CustomDatePicker
+                      label="Start Date"
+                      value={filters.startDate}
+                      onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                      compact={true}
+                    />
+                    <CustomDatePicker
+                      label="End Date"
+                      value={filters.endDate}
+                      onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                      compact={true}
+                    />
+                  </div>
+
+                  <SearchableFilterSelect
+                    label="Source (From) Bank"
+                    value={filters.fromBankName}
+                    onChange={(b) => setFilters(prev => ({ ...prev, fromBankName: b }))}
+                    options={registeredBankNames}
+                    placeholder="All Banks"
+                  />
+
+                  <SearchableFilterSelect
+                    label="Destination (To) Bank"
+                    value={filters.toBankName}
+                    onChange={(b) => setFilters(prev => ({ ...prev, toBankName: b }))}
+                    options={registeredBankNames}
+                    placeholder="All Banks"
+                  />
+
+                  <SearchableFilterSelect
+                    label="Transfer Mode"
+                    value={filters.transferType}
+                    onChange={(t) => setFilters(prev => ({ ...prev, transferType: t }))}
+                    options={TRANSFER_TYPES}
+                    placeholder="All Transfer Modes"
+                  />
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="flex-1 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFilterPanel(false)}
+                      className="flex-1 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition shadow-xs cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Report Button */}
           <button
             type="button"
-            onClick={() => fetchFundTransfers()}
-            title="Refresh list"
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl border border-gray-200 transition cursor-pointer"
+            onClick={() => setShowReportFormatModal(true)}
+            className="h-10 flex items-center justify-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 text-xs sm:text-sm transition-all active:scale-95 cursor-pointer"
           >
-            <RefreshIcon className="w-4 h-4" />
+            <BarChartIcon className="w-4 h-4" />
+            <span>Report</span>
           </button>
 
+          {/* New Transfer Button */}
           {canAdd && (
             <button
               type="button"
               onClick={openAddModal}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm shadow-blue-500/20 active:scale-[0.98] cursor-pointer"
+              className="h-10 flex items-center justify-center gap-1.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition shadow-sm shadow-blue-500/20 active:scale-[0.98] cursor-pointer"
             >
               <PlusIcon className="w-4 h-4" />
               <span>New Transfer</span>
@@ -1021,177 +1169,8 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
         </div>
       </div>
 
-      {/* Main Table & Filter Container */}
+      {/* Main Table Container */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-        {/* Controls Toolbar */}
-        <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          {/* Search */}
-          <div className="relative flex-1 max-w-md">
-            <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by bank, account, ref no, remarks..."
-              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <XIcon className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Filter & Reset Buttons */}
-          <div className="flex items-center gap-2 relative">
-            <button
-              ref={filterButtonRef}
-              type="button"
-              onClick={() => setShowFilterPanel(prev => !prev)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition cursor-pointer ${
-                isFilterActive || showFilterPanel
-                  ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-xs'
-                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              <FunnelIcon className="w-4 h-4" />
-              <span>Filters</span>
-              {isFilterActive && (
-                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-              )}
-            </button>
-
-            {isFilterActive && (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1 bg-rose-50 rounded-lg hover:bg-rose-100 transition cursor-pointer"
-              >
-                Clear
-              </button>
-            )}
-
-            {/* Filter Dropdown Panel */}
-            {showFilterPanel && (
-              <div
-                ref={filterPanelRef}
-                className="absolute top-full right-0 mt-2 w-80 sm:w-96 bg-white border border-gray-100 rounded-2xl shadow-xl z-40 p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-150"
-              >
-                <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-                  <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                    <FunnelIcon className="w-4 h-4 text-blue-600" />
-                    Filter Fund Transfers
-                  </h4>
-                  <button
-                    onClick={() => setShowFilterPanel(false)}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-                  >
-                    <XIcon className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <CustomDatePicker
-                      label="Start Date"
-                      value={filters.startDate}
-                      onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                      compact={true}
-                    />
-                    <CustomDatePicker
-                      label="End Date"
-                      value={filters.endDate}
-                      onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                      compact={true}
-                    />
-                  </div>
-
-                  <SearchableFilterSelect
-                    label="Source (From) Bank"
-                    value={filters.fromBankName}
-                    onChange={(b) => setFilters(prev => ({ ...prev, fromBankName: b }))}
-                    options={registeredBankNames}
-                    placeholder="All Banks"
-                  />
-
-                  <SearchableFilterSelect
-                    label="Destination (To) Bank"
-                    value={filters.toBankName}
-                    onChange={(b) => setFilters(prev => ({ ...prev, toBankName: b }))}
-                    options={registeredBankNames}
-                    placeholder="All Banks"
-                  />
-
-                  <SearchableFilterSelect
-                    label="Transfer Mode"
-                    value={filters.transferType}
-                    onChange={(t) => setFilters(prev => ({ ...prev, transferType: t }))}
-                    options={TRANSFER_TYPES}
-                    placeholder="All Transfer Modes"
-                  />
-
-                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                    <button
-                      type="button"
-                      onClick={resetFilters}
-                      className="flex-1 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition"
-                    >
-                      Reset
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowFilterPanel(false)}
-                      className="flex-1 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition shadow-xs"
-                    >
-                      Apply
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Active Filter Pills */}
-        {isFilterActive && (
-          <div className="px-4 py-2 bg-blue-50/50 border-b border-blue-100/50 flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="text-gray-400 font-medium mr-1">Active filters:</span>
-            {filters.startDate && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white text-blue-700 border border-blue-200 font-medium">
-                From: {formatDate(filters.startDate)}
-                <XIcon className="w-3 h-3 cursor-pointer" onClick={() => setFilters(prev => ({ ...prev, startDate: '' }))} />
-              </span>
-            )}
-            {filters.endDate && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white text-blue-700 border border-blue-200 font-medium">
-                To: {formatDate(filters.endDate)}
-                <XIcon className="w-3 h-3 cursor-pointer" onClick={() => setFilters(prev => ({ ...prev, endDate: '' }))} />
-              </span>
-            )}
-            {filters.fromBankName && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white text-blue-700 border border-blue-200 font-medium">
-                From: {filters.fromBankName}
-                <XIcon className="w-3 h-3 cursor-pointer" onClick={() => setFilters(prev => ({ ...prev, fromBankName: '' }))} />
-              </span>
-            )}
-            {filters.toBankName && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white text-blue-700 border border-blue-200 font-medium">
-                To: {filters.toBankName}
-                <XIcon className="w-3 h-3 cursor-pointer" onClick={() => setFilters(prev => ({ ...prev, toBankName: '' }))} />
-              </span>
-            )}
-            {filters.transferType && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white text-blue-700 border border-blue-200 font-medium">
-                Mode: {filters.transferType}
-                <XIcon className="w-3 h-3 cursor-pointer" onClick={() => setFilters(prev => ({ ...prev, transferType: '' }))} />
-              </span>
-            )}
-          </div>
-        )}
-
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto relative">
           <table className="w-full text-left border-collapse">
@@ -1426,20 +1405,27 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
       </div>
 
       {/* Add / Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
+      {showModal && typeof document !== 'undefined' && document.body && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
+          {/* Full Screen Backdrop */}
+          <div
+            className="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={() => { if (!isSubmitting) { setShowModal(false); resetForm(); } }}
+          />
+
+          {/* Modal Dialog Card (Compact, zero-scroll layout) */}
+          <div className="relative bg-white rounded-2xl w-full max-w-4xl shadow-2xl border border-gray-100 flex flex-col z-10 my-auto animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="px-6 py-4 bg-gray-50/80 border-b border-gray-100 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 text-blue-600 rounded-xl">
-                  <ArrowLeftRightIcon className="w-5 h-5" />
+            <div className="px-5 py-3 bg-gray-50/90 border-b border-gray-100 flex items-center justify-between shrink-0 rounded-t-2xl">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                  <ArrowLeftRightIcon className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 text-base">
+                  <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-tight">
                     {editingId ? 'Edit Fund Transfer' : 'New Bank to Bank Fund Transfer'}
                   </h3>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-[11px] text-gray-400">
                     Debit from source bank and credit into destination bank
                   </p>
                 </div>
@@ -1447,162 +1433,45 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
               <button
                 type="button"
                 onClick={() => { setShowModal(false); resetForm(); }}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition"
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
               >
-                <XIcon className="w-5 h-5" />
+                <XIcon className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-5 flex-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Modal Form - Compact grid without scroll */}
+            <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3.5">
+              {/* Row 1: Date, Mode, Amount, Reference # in 4 columns */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <CustomDatePicker
                   label="Transfer Date"
                   value={formData.date}
                   onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
                   required
+                  compact={true}
                 />
 
                 <div>
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                    Transfer Mode / Type
+                    Transfer Mode
                   </label>
                   <select
                     value={formData.transferType}
                     onChange={(e) => setFormData(prev => ({ ...prev, transferType: e.target.value }))}
-                    className="w-full h-10 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                    className="w-full h-9 px-2.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
                     {TRANSFER_TYPES.map(t => (
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
                 </div>
-              </div>
 
-              {/* Source Account Box (From) */}
-              <div className="p-4 bg-rose-50/40 rounded-2xl border border-rose-100 space-y-3">
-                <div className="flex items-center gap-2 text-rose-700 font-bold text-xs uppercase tracking-wider">
-                  <div className="w-2 h-2 rounded-full bg-rose-500" />
-                  <span>Source Account (Outflow / Debit -)</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <SearchableFilterSelect
-                    label="From Bank *"
-                    value={formData.fromBankName}
-                    onChange={handleFromBankChange}
-                    options={registeredBankNames}
-                    placeholder="Select Source Bank"
-                    required
-                  />
-
-                  <SearchableFilterSelect
-                    label="Branch"
-                    value={formData.fromBranch}
-                    onChange={handleFromBranchChange}
-                    options={fromAvailableBranches.map(b => ({
-                      value: b.branch,
-                      label: `${b.branch} (${b.accountNo})`,
-                      sublabel: b.accountName
-                    }))}
-                    placeholder={formData.fromBankName ? "Select Branch" : "Select bank first"}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                      Account Name
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.fromAccountName}
-                      onChange={(e) => setFormData(prev => ({ ...prev, fromAccountName: e.target.value }))}
-                      placeholder="Source Account Name"
-                      className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                      Account No
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.fromAccountNo}
-                      onChange={(e) => setFormData(prev => ({ ...prev, fromAccountNo: e.target.value }))}
-                      placeholder="Source Account No"
-                      className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Destination Account Box (To) */}
-              <div className="p-4 bg-emerald-50/40 rounded-2xl border border-emerald-100 space-y-3">
-                <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs uppercase tracking-wider">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span>Destination Account (Inflow / Credit +)</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <SearchableFilterSelect
-                    label="To Bank *"
-                    value={formData.toBankName}
-                    onChange={handleToBankChange}
-                    options={registeredBankNames}
-                    placeholder="Select Destination Bank"
-                    required
-                  />
-
-                  <SearchableFilterSelect
-                    label="Branch"
-                    value={formData.toBranch}
-                    onChange={handleToBranchChange}
-                    options={toAvailableBranches.map(b => ({
-                      value: b.branch,
-                      label: `${b.branch} (${b.accountNo})`,
-                      sublabel: b.accountName
-                    }))}
-                    placeholder={formData.toBankName ? "Select Branch" : "Select bank first"}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                      Account Name
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.toAccountName}
-                      onChange={(e) => setFormData(prev => ({ ...prev, toAccountName: e.target.value }))}
-                      placeholder="Destination Account Name"
-                      className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                      Account No
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.toAccountNo}
-                      onChange={(e) => setFormData(prev => ({ ...prev, toAccountNo: e.target.value }))}
-                      placeholder="Destination Account No"
-                      className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Transfer Details (Amount, Reference, Person, Remarks) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                    Transfer Amount (৳) *
+                    Amount (৳) *
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">৳</span>
                     <input
                       type="number"
                       step="any"
@@ -1611,68 +1480,196 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                       value={formData.amount}
                       onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
                       placeholder="0.00"
-                      className="w-full h-11 pl-8 pr-4 bg-gray-50/80 border border-gray-200 rounded-xl text-base font-bold text-gray-900 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      className="w-full h-9 pl-6 pr-2.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs sm:text-sm font-bold text-blue-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                    Ref # / Transaction ID / Cheque #
+                    Ref / Cheque #
                   </label>
                   <input
                     type="text"
                     value={formData.referenceNo}
                     onChange={(e) => setFormData(prev => ({ ...prev, referenceNo: e.target.value }))}
-                    placeholder="e.g. TR-20261101, Chq-987123"
-                    className="w-full h-11 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm font-mono outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                    placeholder="e.g. TR-20261101"
+                    className="w-full h-9 px-2.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-mono outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                  Transferred By / Authorized By
-                </label>
-                <input
-                  type="text"
-                  value={formData.transferredBy}
-                  onChange={(e) => setFormData(prev => ({ ...prev, transferredBy: e.target.value }))}
-                  placeholder="Officer / Manager name"
-                  className="w-full h-10 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
-                />
+              {/* Row 2: Side-by-Side Source (From) & Destination (To) Boxes */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Source Account Box (From) */}
+                <div className="p-3 bg-rose-50/40 rounded-xl border border-rose-100 space-y-2">
+                  <div className="flex items-center gap-1.5 text-rose-700 font-bold text-[11px] uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                    <span>Source Account (From - Debit)</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <SearchableFilterSelect
+                      label="From Bank *"
+                      value={formData.fromBankName}
+                      onChange={handleFromBankChange}
+                      options={registeredBankNames}
+                      placeholder="Select Bank"
+                      required
+                      inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-rose-500/20"
+                    />
+
+                    <SearchableFilterSelect
+                      label="Account No *"
+                      value={formData.fromAccountNo}
+                      onChange={handleFromAccountChange}
+                      options={fromAvailableAccounts.map(b => ({
+                        value: b.accountNo,
+                        label: b.accountNo || '(No Account No)',
+                        sublabel: [b.branch, b.accountName].filter(Boolean).join(' • ')
+                      }))}
+                      placeholder={formData.fromBankName ? "Select Account No" : "Select bank first"}
+                      required
+                      inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold text-gray-900 outline-none focus:ring-2 focus:ring-rose-500/20"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
+                        Account Name
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.fromAccountName}
+                        onChange={(e) => setFormData(prev => ({ ...prev, fromAccountName: e.target.value }))}
+                        placeholder="Auto-filled Account Name"
+                        className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-rose-500/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
+                        Branch
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.fromBranch}
+                        onChange={(e) => setFormData(prev => ({ ...prev, fromBranch: e.target.value }))}
+                        placeholder="Auto-filled Branch"
+                        className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-rose-500/20"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Destination Account Box (To) */}
+                <div className="p-3 bg-emerald-50/40 rounded-xl border border-emerald-100 space-y-2">
+                  <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[11px] uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span>Destination Account (To - Credit)</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <SearchableFilterSelect
+                      label="To Bank *"
+                      value={formData.toBankName}
+                      onChange={handleToBankChange}
+                      options={registeredBankNames}
+                      placeholder="Select Bank"
+                      required
+                      inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+
+                    <SearchableFilterSelect
+                      label="Account No *"
+                      value={formData.toAccountNo}
+                      onChange={handleToAccountChange}
+                      options={toAvailableAccounts.map(b => ({
+                        value: b.accountNo,
+                        label: b.accountNo || '(No Account No)',
+                        sublabel: [b.branch, b.accountName].filter(Boolean).join(' • ')
+                      }))}
+                      placeholder={formData.toBankName ? "Select Account No" : "Select bank first"}
+                      required
+                      inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold text-gray-900 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
+                        Account Name
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.toAccountName}
+                        onChange={(e) => setFormData(prev => ({ ...prev, toAccountName: e.target.value }))}
+                        placeholder="Auto-filled Account Name"
+                        className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
+                        Branch
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.toBranch}
+                        onChange={(e) => setFormData(prev => ({ ...prev, toBranch: e.target.value }))}
+                        placeholder="Auto-filled Branch"
+                        className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                  Remarks / Note / Transfer Purpose
-                </label>
-                <textarea
-                  rows={2}
-                  value={formData.remarks}
-                  onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
-                  placeholder="Purpose of fund transfer..."
-                  className="w-full p-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
-                />
+              {/* Row 3: Transferred By & Remarks in 2 columns */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
+                    Transferred By / Authorized By
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.transferredBy}
+                    onChange={(e) => setFormData(prev => ({ ...prev, transferredBy: e.target.value }))}
+                    placeholder="Officer / Manager name"
+                    className="w-full h-9 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
+                    Remarks / Purpose
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.remarks}
+                    onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                    placeholder="Purpose of fund transfer..."
+                    className="w-full h-9 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
               </div>
 
-              {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+              {/* Submit Buttons Bar */}
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => { setShowModal(false); resetForm(); }}
-                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition shadow-md shadow-blue-500/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition shadow-sm shadow-blue-500/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                 >
                   {isSubmitting ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       <span>Saving...</span>
                     </>
                   ) : (
@@ -1682,13 +1679,21 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Viewing Transfer Voucher Modal */}
-      {viewingTransfer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl border border-gray-100 overflow-hidden">
+      {viewingTransfer && typeof document !== 'undefined' && document.body && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          {/* Full Screen Backdrop */}
+          <div
+            className="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={() => setViewingTransfer(null)}
+          />
+
+          {/* Dialog Card */}
+          <div className="relative bg-white rounded-2xl w-full max-w-xl shadow-2xl border border-gray-100 overflow-hidden z-10 my-auto animate-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1819,8 +1824,19 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
+      {/* Export Report Format Modal */}
+      <ReportFormatModal
+        isOpen={showReportFormatModal}
+        onClose={() => setShowReportFormatModal(false)}
+        title="Fund Transfer Report"
+        subtitle="Select format to generate bank-to-bank fund transfer report (PDF / Excel)"
+        onExportPdf={handleExportPdf}
+        onExportExcel={handleExportExcel}
+      />
     </div>
   );
 };
