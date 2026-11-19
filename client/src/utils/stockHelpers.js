@@ -91,7 +91,7 @@ export const getGroupedBrandList = (brandList) => {
         const closingPacket = inHousePacket;
         const totalInHousePacket = calculatePktRemainder(totalInHouseQuantity, pktSize).whole;
 
-        const saleableQuantity = Math.max(0, inHouseQuantity - orderQuantity);
+        const saleableQuantity = inHouseQuantity - orderQuantity;
         const saleablePktObj = calculatePktRemainder(saleableQuantity, pktSize);
         const saleablePacket = saleablePktObj.whole + (saleablePktObj.remainder / pktSize);
 
@@ -280,8 +280,8 @@ export const reconcilePriceReportBrandList = (brandList) => {
                     closingQuantity: remainingQty,
                     inHousePacket: inHousePacket,
                     closingPacket: inHousePacket,
-                    saleableQuantity: Math.max(0, remainingQty - (entry.orderQuantity || 0)),
-                    saleablePacket: Math.max(0, inHousePacket - (entry.orderPacket || 0))
+                    saleableQuantity: remainingQty - (entry.orderQuantity || 0),
+                    saleablePacket: inHousePacket - (entry.orderPacket || 0)
                 });
             } else {
                 result.push({
@@ -290,8 +290,8 @@ export const reconcilePriceReportBrandList = (brandList) => {
                     closingQuantity: 0,
                     inHousePacket: 0,
                     closingPacket: 0,
-                    saleableQuantity: 0,
-                    saleablePacket: 0
+                    saleableQuantity: -(entry.orderQuantity || 0),
+                    saleablePacket: -(entry.orderPacket || 0)
                 });
             }
         }
@@ -309,8 +309,8 @@ export const reconcilePriceReportBrandList = (brandList) => {
                 closingQuantity: remainingQty,
                 inHousePacket: inHousePacket,
                 closingPacket: inHousePacket,
-                saleableQuantity: 0,
-                saleablePacket: 0
+                saleableQuantity: remainingQty - (entry.orderQuantity || 0),
+                saleablePacket: inHousePacket - (entry.orderPacket || 0)
             });
         }
 
@@ -332,8 +332,8 @@ export const reconcilePriceReportBrandList = (brandList) => {
                     closingPacket: inHousePacket,
                     orderQuantity: totalBrandOrderQty,
                     orderPacket: totalBrandOrderPkt,
-                    saleableQuantity: 0,
-                    saleablePacket: 0
+                    saleableQuantity: closing - totalBrandOrderQty,
+                    saleablePacket: inHousePacket - totalBrandOrderPkt
                 });
             } else if (totalBrandOrderQty > 0.001 || totalBrandOrderPkt > 0.001) {
                 // In stock is zero, but brand has active orders: preserve entry so order is visible!
@@ -347,8 +347,8 @@ export const reconcilePriceReportBrandList = (brandList) => {
                     closingPacket: 0,
                     orderQuantity: totalBrandOrderQty,
                     orderPacket: totalBrandOrderPkt,
-                    saleableQuantity: 0,
-                    saleablePacket: 0
+                    saleableQuantity: -totalBrandOrderQty,
+                    saleablePacket: -totalBrandOrderPkt
                 });
             }
         }
@@ -363,8 +363,8 @@ export const reconcilePriceReportBrandList = (brandList) => {
             if (unallocatedOrderQty > 0.001 || unallocatedOrderPkt > 0.001) {
                 finalGroupEntries[0].orderQuantity = (finalGroupEntries[0].orderQuantity || 0) + unallocatedOrderQty;
                 finalGroupEntries[0].orderPacket = (finalGroupEntries[0].orderPacket || 0) + unallocatedOrderPkt;
-                finalGroupEntries[0].saleableQuantity = Math.max(0, (finalGroupEntries[0].inHouseQuantity || 0) - finalGroupEntries[0].orderQuantity);
-                finalGroupEntries[0].saleablePacket = Math.max(0, (finalGroupEntries[0].inHousePacket || 0) - finalGroupEntries[0].orderPacket);
+                finalGroupEntries[0].saleableQuantity = (finalGroupEntries[0].inHouseQuantity || 0) - finalGroupEntries[0].orderQuantity;
+                finalGroupEntries[0].saleablePacket = (finalGroupEntries[0].inHousePacket || 0) - finalGroupEntries[0].orderPacket;
             }
         }
     });
@@ -443,8 +443,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             totalInHousePacket: safeOpeningPkt,
                             orderQuantity: b.orderQuantity || 0,
                             orderPacket: b.orderPacket || 0,
-                            saleableQuantity: b.saleableQuantity !== undefined ? b.saleableQuantity : Math.max(0, safeInHouseQty - (b.orderQuantity || 0)),
-                            saleablePacket: b.saleablePacket !== undefined ? b.saleablePacket : Math.max(0, safeInHousePkt - (b.orderPacket || 0))
+                            saleableQuantity: b.saleableQuantity !== undefined ? b.saleableQuantity : (safeInHouseQty - (b.orderQuantity || 0)),
+                            saleablePacket: b.saleablePacket !== undefined ? b.saleablePacket : (safeInHousePkt - (b.orderPacket || 0))
                         });
                     });
                 });
@@ -458,6 +458,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                 if (isPriceReport) {
                     groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001);
+                    groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
                 } else if (stockFilters?.reportType === 'short') {
                     groupedBrands = groupedBrands.filter(b =>
                         Math.abs(b.inHouseQuantity || 0) > 0.001 ||
@@ -474,8 +475,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const salePkt = groupedBrands.reduce((sum, b) => sum + (b.salePacket || 0), 0);
                 const orderQty = groupedBrands.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
                 const orderPkt = groupedBrands.reduce((sum, b) => sum + (b.orderPacket || 0), 0);
-                const saleableQty = Math.max(0, inHouseQty - orderQty);
-                const saleablePkt = Math.max(0, inHousePkt - orderPkt);
+                const saleableQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0);
+                const saleablePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.saleablePacket || 0), 0);
 
                 return {
                     ...prod,
@@ -1705,8 +1706,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
             const orderQty = b.orderQuantity || 0;
             const orderPkt = b.orderPacket || 0;
-            const saleableQty = Math.max(0, closingQty - orderQty);
-            const saleablePkt = Math.max(0, closingPkt - orderPkt);
+            const saleableQty = closingQty - orderQty;
+            const saleablePkt = closingPkt - orderPkt;
 
             const cleanVal = (v) => Math.abs(v) < 0.001 ? 0 : v;
 
@@ -1756,6 +1757,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
             if (isPriceReport && !stockFilters?._isSubCall) {
                 return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
+                return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001;
             }
 
             // If closing, order, saleable, opening, and sale are 0, do not show
@@ -1849,6 +1851,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (isPriceReport && !stockFilters?._isSubCall) {
             // In Price Report mode, keep all LC entries with non-zero remaining stock or active orders
             filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001);
+            // In Price Report mode, keep all LC entries with non-zero remaining stock, active orders, or saleable stock
+            filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
         } else if (stockFilters?.reportType === 'short') {
             // In Short Report mode, keep items with non-zero closing stock, active pending orders, opening or sales
             filteredBrands = filteredBrands.filter(b =>

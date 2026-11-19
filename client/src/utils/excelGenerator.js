@@ -1205,7 +1205,7 @@ export const generateInsurancePaymentReportExcel = (payments = [], filters = {},
             totalPaid += paidVal;
             totalAdjusted += adjVal;
 
-            const lcDisplay = p.lcNo 
+            const lcDisplay = p.lcNo
                 ? (p.amendmentNo ? `${p.lcNo} (${p.amendmentNo})` : p.lcNo)
                 : '-';
 
@@ -2235,7 +2235,7 @@ export const generateStockReportExcel = (
         const totalOpeningQty = allRenderedBrands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.totalInHouseQuantity) || 0), 0);
         const totalSaleQty = allRenderedBrands.reduce((sum, b) => sum + (parseFloat(b.saleQuantity) || 0), 0);
         const totalOrderQty = allRenderedBrands.reduce((sum, b) => sum + (parseFloat(b.orderQuantity) || 0), 0);
-        const totalSaleableQty = allRenderedBrands.reduce((sum, b) => sum + (parseFloat(b.saleableQuantity) || 0), 0);
+        const totalSaleableQty = allRenderedBrands.reduce((sum, b) => sum + Math.max(0, parseFloat(b.saleableQuantity) || 0), 0);
 
         if (normalizedReportType === 'detailed') {
             rows.push([
@@ -2347,8 +2347,8 @@ export const generateStockReportExcel = (
                 'Product & Quality',
                 'Brand',
                 'LC No',
-                'Closing Bag',
-                'Closing Qty (KG)'
+                'Saleable Bag',
+                'Saleable Qty (KG)'
             ];
             colWidths = [
                 { wch: 6 },
@@ -2365,8 +2365,8 @@ export const generateStockReportExcel = (
                 'Brand',
                 'LC No',
                 'Lc Rate $',
-                'Closing Bag',
-                'Closing Qty (TON)'
+                'Saleable Bag',
+                'Saleable Qty (TON)'
             ];
             colWidths = [
                 { wch: 6 },
@@ -2384,8 +2384,8 @@ export const generateStockReportExcel = (
                 'Brand',
                 'LC No',
                 'Costing / Rate (TK)',
-                'Closing Bag',
-                'Closing Qty (KG)'
+                'Saleable Bag',
+                'Saleable Qty (KG)'
             ];
             colWidths = [
                 { wch: 6 },
@@ -2453,22 +2453,22 @@ export const generateStockReportExcel = (
                             Math.round(b.inHouseQuantity || 0)
                         ]);
                     } else if (normalizedReportType === 'group') {
-                        // Group Report row (no costing)
+                        // Group Report row (no costing) - shows Saleable Stock
                         const lcStr = (b.lcNos && b.lcNos.length > 0) ? b.lcNos.join(', ') : (b.lcNo || '—');
                         rows.push([
                             bIdx === 0 ? index + 1 : '',
                             prodAndQ,
                             brandStr,
                             lcStr,
-                            formatPktStr(b.inHouseQuantity, b.packetSize || 30),
-                            Math.round(b.inHouseQuantity || 0)
+                            formatPktStr(b.saleableQuantity, b.packetSize || 30),
+                            Math.round(b.saleableQuantity || 0)
                         ]);
 
                         const isLastOfBrand = (bIdx === brands.length - 1) || ((brands[bIdx + 1]?.brand || '').trim().toUpperCase() !== brandStr.toUpperCase());
                         if (brandCounts[brandStr.toUpperCase()] > 1 && isLastOfBrand) {
                             const matchingBrandRows = brands.filter(x => (x.brand || '').trim().toUpperCase() === brandStr.toUpperCase());
-                            const bTotalQty = matchingBrandRows.reduce((s, x) => s + Math.max(0, parseFloat(x.inHouseQuantity) || 0), 0);
-                            const bTotalBagStr = sumPktRemainder(matchingBrandRows, x => Math.max(0, parseFloat(x.inHouseQuantity) || 0), x => x.packetSize);
+                            const bTotalQty = matchingBrandRows.reduce((s, x) => s + Math.max(0, parseFloat(x.saleableQuantity) || 0), 0);
+                            const bTotalBagStr = sumPktRemainder(matchingBrandRows, x => Math.max(0, parseFloat(x.saleableQuantity) || 0), x => x.packetSize);
                             rows.push([
                                 '',
                                 `${brandStr.toUpperCase()} TOTAL`,
@@ -2479,7 +2479,7 @@ export const generateStockReportExcel = (
                             ]);
                         }
                     } else {
-                        // Price Report & LC Price Report row
+                        // Price Report & LC Price Report row - shows Saleable Stock
                         const lcStr = (b.lcNos && b.lcNos.length > 0) ? b.lcNos.join(', ') : (b.lcNo || '—');
                         const isLcPrice = normalizedReportType === 'lc_price';
                         const rateVal = isLcPrice
@@ -2489,26 +2489,26 @@ export const generateStockReportExcel = (
                             ? (isLcPrice ? `$${(parseFloat(rateVal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : (parseFloat(rateVal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
                             : '—';
                         const qtyVal = isLcPrice
-                            ? parseFloat(((parseFloat(b.inHouseQuantity || 0) / 1000).toFixed(3)))
-                            : Math.round(b.inHouseQuantity || 0);
+                            ? parseFloat(((parseFloat(b.saleableQuantity || 0) / 1000).toFixed(3)))
+                            : Math.round(b.saleableQuantity || 0);
                         rows.push([
                             bIdx === 0 ? index + 1 : '',
                             prodAndQ,
                             brandStr,
                             lcStr,
                             rateStr,
-                            formatPktStr(b.inHouseQuantity, b.packetSize || 30),
+                            formatPktStr(b.saleableQuantity, b.packetSize || 30),
                             qtyVal
                         ]);
 
                         const isLastOfBrand = (bIdx === brands.length - 1) || ((brands[bIdx + 1]?.brand || '').trim().toUpperCase() !== brandStr.toUpperCase());
                         if (brandCounts[brandStr.toUpperCase()] > 1 && isLastOfBrand) {
                             const matchingBrandRows = brands.filter(x => (x.brand || '').trim().toUpperCase() === brandStr.toUpperCase());
-                            const rawTotal = matchingBrandRows.reduce((s, x) => s + Math.max(0, parseFloat(x.inHouseQuantity) || 0), 0);
+                            const rawTotal = matchingBrandRows.reduce((s, x) => s + Math.max(0, parseFloat(x.saleableQuantity) || 0), 0);
                             const bTotalQty = isLcPrice
                                 ? parseFloat(((rawTotal / 1000).toFixed(3)))
                                 : Math.round(rawTotal);
-                            const bTotalBagStr = sumPktRemainder(matchingBrandRows, x => Math.max(0, parseFloat(x.inHouseQuantity) || 0), x => x.packetSize);
+                            const bTotalBagStr = sumPktRemainder(matchingBrandRows, x => Math.max(0, parseFloat(x.saleableQuantity) || 0), x => x.packetSize);
                             rows.push([
                                 '',
                                 `${brandStr.toUpperCase()} TOTAL`,
@@ -2533,7 +2533,7 @@ export const generateStockReportExcel = (
                         sumPktRemainder(brands, b => Math.max(0, parseFloat(b.orderQuantity) || 0), b => b.packetSize),
                         Math.round(brands.reduce((s, b) => s + (parseFloat(b.orderQuantity) || 0), 0)),
                         sumPktRemainder(brands, b => Math.max(0, parseFloat(b.saleableQuantity) || 0), b => b.packetSize),
-                        Math.round(brands.reduce((s, b) => s + (parseFloat(b.saleableQuantity) || 0), 0))
+                        Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.saleableQuantity) || 0), 0))
                     ]);
                 } else if (normalizedReportType === 'detailed') {
                     const subSalePkt = brands.reduce((s, b) => s + (parseFloat(b.salePacket) || 0), 0);
@@ -2555,11 +2555,11 @@ export const generateStockReportExcel = (
                         `${prodName} TOTAL`,
                         '',
                         '',
-                        sumPktRemainder(brands, b => Math.max(0, parseFloat(b.inHouseQuantity) || 0), b => b.packetSize),
-                        Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0))
+                        sumPktRemainder(brands, b => Math.max(0, parseFloat(b.saleableQuantity) || 0), b => b.packetSize),
+                        Math.round(brands.reduce((s, b) => s + Math.max(0, parseFloat(b.saleableQuantity) || 0), 0))
                     ]);
                 } else {
-                    const rawSub = brands.reduce((s, b) => s + Math.max(0, parseFloat(b.inHouseQuantity) || 0), 0);
+                    const rawSub = brands.reduce((s, b) => s + Math.max(0, parseFloat(b.saleableQuantity) || 0), 0);
                     const subQty = normalizedReportType === 'lc_price'
                         ? parseFloat(((rawSub / 1000).toFixed(3)))
                         : Math.round(rawSub);
@@ -2569,7 +2569,7 @@ export const generateStockReportExcel = (
                         '',
                         '',
                         '',
-                        sumPktRemainder(brands, b => Math.max(0, parseFloat(b.inHouseQuantity) || 0), b => b.packetSize),
+                        sumPktRemainder(brands, b => Math.max(0, parseFloat(b.saleableQuantity) || 0), b => b.packetSize),
                         subQty
                     ]);
                 }
@@ -2593,7 +2593,7 @@ export const generateStockReportExcel = (
                         whOrderBagStr,
                         Math.round(whBrands.reduce((s, b) => s + (parseFloat(b.orderQuantity) || 0), 0)),
                         whSaleableBagStr,
-                        Math.round(whBrands.reduce((s, b) => s + (parseFloat(b.saleableQuantity) || 0), 0))
+                        Math.round(whBrands.reduce((s, b) => s + Math.max(0, parseFloat(b.saleableQuantity) || 0), 0))
                     ]);
                 } else if (normalizedReportType === 'detailed') {
                     const whTotalOpeningQty = whBrands.reduce((s, b) => s + Math.max(0, parseFloat(b.totalInHouseQuantity) || 0), 0);
@@ -2612,25 +2612,29 @@ export const generateStockReportExcel = (
                         Math.round(whTotalInHouseQty)
                     ]);
                 } else if (normalizedReportType === 'group') {
+                    const whSaleableBagStr = sumPktRemainder(whBrands, b => Math.max(0, parseFloat(b.saleableQuantity) || 0), b => b.packetSize);
+                    const whTotalSaleableQty = whBrands.reduce((s, b) => s + Math.max(0, parseFloat(b.saleableQuantity) || 0), 0);
                     rows.push([
                         `${whItem.name.toUpperCase()} TOTAL`,
                         '',
                         '',
                         '',
-                        whInHouseBagStr,
-                        Math.round(whTotalInHouseQty)
+                        whSaleableBagStr,
+                        Math.round(whTotalSaleableQty)
                     ]);
                 } else {
+                    const whSaleableBagStr = sumPktRemainder(whBrands, b => Math.max(0, parseFloat(b.saleableQuantity) || 0), b => b.packetSize);
+                    const whTotalSaleableQty = whBrands.reduce((s, b) => s + Math.max(0, parseFloat(b.saleableQuantity) || 0), 0);
                     const whQty = normalizedReportType === 'lc_price'
-                        ? parseFloat(((whTotalInHouseQty / 1000).toFixed(3)))
-                        : Math.round(whTotalInHouseQty);
+                        ? parseFloat(((whTotalSaleableQty / 1000).toFixed(3)))
+                        : Math.round(whTotalSaleableQty);
                     rows.push([
                         `${whItem.name.toUpperCase()} TOTAL`,
                         '',
                         '',
                         '',
                         '',
-                        whInHouseBagStr,
+                        whSaleableBagStr,
                         whQty
                     ]);
                 }
@@ -2670,20 +2674,20 @@ export const generateStockReportExcel = (
                 '',
                 '',
                 '',
-                inHouseBagStr,
-                Math.round(totalInHouseQty)
+                saleableBagStr,
+                Math.round(totalSaleableQty)
             ]);
         } else {
             const gQty = normalizedReportType === 'lc_price'
-                ? parseFloat(((totalInHouseQty / 1000).toFixed(3)))
-                : Math.round(totalInHouseQty);
+                ? parseFloat(((totalSaleableQty / 1000).toFixed(3)))
+                : Math.round(totalSaleableQty);
             rows.push([
                 'GRAND TOTAL',
                 '',
                 '',
                 '',
                 '',
-                inHouseBagStr,
+                saleableBagStr,
                 gQty
             ]);
         }

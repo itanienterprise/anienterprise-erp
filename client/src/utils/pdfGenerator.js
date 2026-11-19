@@ -827,7 +827,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
         doc.setTextColor(100, 116, 139);
         doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 4.2, { align: 'right' });
 
-        // Left Side: Product Card (placed a little down on the left)
+        // Center: Product Card
         const prodNameStr = filters.productName
             ? (Array.isArray(filters.productName) ? filters.productName.join(', ') : filters.productName)
             : '';
@@ -839,13 +839,14 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             const prodTW = doc.getTextWidth(prodLabel);
-            const prodPillW = prodTW + 10;
+            const prodPillW = prodTW + 12;
+            const boxX = (pageWidth - prodPillW) / 2;
             doc.setFillColor(241, 245, 249);
             doc.setDrawColor(203, 213, 225);
             doc.setLineWidth(0.3);
-            doc.roundedRect(margin, yPos, prodPillW, 7.5, 2, 2, 'FD');
+            doc.roundedRect(boxX, yPos, prodPillW, 7.5, 2, 2, 'FD');
             doc.setTextColor(30, 41, 59);
-            doc.text(prodLabel, margin + 5, yPos + 5.2);
+            doc.text(prodLabel, pageWidth / 2, yPos + 5.2, { align: 'center' });
             yPos += 9.5;
         }
 
@@ -967,7 +968,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                         return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                     }
                     if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
-                        return Math.abs(b.inHouseQuantity || 0) > 0.001;
+                        return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001;
                     }
                     return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
                 });
@@ -1101,8 +1102,9 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                         row.push({ content: ent.lcNo || '—', styles: { halign: 'left' } });
                     }
 
-                    // Closing Data
-                    const rQty = parseFloat(ent.inHouseQuantity) || 0;
+                    // Closing / Saleable Data
+                    const isSaleableMode = reportType === 'price' || reportType === 'lc_price' || reportType === 'group';
+                    const rQty = parseFloat(isSaleableMode ? ent.saleableQuantity : ent.inHouseQuantity) || 0;
                     const rSize = parseFloat(ent.packetSize) || 0;
                     const { whole: rW, remainder: rR } = calculatePktRemainderLocal(rQty, rSize);
                     if (showBag) row.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right' } });
@@ -1139,7 +1141,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
 
                     if ((reportType === 'price' || reportType === 'lc_price' || reportType === 'group') && hasMultipleLcs && isLastOfBrandGroup) {
                         const brandGroup = brands.slice(startIdx, startIdx + bSpanInfo.span);
-                        const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                        const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0);
                         const pktSize = ent.packetSize || 30;
                         const { whole, remainder } = calculatePktRemainderLocal(totalQty, pktSize);
 
@@ -1197,16 +1199,19 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     if (showQty) subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 }
 
-                let rW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.inHouseQuantity) || 0), ent.packetSize).whole, 0);
-                let rR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.inHouseQuantity) || 0), ent.packetSize).remainder, 0));
+                const isSubSaleableMode = reportType === 'price' || reportType === 'lc_price' || reportType === 'group';
+                const subQtyField = isSubSaleableMode ? 'saleableQuantity' : 'inHouseQuantity';
+                const subSourceBrands = isSubSaleableMode ? (item.brandList || []) : getGroupedBrandList(item.brandList);
+                let rW2 = subSourceBrands.reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent[subQtyField]) || 0), ent.packetSize).whole, 0);
+                let rR2 = Math.round(subSourceBrands.reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent[subQtyField]) || 0), ent.packetSize).remainder, 0));
                 const pktSizeR = item.packetSize || item.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
                 if (pktSizeR > 0 && Math.abs(rR2) >= pktSizeR) { const ex = Math.floor(Math.abs(rR2) / pktSizeR); rW2 += rR2 >= 0 ? ex : -ex; rR2 = rR2 % pktSizeR; }
                 if (showBag) subRow.push({ content: `${rW2}${rR2 !== 0 ? ` - ${Math.abs(rR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                const subInHouseQty = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, parseFloat(ent.inHouseQuantity) || 0), 0);
+                const subQtyVal = subSourceBrands.reduce((sum, ent) => sum + Math.max(0, parseFloat(ent[subQtyField]) || 0), 0);
                 if (showQty) {
                     const subQtyText = reportType === 'lc_price'
-                        ? (subInHouseQty / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
-                        : Math.round(subInHouseQty).toLocaleString('en-US');
+                        ? (subQtyVal / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+                        : Math.round(subQtyVal).toLocaleString('en-US');
                     subRow.push({ content: subQtyText, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 }
 
@@ -1254,11 +1259,14 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             const totalOrderQty = currentStockData.displayRecords.reduce((sum, item) => sum + (item.orderQuantity || 0), 0);
 
             const whSaleablePktStr = (() => {
-                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.saleablePacket) || 0)), 0), 0);
-                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.saleableQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.saleablePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+                const allBrands = sortedDisplayRecords.flatMap(it => it.brandList || []);
+                let totalWhole = allBrands.reduce((accWhole, ent) => accWhole + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.saleableQuantity) || 0), ent.packetSize).whole, 0);
+                let totalRem = Math.round(allBrands.reduce((accRem, ent) => accRem + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.saleableQuantity) || 0), ent.packetSize).remainder, 0));
+                const pktSizeR = allBrands.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                if (pktSizeR > 0 && Math.abs(totalRem) >= pktSizeR) { const ex = Math.floor(Math.abs(totalRem) / pktSizeR); totalWhole += totalRem >= 0 ? ex : -ex; totalRem = totalRem % pktSizeR; }
                 return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
             })();
-            const totalSaleableQty = currentStockData.displayRecords.reduce((sum, item) => sum + (item.saleableQuantity || 0), 0);
+            const totalSaleableQty = sortedDisplayRecords.flatMap(it => it.brandList || []).reduce((sum, b) => sum + Math.max(0, parseFloat(b.saleableQuantity) || 0), 0);
 
             const whTotalSalePktStr = (() => {
                 const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
@@ -1282,15 +1290,19 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                 if (showQty) grandTotalRow.push({ content: Math.round(currentStockData.totalSaleQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
             }
 
+            const isGrandSaleableMode = reportType === 'price' || reportType === 'lc_price' || reportType === 'group';
             const grandInHouseQty = currentStockData.totalInHouseQty !== undefined
                 ? Math.max(0, currentStockData.totalInHouseQty)
                 : currentStockData.displayRecords.reduce((sum, item) => sum + getGroupedBrandList(item.brandList).reduce((s, ent) => s + Math.max(0, parseFloat(ent.inHouseQuantity) || 0), 0), 0);
 
-            if (showBag) grandTotalRow.push({ content: whInHousePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+            const displayGrandBagStr = isGrandSaleableMode ? whSaleablePktStr : whInHousePktStr;
+            const displayGrandQtyVal = isGrandSaleableMode ? totalSaleableQty : grandInHouseQty;
+
+            if (showBag) grandTotalRow.push({ content: displayGrandBagStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
             if (showQty) {
                 const grandQtyText = reportType === 'lc_price'
-                    ? (grandInHouseQty / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
-                    : Math.round(grandInHouseQty).toString();
+                    ? (displayGrandQtyVal / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+                    : Math.round(displayGrandQtyVal).toString();
                 grandTotalRow.push({ content: grandQtyText, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
             }
 
@@ -1306,33 +1318,62 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             tableRows.push(grandTotalRow);
 
             // --- Table ---
-            const headCols = ['SL', 'PRODUCT NAME', 'BRAND'];
+            let pdfHead;
             if (reportType === 'price' || reportType === 'lc_price') {
-                headCols.push('LC NO', reportType === 'lc_price' ? 'LC RATE $' : 'COSTING');
-                if (showBag) headCols.push('BAG');
-                if (showQty) headCols.push(reportType === 'lc_price' ? 'QTY (TON)' : 'QTY (KG)');
+                const stockColsCount = (showBag ? 1 : 0) + (showQty ? 1 : 0);
+                if (stockColsCount > 0) {
+                    const topRow = [
+                        { content: 'SL', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+                        { content: 'PRODUCT NAME', rowSpan: 2, styles: { valign: 'middle', halign: 'left' } },
+                        { content: 'BRAND', rowSpan: 2, styles: { valign: 'middle', halign: 'left' } },
+                        { content: 'LC NO', rowSpan: 2, styles: { valign: 'middle', halign: 'left' } },
+                        { content: reportType === 'lc_price' ? 'LC RATE $' : 'COSTING', rowSpan: 2, styles: { valign: 'middle', halign: 'right' } },
+                        { content: 'SALEABLE STOCK', colSpan: stockColsCount, styles: { valign: 'middle', halign: 'center' } }
+                    ];
+                    const bottomRow = [];
+                    if (showBag) bottomRow.push({ content: 'BAG', styles: { halign: 'right' } });
+                    if (showQty) bottomRow.push({ content: reportType === 'lc_price' ? 'QTY (TON)' : 'QTY (KG)', styles: { halign: 'right' } });
+                    pdfHead = [topRow, bottomRow];
+                } else {
+                    pdfHead = [['SL', 'PRODUCT NAME', 'BRAND', 'LC NO', reportType === 'lc_price' ? 'LC RATE $' : 'COSTING']];
+                }
             } else if (reportType === 'group') {
-                headCols.push('LC NO');
-                if (showBag) headCols.push('BAG');
-                if (showQty) headCols.push('QTY (KG)');
+                const stockColsCount = (showBag ? 1 : 0) + (showQty ? 1 : 0);
+                if (stockColsCount > 0) {
+                    const topRow = [
+                        { content: 'SL', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+                        { content: 'PRODUCT NAME', rowSpan: 2, styles: { valign: 'middle', halign: 'left' } },
+                        { content: 'BRAND', rowSpan: 2, styles: { valign: 'middle', halign: 'left' } },
+                        { content: 'LC NO', rowSpan: 2, styles: { valign: 'middle', halign: 'left' } },
+                        { content: 'SALEABLE STOCK', colSpan: stockColsCount, styles: { valign: 'middle', halign: 'center' } }
+                    ];
+                    const bottomRow = [];
+                    if (showBag) bottomRow.push({ content: 'BAG', styles: { halign: 'right' } });
+                    if (showQty) bottomRow.push({ content: 'QTY (KG)', styles: { halign: 'right' } });
+                    pdfHead = [topRow, bottomRow];
+                } else {
+                    pdfHead = [['SL', 'PRODUCT NAME', 'BRAND', 'LC NO']];
+                }
             } else if (reportType === 'detailed') {
+                const headCols = ['SL', 'PRODUCT NAME', 'BRAND'];
                 if (showBag) headCols.push('Opening Stock BAG');
                 if (showQty) headCols.push('Opening Stock QTY (KG)');
                 if (showBag) headCols.push('SALE BAG');
                 if (showQty) headCols.push('SALE QTY (KG)');
                 if (showBag) headCols.push('Closing Stock BAG');
                 if (showQty) headCols.push('Closing Stock QTY (KG)');
+                pdfHead = [headCols];
             } else {
                 // short report
+                const headCols = ['SL', 'PRODUCT NAME', 'BRAND'];
                 if (showBag) headCols.push('Closing BAG');
                 if (showQty) headCols.push('Closing QTY (KG)');
                 if (showBag) headCols.push('Order BAG');
                 if (showQty) headCols.push('Order QTY (KG)');
                 if (showBag) headCols.push('Saleable BAG');
                 if (showQty) headCols.push('Saleable QTY (KG)');
+                pdfHead = [headCols];
             }
-
-            const pdfHead = [headCols];
 
             const getColumnStyles = () => {
                 if (reportType === 'detailed') {

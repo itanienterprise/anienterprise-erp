@@ -7241,8 +7241,8 @@ const SaleManagement = ({
                                                                     <th className="px-5 py-3.5 whitespace-nowrap">Product Name</th>
                                                                     <th className="px-5 py-3.5 whitespace-nowrap text-gray-900">Brand</th>
                                                                     <th className="px-5 py-3.5 text-center whitespace-nowrap text-purple-800">LC No</th>
-                                                                    <th className="px-5 py-3.5 text-center whitespace-nowrap text-green-800">Closing Bag</th>
-                                                                    <th className="px-5 py-3.5 text-center whitespace-nowrap text-green-800">Closing QTY (KG)</th>
+                                                                    <th className="px-5 py-3.5 text-center whitespace-nowrap text-teal-800">Saleable Bag</th>
+                                                                    <th className="px-5 py-3.5 text-center whitespace-nowrap text-teal-800">Saleable QTY (KG)</th>
                                                                     <th className="px-5 py-3.5 text-center whitespace-nowrap">Status</th>
                                                                 </tr>
                                                             </thead>
@@ -7256,6 +7256,12 @@ const SaleManagement = ({
                                                                     const isLastOfBrandGroup = bIdx === startIdx + spanInfo.span - 1;
                                                                     const hasMultipleLcs = spanInfo.span > 1;
                                                                     const showBrandName = brandSpans[bIdx]?.span > 0;
+                                                                    const salQty = brand.saleableQuantity !== undefined
+                                                                        ? (parseFloat(brand.saleableQuantity) || 0)
+                                                                        : ((parseFloat(brand.inHouseQuantity) || 0) - (parseFloat(brand.orderQuantity) || 0));
+                                                                    const isPreSold = Math.round(brand.inHouseQuantity || 0) < 0 && (brand.orderQuantity || 0) <= 0;
+                                                                    const isPreOrder = Math.round(salQty) < 0;
+                                                                    const isInStock = Math.round(brand.inHouseQuantity || 0) > 0;
 
                                                                     return (
                                                                         <React.Fragment key={bIdx}>
@@ -7291,21 +7297,29 @@ const SaleManagement = ({
                                                                                     </span>
                                                                                 </td>
                                                                                 <td className="px-5 py-3 text-center whitespace-nowrap align-middle">
-                                                                                    <span className={`text-sm px-3 py-1 rounded-xl font-bold border inline-block ${brand.inHouseQuantity < 0 ? 'text-blue-800 bg-blue-50/60 border-blue-100/60' : 'text-green-800 bg-green-50/70 border-green-200/60'}`}>
+                                                                                    <span className={`text-sm px-3 py-1 rounded-xl font-bold border inline-block ${salQty < 0 ? 'text-purple-800 bg-purple-50/60 border-purple-100/60' : 'text-teal-800 bg-teal-50/70 border-teal-200/60'}`}>
                                                                                         {(() => {
-                                                                                            const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize || 30);
-                                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                            const { whole, remainder } = calculatePktRemainder(salQty, brand.packetSize || 30);
+                                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(Math.round(remainder)).toLocaleString('en-US')} kg`;
                                                                                         })()}
                                                                                     </span>
                                                                                 </td>
                                                                                 <td className="px-5 py-3 text-center whitespace-nowrap align-middle">
-                                                                                    <span className={`text-sm px-3.5 py-1 rounded-xl font-black border inline-block ${brand.inHouseQuantity < 0 ? 'text-blue-900 bg-blue-50/60 border-blue-100/60' : 'text-green-900 bg-green-50/70 border-green-200/60'}`}>
-                                                                                        {Math.round(brand.inHouseQuantity).toLocaleString('en-US')}
+                                                                                    <span className={`text-sm px-3.5 py-1 rounded-xl font-black border inline-block ${salQty < 0 ? 'text-purple-900 bg-purple-50/60 border-purple-100/60' : 'text-teal-900 bg-teal-50/70 border-teal-200/60'}`}>
+                                                                                        {Math.round(salQty).toLocaleString('en-US')}
                                                                                     </span>
                                                                                 </td>
                                                                                 <td className="px-5 py-3 text-center whitespace-nowrap align-middle">
-                                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${Math.round(brand.inHouseQuantity) > 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : Math.round(brand.inHouseQuantity) < 0 ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
-                                                                                        {Math.round(brand.inHouseQuantity) > 0 ? 'In Stock' : Math.round(brand.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                                                                        isPreSold
+                                                                                            ? 'bg-blue-50 text-blue-600 border border-blue-100'
+                                                                                            : isPreOrder
+                                                                                                ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                                                                                : isInStock
+                                                                                                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                                                                                    : 'bg-red-50 text-red-600 border border-red-100'
+                                                                                    }`}>
+                                                                                        {isPreSold ? 'Pre-Sold' : isPreOrder ? 'Pre-Order' : isInStock ? 'In Stock' : 'Out of Stock'}
                                                                                     </span>
                                                                                 </td>
                                                                             </tr>
@@ -7320,10 +7334,13 @@ const SaleManagement = ({
                                                                                         <span className="text-xs text-purple-900 font-extrabold bg-purple-100/60 px-3 py-1 rounded-lg inline-block">
                                                                                             {(() => {
                                                                                                 const brandGroup = effectiveBrandList.slice(startIdx, startIdx + spanInfo.span);
-                                                                                                const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                                                                                                const totalQty = brandGroup.reduce((sum, b) => {
+                                                                                                    const sQ = b.saleableQuantity !== undefined ? (parseFloat(b.saleableQuantity) || 0) : ((parseFloat(b.inHouseQuantity) || 0) - (parseFloat(b.orderQuantity) || 0));
+                                                                                                    return sum + Math.max(0, sQ);
+                                                                                                }, 0);
                                                                                                 const pktSize = brand.packetSize || 30;
                                                                                                 const { whole, remainder = 0 } = calculatePktRemainder(totalQty, pktSize);
-                                                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(Math.round(remainder)).toLocaleString('en-US')} kg`;
                                                                                             })()}
                                                                                         </span>
                                                                                     </td>
@@ -7331,7 +7348,10 @@ const SaleManagement = ({
                                                                                         <span className="text-xs text-purple-900 font-extrabold bg-purple-100/60 px-3 py-1 rounded-lg inline-block">
                                                                                             {(() => {
                                                                                                 const brandGroup = effectiveBrandList.slice(startIdx, startIdx + spanInfo.span);
-                                                                                                const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                                                                                                const totalQty = brandGroup.reduce((sum, b) => {
+                                                                                                    const sQ = b.saleableQuantity !== undefined ? (parseFloat(b.saleableQuantity) || 0) : ((parseFloat(b.inHouseQuantity) || 0) - (parseFloat(b.orderQuantity) || 0));
+                                                                                                    return sum + Math.max(0, sQ);
+                                                                                                }, 0);
                                                                                                 return Math.round(totalQty).toLocaleString('en-US');
                                                                                             })()}
                                                                                         </span>
@@ -7351,8 +7371,14 @@ const SaleManagement = ({
                                                                     <td className="px-5 py-2.5 text-center whitespace-nowrap">
                                                                         <span className="text-xs text-blue-900 font-extrabold bg-blue-100/60 px-3 py-1 rounded-lg inline-block">
                                                                             {(() => {
-                                                                                let totalWhole = effectiveBrandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize || 30).whole, 0);
-                                                                                let totalRem = effectiveBrandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize || 30).remainder, 0);
+                                                                                let totalWhole = effectiveBrandList.reduce((sum, ent) => {
+                                                                                    const sQ = ent.saleableQuantity !== undefined ? (parseFloat(ent.saleableQuantity) || 0) : ((parseFloat(ent.inHouseQuantity) || 0) - (parseFloat(ent.orderQuantity) || 0));
+                                                                                    return sum + calculatePktRemainder(Math.max(0, sQ), ent.packetSize || 30).whole;
+                                                                                }, 0);
+                                                                                let totalRem = effectiveBrandList.reduce((sum, ent) => {
+                                                                                    const sQ = ent.saleableQuantity !== undefined ? (parseFloat(ent.saleableQuantity) || 0) : ((parseFloat(ent.inHouseQuantity) || 0) - (parseFloat(ent.orderQuantity) || 0));
+                                                                                    return sum + calculatePktRemainder(Math.max(0, sQ), ent.packetSize || 30).remainder;
+                                                                                }, 0);
                                                                                 const pktSize = group.packetSize || effectiveBrandList.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
                                                                                 if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
                                                                                     const extra = Math.floor(Math.abs(totalRem) / pktSize);
@@ -7366,7 +7392,10 @@ const SaleManagement = ({
                                                                     <td className="px-5 py-2.5 text-center whitespace-nowrap">
                                                                         <span className="text-xs text-blue-900 font-extrabold bg-blue-100/60 px-3 py-1 rounded-lg inline-block">
                                                                             {(() => {
-                                                                                const totalQty = effectiveBrandList.reduce((sum, ent) => sum + Math.max(0, ent.inHouseQuantity || 0), 0);
+                                                                                const totalQty = effectiveBrandList.reduce((sum, ent) => {
+                                                                                    const sQ = ent.saleableQuantity !== undefined ? (parseFloat(ent.saleableQuantity) || 0) : ((parseFloat(ent.inHouseQuantity) || 0) - (parseFloat(ent.orderQuantity) || 0));
+                                                                                    return sum + Math.max(0, sQ);
+                                                                                }, 0);
                                                                                 return Math.round(totalQty).toLocaleString('en-US');
                                                                             })()}
                                                                         </span>

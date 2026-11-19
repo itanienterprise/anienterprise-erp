@@ -200,6 +200,12 @@ const StockReport = ({
                             : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0);
                         const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
                         const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
+                        const saleableQuantity = (reportType === 'price' || reportType === 'lc_price' || reportType === 'group')
+                            ? filteredBrands.reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0)
+                            : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0);
+                        const orderQuantity = (reportType === 'price' || reportType === 'lc_price' || reportType === 'group')
+                            ? filteredBrands.reduce((sum, b) => sum + (b.orderQuantity || 0), 0)
+                            : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
                         return {
                             ...item,
                             brandList: filteredBrands,
@@ -207,6 +213,8 @@ const StockReport = ({
                             totalInHouseQuantity,
                             saleQuantity,
                             salePacket,
+                            saleableQuantity,
+                            orderQuantity,
                             packetSize: filteredBrands.find(b => (b.packetSize || 0) > 0)?.packetSize || item.packetSize || 30
                         };
                     }
@@ -239,6 +247,12 @@ const StockReport = ({
                     : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0);
                 const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
                 const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
+                const saleableQuantity = (reportType === 'price' || reportType === 'lc_price' || reportType === 'group')
+                    ? filteredBrands.reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0)
+                    : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0);
+                const orderQuantity = (reportType === 'price' || reportType === 'lc_price' || reportType === 'group')
+                    ? filteredBrands.reduce((sum, b) => sum + (b.orderQuantity || 0), 0)
+                    : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
 
                 return {
                     ...item,
@@ -247,6 +261,8 @@ const StockReport = ({
                     totalInHouseQuantity,
                     saleQuantity,
                     salePacket,
+                    saleableQuantity,
+                    orderQuantity,
                     packetSize: filteredBrands.find(b => (b.packetSize || 0) > 0)?.packetSize || item.packetSize || 30
                 };
             }
@@ -262,6 +278,7 @@ const StockReport = ({
         let totalSalePkt = 0;
         let totalShortage = 0;
         let totalDamageQty = 0;
+        let totalSaleableQty = 0;
 
         filteredRecords.forEach(item => {
             totalTotalInHouseQty += Math.max(0, item.totalInHouseQuantity || 0);
@@ -270,9 +287,10 @@ const StockReport = ({
             totalSalePkt += (item.salePacket || 0);
             totalShortage += (item.sweepedQuantity || 0);
             totalDamageQty += (item.damageQuantity || 0);
+            totalSaleableQty += Math.max(0, item.saleableQuantity || 0);
         });
 
-        return { totalTotalInHouseQty, totalSaleQty, totalInHouseQty, totalSalePkt, totalShortage, totalDamageQty };
+        return { totalTotalInHouseQty, totalSaleQty, totalInHouseQty, totalSalePkt, totalShortage, totalDamageQty, totalSaleableQty };
     }, [filteredRecords]);
 
     const filteredStockData = React.useMemo(() => ({
@@ -283,7 +301,8 @@ const StockReport = ({
         totalInHouseQty: totals.totalInHouseQty,
         totalSalePkt: totals.totalSalePkt,
         totalShortage: totals.totalShortage,
-        totalDamageQty: totals.totalDamageQty
+        totalDamageQty: totals.totalDamageQty,
+        totalSaleableQty: totals.totalSaleableQty
     }), [activeStockData, filteredRecords, totals]);
 
     const warehouseOptions = React.useMemo(() => {
@@ -376,7 +395,7 @@ const StockReport = ({
                         (b.saleQuantity || 0) > 0.001;
                 }
                 if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
-                    return Math.abs(b.inHouseQuantity || 0) > 0.001;
+                    return Math.abs(b.inHouseQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                 }
                 return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
             });
@@ -387,7 +406,9 @@ const StockReport = ({
                 inHouseQuantity: validBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0),
                 totalInHouseQuantity: validBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0),
                 saleQuantity: validBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0),
-                salePacket: validBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0)
+                salePacket: validBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0),
+                saleableQuantity: validBrands.reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0),
+                orderQuantity: validBrands.reduce((sum, b) => sum + (b.orderQuantity || 0), 0)
             };
         }).filter(Boolean);
 
@@ -395,7 +416,8 @@ const StockReport = ({
             totalTotalInHouseQty: records.reduce((sum, item) => sum + Math.max(0, item.totalInHouseQuantity || 0), 0),
             totalSaleQty: records.reduce((sum, item) => sum + (item.saleQuantity || 0), 0),
             totalInHouseQty: records.reduce((sum, item) => sum + Math.max(0, item.inHouseQuantity || 0), 0),
-            totalSalePkt: records.reduce((sum, item) => sum + (parseFloat(item.salePacket) || 0), 0)
+            totalSalePkt: records.reduce((sum, item) => sum + (parseFloat(item.salePacket) || 0), 0),
+            totalSaleableQty: records.reduce((sum, item) => sum + Math.max(0, item.saleableQuantity || 0), 0)
         };
 
         return (
@@ -429,7 +451,9 @@ const StockReport = ({
                                         <th className="px-1 py-1 text-center text-[11px] font-bold text-teal-900 uppercase tracking-wider border-b border-gray-900" colSpan={showBag && showQty ? 2 : 1}>Saleable Stock</th>
                                     </>
                                 ) : (
-                                    <th className="px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider border-b border-gray-900" colSpan={showBag && showQty ? 2 : 1}>Closing Stock</th>
+                                    <th className="px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider border-b border-gray-900" colSpan={showBag && showQty ? 2 : 1}>
+                                        {reportType === 'detailed' ? 'Closing Stock' : 'Saleable Stock'}
+                                    </th>
                                 )}
                             </tr>
                             <tr className="bg-gray-50 border-b border-gray-900">
@@ -520,6 +544,7 @@ const StockReport = ({
                                             {brands.map((ent, i) => {
                                                 const { whole: openWhole, remainder: openRem } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
                                                 const { whole: closeWhole, remainder: closeRem } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
+                                                const { whole: saleableWhole, remainder: saleableRem } = calculatePktRemainder(ent.saleableQuantity, ent.packetSize || 30);
                                                 const sPkt = parseFloat(ent.salePacket) || 0;
                                                 const qInfo = qualitySpans[i];
                                                 const bInfo = brandSpans[i];
@@ -592,14 +617,19 @@ const StockReport = ({
                                                             ) : null}
                                                             {showBag && (
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap">
-                                                                    {closeWhole}{closeRem !== 0 ? ` - ${Math.abs(closeRem)} kg` : ''}
+                                                                    {(reportType === 'price' || reportType === 'lc_price' || reportType === 'group')
+                                                                        ? `${saleableWhole}${saleableRem !== 0 ? ` - ${Math.abs(saleableRem)} kg` : ''}`
+                                                                        : `${closeWhole}${closeRem !== 0 ? ` - ${Math.abs(closeRem)} kg` : ''}`
+                                                                    }
                                                                 </td>
                                                             )}
                                                             {showQty && (
                                                                 <td className={`${reportType === 'short' ? 'border-r border-gray-900' : ''} px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap font-black`}>
-                                                                    {reportType === 'lc_price'
-                                                                        ? ((parseFloat(ent.inHouseQuantity || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
-                                                                        : Math.round(ent.inHouseQuantity || 0).toLocaleString('en-US')}
+                                                                    {reportType === 'price' || reportType === 'group'
+                                                                        ? Math.round(ent.saleableQuantity || 0).toLocaleString('en-US')
+                                                                        : (reportType === 'lc_price'
+                                                                            ? ((parseFloat(ent.saleableQuantity || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
+                                                                            : Math.round(ent.inHouseQuantity || 0).toLocaleString('en-US'))}
                                                                 </td>
                                                             )}
                                                             {reportType === 'short' && (
@@ -635,7 +665,7 @@ const StockReport = ({
                                                         </tr>
                                                         {(reportType === 'price' || reportType === 'lc_price' || reportType === 'group') && hasMultipleLcs && isLastOfBrandGroup && (() => {
                                                             const brandGroup = brands.slice(startIdx, startIdx + spanInfo.span);
-                                                            const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
+                                                            const totalQty = brandGroup.reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0);
                                                             const pktSize = ent.packetSize || 30;
                                                             const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
                                                             return (
@@ -697,8 +727,11 @@ const StockReport = ({
                                                 {showBag && (
                                                     <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-gray-900 align-top whitespace-nowrap">
                                                         {(() => {
-                                                            let totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0);
-                                                            let totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0);
+                                                            const isSaleableMode = reportType === 'price' || reportType === 'lc_price' || reportType === 'group';
+                                                            const qtyField = isSaleableMode ? 'saleableQuantity' : 'inHouseQuantity';
+                                                            const targetBrands = isSaleableMode ? brands : getGroupedBrandList(brands);
+                                                            let totalWhole = targetBrands.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent[qtyField] || 0), ent.packetSize).whole, 0);
+                                                            let totalRem = targetBrands.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent[qtyField] || 0), ent.packetSize).remainder, 0);
                                                             const pktSize = item.packetSize || brands?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
                                                             if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
                                                                 const extra = Math.floor(Math.abs(totalRem) / pktSize);
@@ -711,9 +744,13 @@ const StockReport = ({
                                                 )}
                                                 {showQty && (
                                                     <td className={`${reportType === 'short' ? 'border-r border-gray-900' : ''} px-2 py-1.5 text-[13px] text-right font-black text-blue-800 align-top whitespace-nowrap`}>
-                                                        {reportType === 'lc_price'
-                                                            ? ((parseFloat(item.inHouseQuantity || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
-                                                            : Math.round(item.inHouseQuantity).toLocaleString('en-US')}
+                                                        {(() => {
+                                                            const isSaleableMode = reportType === 'price' || reportType === 'lc_price' || reportType === 'group';
+                                                            const val = isSaleableMode ? (item.saleableQuantity || 0) : (item.inHouseQuantity || 0);
+                                                            return reportType === 'lc_price'
+                                                                ? ((parseFloat(val || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
+                                                                : Math.round(val).toLocaleString('en-US');
+                                                        })()}
                                                     </td>
                                                 )}
                                                 {reportType === 'short' && (
@@ -755,7 +792,7 @@ const StockReport = ({
                                                         )}
                                                         {showQty && (
                                                             <td className="px-2 py-1.5 text-[13px] text-right font-black text-teal-900 align-top whitespace-nowrap">
-                                                                {Math.round(item.saleableQuantity).toLocaleString('en-US')}
+                                                                {Math.round(Math.max(0, item.saleableQuantity || 0)).toLocaleString('en-US')}
                                                             </td>
                                                         )}
                                                     </>
@@ -810,8 +847,10 @@ const StockReport = ({
                                     {showBag && (
                                         <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                             {(() => {
-                                                let totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                let totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                const isSaleableMode = reportType === 'price' || reportType === 'lc_price' || reportType === 'group';
+                                                const qtyField = isSaleableMode ? 'saleableQuantity' : 'inHouseQuantity';
+                                                let totalWhole = records.reduce((accWhole, item) => accWhole + (isSaleableMode ? (item.brandList || []) : getGroupedBrandList(item.brandList)).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent[qtyField] || 0), ent.packetSize).whole, 0), 0);
+                                                let totalRem = records.reduce((accRem, item) => accRem + (isSaleableMode ? (item.brandList || []) : getGroupedBrandList(item.brandList)).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent[qtyField] || 0), ent.packetSize).remainder, 0), 0);
                                                 const pktSize = records[0]?.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
                                                 if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
                                                     const extra = Math.floor(Math.abs(totalRem) / pktSize);
@@ -824,9 +863,13 @@ const StockReport = ({
                                     )}
                                     {showQty && (
                                         <td className={`${reportType === 'short' ? 'border-r border-gray-900' : ''} px-2 py-1.5 text-[14px] text-right font-black text-gray-900`}>
-                                            {reportType === 'lc_price'
-                                                ? ((parseFloat(totals.totalInHouseQty || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
-                                                : Math.round(totals.totalInHouseQty).toLocaleString('en-US')}
+                                            {(() => {
+                                                const isSaleableMode = reportType === 'price' || reportType === 'lc_price' || reportType === 'group';
+                                                const val = isSaleableMode ? (totals.totalSaleableQty !== undefined ? totals.totalSaleableQty : records.reduce((sum, item) => sum + (item.saleableQuantity || 0), 0)) : totals.totalInHouseQty;
+                                                return reportType === 'lc_price'
+                                                    ? ((parseFloat(val || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }))
+                                                    : Math.round(val || 0).toLocaleString('en-US');
+                                            })()}
                                         </td>
                                     )}
                                     {reportType === 'short' && (
@@ -868,7 +911,7 @@ const StockReport = ({
                                             )}
                                             {showQty && (
                                                 <td className="px-2 py-1.5 text-[14px] text-right font-black text-teal-900">
-                                                    {Math.round(records.reduce((sum, item) => sum + (item.saleableQuantity || 0), 0))}
+                                                    {Math.round(records.reduce((sum, item) => sum + Math.max(0, item.saleableQuantity || 0), 0))}
                                                 </td>
                                             )}
                                         </>
@@ -895,7 +938,10 @@ const StockReport = ({
                                         const sameBrandEntries = item.brandList.filter(b => (b.brand || '').trim().toLowerCase() === brandNameLower);
                                         const hasMultipleLcs = sameBrandEntries.length > 1;
 
-                                        const brandTotalQty = hasMultipleLcs ? sameBrandEntries.reduce((sum, b) => sum + (parseFloat(b.inHouseQuantity) || 0), 0) : 0;
+                                        const isSaleableMode = reportType === 'price' || reportType === 'lc_price' || reportType === 'group';
+                                        const brandTotalQty = hasMultipleLcs
+                                            ? sameBrandEntries.reduce((sum, b) => sum + (parseFloat(isSaleableMode ? Math.max(0, b.saleableQuantity || 0) : b.inHouseQuantity) || 0), 0)
+                                            : 0;
                                         const brandTotalPktRemainder = hasMultipleLcs ? calculatePktRemainder(brandTotalQty, ent.packetSize || 30) : null;
 
                                         return (
@@ -922,17 +968,18 @@ const StockReport = ({
                                                                 </>
                                                             )}
 
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QUANTITY</span>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SALEABLE</span>
                                                             <span className="text-gray-400 font-bold">:</span>
                                                             <span className="font-bold text-gray-900 break-words">
                                                                 {(() => {
-                                                                    const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
+                                                                    const qtyVal = parseFloat(ent.saleableQuantity) || 0;
+                                                                    const { whole, remainder } = calculatePktRemainder(qtyVal, ent.packetSize || 30);
                                                                     const bagStr = `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''} BAG`;
                                                                     if (reportType === 'lc_price') {
-                                                                        const tonStr = (parseFloat(ent.inHouseQuantity || 0) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+                                                                        const tonStr = (qtyVal / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
                                                                         return `${bagStr} (${tonStr} Ton)`;
                                                                     }
-                                                                    return `${bagStr} (${Math.round(ent.inHouseQuantity).toLocaleString('en-US')} kg)`;
+                                                                    return `${bagStr} (${Math.round(qtyVal).toLocaleString('en-US')} kg)`;
                                                                 })()}
                                                             </span>
                                                         </div>

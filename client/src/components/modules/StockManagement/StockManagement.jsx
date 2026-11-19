@@ -3685,8 +3685,23 @@ const StockManagement = ({
                                                             <div className="flex justify-between items-center w-full">
                                                                 <h3 className="text-base font-black text-gray-900 leading-tight truncate flex-1 min-w-0 pr-3">{group.productName}</h3>
                                                                 <div className="shrink-0 flex items-center">
-                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${Math.round(group.inHouseQuantity) > 0 ? 'bg-emerald-100 text-emerald-700' : Math.round(group.inHouseQuantity) < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                                        {Math.round(group.inHouseQuantity) > 0 ? 'In Stock' : Math.round(group.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                                                        Math.round(group.inHouseQuantity) < 0 && (group.orderQuantity || 0) <= 0
+                                                                            ? 'bg-blue-100 text-blue-700'
+                                                                            : Math.round(group.saleableQuantity || 0) < 0
+                                                                                ? 'bg-purple-100 text-purple-700'
+                                                                                : Math.round(group.inHouseQuantity) > 0
+                                                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                                                    : 'bg-red-100 text-red-700'
+                                                                    }`}>
+                                                                        {Math.round(group.inHouseQuantity) < 0 && (group.orderQuantity || 0) <= 0
+                                                                            ? 'Pre-Sold'
+                                                                            : Math.round(group.saleableQuantity || 0) < 0
+                                                                                ? 'Pre-Order'
+                                                                                : Math.round(group.inHouseQuantity) > 0
+                                                                                    ? 'In Stock'
+                                                                                    : 'Out of Stock'
+                                                                        }
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -3750,9 +3765,25 @@ const StockManagement = ({
                                                                                             {brandGroup.brand}
                                                                                         </span>
                                                                                         <div className="shrink-0 flex items-center gap-2">
-                                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${Math.round(totalInHouseQty) > 0 ? 'bg-emerald-100 text-emerald-700' : Math.round(totalInHouseQty) < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                                                                {Math.round(totalInHouseQty) > 0 ? 'In Stock' : Math.round(totalInHouseQty) < 0 ? 'Pre-Sold' : 'Out of Stock'}
-                                                                                            </span>
+                                                                                            {(() => {
+                                                                                                const isPreSold = Math.round(totalInHouseQty) < 0 && (brandGroup.entries.reduce((s, b) => s + (b.orderQuantity || 0), 0) <= 0);
+                                                                                                const totalSaleableQty = brandGroup.entries.reduce((sum, b) => sum + (b.saleableQuantity !== undefined ? b.saleableQuantity : ((b.inHouseQuantity || 0) - (b.orderQuantity || 0))), 0);
+                                                                                                const isPreOrder = Math.round(totalSaleableQty) < 0;
+                                                                                                const isInStock = Math.round(totalInHouseQty) > 0;
+                                                                                                return (
+                                                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                                                                                        isPreSold
+                                                                                                            ? 'bg-blue-100 text-blue-700'
+                                                                                                            : isPreOrder
+                                                                                                                ? 'bg-purple-100 text-purple-700'
+                                                                                                                : isInStock
+                                                                                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                                                                                    : 'bg-red-100 text-red-700'
+                                                                                                    }`}>
+                                                                                                        {isPreSold ? 'Pre-Sold' : isPreOrder ? 'Pre-Order' : isInStock ? 'In Stock' : 'Out of Stock'}
+                                                                                                    </span>
+                                                                                                );
+                                                                                            })()}
                                                                                             <button
                                                                                                 type="button"
                                                                                                 onClick={(e) => {
@@ -3811,7 +3842,7 @@ const StockManagement = ({
                                                                                                     <span className="font-bold text-teal-700 break-words">
                                                                                                         {(() => {
                                                                                                             const pktSize = brand.packetSize || brandGroup.packetSize || group.packetSize || 30;
-                                                                                                            const saleableQty = brand.saleableQuantity !== undefined ? brand.saleableQuantity : Math.max(0, (brand.inHouseQuantity || 0) - (brand.orderQuantity || 0));
+                                                                                                            const saleableQty = brand.saleableQuantity !== undefined ? brand.saleableQuantity : ((brand.inHouseQuantity || 0) - (brand.orderQuantity || 0));
                                                                                                             const { whole: saleableWhole } = calculatePktRemainder(saleableQty, pktSize);
                                                                                                             const saleablePkt = brand.saleablePacket !== undefined ? Math.round(brand.saleablePacket) : saleableWhole;
                                                                                                             return `${(saleablePkt || 0).toLocaleString('en-US')} BAG • ${(Math.round(saleableQty) || 0).toLocaleString('en-US')} ${group.unit || 'kg'}`;
@@ -4080,7 +4111,7 @@ const StockManagement = ({
                                                                                             </div>
                                                                                         )}
                                                                                         {showBag && (
-                                                                                            <div className="text-sm text-teal-800 bg-teal-50/50 px-2 py-1 rounded-lg text-center font-bold border border-teal-100/50">
+                                                                                            <div className={`text-sm px-2 py-1 rounded-lg text-center font-bold border ${(Math.round(brand.saleableQuantity || 0) < 0) ? 'text-purple-800 bg-purple-50/50 border-purple-100/50' : 'text-teal-800 bg-teal-50/50 border-teal-100/50'}`}>
                                                                                                 {(() => {
                                                                                                     const { whole, remainder } = calculatePktRemainder(brand.saleableQuantity, brand.packetSize);
                                                                                                     return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
@@ -4088,14 +4119,29 @@ const StockManagement = ({
                                                                                             </div>
                                                                                         )}
                                                                                         {showQty && (
-                                                                                            <div className="text-sm text-teal-900 bg-teal-50/50 px-2 py-1 rounded-lg text-center font-black border border-teal-100/50">
+                                                                                            <div className={`text-sm px-2 py-1 rounded-lg text-center font-black border ${(Math.round(brand.saleableQuantity || 0) < 0) ? 'text-purple-900 bg-purple-50/50 border-purple-100/50' : 'text-teal-900 bg-teal-50/50 border-teal-100/50'}`}>
                                                                                                 {Math.round(brand.saleableQuantity || 0).toLocaleString('en-US')}
                                                                                             </div>
                                                                                         )}
 
                                                                                         <div className="text-center overflow-hidden">
-                                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${Math.round(brand.inHouseQuantity) > 0 ? 'bg-emerald-50 text-emerald-600' : Math.round(brand.inHouseQuantity) < 0 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
-                                                                                                {Math.round(brand.inHouseQuantity) > 0 ? 'In Stock' : Math.round(brand.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                                                                                Math.round(brand.inHouseQuantity) < 0 && (brand.orderQuantity || 0) <= 0
+                                                                                                    ? 'bg-blue-50 text-blue-600'
+                                                                                                    : Math.round(brand.saleableQuantity || 0) < 0
+                                                                                                        ? 'bg-purple-50 text-purple-700'
+                                                                                                        : Math.round(brand.inHouseQuantity) > 0
+                                                                                                            ? 'bg-emerald-50 text-emerald-600'
+                                                                                                            : 'bg-red-50 text-red-600'
+                                                                                            }`}>
+                                                                                                {Math.round(brand.inHouseQuantity) < 0 && (brand.orderQuantity || 0) <= 0
+                                                                                                    ? 'Pre-Sold'
+                                                                                                    : Math.round(brand.saleableQuantity || 0) < 0
+                                                                                                        ? 'Pre-Order'
+                                                                                                        : Math.round(brand.inHouseQuantity) > 0
+                                                                                                            ? 'In Stock'
+                                                                                                            : 'Out of Stock'
+                                                                                                }
                                                                                             </span>
                                                                                         </div>
                                                                                     </div>
