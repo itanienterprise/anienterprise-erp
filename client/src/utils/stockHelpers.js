@@ -91,9 +91,11 @@ export const getGroupedBrandList = (brandList) => {
         const closingPacket = inHousePacket;
         const totalInHousePacket = calculatePktRemainder(totalInHouseQuantity, pktSize).whole;
 
-        const saleableQuantity = inHouseQuantity - orderQuantity;
+        const saleableQuantity = Math.max(0, inHouseQuantity) - orderQuantity;
         const saleablePktObj = calculatePktRemainder(saleableQuantity, pktSize);
-        const saleablePacket = saleablePktObj.whole + (saleablePktObj.remainder / pktSize);
+        const saleablePacket = saleableQuantity < 0
+            ? (saleablePktObj.whole + (saleablePktObj.remainder / pktSize))
+            : Math.max(0, inHousePacket - orderPacket);
 
         const repEntry = entries[0] || {};
         const { _entries, ...cleanG } = g;
@@ -303,14 +305,20 @@ export const reconcilePriceReportBrandList = (brandList) => {
             const { whole, remainder } = calculatePktRemainder(remainingQty, pktSize);
             const inHousePacket = whole + (remainder / pktSize);
 
+            // Pre-sold applies no effect on saleable: Math.max(0, remainingQty) - (entry.orderQuantity || 0)
+            const orderQ = entry.orderQuantity || 0;
+            const saleableQty = -orderQ;
+            const { whole: sWhole, remainder: sRem } = calculatePktRemainder(saleableQty, pktSize);
+            const saleablePacket = orderQ > 0 ? (sWhole + (sRem / pktSize)) : 0;
+
             result.push({
                 ...entry,
                 inHouseQuantity: remainingQty,
                 closingQuantity: remainingQty,
                 inHousePacket: inHousePacket,
                 closingPacket: inHousePacket,
-                saleableQuantity: remainingQty - (entry.orderQuantity || 0),
-                saleablePacket: inHousePacket - (entry.orderPacket || 0)
+                saleableQuantity: saleableQty,
+                saleablePacket: saleablePacket
             });
         }
 
@@ -324,6 +332,12 @@ export const reconcilePriceReportBrandList = (brandList) => {
                 const pktSize = negEntry.packetSize || 30;
                 const { whole, remainder } = calculatePktRemainder(closing, pktSize);
                 const inHousePacket = whole + (remainder / pktSize);
+
+                // Pre-sold applies no effect on saleable: Math.max(0, closing) - totalBrandOrderQty
+                const saleableQty = -totalBrandOrderQty;
+                const { whole: sWhole, remainder: sRem } = calculatePktRemainder(saleableQty, pktSize);
+                const saleablePacket = totalBrandOrderQty > 0 ? (sWhole + (sRem / pktSize)) : 0;
+
                 result.push({
                     ...negEntry,
                     inHouseQuantity: closing,
@@ -332,8 +346,8 @@ export const reconcilePriceReportBrandList = (brandList) => {
                     closingPacket: inHousePacket,
                     orderQuantity: totalBrandOrderQty,
                     orderPacket: totalBrandOrderPkt,
-                    saleableQuantity: closing - totalBrandOrderQty,
-                    saleablePacket: inHousePacket - totalBrandOrderPkt
+                    saleableQuantity: saleableQty,
+                    saleablePacket: saleablePacket
                 });
             } else if (totalBrandOrderQty > 0.001 || totalBrandOrderPkt > 0.001) {
                 // In stock is zero, but brand has active orders: preserve entry so order is visible!
@@ -363,8 +377,9 @@ export const reconcilePriceReportBrandList = (brandList) => {
             if (unallocatedOrderQty > 0.001 || unallocatedOrderPkt > 0.001) {
                 finalGroupEntries[0].orderQuantity = (finalGroupEntries[0].orderQuantity || 0) + unallocatedOrderQty;
                 finalGroupEntries[0].orderPacket = (finalGroupEntries[0].orderPacket || 0) + unallocatedOrderPkt;
-                finalGroupEntries[0].saleableQuantity = (finalGroupEntries[0].inHouseQuantity || 0) - finalGroupEntries[0].orderQuantity;
-                finalGroupEntries[0].saleablePacket = (finalGroupEntries[0].inHousePacket || 0) - finalGroupEntries[0].orderPacket;
+                finalGroupEntries[0].saleableQuantity = Math.max(0, finalGroupEntries[0].inHouseQuantity || 0) - finalGroupEntries[0].orderQuantity;
+                const { whole: fWhole, remainder: fRem } = calculatePktRemainder(finalGroupEntries[0].saleableQuantity, finalGroupEntries[0].packetSize || 30);
+                finalGroupEntries[0].saleablePacket = finalGroupEntries[0].saleableQuantity < 0 ? (fWhole + (fRem / (finalGroupEntries[0].packetSize || 30))) : 0;
             }
         }
     });
@@ -1710,8 +1725,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
             const orderQty = b.orderQuantity || 0;
             const orderPkt = b.orderPacket || 0;
-            const saleableQty = closingQty - orderQty;
-            const saleablePkt = closingPkt - orderPkt;
+            const saleableQty = Math.max(0, closingQty) - orderQty;
+            const saleablePkt = Math.max(0, closingPkt) - orderPkt;
 
             const cleanVal = (v) => Math.abs(v) < 0.001 ? 0 : v;
 
