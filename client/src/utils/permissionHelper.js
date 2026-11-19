@@ -239,6 +239,13 @@ export const MODULES_LIST = [
         ]
     },
     {
+        key: 'fundTransfer',
+        label: 'Fund Transfer',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
+    {
         key: 'bankStatement',
         label: 'Bank Statement',
         specialLabels: [
@@ -394,8 +401,8 @@ export const getDefaultPermissionsForRole = (role) => {
             defaults[key] = permsObj;
         });
     } else if (roleLower === 'sales manager') {
-        // Sales Manager can access products, customers, sales, borderSale, order, purchase, payment, bank, deposit, withdrawal, bankStatement, pattyCash, insurance, insurancePayment, returnProduct, transfer
-        const salesModules = ['product', 'customer', 'sales', 'borderSale', 'order', 'purchase', 'purchaseReceive', 'transfer', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'bankStatement', 'pattyCash', 'insurance', 'insurancePayment', 'returnProduct', 'lcPurchase', 'dealReceive'];
+        // Sales Manager can access products, customers, sales, borderSale, order, purchase, payment, bank, deposit, withdrawal, fundTransfer, bankStatement, pattyCash, insurance, insurancePayment, returnProduct, transfer
+        const salesModules = ['product', 'customer', 'sales', 'borderSale', 'order', 'purchase', 'purchaseReceive', 'transfer', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'fundTransfer', 'bankStatement', 'pattyCash', 'insurance', 'insurancePayment', 'returnProduct', 'lcPurchase', 'dealReceive'];
         salesModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -423,8 +430,8 @@ export const getDefaultPermissionsForRole = (role) => {
             }
         });
     } else if (roleLower === 'accounts manager') {
-        // Accounts Manager can access paymentCollection, payToCustomer, bank, deposit, withdrawal, bankStatement, pattyCash, insurance, insurancePayment, cnfPayment, returnProduct, purchase
-        const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'bankStatement', 'pattyCash', 'insurance', 'insurancePayment', 'cnfPayment', 'returnProduct', 'costOfGoods', 'purchase', 'purchaseReceive', 'lcPurchase', 'dealReceive'];
+        // Accounts Manager can access paymentCollection, payToCustomer, bank, deposit, withdrawal, fundTransfer, bankStatement, pattyCash, insurance, insurancePayment, cnfPayment, returnProduct, purchase
+        const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'deposit', 'withdrawal', 'fundTransfer', 'bankStatement', 'pattyCash', 'insurance', 'insurancePayment', 'cnfPayment', 'returnProduct', 'costOfGoods', 'purchase', 'purchaseReceive', 'lcPurchase', 'dealReceive'];
         accModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -622,6 +629,17 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
     if (moduleName === 'withdrawal') {
         if (currentUser.permissions && currentUser.permissions.withdrawal && currentUser.permissions.withdrawal[checkAction] !== undefined) {
             return !!currentUser.permissions.withdrawal[checkAction];
+        }
+        if (checkAction === 'showEntryBy') {
+            return hasPermission(currentUser, 'bank', 'view');
+        }
+        return hasPermission(currentUser, 'bank', action);
+    }
+
+    // Special fallback for fundTransfer if not explicitly defined in custom permissions
+    if (moduleName === 'fundTransfer' || moduleName === 'fund-transfer') {
+        if (currentUser.permissions && currentUser.permissions.fundTransfer && currentUser.permissions.fundTransfer[checkAction] !== undefined) {
+            return !!currentUser.permissions.fundTransfer[checkAction];
         }
         if (checkAction === 'showEntryBy') {
             return hasPermission(currentUser, 'bank', 'view');

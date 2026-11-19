@@ -291,6 +291,7 @@ const SearchableFilterSelect = ({
 const MODULE_TAG_STYLES = {
   'Bank Deposit': 'bg-emerald-50 text-emerald-700 border-emerald-200',
   'Bank Withdrawal': 'bg-rose-50 text-rose-700 border-rose-200',
+  'Fund Transfer': 'bg-blue-50 text-blue-700 border-blue-200',
   'Payment Collection': 'bg-teal-50 text-teal-700 border-teal-200',
   'Pay to Customer': 'bg-amber-50 text-amber-700 border-amber-200',
   'C&F Payment': 'bg-cyan-50 text-cyan-700 border-cyan-200',
@@ -310,6 +311,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
   const [banks, setBanks] = useState([]);
   const [deposits, setDeposits] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
+  const [fundTransfers, setFundTransfers] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [cnfPayments, setCnfPayments] = useState([]);
   const [insurancePayments, setInsurancePayments] = useState([]);
@@ -564,7 +566,8 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
         pattyRes,
         marginRes,
         lcExpRes,
-        lcRecordsRes
+        lcRecordsRes,
+        fundTransfersRes
       ] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/banks?_t=${Date.now()}`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/deposits?_t=${Date.now()}`).catch(() => ({ data: [] })),
@@ -575,7 +578,8 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
         axios.get(`${API_BASE_URL}/api/patty-cash?_t=${Date.now()}`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/margin-returns?_t=${Date.now()}`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/lc-expenses?_t=${Date.now()}`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`).catch(() => ({ data: [] }))
+        axios.get(`${API_BASE_URL}/api/lc-management?_t=${Date.now()}`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/fund-transfers?_t=${Date.now()}`).catch(() => ({ data: [] }))
       ]);
 
       setBanks(Array.isArray(banksRes.data) ? banksRes.data : []);
@@ -588,6 +592,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       setMarginReturns(Array.isArray(marginRes.data) ? marginRes.data : []);
       setLcExpenses(Array.isArray(lcExpRes.data) ? lcExpRes.data : []);
       setLcRecords(Array.isArray(lcRecordsRes.data) ? lcRecordsRes.data : []);
+      setFundTransfers(Array.isArray(fundTransfersRes.data) ? fundTransfersRes.data : []);
     } catch (err) {
       console.warn('Error fetching statement module data:', err);
     } finally {
@@ -646,6 +651,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       const mod = (detail?.module || '').toLowerCase();
       if ([
         'banks', 'bank', 'deposits', 'deposit', 'withdrawals', 'withdrawal',
+        'fund-transfers', 'fund-transfer', 'fundtransfer',
         'customers', 'customer', 'payment-collection', 'paymentcollection',
         'pay-to-customer', 'paytocustomer', 'cnf-payments', 'cnf',
         'insurance-payments', 'insurance', 'patty-cash', 'pattycash',
@@ -1192,8 +1198,62 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       });
     });
 
+    // 9. Fund Transfers (Bank to Bank)
+    fundTransfers.forEach((ft, ftIdx) => {
+      const amt = Number(ft.amount) || 0;
+      if (amt <= 0) return;
+
+      const ftDate = toDateStr(ft.date || ft.transferDate || ft.createdAt);
+
+      // A. Outflow (-) from Source Bank
+      if (ft.fromBankName) {
+        list.push({
+          id: `ft-out-${ft._id || ft.id || ftIdx}`,
+          sourceModule: 'Fund Transfer',
+          moduleKey: 'fundTransfer',
+          type: 'withdrawal', // Outflow (-)
+          typeName: ft.transferType || 'Fund Transfer Out',
+          date: ftDate,
+          bankName: (ft.fromBankName || '').trim(),
+          branch: (ft.fromBranch || '').trim(),
+          accountNo: (ft.fromAccountNo || '').trim(),
+          accountName: (ft.fromAccountName || '').trim(),
+          amount: amt,
+          referenceNo: (ft.referenceNo || '').trim(),
+          partyOrPerson: `To: ${(ft.toBankName || '').trim()}${ft.toAccountNo ? ` (${ft.toAccountNo})` : ''}`,
+          remarks: (ft.remarks || ft.note || '').trim(),
+          createdBy: ft.createdBy || ft.entryBy || '',
+          createdAt: ft.createdAt || ft.date || '',
+          raw: ft
+        });
+      }
+
+      // B. Inflow (+) into Destination Bank
+      if (ft.toBankName) {
+        list.push({
+          id: `ft-in-${ft._id || ft.id || ftIdx}`,
+          sourceModule: 'Fund Transfer',
+          moduleKey: 'fundTransfer',
+          type: 'deposit', // Inflow (+)
+          typeName: ft.transferType || 'Fund Transfer In',
+          date: ftDate,
+          bankName: (ft.toBankName || '').trim(),
+          branch: (ft.toBranch || '').trim(),
+          accountNo: (ft.toAccountNo || '').trim(),
+          accountName: (ft.toAccountName || '').trim(),
+          amount: amt,
+          referenceNo: (ft.referenceNo || '').trim(),
+          partyOrPerson: `From: ${(ft.fromBankName || '').trim()}${ft.fromAccountNo ? ` (${ft.fromAccountNo})` : ''}`,
+          remarks: (ft.remarks || ft.note || '').trim(),
+          createdBy: ft.createdBy || ft.entryBy || '',
+          createdAt: ft.createdAt || ft.date || '',
+          raw: ft
+        });
+      }
+    });
+
     return list;
-  }, [deposits, withdrawals, customers, cnfPayments, insurancePayments, pattyCashRecords, marginReturns, lcExpenses, lcRecords, banks]);
+  }, [deposits, withdrawals, fundTransfers, customers, cnfPayments, insurancePayments, pattyCashRecords, marginReturns, lcExpenses, lcRecords, banks]);
 
   // Unique BD bank names across all sources
   const uniqueBankNames = useMemo(() => {
@@ -2039,6 +2099,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                         { value: 'all', label: 'All Modules (Complete Statement)' },
                         { value: 'deposit', label: 'Bank Deposits (Direct)' },
                         { value: 'withdrawal', label: 'Bank Withdrawals (Direct)' },
+                        { value: 'fundTransfer', label: 'Fund Transfers (Bank to Bank)' },
                         { value: 'paymentCollection', label: 'Payment Collection (Customer Inflow)' },
                         { value: 'payToCustomer', label: 'Pay to Customer (Customer Outflow)' },
                         { value: 'cnfPayment', label: 'C&F Payments' },
@@ -2197,6 +2258,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                       { value: 'all', label: 'All Modules (Complete Statement)' },
                       { value: 'deposit', label: 'Bank Deposits (Direct)' },
                       { value: 'withdrawal', label: 'Bank Withdrawals (Direct)' },
+                      { value: 'fundTransfer', label: 'Fund Transfers (Bank to Bank)' },
                       { value: 'paymentCollection', label: 'Payment Collection (Customer Inflow)' },
                       { value: 'payToCustomer', label: 'Pay to Customer (Customer Outflow)' },
                       { value: 'cnfPayment', label: 'C&F Payments' },

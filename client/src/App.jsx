@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon, ShoppingBagIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon, TruckIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon, ActivityLogIcon, TicketIcon, WalletIcon, MapPinIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, ArrowLeftRightIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon, ActivityLogIcon, TicketIcon, WalletIcon, MapPinIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -70,6 +70,7 @@ import PayToCustomer from './components/modules/PayToCustomer/PayToCustomer';
 import Bank from './components/modules/Bank/Bank';
 import Deposit from './components/modules/Bank/Deposit';
 import Withdrawal from './components/modules/Bank/Withdrawal';
+import FundTransfer from './components/modules/Bank/FundTransfer';
 import Statement from './components/modules/Bank/Statement';
 import PattyCash from './components/modules/PattyCash/PattyCash';
 import Insurance from './components/modules/Insurance/Insurance';
@@ -1088,7 +1089,7 @@ function App() {
   const [cnfDropdownOpen, setCnfDropdownOpen] = useState(false);
   const [bankDropdownOpen, setBankDropdownOpen] = useState(() => {
     const saved = localStorage.getItem('currentView');
-    return saved === 'bank-section' || saved === 'deposit-section' || saved === 'withdrawal-section' || saved === 'statement-section' || saved === 'bank-statement-section';
+    return saved === 'bank-section' || saved === 'deposit-section' || saved === 'withdrawal-section' || saved === 'fund-transfer-section' || saved === 'statement-section' || saved === 'bank-statement-section';
   });
   const [crmDropdownOpen, setCrmDropdownOpen] = useState(false);
   const [collectionPaymentDropdownOpen, setCollectionPaymentDropdownOpen] = useState(true);
@@ -1641,6 +1642,7 @@ function App() {
                         type === 'bank' ? 'banks' :
                           type === 'deposit' ? 'deposits' :
                           type === 'withdrawal' ? 'withdrawals' :
+                          type === 'fund-transfer' ? 'fund-transfers' :
                           type === 'patty-cash' ? 'patty-cash' :
                             type === 'indian-bank' ? 'indian-banks' :
                             type === 'cnf' ? 'cnfs' :
@@ -1819,7 +1821,7 @@ function App() {
         else if (type === 'sales') fetchSales();
         else if (type === 'cnf') fetchCnFs();
 
-        if (['insurance', 'employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'deposit', 'withdrawal', 'patty-cash', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
+        if (['insurance', 'employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'deposit', 'withdrawal', 'fund-transfer', 'patty-cash', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
 
@@ -1838,6 +1840,7 @@ function App() {
           'bank': 'Bank',
           'deposit': 'Deposit',
           'withdrawal': 'Withdrawal',
+          'fund-transfer': 'Fund Transfer',
           'patty-cash': 'Patty Cash Record',
           'indian-bank': 'Indian Bank',
           'cnf': 'C&F Agent',
@@ -2479,10 +2482,11 @@ function App() {
       }
 
       try {
-        if (module === 'banks' || module === 'bank' || module === 'deposits' || module === 'deposit' || module === 'withdrawals' || module === 'withdrawal' || module === 'all') {
+        if (module === 'banks' || module === 'bank' || module === 'deposits' || module === 'deposit' || module === 'withdrawals' || module === 'withdrawal' || module === 'fund-transfers' || module === 'fund-transfer' || module === 'fundtransfer' || module === 'all') {
           queryClient.invalidateQueries({ queryKey: ['banks'] });
           queryClient.invalidateQueries({ queryKey: ['deposits'] });
           queryClient.invalidateQueries({ queryKey: ['withdrawals'] });
+          queryClient.invalidateQueries({ queryKey: ['fund-transfers'] });
         }
       } catch (err) {
         console.warn('Error syncing banks and deposits in handleDataUpdate:', err);
@@ -2922,6 +2926,21 @@ function App() {
         }
         return (
           <Withdrawal
+            key={refreshKey}
+            currentUser={currentUser}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+          />
+        );
+      case 'fund-transfer-section':
+        if (!hasPermission(currentUser, 'fundTransfer', 'view')) {
+          return (
+            <div className="p-8 text-center text-gray-500 font-medium">
+              You do not have permission to access Fund Transfer.
+            </div>
+          );
+        }
+        return (
+          <FundTransfer
             key={refreshKey}
             currentUser={currentUser}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
@@ -3629,7 +3648,7 @@ function App() {
               )}
 
               {/* Bank */}
-              {(hasPermission(currentUser, 'bank', 'view') || hasPermission(currentUser, 'deposit', 'view') || hasPermission(currentUser, 'withdrawal', 'view') || hasPermission(currentUser, 'bankStatement', 'view')) && (
+              {(hasPermission(currentUser, 'bank', 'view') || hasPermission(currentUser, 'deposit', 'view') || hasPermission(currentUser, 'withdrawal', 'view') || hasPermission(currentUser, 'fundTransfer', 'view') || hasPermission(currentUser, 'bankStatement', 'view')) && (
                 <div>
                   <button
                     onClick={() => {
@@ -3640,6 +3659,8 @@ function App() {
                           handleViewChange('deposit-section');
                         } else if (hasPermission(currentUser, 'withdrawal', 'view')) {
                           handleViewChange('withdrawal-section');
+                        } else if (hasPermission(currentUser, 'fundTransfer', 'view')) {
+                          handleViewChange('fund-transfer-section');
                         } else {
                           handleViewChange('statement-section');
                         }
@@ -3648,7 +3669,7 @@ function App() {
                       }
                     }}
                     title={isMini ? 'Bank' : undefined}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['bank-section', 'deposit-section', 'withdrawal-section', 'statement-section', 'bank-statement-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['bank-section', 'deposit-section', 'withdrawal-section', 'fund-transfer-section', 'statement-section', 'bank-statement-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
                     <div className="flex items-center min-w-0">
                       <DollarSignIcon className="w-5 h-5 flex-shrink-0" />
@@ -3687,6 +3708,15 @@ function App() {
                         >
                           <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                           <span>Withdrawal</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'fundTransfer', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('fund-transfer-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'fund-transfer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                        >
+                          <ArrowLeftRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Fund Transfer</span>
                         </button>
                       )}
                       {hasPermission(currentUser, 'bankStatement', 'view') && (

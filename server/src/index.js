@@ -485,6 +485,7 @@ const Notification = require('./models/Notification');
 const Bank = require('./models/Bank');
 const Deposit = require('./models/Deposit');
 const Withdrawal = require('./models/Withdrawal');
+const FundTransfer = require('./models/FundTransfer');
 const PattyCash = require('./models/PattyCash');
 const Exporter = require('./models/Exporter');
 const Supplier = require('./models/Supplier');
@@ -2009,6 +2010,7 @@ const ROUTE_MODEL_MAP = {
   'banks': Bank,
   'deposits': Deposit,
   'withdrawals': Withdrawal,
+  'fund-transfers': FundTransfer,
   'insurance': Insurance,
   'insurance-payments': InsurancePayment,
   'lc-management': LCManagement,
@@ -5037,6 +5039,65 @@ apiRouter.get('/api/withdrawals', async (req, res) => {
   }
 });
 
+// Fund Transfer APIs (Bank to Bank)
+apiRouter.post('/api/fund-transfers', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newFundTransfer = new FundTransfer({ data: encryptedData });
+    const savedFundTransfer = await newFundTransfer.save();
+    const result = { ...req.body, _id: savedFundTransfer._id, createdAt: savedFundTransfer.createdAt };
+    broadcastUpdate('fund-transfers', 'create', { id: savedFundTransfer._id, fundTransfer: result });
+    req._broadcastDone = true;
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/fund-transfers/:id', async (req, res) => {
+  try {
+    const userSession = req.session.user;
+    if (userSession && ['incharge', 'lc manager', 'sales manager'].includes((userSession.role || '').toLowerCase())) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to delete fund transfers' });
+    }
+
+    const deletedFundTransfer = await FundTransfer.findByIdAndDelete(req.params.id);
+    if (!deletedFundTransfer) return res.status(404).json({ message: 'Fund transfer not found' });
+    broadcastUpdate('fund-transfers', 'delete', { id: req.params.id });
+    req._broadcastDone = true;
+    res.json({ message: 'Fund transfer deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/fund-transfers/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedFundTransfer = await FundTransfer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
+    if (!updatedFundTransfer) return res.status(404).json({ message: 'Fund transfer not found' });
+    const result = { ...req.body, _id: updatedFundTransfer._id, createdAt: updatedFundTransfer.createdAt };
+    broadcastUpdate('fund-transfers', 'update', { id: req.params.id, fundTransfer: result });
+    req._broadcastDone = true;
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/fund-transfers', async (req, res) => {
+  try {
+    const records = await FundTransfer.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Patty Cash APIs
 apiRouter.post('/api/patty-cash', async (req, res) => {
   try {
@@ -6771,7 +6832,7 @@ const ERP_MODULE_COLLECTIONS = {
   port: { label: 'Ports', models: ['Port'], description: 'Ports of loading / discharge' },
   importerExporter: { label: 'Importers & Exporters', models: ['Importer', 'Exporter'], description: 'Registered Importers & Exporters' },
   product: { label: 'Products', models: ['Product'], description: 'Product catalog & categories' },
-  bank: { label: 'Banks', models: ['Bank', 'Deposit', 'Withdrawal'], description: 'Bank accounts & configurations, deposits, withdrawals' },
+  bank: { label: 'Banks', models: ['Bank', 'Deposit', 'Withdrawal', 'FundTransfer'], description: 'Bank accounts & configurations, deposits, withdrawals, fund transfers' },
   pattyCash: { label: 'Patty Cash', models: ['PattyCash'], description: 'Patty cash vouchers, expenses & fund replenishments' },
   cnf: { label: 'C&F Management', models: ['CnF', 'CnFPayment'], description: 'C&F Agents & payment transactions' },
   insurance: { label: 'Insurance', models: ['Insurance', 'InsurancePayment'], description: 'Insurance policies & payments' },
