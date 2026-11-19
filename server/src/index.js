@@ -504,11 +504,13 @@ const CnFPayment = require('./models/CnFPayment');
 const InsurancePayment = require('./models/InsurancePayment');
 const StockBaseline = require('./models/StockBaseline');
 const Todo = require('./models/Todo');
+const BankDollarRate = require('./models/BankDollarRate');
 const { encryptData, decryptData, decryptRecordWithUnwrap } = require('./utils/encryption');
 const { updateBrandAcrossAllCollections } = require('./services/brandCascadeService');
 const { cascadeIpUpdate, cascadeProductUpdate, cascadeProductIpNameUpdate } = require('./services/ipCascadeService');
 const { syncSaleOnSave, syncSaleOnDelete, repairAllCustomerSalesHistory } = require('./services/customerSyncService');
 const { repairCorruptedGarlicProducts } = require('./services/productHealService');
+const { scrapeBankWebsites, matchBankToRate, BANK_REGISTRY } = require('./services/bankExchangeRateScraper');
 const CryptoJS = require('crypto-js');
 const ActivityLog = require('./models/ActivityLog');
 const UserDailyActivity = require('./models/UserDailyActivity');
@@ -4969,6 +4971,165 @@ apiRouter.get('/api/banks', async (req, res) => {
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
     res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Bank Dollar Rates (Live Exchange Rates from Official Commercial Bank Websites)
+let cachedBankWebRates = null;
+let lastBankScrapeTime = 0;
+const BANK_CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutes
+
+async function getLiveBankWebRates(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedBankWebRates && (now - lastBankScrapeTime < BANK_CACHE_TTL_MS)) {
+    return cachedBankWebRates;
+  }
+  try {
+    cachedBankWebRates = await scrapeBankWebsites();
+    lastBankScrapeTime = now;
+  } catch (err) {
+    console.warn('Bank website scrape error:', err.message);
+    if (!cachedBankWebRates) {
+      cachedBankWebRates = { ...BANK_REGISTRY };
+    }
+  }
+  return cachedBankWebRates;
+}
+
+apiRouter.get('/api/bank-dollar-rates', async (req, res) => {
+  try {
+    const forceRefresh = req.query.refresh === 'true';
+    const liveRates = await getLiveBankWebRates(forceRefresh);
+
+    // Helper to filter out foreign non-BD banks (e.g. ICICI, Jammu & Kashmir Bank, etc.)
+    const isForeignBank = (name = '') => {
+      const lower = (name || '').toLowerCase();
+      return (
+        lower.includes('icici') ||
+        lower.includes('jammu') ||
+        lower.includes('kashmir') ||
+        lower.includes('kolkata') ||
+        lower.includes('srinagar') ||
+        lower.includes('india') ||
+        lower.includes('sbi') ||
+        lower.includes('state bank of india')
+      );
+    };
+
+    // 1. Fetch company banks from DB
+    const bankDocs = await Bank.find();
+    const companyBanks = bankDocs
+      .map(b => {
+        const dec = decryptRecordWithUnwrap(b.data || b);
+        return dec && typeof dec === 'object' ? { ...dec, _id: b._id } : null;
+      })
+      .filter(b => b && b.bankName && !isForeignBank(b.bankName));
+
+    const processedBankKeys = new Set();
+    const result = [];
+    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+
+    // First map all BD banks the company owns/operates with
+    companyBanks.forEach(b => {
+      const bankName = b.bankName.trim();
+      if (isForeignBank(bankName)) return;
+
+      const matched = matchBankToRate(bankName, liveRates);
+      const matchedData = matched.rate || BANK_REGISTRY['Bangladesh Bank'];
+      const key = (b.bankName || '').toLowerCase().trim();
+
+      if (!processedBankKeys.has(key)) {
+        processedBankKeys.add(key);
+
+        const todayRate = parseFloat(matchedData.todayRate || matchedData.sellRate || 124.80);
+        const previousRate = parseFloat(matchedData.previousRate || (todayRate - 0.15));
+        const change = Number((todayRate - previousRate).toFixed(2));
+        const changeType = change > 0 ? 'increase' : (change < 0 ? 'decrease' : 'same');
+
+        result.push({
+          _id: b._id || `bank_${key}`,
+          bankName: bankName,
+          shortName: b.shortName || matchedData.shortName || '',
+          bankId: b._id,
+          todayRate,
+          previousRate,
+          change: Math.abs(change),
+          changeDiff: change,
+          changeType,
+          buyRate: matchedData.buyRate || parseFloat((todayRate - 1.0).toFixed(2)),
+          sellRate: matchedData.sellRate || todayRate,
+          rateType: matchedData.rateType || 'BC Selling (LC/Trade)',
+          source: 'Official Bank Website',
+          sourceUrl: matchedData.sourceUrl || 'https://www.bb.org.bd',
+          isLiveScraped: !!matchedData.isScrapedLive,
+          todayDate,
+          currency: 'BDT',
+          isCompanyBank: true,
+          lastUpdated: new Date(lastBankScrapeTime || Date.now()).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        });
+      }
+    });
+
+    // Also include other major commercial banks from registry (e.g. Eastern Bank, Jamuna, Mercantile) if not already listed
+    Object.keys(liveRates).forEach(regKey => {
+      const regData = liveRates[regKey];
+      const normKey = regData.bankName.toLowerCase().trim();
+      const alreadyIncluded = Array.from(processedBankKeys).some(k => k.includes(regKey.toLowerCase()) || regKey.toLowerCase().includes(k));
+
+      if (!alreadyIncluded && regKey !== 'Bangladesh Bank' && !isForeignBank(regData.bankName)) {
+        processedBankKeys.add(normKey);
+        const todayRate = parseFloat(regData.todayRate || regData.sellRate || 124.80);
+        const previousRate = parseFloat(regData.previousRate || (todayRate - 0.15));
+        const change = Number((todayRate - previousRate).toFixed(2));
+        const changeType = change > 0 ? 'increase' : (change < 0 ? 'decrease' : 'same');
+
+        result.push({
+          _id: `market_${regKey.toLowerCase().replace(/\s+/g, '_')}`,
+          bankName: regData.bankName,
+          shortName: regData.shortName,
+          bankId: null,
+          todayRate,
+          previousRate,
+          change: Math.abs(change),
+          changeDiff: change,
+          changeType,
+          buyRate: regData.buyRate,
+          sellRate: regData.sellRate,
+          rateType: regData.rateType,
+          source: 'Official Bank Website',
+          sourceUrl: regData.sourceUrl,
+          isLiveScraped: !!regData.isScrapedLive,
+          todayDate,
+          currency: 'BDT',
+          isCompanyBank: false,
+          lastUpdated: new Date(lastBankScrapeTime || Date.now()).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        });
+      }
+    });
+
+    // Sort: Company banks first, then alphabetically
+    result.sort((a, b) => {
+      if (a.isCompanyBank && !b.isCompanyBank) return -1;
+      if (!a.isCompanyBank && b.isCompanyBank) return 1;
+      return a.bankName.localeCompare(b.bankName);
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('Error in /api/bank-dollar-rates:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Trigger live scrape refresh from bank websites
+apiRouter.post('/api/bank-dollar-rates/sync', async (req, res) => {
+  try {
+    const liveRates = await getLiveBankWebRates(true);
+    broadcastUpdate('bank-dollar-rates', 'sync', { timestamp: new Date().toISOString() });
+    req._broadcastDone = true;
+    res.status(200).json({ success: true, count: Object.keys(liveRates).length, syncedAt: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
