@@ -35,6 +35,7 @@ import BankDollarRatesWidget from './BankDollarRatesWidget';
 import './Dashboard.css';
 
 const formatCurrency = (val) => '৳' + Number(val || 0).toLocaleString('en-IN');
+const formatDhakaYMD = (date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(date);
 
 const formatCompactValue = (val, isCurrency = false, unit = '') => {
   if (val === undefined || val === null || isNaN(val)) return '0';
@@ -143,6 +144,18 @@ const Dashboard = ({
 
   // ─── Customer Records (for Payment Collections) ───────────────
   const [customerRecords, setCustomerRecords] = useState(initialCustomerRecords || []);
+
+  useEffect(() => {
+    if (!initialCustomerRecords || initialCustomerRecords.length === 0) {
+      axios.get(`${API_BASE_URL}/api/customers`).then(res => {
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          setCustomerRecords(res.data);
+        }
+      }).catch(err => {
+        console.warn('Dashboard customers fetch fallback error:', err);
+      });
+    }
+  }, [initialCustomerRecords]);
 
   // ─── Card 1: Attendance & Working Time State ──────────────────
   const [attendanceViewMode, setAttendanceViewMode] = useState('attendance'); // 'attendance' | 'workingTime'
@@ -918,23 +931,23 @@ const Dashboard = ({
     });
 
     const allSalesList = (salesRecords || []).map(s => ({
-      date: String(s.date || s.createdAt || '').slice(0, 10),
-      totalAmount: parseFloat(s.totalAmount || 0),
-      paidAmount: parseFloat(s.paidAmount || 0)
+      date: String(s.date || (s.createdAt ? String(s.createdAt).slice(0, 10) : '')).slice(0, 10),
+      totalAmount: parseFloat(s.totalAmount || s.totalBill || s.grandTotal || 0) || 0,
+      paidAmount: parseFloat(s.paidAmount || s.paid || s.receivedAmount || 0) || 0
     }));
 
     const now = new Date();
-    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(now);
+    const todayStr = formatDhakaYMD(now);
 
     let columns = [];
 
-    if (collectionTimeframe === 'today') {
-      // Past 7 Days leading up to and including Today
+    if (collectionTimeframe === 'today' || collectionTimeframe === 'weekly') {
+      // Past 7 Days leading up to and including Today (Weekly cycle)
       for (let i = 6; i >= 0; i--) {
         const cur = new Date(now);
         cur.setDate(now.getDate() - i);
-        const dateStr = cur.toISOString().slice(0, 10);
-        const dayName = cur.toLocaleDateString('en-US', { weekday: 'short' });
+        const dateStr = formatDhakaYMD(cur);
+        const dayName = cur.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Dhaka' });
         const [y, m, d] = dateStr.split('-');
         const isToday = dateStr === todayStr;
 
@@ -1083,33 +1096,39 @@ const Dashboard = ({
       });
 
     } else {
-      // Default: 'weekly' (Work Week Saturday to Friday)
-      columns = weeklyDaysList.map(d => {
+      // Default fallback: Past 7 Days leading up to and including Today
+      for (let i = 6; i >= 0; i--) {
+        const cur = new Date(now);
+        cur.setDate(now.getDate() - i);
+        const dateStr = formatDhakaYMD(cur);
+        const dayName = cur.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Dhaka' });
+        const [y, m, d] = dateStr.split('-');
+        const isToday = dateStr === todayStr;
+
         let daySales = 0;
-        let dayCollected = 0;
+        let dayColl = 0;
 
         allSalesList.forEach(s => {
-          if (s.date === d.date) {
+          if (s.date === dateStr) {
             daySales += s.totalAmount;
-            dayCollected += s.paidAmount;
+            dayColl += s.paidAmount;
           }
         });
-
         allCollections.forEach(c => {
-          if (c.date === d.date) {
-            dayCollected += c.amount;
+          if (c.date === dateStr) {
+            dayColl += c.amount;
           }
         });
 
-        return {
-          label: d.dayName.slice(0, 3),
-          fullLabel: d.dayName,
-          subLabel: d.formattedDate || d.date,
-          date: d.date,
+        columns.push({
+          label: isToday ? 'Today' : dayName,
+          subLabel: `${d}/${m}/${y}`,
+          date: dateStr,
           sales: Math.round(daySales),
-          collection: Math.round(dayCollected)
-        };
-      });
+          collection: Math.round(dayColl),
+          isHighlight: isToday
+        });
+      }
     }
 
     // Compute Totals
