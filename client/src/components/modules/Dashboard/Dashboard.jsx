@@ -1244,37 +1244,56 @@ const Dashboard = ({
             <div className="dash-card xl:col-span-6 bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-5 h-full items-stretch">
 
-                {/* LEFT SIDE: Portrait Profile Card */}
-                <div className="md:col-span-5 relative rounded-2xl overflow-hidden flex flex-col justify-end p-4 sm:p-5 select-none bg-slate-900 min-h-[380px]">
-                  {/* Full-Card Background Photo or Fallback */}
+                {/* LEFT SIDE: Profile Card (Desktop: Portrait full card | Mobile: Compact Banner with overflowing portrait image on left) */}
+                <div className="md:col-span-5 relative rounded-2xl select-none bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 md:bg-slate-900 p-4 sm:p-5 min-h-[145px] md:min-h-[380px] flex flex-col justify-center md:justify-end overflow-visible md:overflow-hidden mt-6 md:mt-0 border border-slate-800/80 md:border-none shadow-md md:shadow-none">
+                  {/* Desktop Full-Card Background Photo or Fallback (hidden on mobile) */}
                   {profilePhoto ? (
                     <img
                       src={profilePhoto}
                       alt={profileName}
-                      className="absolute inset-0 w-full h-full object-cover object-top"
+                      className="hidden md:block absolute inset-0 w-full h-full object-cover object-top"
                     />
                   ) : (
-                    <div className="absolute inset-0 w-full h-full bg-slate-800 flex items-center justify-center">
+                    <div className="hidden md:flex absolute inset-0 w-full h-full bg-slate-800 items-center justify-center">
                       <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl font-extrabold text-white shadow-xl">
                         {profileName.charAt(0).toUpperCase()}
                       </div>
                     </div>
                   )}
 
-                  {/* Faded Effect overlay from bottom up till Welcome text */}
-                  <div className="absolute inset-x-0 bottom-0 h-44 sm:h-52 pointer-events-none bg-gradient-to-t from-slate-950 via-slate-950/75 via-65% to-transparent"></div>
+                  {/* Desktop Faded Effect overlay from bottom up (hidden on mobile) */}
+                  <div className="hidden md:block absolute inset-x-0 bottom-0 h-44 sm:h-52 pointer-events-none bg-gradient-to-t from-slate-950 via-slate-950/75 via-65% to-transparent"></div>
 
-                  {/* Bottom Info Content: Welcome Name, Designation, Department */}
-                  <div className="relative z-10 flex flex-col">
-                    <p className="text-base sm:text-lg font-bold text-white tracking-tight drop-shadow-sm">Welcome,</p>
-                    <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight drop-shadow-md truncate">
+                  {/* Mobile Overflowing Portrait Image (< md: positioned left, popping -top-7 out of the card boundary) */}
+                  <div className="md:hidden absolute left-2 sm:left-4 -top-7 bottom-0 w-36 sm:w-44 pointer-events-none flex items-end justify-center">
+                    {profilePhoto ? (
+                      <div className="relative w-full h-[calc(100%+28px)] flex items-end">
+                        <img
+                          src={profilePhoto}
+                          alt={profileName}
+                          className="w-full h-full object-cover object-top rounded-2xl shadow-2xl border-2 border-slate-700/60"
+                        />
+                        {/* Soft blend gradient at bottom of mobile photo */}
+                        <div className="absolute inset-x-0 bottom-0 h-10 rounded-b-2xl bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent pointer-events-none" />
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-2xl font-extrabold text-white shadow-xl mb-3">
+                        {profileName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Welcome Info Content: Welcome Name, Designation, Department (Mobile: Right side, Desktop: Bottom) */}
+                  <div className="relative z-10 flex flex-col max-w-[54%] sm:max-w-[58%] md:max-w-none w-full ml-auto md:ml-0 py-1 md:py-0 pl-2 sm:pl-0">
+                    <p className="text-xs sm:text-base md:text-lg font-bold text-blue-400 md:text-white tracking-tight drop-shadow-sm uppercase md:normal-case">Welcome,</p>
+                    <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-tight drop-shadow-md truncate">
                       {profileName}
                     </h2>
-                    <p className="text-xs sm:text-sm font-semibold text-blue-400 mt-1 drop-shadow-sm truncate">
+                    <p className="text-xs sm:text-sm font-semibold text-blue-300 md:text-blue-400 mt-0.5 sm:mt-1 drop-shadow-sm truncate">
                       {profileDesignation}
                     </p>
                     {profileDepartment && (
-                      <p className="text-xs text-white/80 mt-0.5 drop-shadow-sm truncate">
+                      <p className="text-[11px] sm:text-xs text-white/80 mt-0.5 drop-shadow-sm truncate">
                         {profileDepartment}
                       </p>
                     )}
@@ -1342,19 +1361,19 @@ const Dashboard = ({
                           const renderStatusBadge = () => {
                             switch (statusStr) {
                               case 'PRESENT':
-                                return <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Present</span>;
+                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">Present</span>;
                               case 'LATE':
-                                return <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Late</span>;
+                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">Late</span>;
                               case 'HALF_DAY':
-                                return <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Half Day</span>;
+                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap">Half Day</span>;
                               case 'LEAVE':
-                                return <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">Leave</span>;
+                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 whitespace-nowrap">Leave</span>;
                               case 'WEEKEND':
-                                return <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-500 border border-gray-200">Weekend</span>;
+                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">Weekend</span>;
                               case 'ACTIVE':
-                                return <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">Active</span>;
+                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">Active</span>;
                               default:
-                                return <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200">Absent</span>;
+                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200 whitespace-nowrap">Absent</span>;
                             }
                           };
 
@@ -1459,10 +1478,10 @@ const Dashboard = ({
                   </div>
 
                   {/* Footer Total */}
-                  <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 min-h-[34px]">
+                  <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-gray-500 min-h-[34px]">
                     {attendanceViewMode === 'attendance' ? (
                       <>
-                        <div className="flex items-center gap-3 text-xs">
+                        <div className="flex flex-wrap items-center gap-3 text-xs">
                           <span>Present: <strong className="text-emerald-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'PRESENT' || d.attendanceStatus === 'LATE' || d.attendanceStatus === 'HALF_DAY').length}</strong></span>
                           <span>Late: <strong className="text-amber-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'LATE').length}</strong></span>
                           <span>Absent: <strong className="text-rose-500">{weeklyDaysList.filter(d => (d.attendanceStatus === 'ABSENT' || !d.attendanceStatus) && d.dayName !== 'Friday' && !d.isToday).length}</strong></span>
@@ -1495,7 +1514,7 @@ const Dashboard = ({
             <div className="dash-card xl:col-span-3 bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
               <div>
                 {/* Header with Product / IP / LC Switch */}
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
                       <BoxIcon className="w-4 h-4" />
@@ -1645,7 +1664,7 @@ const Dashboard = ({
                 </div>
               </div>
 
-              <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between gap-1 text-xs">
+              <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs">
                 {/* Left Side: General & Border Product Switch */}
                 {pieTab === 'product' ? (
                   <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
@@ -1709,7 +1728,7 @@ const Dashboard = ({
             <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
               <div>
                 {/* Header */}
-                <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100 min-h-[46px]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 min-h-[46px]">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
                       <ShoppingCartIcon className="w-4 h-4" />
@@ -1726,7 +1745,7 @@ const Dashboard = ({
                   </div>
 
                   {/* Timeframe Selector: Today | Weekly | Monthly | Yearly | All */}
-                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs flex-shrink-0">
+                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs flex-shrink-0 overflow-x-auto max-w-full">
                     {[
                       { id: 'today', label: 'Today' },
                       { id: 'weekly', label: 'Weekly' },
@@ -1895,7 +1914,7 @@ const Dashboard = ({
             <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
               <div>
                 {/* Header */}
-                <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100 min-h-[46px]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 min-h-[46px]">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
                       <BarChartIcon className="w-4 h-4" />
@@ -1907,7 +1926,7 @@ const Dashboard = ({
                   </div>
 
                   {/* Timeframe Selector: Today | Weekly | Monthly | Yearly | All */}
-                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs flex-shrink-0">
+                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs flex-shrink-0 overflow-x-auto max-w-full">
                     {[
                       { id: 'today', label: 'Today' },
                       { id: 'weekly', label: 'Weekly' },

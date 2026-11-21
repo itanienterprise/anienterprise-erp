@@ -510,7 +510,7 @@ const { updateBrandAcrossAllCollections } = require('./services/brandCascadeServ
 const { cascadeIpUpdate, cascadeProductUpdate, cascadeProductIpNameUpdate } = require('./services/ipCascadeService');
 const { syncSaleOnSave, syncSaleOnDelete, repairAllCustomerSalesHistory } = require('./services/customerSyncService');
 const { repairCorruptedGarlicProducts } = require('./services/productHealService');
-const { scrapeBankWebsites, matchBankToRate, BANK_REGISTRY } = require('./services/bankExchangeRateScraper');
+const { scrapeBankWebsites, matchBankToRate, BANK_REGISTRY, extractCircularDate } = require('./services/bankExchangeRateScraper');
 const CryptoJS = require('crypto-js');
 const ActivityLog = require('./models/ActivityLog');
 const UserDailyActivity = require('./models/UserDailyActivity');
@@ -4981,6 +4981,16 @@ let cachedBankWebRates = null;
 let lastBankScrapeTime = 0;
 const BANK_CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutes
 
+// Canonical bank key normalizer: maps variants (e.g. DHAKA BANK LTD., Dhaka Bank PLC) to same key
+const normalizeCanonicalBank = (name = '') => {
+  const m = matchBankToRate(name);
+  const canon = m?.key || name;
+  return (canon || '')
+    .toLowerCase()
+    .replace(/plc|ltd|limited|\.|,|\(|\)/g, '')
+    .replace(/[^a-z0-9]/g, '');
+};
+
 async function getLiveBankWebRates(forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && cachedBankWebRates && (now - lastBankScrapeTime < BANK_CACHE_TTL_MS)) {
@@ -4992,16 +5002,17 @@ async function getLiveBankWebRates(forceRefresh = false) {
   } catch (err) {
     console.warn('Bank website scrape error:', err.message);
     if (!cachedBankWebRates) {
-      cachedBankWebRates = { ...BANK_REGISTRY };
+      cachedBankWebRates = {};
     }
   }
-  return cachedBankWebRates;
+  return cachedBankWebRates || {};
 }
 
 apiRouter.get('/api/bank-dollar-rates', async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === 'true';
     const liveRates = await getLiveBankWebRates(forceRefresh);
+    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
 
     // Helper to filter out foreign non-BD banks (e.g. ICICI, Jammu & Kashmir Bank, etc.)
     const isForeignBank = (name = '') => {
@@ -5018,6 +5029,31 @@ apiRouter.get('/api/bank-dollar-rates', async (req, res) => {
       );
     };
 
+    // Load all historical records from BankDollarRate in MongoDB
+    const allSavedDocs = await BankDollarRate.find();
+    // Map of cKey -> { todayRecord: null, pastRecords: [] }
+    const bankHistoryMap = new Map();
+
+    for (const doc of allSavedDocs) {
+      const dec = decryptRecordWithUnwrap(doc.data || doc);
+      if (!dec || !dec.bankName) continue;
+      const cKey = normalizeCanonicalBank(dec.normKey || dec.bankName);
+      if (!bankHistoryMap.has(cKey)) {
+        bankHistoryMap.set(cKey, { todayRecord: null, pastRecords: [] });
+      }
+      const entry = bankHistoryMap.get(cKey);
+      if (dec.date === todayDate) {
+        entry.todayRecord = { ...dec, _id: doc._id };
+      } else if (dec.date < todayDate) {
+        entry.pastRecords.push({ ...dec, _id: doc._id });
+      }
+    }
+
+    // Sort pastRecords by date descending so the first element is the most recent past day
+    for (const [, entry] of bankHistoryMap) {
+      entry.pastRecords.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    }
+
     // 1. Fetch company banks from DB
     const bankDocs = await Bank.find();
     const companyBanks = bankDocs
@@ -5029,85 +5065,138 @@ apiRouter.get('/api/bank-dollar-rates', async (req, res) => {
 
     const processedBankKeys = new Set();
     const result = [];
-    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
 
-    // First map all BD banks the company owns/operates with
-    companyBanks.forEach(b => {
-      const bankName = b.bankName.trim();
-      if (isForeignBank(bankName)) return;
+    // Builder function for bank items
+    const buildBankItem = (bankName, shortName, isCompanyBank, originalId = null) => {
+      const cKey = normalizeCanonicalBank(bankName);
+      if (processedBankKeys.has(cKey)) return null;
+      processedBankKeys.add(cKey);
 
+      const history = bankHistoryMap.get(cKey) || { todayRecord: null, pastRecords: [] };
+      const mostRecentPast = history.pastRecords[0] || null;
+      const todayDoc = history.todayRecord;
+
+      // Previous day rate comes from the most recent past record (e.g. yesterday)
+      let previousRate = null;
+      if (mostRecentPast && mostRecentPast.todayRate != null) {
+        previousRate = parseFloat(mostRecentPast.todayRate);
+      } else if (mostRecentPast && mostRecentPast.sellRate != null) {
+        previousRate = parseFloat(mostRecentPast.sellRate);
+      }
+
+      // Check if matched in live scraped rates
       const matched = matchBankToRate(bankName, liveRates);
-      const matchedData = matched.rate || BANK_REGISTRY['Bangladesh Bank'];
-      const key = (b.bankName || '').toLowerCase().trim();
+      const scraped = matched?.rate || null;
 
-      if (!processedBankKeys.has(key)) {
-        processedBankKeys.add(key);
+      // Determine today's rate:
+      // Priority 1: Manual override saved today
+      // Priority 2: Scraped rate from official bank website
+      // Priority 3: Today record saved in DB
+      // Fallback: null ("keep blank if not get")
+      let todayRate = null;
+      let buyRate = null;
+      let sellRate = null;
+      let source = 'Official Bank Website';
+      let sourceUrl = scraped?.sourceUrl || (BANK_REGISTRY[matched?.key]?.sourceUrl) || '';
+      let isLiveScraped = false;
+      let isManualOverride = false;
 
-        const todayRate = parseFloat(matchedData.todayRate || matchedData.sellRate || 124.80);
-        const previousRate = parseFloat(matchedData.previousRate || (todayRate - 0.15));
-        const change = Number((todayRate - previousRate).toFixed(2));
-        const changeType = change > 0 ? 'increase' : (change < 0 ? 'decrease' : 'same');
-
-        result.push({
-          _id: b._id || `bank_${key}`,
-          bankName: bankName,
-          shortName: b.shortName || matchedData.shortName || '',
-          bankId: b._id,
-          todayRate,
-          previousRate,
-          change: Math.abs(change),
-          changeDiff: change,
-          changeType,
-          buyRate: matchedData.buyRate || parseFloat((todayRate - 1.0).toFixed(2)),
-          sellRate: matchedData.sellRate || todayRate,
-          rateType: matchedData.rateType || 'BC Selling (LC/Trade)',
-          source: 'Official Bank Website',
-          sourceUrl: matchedData.sourceUrl || 'https://www.bb.org.bd',
-          isLiveScraped: !!matchedData.isScrapedLive,
-          todayDate,
-          currency: 'BDT',
-          isCompanyBank: true,
-          lastUpdated: new Date(lastBankScrapeTime || Date.now()).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-        });
+      if (todayDoc?.isManualOverride) {
+        todayRate = todayDoc.todayRate != null ? parseFloat(todayDoc.todayRate) : null;
+        buyRate = todayDoc.buyRate != null ? parseFloat(todayDoc.buyRate) : null;
+        sellRate = todayDoc.sellRate != null ? parseFloat(todayDoc.sellRate) : todayRate;
+        source = 'Custom Entry';
+        isManualOverride = true;
+      } else if (scraped && scraped.todayRate != null) {
+        todayRate = parseFloat(scraped.todayRate);
+        buyRate = scraped.buyRate != null ? parseFloat(scraped.buyRate) : null;
+        sellRate = scraped.sellRate != null ? parseFloat(scraped.sellRate) : todayRate;
+        source = 'Official Bank Website';
+        isLiveScraped = true;
+      } else if (todayDoc && todayDoc.todayRate != null) {
+        todayRate = parseFloat(todayDoc.todayRate);
+        buyRate = todayDoc.buyRate != null ? parseFloat(todayDoc.buyRate) : null;
+        sellRate = todayDoc.sellRate != null ? parseFloat(todayDoc.sellRate) : todayRate;
+        isLiveScraped = !!todayDoc.isLiveScraped;
+        isManualOverride = !!todayDoc.isManualOverride;
+      } else {
+        // Not obtained from official website and not manually entered: KEEP BLANK!
+        todayRate = null;
+        buyRate = null;
+        sellRate = null;
       }
+
+      // If previousRate is still null but todayDoc has a stored previousRate
+      if (previousRate == null && todayDoc?.previousRate != null) {
+        previousRate = parseFloat(todayDoc.previousRate);
+      }
+
+      // Calculate change
+      let change = null;
+      let changeDiff = null;
+      let changeType = 'none';
+
+      if (todayRate != null && previousRate != null) {
+        changeDiff = Number((todayRate - previousRate).toFixed(2));
+        change = Math.abs(changeDiff);
+        changeType = changeDiff > 0 ? 'increase' : (changeDiff < 0 ? 'decrease' : 'same');
+      }
+
+      // Determine the date of the last dollar rate obtained
+      let rawRateDate = null;
+      if (todayRate != null) {
+        rawRateDate = scraped?.rateDate || todayDoc?.rateDate || todayDoc?.date || todayDate;
+      } else {
+        rawRateDate = mostRecentPast?.rateDate || mostRecentPast?.date || null;
+      }
+      const rateDateDisplay = extractCircularDate(rawRateDate) || (rawRateDate ? String(rawRateDate) : '');
+
+      return {
+        _id: todayDoc?._id || originalId || `bank_${cKey}`,
+        bankName,
+        shortName: shortName || scraped?.shortName || (BANK_REGISTRY[matched?.key]?.shortName) || '',
+        bankId: isCompanyBank ? originalId : null,
+        todayRate,
+        previousRate,
+        change,
+        changeDiff,
+        changeType,
+        buyRate,
+        sellRate,
+        rateType: scraped?.rateType || 'BC Selling (LC/Trade)',
+        rateDate: rawRateDate,
+        rateDateDisplay,
+        source,
+        sourceUrl,
+        isLiveScraped,
+        isManualOverride,
+        todayDate,
+        currency: 'BDT',
+        isCompanyBank: !!isCompanyBank,
+        lastUpdated: new Date(lastBankScrapeTime || Date.now()).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      };
+    };
+
+    // 1. Process company banks first
+    companyBanks.forEach(b => {
+      const item = buildBankItem(b.bankName.trim(), b.shortName || '', true, b._id);
+      if (item) result.push(item);
     });
 
-    // Also include other major commercial banks from registry (e.g. Eastern Bank, Jamuna, Mercantile) if not already listed
-    Object.keys(liveRates).forEach(regKey => {
-      const regData = liveRates[regKey];
-      const normKey = regData.bankName.toLowerCase().trim();
-      const alreadyIncluded = Array.from(processedBankKeys).some(k => k.includes(regKey.toLowerCase()) || regKey.toLowerCase().includes(k));
-
-      if (!alreadyIncluded && regKey !== 'Bangladesh Bank' && !isForeignBank(regData.bankName)) {
-        processedBankKeys.add(normKey);
-        const todayRate = parseFloat(regData.todayRate || regData.sellRate || 124.80);
-        const previousRate = parseFloat(regData.previousRate || (todayRate - 0.15));
-        const change = Number((todayRate - previousRate).toFixed(2));
-        const changeType = change > 0 ? 'increase' : (change < 0 ? 'decrease' : 'same');
-
-        result.push({
-          _id: `market_${regKey.toLowerCase().replace(/\s+/g, '_')}`,
-          bankName: regData.bankName,
-          shortName: regData.shortName,
-          bankId: null,
-          todayRate,
-          previousRate,
-          change: Math.abs(change),
-          changeDiff: change,
-          changeType,
-          buyRate: regData.buyRate,
-          sellRate: regData.sellRate,
-          rateType: regData.rateType,
-          source: 'Official Bank Website',
-          sourceUrl: regData.sourceUrl,
-          isLiveScraped: !!regData.isScrapedLive,
-          todayDate,
-          currency: 'BDT',
-          isCompanyBank: false,
-          lastUpdated: new Date(lastBankScrapeTime || Date.now()).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-        });
-      }
+    // 2. Process other major BD banks from BANK_REGISTRY
+    Object.keys(BANK_REGISTRY).forEach(regKey => {
+      const reg = BANK_REGISTRY[regKey];
+      if (regKey === 'Bangladesh Bank' || isForeignBank(reg.bankName)) return;
+      const item = buildBankItem(reg.bankName, reg.shortName, false);
+      if (item) result.push(item);
     });
+
+    // 3. Bangladesh Bank (Central Bank)
+    if (BANK_REGISTRY['Bangladesh Bank']) {
+      const bbReg = BANK_REGISTRY['Bangladesh Bank'];
+      const bbItem = buildBankItem(bbReg.bankName, bbReg.shortName, false);
+      if (bbItem) result.push(bbItem);
+    }
 
     // Sort: Company banks first, then alphabetically
     result.sort((a, b) => {
@@ -5116,9 +5205,132 @@ apiRouter.get('/api/bank-dollar-rates', async (req, res) => {
       return a.bankName.localeCompare(b.bankName);
     });
 
+    // Auto-save today's scraped rates in MongoDB BankDollarRate so tomorrow they automatically serve as previous day rate
+    for (const item of result) {
+      if (item.isLiveScraped && item.todayRate != null) {
+        const cKey = normalizeCanonicalBank(item.bankName);
+        const history = bankHistoryMap.get(cKey);
+        if (!history?.todayRecord) {
+          const payload = {
+            bankName: item.bankName,
+            shortName: item.shortName,
+            normKey: cKey,
+            date: todayDate,
+            todayRate: item.todayRate,
+            previousRate: item.previousRate,
+            buyRate: item.buyRate,
+            sellRate: item.sellRate,
+            rateType: item.rateType,
+            rateDate: item.rateDateDisplay || item.rateDate || todayDate,
+            isLiveScraped: true,
+            isManualOverride: false,
+            source: item.source,
+            sourceUrl: item.sourceUrl,
+            updatedAt: new Date().toISOString()
+          };
+          const newDoc = new BankDollarRate({ data: encryptData(payload) });
+          newDoc.save().catch(err => console.warn('Auto-save rate error:', err.message));
+        }
+      }
+    }
+
     res.json(result);
   } catch (err) {
     console.error('Error in /api/bank-dollar-rates:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Update or manually override a bank's dollar rates
+apiRouter.post('/api/bank-dollar-rates/update', async (req, res) => {
+  try {
+    const { bankName, todayRate, previousRate, buyRate, sellRate } = req.body;
+    if (!bankName || todayRate == null) {
+      return res.status(400).json({ message: 'bankName and todayRate are required' });
+    }
+
+    const cKey = normalizeCanonicalBank(bankName);
+    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+
+    // Check if a document already exists for this bank and date === todayDate
+    const allSaved = await BankDollarRate.find();
+    let existingDoc = null;
+    let existingPastDoc = null;
+
+    for (const doc of allSaved) {
+      const dec = decryptRecordWithUnwrap(doc.data || doc);
+      if (dec && normalizeCanonicalBank(dec.normKey || dec.bankName) === cKey) {
+        if (dec.date === todayDate) {
+          existingDoc = doc;
+        } else if (dec.date < todayDate) {
+          if (!existingPastDoc || dec.date > existingPastDoc.date) {
+            existingPastDoc = dec;
+          }
+        }
+      }
+    }
+
+    const prevRateValue = previousRate != null 
+      ? parseFloat(previousRate) 
+      : (existingPastDoc?.todayRate != null ? parseFloat(existingPastDoc.todayRate) : parseFloat((parseFloat(todayRate) - 0.10).toFixed(2)));
+
+    const payload = {
+      bankName: bankName.trim(),
+      normKey: cKey,
+      date: todayDate,
+      todayRate: parseFloat(todayRate),
+      previousRate: prevRateValue,
+      buyRate: buyRate != null ? parseFloat(buyRate) : parseFloat((parseFloat(todayRate) - 1.0).toFixed(2)),
+      sellRate: sellRate != null ? parseFloat(sellRate) : parseFloat(todayRate),
+      rateType: 'BC Selling (LC/Trade)',
+      isManualOverride: true,
+      source: 'Custom Entry',
+      updatedAt: new Date().toISOString()
+    };
+
+    const encryptedData = encryptData(payload);
+
+    if (existingDoc) {
+      existingDoc.data = encryptedData;
+      await existingDoc.save();
+    } else {
+      const newDoc = new BankDollarRate({ data: encryptedData });
+      await newDoc.save();
+    }
+
+    broadcastUpdate('bank-dollar-rates', 'update', payload);
+    req._broadcastDone = true;
+    res.status(200).json({ success: true, rate: payload });
+  } catch (err) {
+    console.error('Error in /api/bank-dollar-rates/update:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Reset manual override to live portal rate
+apiRouter.post('/api/bank-dollar-rates/reset', async (req, res) => {
+  try {
+    const { bankName } = req.body;
+    const cKey = bankName ? normalizeCanonicalBank(bankName) : null;
+    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+
+    const allSaved = await BankDollarRate.find();
+    for (const doc of allSaved) {
+      const dec = decryptRecordWithUnwrap(doc.data || doc);
+      if (dec && dec.date === todayDate) {
+        if (!cKey || normalizeCanonicalBank(dec.normKey || dec.bankName) === cKey) {
+          if (dec.isManualOverride) {
+            await BankDollarRate.deleteOne({ _id: doc._id });
+          }
+        }
+      }
+    }
+
+    broadcastUpdate('bank-dollar-rates', 'reset', { bankName: bankName || 'ALL' });
+    req._broadcastDone = true;
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('Error in /api/bank-dollar-rates/reset:', err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -5127,10 +5339,60 @@ apiRouter.get('/api/bank-dollar-rates', async (req, res) => {
 apiRouter.post('/api/bank-dollar-rates/sync', async (req, res) => {
   try {
     const liveRates = await getLiveBankWebRates(true);
+    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+
+    // Upsert each scraped bank into MongoDB BankDollarRate under todayDate
+    const allSavedDocs = await BankDollarRate.find();
+    const existingTodayMap = new Map();
+    for (const doc of allSavedDocs) {
+      const dec = decryptRecordWithUnwrap(doc.data || doc);
+      if (dec && dec.date === todayDate) {
+        existingTodayMap.set(normalizeCanonicalBank(dec.normKey || dec.bankName), { doc, dec });
+      }
+    }
+
+    let savedCount = 0;
+    for (const scrapedKey of Object.keys(liveRates)) {
+      const scraped = liveRates[scrapedKey];
+      if (!scraped || scraped.todayRate == null) continue;
+      const cKey = normalizeCanonicalBank(scraped.bankName || scrapedKey);
+
+      const payload = {
+        bankName: scraped.bankName,
+        shortName: scraped.shortName || '',
+        normKey: cKey,
+        date: todayDate,
+        todayRate: parseFloat(scraped.todayRate),
+        buyRate: scraped.buyRate != null ? parseFloat(scraped.buyRate) : null,
+        sellRate: scraped.sellRate != null ? parseFloat(scraped.sellRate) : parseFloat(scraped.todayRate),
+        rateType: scraped.rateType || 'BC Selling (LC/Trade)',
+        rateDate: scraped.rateDate || todayDate,
+        isLiveScraped: true,
+        isManualOverride: false,
+        source: 'Official Bank Website',
+        sourceUrl: scraped.sourceUrl || '',
+        updatedAt: new Date().toISOString()
+      };
+
+      const existing = existingTodayMap.get(cKey);
+      if (existing) {
+        if (!existing.dec?.isManualOverride) {
+          existing.doc.data = encryptData({ ...existing.dec, ...payload });
+          await existing.doc.save();
+          savedCount++;
+        }
+      } else {
+        const newDoc = new BankDollarRate({ data: encryptData(payload) });
+        await newDoc.save();
+        savedCount++;
+      }
+    }
+
     broadcastUpdate('bank-dollar-rates', 'sync', { timestamp: new Date().toISOString() });
     req._broadcastDone = true;
-    res.status(200).json({ success: true, count: Object.keys(liveRates).length, syncedAt: new Date().toISOString() });
+    res.status(200).json({ success: true, count: Object.keys(liveRates).length, savedCount, syncedAt: new Date().toISOString() });
   } catch (err) {
+    console.error('Error in /api/bank-dollar-rates/sync:', err);
     res.status(500).json({ message: err.message });
   }
 });
