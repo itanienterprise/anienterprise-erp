@@ -22,6 +22,7 @@ import {
   CheckIcon,
   XIcon,
   ShieldIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
   AnchorIcon,
   BuildingIcon
@@ -29,6 +30,7 @@ import {
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { getSocket } from '../../../utils/socket';
 import BankDollarRatesWidget from './BankDollarRatesWidget';
 import './Dashboard.css';
 
@@ -145,6 +147,8 @@ const Dashboard = ({
   // ─── Card 1: Attendance & Working Time State ──────────────────
   const [attendanceViewMode, setAttendanceViewMode] = useState('attendance'); // 'attendance' | 'workingTime'
   const [userProfile, setUserProfile] = useState(null);
+  const [isSyncingAttendance, setIsSyncingAttendance] = useState(false);
+  const [attendanceWeekOffset, setAttendanceWeekOffset] = useState(0);
 
   // ─── Card 2: Line Graph (Weekly / Daily LC & PI) State ─────────
   const [lcGraphTimeframe, setLcGraphTimeframe] = useState('weekly'); // 'weekly' | 'daily' | 'all'
@@ -158,11 +162,11 @@ const Dashboard = ({
   const [pieProductType, setPieProductType] = useState('all'); // 'all' | 'General' | 'Border'
 
   // ─── Card 4: Order & Sales Donut State ─────────────────────────
-  const [orderSalesTimeframe, setOrderSalesTimeframe] = useState('today'); // 'today' | 'weekly' | 'monthly' | 'yearly' | 'all'
+  const [orderSalesTimeframe, setOrderSalesTimeframe] = useState('weekly'); // 'today' | 'weekly' | 'monthly' | 'yearly' | 'all'
   const [donutHoveredSlice, setDonutHoveredSlice] = useState(null);
 
   // ─── Card 5: Collection vs Sales State ─────────────────────────
-  const [collectionTimeframe, setCollectionTimeframe] = useState('today'); // 'today' | 'weekly' | 'monthly' | 'yearly' | 'all'
+  const [collectionTimeframe, setCollectionTimeframe] = useState('weekly'); // 'today' | 'weekly' | 'monthly' | 'yearly' | 'all'
   const [barHoveredIndex, setBarHoveredIndex] = useState(null);
 
   // ─── Card 6: To-Do List State ──────────────────────────────────
@@ -211,10 +215,12 @@ const Dashboard = ({
   }, [currentUser]);
 
   // ─── Fetch Dashboard Backend Data ──────────────────────────────
-  const fetchDashboardStats = useCallback(async () => {
+  const fetchDashboardStats = useCallback(async (customOffset = null) => {
     try {
       setIsLoadingStats(true);
-      const res = await axios.get(`${API_BASE_URL}/api/dashboard/stats?mode=personal`);
+      const targetOffset = customOffset !== null ? customOffset : attendanceWeekOffset;
+      const offsetQuery = targetOffset !== 0 ? `&weekOffset=${targetOffset}` : '';
+      const res = await axios.get(`${API_BASE_URL}/api/dashboard/stats?mode=personal${offsetQuery}`);
       if (res.data && res.data.success) {
         setStatsData(res.data);
       }
@@ -224,7 +230,42 @@ const Dashboard = ({
       setIsLoadingStats(false);
       setLastRefreshed(new Date());
     }
-  }, []);
+  }, [attendanceWeekOffset]);
+
+  const handleWeekChange = (offset) => {
+    setAttendanceWeekOffset(offset);
+    fetchDashboardStats(offset);
+  };
+
+  // Real-time synchronization via Socket.IO for Attendance & Biometrics
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    const handleAttendanceUpdate = (data) => {
+      const mod = (data?.module || '').toLowerCase().trim();
+      if (mod === 'attendance' || mod === 'attendances' || mod === 'all') {
+        fetchDashboardStats();
+      }
+    };
+    socket.on('data_updated', handleAttendanceUpdate);
+    return () => {
+      socket.off('data_updated', handleAttendanceUpdate);
+    };
+  }, [fetchDashboardStats]);
+
+  // Manual trigger for attendance processing
+  const handleManualAttendanceSync = async () => {
+    try {
+      setIsSyncingAttendance(true);
+      await axios.post(`${API_BASE_URL}/api/attendance/process-today`);
+      await fetchDashboardStats();
+    } catch (err) {
+      console.warn('Manual attendance sync error:', err);
+      await fetchDashboardStats();
+    } finally {
+      setIsSyncingAttendance(false);
+    }
+  };
 
   // ─── Fetch Todos ───────────────────────────────────────────────
   const fetchTodos = useCallback(async () => {
@@ -1484,17 +1525,77 @@ const Dashboard = ({
                         <div className="flex flex-wrap items-center gap-3 text-xs">
                           <span>Present: <strong className="text-emerald-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'PRESENT' || d.attendanceStatus === 'LATE' || d.attendanceStatus === 'HALF_DAY').length}</strong></span>
                           <span>Late: <strong className="text-amber-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'LATE').length}</strong></span>
-                          <span>Absent: <strong className="text-rose-500">{weeklyDaysList.filter(d => (d.attendanceStatus === 'ABSENT' || !d.attendanceStatus) && d.dayName !== 'Friday' && !d.isToday).length}</strong></span>
+                          <span>Absent: <strong className="text-rose-500">{weeklyDaysList.filter(d => (d.attendanceStatus === 'ABSENT' || !d.attendanceStatus) && d.dayName !== 'Friday' && (attendanceWeekOffset !== 0 || !d.isToday)).length}</strong></span>
                         </div>
-                        <span className="text-xs font-semibold text-blue-600 flex items-center gap-1.5">
+
+                        {/* Previous Week / Current Week Button */}
+                        {attendanceWeekOffset === 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleWeekChange(-1)}
+                            disabled={isLoadingStats}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 border border-gray-200/80 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                            title="View previous week attendance"
+                          >
+                            <ChevronLeftIcon className="w-3.5 h-3.5 text-gray-500" />
+                            <span>Previous Week</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleWeekChange(0)}
+                            disabled={isLoadingStats}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                            title="Return to current week"
+                          >
+                            <span>Current Week</span>
+                            <ChevronRightIcon className="w-3.5 h-3.5 text-blue-600" />
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={handleManualAttendanceSync}
+                          disabled={isSyncingAttendance}
+                          title="Click to re-process and sync today's attendance punches from biometric device"
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 cursor-pointer transition-colors group"
+                        >
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                          Attendance Module Synced
-                        </span>
+                          <span>Attendance Module Synced</span>
+                          <RefreshIcon className={`w-3.5 h-3.5 text-blue-500 group-hover:rotate-180 transition-transform duration-500 ${isSyncingAttendance ? 'animate-spin' : ''}`} />
+                        </button>
                       </>
                     ) : (
                       <>
-                        <span className="text-xs font-medium text-gray-500">Total Weekly Time:</span>
-                        <span className="font-bold text-gray-900 text-sm sm:text-base">{weeklyTotalHours} Hours</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-gray-500">Total Weekly Time:</span>
+                          <span className="font-bold text-gray-900 text-sm sm:text-base">{weeklyTotalHours} Hours</span>
+                        </div>
+
+                        {/* Previous Week / Current Week Button (Working Time Mode) */}
+                        {attendanceWeekOffset === 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleWeekChange(-1)}
+                            disabled={isLoadingStats}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 border border-gray-200/80 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                            title="View previous week working hours"
+                          >
+                            <ChevronLeftIcon className="w-3.5 h-3.5 text-gray-500" />
+                            <span>Previous Week</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleWeekChange(0)}
+                            disabled={isLoadingStats}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                            title="Return to current week"
+                          >
+                            <span>Current Week</span>
+                            <ChevronRightIcon className="w-3.5 h-3.5 text-blue-600" />
+                          </button>
+                        )}
                       </>
                     )}
                   </div>

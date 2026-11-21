@@ -1314,6 +1314,7 @@ apiRouter.get('/api/dashboard/stats', async (req, res) => {
     const user = req.session?.user;
     const username = user?.username || 'user';
     const mode = (req.query.mode || 'personal').toLowerCase(); // 'personal' | 'all'
+    const weekOffset = parseInt(req.query.weekOffset || '0', 10) || 0;
 
     // Compute Asia/Dhaka (+06:00) current date string
     const formatDhakaYMD = (date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(date);
@@ -1327,7 +1328,7 @@ apiRouter.get('/api/dashboard/stats', async (req, res) => {
     const diffToSaturday = (dayOfWeek + 1) % 7;
 
     const satDate = new Date(d);
-    satDate.setDate(d.getDate() - diffToSaturday);
+    satDate.setDate(d.getDate() - diffToSaturday + (weekOffset * 7));
     satDate.setHours(12, 0, 0, 0);
 
     const weekDays = [];
@@ -1351,6 +1352,13 @@ apiRouter.get('/api/dashboard/stats', async (req, res) => {
         actionCount: 0,
         status: dateStr === todayDhaka ? 'Active' : 'Offline'
       });
+    }
+
+    // Auto-process today's biometric punches (and current week's days) on every dashboard reload
+    try {
+      await triggerDashboardAutoProcess(todayDhaka, weekOffset === 0 ? dateStrings : []);
+    } catch (autoErr) {
+      console.warn('[Dashboard] Attendance auto-process warning:', autoErr.message);
     }
 
     // Fetch user activity / attendance for the week
@@ -1594,6 +1602,7 @@ apiRouter.get('/api/dashboard/stats', async (req, res) => {
       },
       weekDays,
       todayStr: todayDhaka,
+      weekOffset,
       staffList,
       activeEmployeeName,
       activeEmployeeEmpId,
@@ -9179,7 +9188,7 @@ const dayDiff = (from, to) => {
 };
 
 // ─── Helper: compute AttendanceLog from punches for one employee on one date ──
-const processEmployeeDay = async (employeeId, date) => {
+async function processEmployeeDay(employeeId, date) {
   try {
     // Normalize date to "YYYY-MM-DD" in Asia/Dhaka
     let dStr = (date || '').trim();
@@ -9312,7 +9321,197 @@ const processEmployeeDay = async (employeeId, date) => {
     console.error('[Attendance] processEmployeeDay error:', e.message);
     return null;
   }
-};
+}
+
+// ─── Unified Helper: Process attendance for ALL employees on targetDate ───────────
+let lastDashboardAttendanceProcessTime = 0;
+let dashboardAttendanceProcessPromise = null;
+
+async function processAttendanceForDate(date) {
+  let targetDate = (date || '').trim();
+  if (!targetDate) {
+    targetDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+  } else if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(targetDate)) {
+    const [d, m, y] = targetDate.split(/[-/]/);
+    targetDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  const dayStart = new Date(`${targetDate}T00:00:00.000+06:00`);
+  const dayEnd   = new Date(`${targetDate}T23:59:59.999+06:00`);
+
+  // First, resolve any unmatched punches on this date via DeviceMapping
+  try {
+    const unmatchedPunches = await AttendancePunch.find({
+      punchTime: { $gte: dayStart, $lte: dayEnd },
+      $or: [{ employeeId: null }, { unmatched: true }]
+    });
+    if (unmatchedPunches.length > 0) {
+      const allMappings = await DeviceMapping.find().lean();
+      const mapByEnroll = new Map();
+      allMappings.forEach(m => {
+        if (m.enrollId && m.employeeId) mapByEnroll.set(Number(m.enrollId), m.employeeId);
+      });
+      for (const p of unmatchedPunches) {
+        const mappedEmpId = mapByEnroll.get(Number(p.enrollId));
+        if (mappedEmpId) {
+          await AttendancePunch.updateOne(
+            { _id: p._id },
+            { $set: { employeeId: mappedEmpId, unmatched: false } }
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Attendance] Unmatched punches mapping resolution error:', err.message);
+  }
+
+  // Get all unique employeeIds that punched on this date
+  const uniqueEmployees = await AttendancePunch.distinct('employeeId', {
+    punchTime: { $gte: dayStart, $lte: dayEnd },
+    employeeId: { $ne: null }
+  });
+
+  let processed = 0;
+  const allEmployees = await Employee.find({});
+
+  for (const emp of allEmployees) {
+    let dec;
+    try {
+      dec = decryptRecordWithUnwrap(emp.data);
+    } catch (e) {
+      continue;
+    }
+    if (!dec) continue;
+
+    const empObjId = emp._id;
+    const hasPunch = uniqueEmployees.some(id => id && id.toString() === empObjId.toString());
+
+    if (hasPunch) {
+      const result = await processEmployeeDay(empObjId, targetDate);
+      if (result) {
+        const existingLog = await AttendanceLog.findOne({ employeeId: empObjId, date: targetDate });
+        if (existingLog && existingLog.manualOverride) {
+          // Preserve manual override status, but update in/out punch times if available
+          await AttendanceLog.findOneAndUpdate(
+            { employeeId: empObjId, date: targetDate },
+            {
+              $set: {
+                firstPunchIn: existingLog.firstPunchIn || result.firstIn,
+                lastPunchOut: result.lastOut || existingLog.lastPunchOut,
+                totalHours: result.totalHours > 0 ? result.totalHours : existingLog.totalHours
+              }
+            }
+          );
+        } else {
+          await AttendanceLog.findOneAndUpdate(
+            { employeeId: empObjId, date: targetDate },
+            {
+              $set: {
+                employeeId: empObjId,
+                employeeName: dec?.name || dec?.nameEn || dec?.firstName || 'Employee',
+                employeeEmpId: dec?.employeeId || '',
+                date: targetDate,
+                shiftId: result.shiftId,
+                shiftName: result.shiftName || '',
+                firstPunchIn: result.firstIn,
+                lastPunchOut: result.lastOut,
+                totalHours: result.totalHours,
+                overtimeHours: result.overtimeHours,
+                lateMinutes: result.lateMinutes || 0,
+                status: result.status,
+                manualOverride: false
+              }
+            },
+            { upsert: true, returnDocument: 'after' }
+          );
+        }
+
+        await AttendancePunch.updateMany(
+          { employeeId: empObjId, punchTime: { $gte: dayStart, $lte: dayEnd } },
+          { $set: { processed: true } }
+        );
+        processed++;
+      }
+    } else {
+      // If inactive and no punch, skip creating absent record
+      if (dec?.status === 'Inactive') continue;
+
+      // Ensure record exists (don't overwrite manual corrections)
+      const existing = await AttendanceLog.findOne({ employeeId: empObjId, date: targetDate });
+      if (!existing) {
+        let empShift = null;
+        try {
+          const devMap = await DeviceMapping.findOne({ $or: [{ employeeId: empObjId }, { employeeId: String(empObjId) }] });
+          if (devMap && devMap.shiftId) empShift = await ShiftConfig.findById(devMap.shiftId);
+          if (!empShift) empShift = await ShiftConfig.findOne({ $or: [{ applicableTo: empObjId }, { applicableTo: String(empObjId) }] });
+          if (!empShift) empShift = await ShiftConfig.findOne({ isDefault: true }) || await ShiftConfig.findOne();
+        } catch (_) {}
+
+        const dObj = new Date(`${targetDate}T12:00:00.000+06:00`);
+        const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'Asia/Dhaka' }).format(dObj);
+        const isShiftHoliday = Array.isArray(empShift?.holidays) && empShift.holidays.includes(dayName);
+
+        await AttendanceLog.create({
+          employeeId: empObjId,
+          employeeName: dec?.name || dec?.nameEn || dec?.firstName || 'Employee',
+          employeeEmpId: dec?.employeeId || '',
+          date: targetDate,
+          shiftId: empShift?._id || null,
+          shiftName: empShift?.shiftName || '',
+          status: isShiftHoliday ? 'WEEKEND' : 'ABSENT'
+        });
+      }
+    }
+  }
+
+  try {
+    broadcastUpdate('attendance', 'logs_updated', { date: targetDate, processed });
+  } catch (_) {}
+
+  return { targetDate, processed, totalEmployees: allEmployees.length };
+}
+
+async function triggerDashboardAutoProcess(todayDhaka, weekDateStrings = []) {
+  const now = Date.now();
+  if (dashboardAttendanceProcessPromise) {
+    return dashboardAttendanceProcessPromise;
+  }
+  if (now - lastDashboardAttendanceProcessTime < 2500) {
+    return { skipped: true };
+  }
+  lastDashboardAttendanceProcessTime = now;
+  dashboardAttendanceProcessPromise = (async () => {
+    // 1. Process today (primary target)
+    const todayRes = await processAttendanceForDate(todayDhaka);
+
+    // 2. Also check if any past days in current week have unprocessed punches
+    if (Array.isArray(weekDateStrings)) {
+      const pastDaysInWeek = weekDateStrings.filter(dStr => dStr < todayDhaka);
+      for (const dStr of pastDaysInWeek) {
+        const dayStart = new Date(`${dStr}T00:00:00.000+06:00`);
+        const dayEnd   = new Date(`${dStr}T23:59:59.999+06:00`);
+        const hasUnprocessed = await AttendancePunch.exists({
+          punchTime: { $gte: dayStart, $lte: dayEnd },
+          employeeId: { $ne: null },
+          processed: { $ne: true }
+        });
+        if (hasUnprocessed) {
+          await processAttendanceForDate(dStr);
+        }
+      }
+    }
+    return todayRes;
+  })()
+    .catch(err => {
+      console.warn('[Attendance] Auto-process error:', err.message);
+      return { error: err.message };
+    })
+    .finally(() => {
+      dashboardAttendanceProcessPromise = null;
+    });
+
+  return dashboardAttendanceProcessPromise;
+}
 
 // ─── 1. ZKTech ADMS Device Push Receiver ─────────────────────────────────────
 // The F8 device sends a POST with query params: sn, table, Stamp, PIN, Checked, Status, Verify
@@ -9719,53 +9918,7 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
   // Auto-process today's attendance logs ONLY when new punches were actually inserted
   try {
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
-    const dayStart = new Date(`${todayStr}T00:00:00.000+06:00`);
-    const dayEnd = new Date(`${todayStr}T23:59:59.999+06:00`);
-    const todayEmps = await AttendancePunch.distinct('employeeId', {
-      punchTime: { $gte: dayStart, $lte: dayEnd },
-      employeeId: { $ne: null }
-    });
-
-    for (const empId of todayEmps) {
-      const result = await processEmployeeDay(empId, todayStr);
-      if (result) {
-        const emp = await Employee.findById(empId);
-        let dec;
-        try {
-          dec = decryptData(emp?.data);
-          if (dec && dec.data && typeof dec.data === 'string' && !dec.employeeId) {
-            try { dec = decryptData(dec.data); } catch (_) {}
-          }
-        } catch (_) {}
-
-        await AttendanceLog.findOneAndUpdate(
-          { employeeId: empId, date: todayStr },
-          {
-            $set: {
-              employeeId: empId,
-              employeeName: dec?.name || dec?.firstName || 'Employee',
-              employeeEmpId: dec?.employeeId || '',
-              date: todayStr,
-              shiftId: result.shiftId,
-              shiftName: result.shiftName || '',
-              firstPunchIn: result.firstIn,
-              lastPunchOut: result.lastOut,
-              totalHours: result.totalHours,
-              overtimeHours: result.overtimeHours,
-              lateMinutes: result.lateMinutes || 0,
-              status: result.status,
-              manualOverride: false
-            }
-          },
-          { upsert: true }
-        );
-      }
-    }
-    if (todayEmps.length > 0) {
-      try {
-        broadcastUpdate('attendance', 'logs_updated', { count: todayEmps.length });
-      } catch (_) {}
-    }
+    await processAttendanceForDate(todayStr);
   } catch (err) {
     console.warn('[Attendance] Auto-process today warning:', err.message);
   }
@@ -10400,10 +10553,7 @@ const getEmployeeForUser = async (user) => {
   try {
     const employees = await Employee.find();
     for (const emp of employees) {
-      let d = decryptData(emp.data);
-      if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
-        try { d = decryptData(d.data); } catch (e) { }
-      }
+      let d = decryptRecordWithUnwrap(emp.data);
       if (!d) continue;
       const empId = (d.employeeId || '').toLowerCase().trim();
       const empName = (d.name || d.nameEn || '').toLowerCase().trim();
@@ -10539,101 +10689,37 @@ apiRouter.get('/api/attendance/punches', verifyPermission('attendance', 'view'),
 apiRouter.post('/api/attendance/process', verifyPermission('attendance', 'edit'), async (req, res) => {
   try {
     const { date } = req.body; // "YYYY-MM-DD" or "DD/MM/YYYY", defaults to today
-    let targetDate = (date || '').trim();
-    if (!targetDate) {
-      targetDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
-    } else if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(targetDate)) {
-      const [d, m, y] = targetDate.split(/[-/]/);
-      targetDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-    }
-
-    const dayStart = new Date(`${targetDate}T00:00:00.000+06:00`);
-    const dayEnd   = new Date(`${targetDate}T23:59:59.999+06:00`);
-
-    // Get all unique employeeIds that punched on this date
-    const uniqueEmployees = await AttendancePunch.distinct('employeeId', {
-      punchTime: { $gte: dayStart, $lte: dayEnd },
-      employeeId: { $ne: null }
+    const result = await processAttendanceForDate(date);
+    res.json({
+      success: true,
+      message: `Processed ${result.processed} employee(s) for ${result.targetDate}`,
+      date: result.targetDate,
+      processed: result.processed,
+      totalEmployees: result.totalEmployees
     });
-
-    let processed = 0;
-
-    // Also ensure records for all known employees
-    const allEmployees = await Employee.find({});
-
-    for (const emp of allEmployees) {
-      let dec;
-      try {
-        dec = decryptData(emp.data);
-        if (dec && dec.data && typeof dec.data === 'string' && !dec.employeeId) {
-          try { dec = decryptData(dec.data); } catch (e) { }
-        }
-      } catch (e) { continue; }
-
-      const empObjId = emp._id;
-      const hasPunch = uniqueEmployees.some(id => id && id.toString() === empObjId.toString());
-
-      if (hasPunch) {
-        const result = await processEmployeeDay(empObjId, targetDate);
-        if (result) {
-          await AttendanceLog.findOneAndUpdate(
-            { employeeId: empObjId, date: targetDate },
-            {
-              employeeId: empObjId,
-              employeeName: dec?.name || dec?.firstName || '',
-              employeeEmpId: dec?.employeeId || '',
-              date: targetDate,
-              shiftId: result.shiftId,
-              shiftName: result.shiftName || '',
-              firstPunchIn: result.firstIn,
-              lastPunchOut: result.lastOut,
-              totalHours: result.totalHours,
-              overtimeHours: result.overtimeHours,
-              lateMinutes: result.lateMinutes || 0,
-              status: result.status,
-              manualOverride: false
-            },
-            { upsert: true, returnDocument: 'after' }
-          );
-          await AttendancePunch.updateMany(
-            { employeeId: empObjId, punchTime: { $gte: dayStart, $lte: dayEnd } },
-            { processed: true }
-          );
-          processed++;
-        }
-      } else {
-        // Ensure record exists (don't overwrite manual corrections)
-        const existing = await AttendanceLog.findOne({ employeeId: empObjId, date: targetDate });
-        if (!existing) {
-          let empShift = null;
-          try {
-            const devMap = await DeviceMapping.findOne({ $or: [{ employeeId: empObjId }, { employeeId: String(empObjId) }] });
-            if (devMap && devMap.shiftId) empShift = await ShiftConfig.findById(devMap.shiftId);
-            if (!empShift) empShift = await ShiftConfig.findOne({ $or: [{ applicableTo: empObjId }, { applicableTo: String(empObjId) }] });
-            if (!empShift) empShift = await ShiftConfig.findOne({ isDefault: true }) || await ShiftConfig.findOne();
-          } catch (_) {}
-
-          const dObj = new Date(`${targetDate}T12:00:00.000+06:00`);
-          const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'Asia/Dhaka' }).format(dObj);
-          const isShiftHoliday = Array.isArray(empShift?.holidays) && empShift.holidays.includes(dayName);
-
-          await AttendanceLog.create({
-            employeeId: empObjId,
-            employeeName: dec?.name || dec?.firstName || '',
-            employeeEmpId: dec?.employeeId || '',
-            date: targetDate,
-            shiftId: empShift?._id || null,
-            shiftName: empShift?.shiftName || '',
-            status: isShiftHoliday ? 'WEEKEND' : 'ABSENT'
-          });
-        }
-      }
-    }
-
-    res.json({ message: `Processed ${processed} employee(s) for ${targetDate}`, date: targetDate });
   } catch (err) {
     console.error('[Attendance] Process error:', err.message);
     res.status(500).json({ message: err.message });
+  }
+});
+
+// ─── 4b. Lightweight today auto-process trigger (authenticated users) ─────────
+apiRouter.post('/api/attendance/process-today', async (req, res) => {
+  try {
+    if (!req.session?.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+    const result = await triggerDashboardAutoProcess(todayStr);
+    res.json({
+      success: true,
+      message: `Today's attendance auto-processed (${todayStr})`,
+      date: todayStr,
+      result
+    });
+  } catch (err) {
+    console.error('[Attendance] Process-today error:', err.message);
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
