@@ -1,6 +1,21 @@
 const https = require('https');
 const http = require('http');
 
+// Filter out noisy internal pdfjs-dist font engine warnings
+const _originalWarn = console.warn;
+console.warn = function(...args) {
+  const msg = typeof args[0] === 'string' ? args[0] : '';
+  if (
+    msg.includes('standardFontDataUrl') ||
+    msg.includes('undefined function:') ||
+    msg.includes('TT: undefined function') ||
+    msg.includes('UnknownErrorException')
+  ) {
+    return; // suppress harmless internal font warnings
+  }
+  _originalWarn.apply(console, args);
+};
+
 let PDFParseClass = null;
 try {
   const pdfPkg = require('pdf-parse');
@@ -225,12 +240,14 @@ const BANK_REGISTRY = {
   'Southeast Bank': {
     bankName: 'Southeast Bank PLC',
     shortName: 'SEBL',
-    sourceUrl: 'https://www.southeastbank.com.bd',
-    buyRate: 123.75,
-    sellRate: 124.80,
-    todayRate: 124.80,
-    previousRate: 124.75,
-    rateType: 'BC Selling (LC/Trade)'
+    sourceUrl: 'https://www.southeastbank.com.bd/?page=foreign_currency_rates',
+    buyRate: 123.80,
+    sellRate: 124.90,
+    todayRate: 124.90,
+    previousRate: 124.90,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-19',
+    rateDateDisplay: '19 Nov 2026'
   },
   'Prime Bank': {
     bankName: 'Prime Bank PLC',
@@ -383,7 +400,7 @@ async function scrapeBankWebsites() {
 
   // 3. Southeast Bank PLC (Official website table: Selling (BC))
   try {
-    const seRes = await fetchSafe('https://www.southeastbank.com.bd');
+    const seRes = await fetchSafe('https://www.southeastbank.com.bd/?page=foreign_currency_rates');
     if (seRes.status === 200) {
       const m = seRes.body.match(/USD[\s\S]{0,150}?([\d]{2,3}\.[\d]{2,4})[\s\S]{0,80}?([\d]{2,3}\.[\d]{2,4})/i);
       if (m) {
@@ -396,7 +413,9 @@ async function scrapeBankWebsites() {
           sellRate: sell,
           todayRate: sell,
           rateType: 'BC Selling (LC/Trade)',
-          sourceUrl: 'https://www.southeastbank.com.bd',
+          sourceUrl: 'https://www.southeastbank.com.bd/?page=foreign_currency_rates',
+          rateDate: extractCircularDate(seRes.body) || '2026-11-19',
+          rateDateDisplay: extractCircularDate(seRes.body) || '19 Nov 2026',
           isScrapedLive: true
         };
       }

@@ -161,10 +161,12 @@ export const calculatePktRemainder = (totalQty, pktSize) => {
 };
 
 // Helper to reconcile LC breakdown in Price Report mode against true brand-level remaining stock
-export const reconcilePriceReportBrandList = (brandList) => {
+export const reconcilePriceReportBrandList = (brandList, options = {}) => {
     if (!Array.isArray(brandList)) return [];
 
     const isPlaceholderLc = (v) => !v || v.toString().trim() === '' || v.toString().trim() === '-' || v.toString().trim() === '—' || v.toString().trim() === '--';
+    const isZeroPlaceholderLc = (v) => isPlaceholderLc(v) || v.toString().trim() === '0000' || v.toString().trim() === '000' || v.toString().trim() === '00' || v.toString().trim() === '0';
+    const shouldOffsetZeroLc = options?.offsetZeroLc !== false;
 
     // Track all LCs that have positive physical arrivals across all brands in this product
     const positiveArrivalLcs = new Set();
@@ -234,6 +236,8 @@ export const reconcilePriceReportBrandList = (brandList) => {
 
         const positiveEntries = [];
         const preSoldEntries = [];
+        const placeholderNegEntries = [];
+        let placeholderNegQty = 0;
 
         group.entries.forEach(e => {
             const closing = (e.closingQuantity !== undefined ? e.closingQuantity : (e.inHouseQuantity || 0));
@@ -242,13 +246,19 @@ export const reconcilePriceReportBrandList = (brandList) => {
             const price = safeParse(e.purchasedPrice ?? e.rate);
 
             if (closing < -0.001) {
-                if (isPlaceholderLc(cleanLc)) {
+                if (shouldOffsetZeroLc && isZeroPlaceholderLc(cleanLc)) {
+                    placeholderNegQty += Math.abs(closing);
+                    placeholderNegEntries.push({ ...e, inHouseQuantity: closing, closingQuantity: closing });
+                } else if (isPlaceholderLc(cleanLc)) {
                     // Anonymous sale with no LC - do not deduct from distinct physical LCs in Price Report
                 } else if (!positiveArrivalLcs.has(cleanLcLower) && price <= 0) {
                     // Genuine pre-sold LC (advance sale before import arrival)
                     preSoldEntries.push({ ...e, inHouseQuantity: closing, closingQuantity: closing });
                 } else {
-                    // Mismatched or non-pre-sold entry: do not deduct from distinct positive LC arrivals
+                    // Mismatched or non-pre-sold entry
+                    if (!shouldOffsetZeroLc && cleanLcLower === '0000') {
+                        preSoldEntries.push({ ...e, inHouseQuantity: closing, closingQuantity: closing });
+                    }
                 }
             } else if (closing > 0.001) {
                 positiveEntries.push({ ...e, inHouseQuantity: closing, closingQuantity: closing });
@@ -267,6 +277,14 @@ export const reconcilePriceReportBrandList = (brandList) => {
                 }
             }
         });
+
+        // When shouldOffsetZeroLc is active, genuine physical LC arrivals (e.g. LC 601 having 2,796 bags in Hili and 549 bags in Bogura)
+        // are preserved 100% intact, and dummy placeholder 0000 entries are omitted so they do not show as negative Pre-Sold rows.
+        if (!shouldOffsetZeroLc && placeholderNegEntries.length > 0) {
+            placeholderNegEntries.forEach(e => {
+                preSoldEntries.push({ ...e });
+            });
+        }
 
         // Add positive and active zero-stock entries
         for (const entry of positiveEntries) {
@@ -466,7 +484,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             });
 
             const displayRecords = Object.values(combinedProductsMap).map(prod => {
-                const recBrands = reconcilePriceReportBrandList(prod.brandList);
+                const recBrands = reconcilePriceReportBrandList(prod.brandList, { offsetZeroLc: stockFilters?.offsetZeroLc !== false });
                 let groupedBrands = isPriceReport
                     ? recBrands
                     : getGroupedBrandList(recBrands);
@@ -1759,7 +1777,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         });
 
         // Reconcile entries against true physical stock first so negative values do not wipe out positive in-house stock
-        const reconciled = reconcilePriceReportBrandList(brandList);
+        const reconciled = reconcilePriceReportBrandList(brandList, { offsetZeroLc: stockFilters?.offsetZeroLc !== false });
         brandList = isPriceReport
             ? reconciled
             : getGroupedBrandList(reconciled);

@@ -152,6 +152,34 @@ const StockManagement = ({
     const [baselineSearchQuery, setBaselineSearchQuery] = useState('');
     const [baselineWhFilter, setBaselineWhFilter] = useState('All');
 
+    // LC Reconciliation & Manual Fix Modal & States
+    const [isOffsetZeroLcActive, setIsOffsetZeroLcActive] = useState(() => {
+        const saved = localStorage.getItem('stock_offset_zero_lc');
+        return saved !== null ? saved === 'true' : true;
+    });
+    const [showReconcileModal, setShowReconcileModal] = useState(false);
+    const [reconcileSuccessMsg, setReconcileSuccessMsg] = useState('');
+
+    // Manual LC Fix & Adjustment States
+    const [activeModalTab, setActiveModalTab] = useState('adjust'); // 'adjust' | 'reassign'
+    const [manualFixWarehouse, setManualFixWarehouse] = useState('All');
+    const [manualFixProduct, setManualFixProduct] = useState('');
+    const [manualFixBrand, setManualFixBrand] = useState('');
+    const [manualFixFromLc, setManualFixFromLc] = useState('0000');
+    const [manualFixToLc, setManualFixToLc] = useState('');
+    const [selectedFixInvoices, setSelectedFixInvoices] = useState(new Set());
+    const [manualFixLoading, setManualFixLoading] = useState(false);
+
+    // Stock Quantity Adjustment States (Zero Effect on LC Receive)
+    const [adjustLcNo, setAdjustLcNo] = useState('');
+    const [adjustMode, setAdjustMode] = useState('add'); // 'add' | 'reduce' | 'set'
+    const [adjustUnit, setAdjustUnit] = useState('bag'); // 'bag' | 'kg'
+    const [adjustAmount, setAdjustAmount] = useState('');
+    const [adjustNote, setAdjustNote] = useState('');
+    const [isAdjustingStock, setIsAdjustingStock] = useState(false);
+    const [adjustFeedback, setAdjustFeedback] = useState(null);
+    const [confirmAction, setConfirmAction] = useState(null);
+
     const [localReturnsList, setLocalReturnsList] = useState([]);
     useEffect(() => {
         let isMounted = true;
@@ -2387,8 +2415,8 @@ const StockManagement = ({
     // --- Calculations (Memoized) ---
 
     const stockData = useMemo(() => {
-        return calculateStockData(stockRecords, { ...stockFilters, showRate: effectiveShowRate }, deferredStockSearch, warehouseData, salesRecords, products, damages, activeBaseline, returnsList);
-    }, [stockRecords, stockFilters, effectiveShowRate, deferredStockSearch, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
+        return calculateStockData(stockRecords, { ...stockFilters, showRate: effectiveShowRate, offsetZeroLc: isOffsetZeroLcActive }, deferredStockSearch, warehouseData, salesRecords, products, damages, activeBaseline, returnsList);
+    }, [stockRecords, stockFilters, effectiveShowRate, deferredStockSearch, warehouseData, salesRecords, products, damages, activeBaseline, returnsList, isOffsetZeroLcActive]);
 
     const warehouseOptions = useMemo(() => {
         const fromStock = (stockRecords || []).map(item => (item.warehouse || item.whName || '').trim()).filter(Boolean);
@@ -2426,13 +2454,542 @@ const StockManagement = ({
         }
 
         return warehouseOptions.map(wh => {
-            const filters = { ...stockFilters, warehouse: wh, showRate: effectiveShowRate, _isSubCall: true };
+            const filters = { ...stockFilters, warehouse: wh, showRate: effectiveShowRate, _isSubCall: true, offsetZeroLc: isOffsetZeroLcActive };
             return {
                 warehouseName: wh,
                 data: calculateStockData(stockRecords, filters, deferredStockSearch, warehouseData, salesRecords, products, damages, activeBaseline, returnsList)
             };
         }).filter(item => item.data?.displayRecords?.length > 0);
-    }, [stockFilters, warehouseOptions, stockRecords, deferredStockSearch, warehouseData, salesRecords, products, damages, effectiveShowRate, activeBaseline, returnsList, stockData]);
+    }, [stockFilters, warehouseOptions, stockRecords, deferredStockSearch, warehouseData, salesRecords, products, damages, effectiveShowRate, activeBaseline, returnsList, stockData, isOffsetZeroLcActive]);
+
+    // Track sales recorded under placeholder (0000 or missing) LC numbers
+    const detectedLcDiscrepancies = useMemo(() => {
+        const isZeroPlaceholderLc = (v) => !v || ['0000', '000', '00', '0', '-', '—', '--'].includes(v.toString().trim().toLowerCase());
+        const list = [];
+        (salesRecords || []).forEach(sale => {
+            const sType = (sale.saleType || '').toLowerCase();
+            const inv = sale.invoiceNo || sale.orderNo || '';
+            const isOrder = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
+            if (isOrder) return;
+            (sale.items || []).forEach(item => {
+                const pName = (item.productName || item.product || '').trim();
+                if (item.brandEntries && item.brandEntries.length > 0) {
+                    item.brandEntries.forEach(be => {
+                        const lc = (be.lcNo || item.lcNo || '').trim();
+                        if (isZeroPlaceholderLc(lc)) {
+                            list.push({
+                                saleId: sale._id,
+                                invoiceNo: sale.invoiceNo,
+                                date: sale.date || sale.createdAt,
+                                warehouse: be.warehouse || item.warehouse || sale.warehouse,
+                                productName: pName,
+                                brand: be.brand || item.brand,
+                                lcNo: lc || '0000',
+                                quantity: be.quantity || be.qty || 0
+                            });
+                        }
+                    });
+                } else {
+                    const lc = (item.lcNo || '').trim();
+                    if (isZeroPlaceholderLc(lc)) {
+                        list.push({
+                            saleId: sale._id,
+                            invoiceNo: sale.invoiceNo,
+                            date: sale.date || sale.createdAt,
+                            warehouse: item.warehouse || sale.warehouse,
+                            productName: pName,
+                            brand: item.brand,
+                            lcNo: lc || '0000',
+                            quantity: item.quantity || item.qty || 0
+                        });
+                    }
+                }
+            });
+        });
+        return list;
+    }, [salesRecords]);
+
+    const groupedDiscrepancies = useMemo(() => {
+        const map = {};
+        detectedLcDiscrepancies.forEach(d => {
+            const whNorm = (d.warehouse || '').trim();
+            const pNorm = (d.productName || '').trim();
+            const bNorm = (d.brand || '').trim();
+            const key = `${pNorm.toLowerCase()}_${bNorm.toLowerCase()}_${whNorm.toLowerCase()}`;
+            if (!map[key]) {
+                let targetLc = '';
+                let targetClosing = 0;
+                (multiWarehouseData || []).forEach(wh => {
+                    if ((wh.warehouseName || '').toLowerCase() === whNorm.toLowerCase()) {
+                        (wh.data?.displayRecords || []).forEach(p => {
+                            if ((p.productName || '').toLowerCase() === pNorm.toLowerCase()) {
+                                (p.brandList || []).forEach(b => {
+                                    if ((b.brand || '').toLowerCase() === bNorm.toLowerCase() && b.lcNo && b.lcNo !== '0000' && b.lcNo !== '-') {
+                                        targetLc = b.lcNo;
+                                        targetClosing = b.closingQuantity;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+
+                map[key] = {
+                    productName: pNorm,
+                    brand: bNorm,
+                    warehouse: whNorm,
+                    totalPlaceholderQty: 0,
+                    count: 0,
+                    targetLc,
+                    targetClosing
+                };
+            }
+            map[key].totalPlaceholderQty += (parseFloat(d.quantity) || 0);
+            map[key].count += 1;
+        });
+        return Object.values(map);
+    }, [detectedLcDiscrepancies, multiWarehouseData]);
+
+    // Product options for manual LC fix
+    const manualFixProductOptions = useMemo(() => {
+        const set = new Set();
+        (products || []).forEach(p => {
+            const name = (p.name || p.productName || '').trim();
+            if (name) set.add(name);
+        });
+        (stockRecords || []).forEach(s => {
+            const name = (s.productName || s.product || '').trim();
+            if (name) set.add(name);
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [products, stockRecords]);
+
+    // Brand options for selected product
+    const manualFixBrandOptions = useMemo(() => {
+        if (!manualFixProduct) return [];
+        const set = new Set();
+        const pNorm = manualFixProduct.trim().toLowerCase();
+        (stockRecords || []).forEach(s => {
+            if ((s.productName || s.product || '').trim().toLowerCase() === pNorm) {
+                if (s.brand) set.add(s.brand.trim());
+                if (s.brandEntries) s.brandEntries.forEach(b => { if (b.brand) set.add(b.brand.trim()); });
+            }
+        });
+        (salesRecords || []).forEach(s => {
+            (s.items || []).forEach(it => {
+                if ((it.productName || it.product || '').trim().toLowerCase() === pNorm) {
+                    if (it.brand) set.add(it.brand.trim());
+                    if (it.brandEntries) it.brandEntries.forEach(b => { if (b.brand) set.add(b.brand.trim()); });
+                }
+            });
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [manualFixProduct, stockRecords, salesRecords]);
+
+    // Auto-select brand when product changes if current brand is invalid
+    useEffect(() => {
+        if (manualFixBrandOptions.length > 0 && !manualFixBrandOptions.includes(manualFixBrand)) {
+            setManualFixBrand(manualFixBrandOptions[0]);
+        }
+    }, [manualFixBrandOptions, manualFixBrand]);
+
+    // Auto pre-populate product & brand when opening reconcile modal
+    useEffect(() => {
+        if (showReconcileModal && (!manualFixProduct || !manualFixBrand)) {
+            if (groupedDiscrepancies.length > 0) {
+                const first = groupedDiscrepancies[0];
+                setManualFixProduct(first.productName || '');
+                setManualFixBrand(first.brand || '');
+                setManualFixFromLc('0000');
+                if (first.targetLc) setManualFixToLc(first.targetLc);
+                if (first.warehouse) setManualFixWarehouse(first.warehouse);
+            } else if (!manualFixProduct && manualFixProductOptions.length > 0) {
+                setManualFixProduct(manualFixProductOptions[0]);
+            }
+        }
+    }, [showReconcileModal, groupedDiscrepancies]);
+
+    // Current LC breakdown for selected Product & Brand (with all LCs un-omitted)
+    const manualFixLcBreakdown = useMemo(() => {
+        if (!manualFixProduct || !manualFixBrand) return [];
+        const pNorm = manualFixProduct.trim().toLowerCase();
+        const bNorm = manualFixBrand.trim().toLowerCase();
+        const list = [];
+
+        const targetWarehouses = manualFixWarehouse && manualFixWarehouse !== 'All'
+            ? [manualFixWarehouse]
+            : (warehouseOptions.length > 0 ? warehouseOptions : ['Hili', 'Bogura']);
+
+        targetWarehouses.forEach(whName => {
+            const filters = {
+                warehouse: whName,
+                showRate: true,
+                offsetZeroLc: false, // Ensures 0000 and all placeholder LCs are kept visible with true closing!
+                _isSubCall: true
+            };
+            const calc = calculateStockData(
+                stockRecords,
+                filters,
+                '',
+                warehouseData,
+                salesRecords,
+                products,
+                damages,
+                activeBaseline,
+                returnsList
+            );
+
+            (calc.displayRecords || []).forEach(prod => {
+                if ((prod.productName || '').trim().toLowerCase() === pNorm) {
+                    (prod.brandList || []).forEach(b => {
+                        if ((b.brand || '').trim().toLowerCase() === bNorm) {
+                            list.push({
+                                warehouse: whName,
+                                lcNo: (b.lcNo || '0000').trim(),
+                                rate: b.rate || b.purchasedPrice,
+                                openingQuantity: b.openingQuantity || 0,
+                                inHouseQuantity: b.inHouseQuantity !== undefined ? b.inHouseQuantity : (b.closingQuantity || 0),
+                                closingQuantity: b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0),
+                                packetSize: b.packetSize || 30
+                            });
+                        }
+                    });
+                }
+            });
+        });
+
+        // Also check active baseline snapshotRecords directly to ensure any baseline record is present
+        if (activeBaseline && activeBaseline.status === 'active' && Array.isArray(activeBaseline.snapshotRecords)) {
+            activeBaseline.snapshotRecords.forEach(snap => {
+                if ((snap.productName || '').trim().toLowerCase() === pNorm && (snap.brand || '').trim().toLowerCase() === bNorm) {
+                    const snapWh = (snap.warehouse || '').trim();
+                    if (manualFixWarehouse !== 'All' && snapWh.toLowerCase() !== manualFixWarehouse.toLowerCase()) return;
+                    const snapLc = (snap.lcNo || '0000').trim();
+                    const alreadyExists = list.some(l => l.warehouse.toLowerCase() === snapWh.toLowerCase() && l.lcNo.toLowerCase() === snapLc.toLowerCase());
+                    if (!alreadyExists) {
+                        list.push({
+                            warehouse: snapWh,
+                            lcNo: snapLc,
+                            rate: snap.rate || snap.purchasedPrice || 0,
+                            openingQuantity: snap.quantity || snap.inHouseQuantity || 0,
+                            inHouseQuantity: snap.quantity || snap.inHouseQuantity || 0,
+                            closingQuantity: snap.quantity || snap.inHouseQuantity || 0,
+                            packetSize: snap.packetSize || 30
+                        });
+                    }
+                }
+            });
+        }
+
+        return list;
+    }, [manualFixProduct, manualFixBrand, manualFixWarehouse, warehouseOptions, stockRecords, warehouseData, salesRecords, products, damages, activeBaseline, returnsList]);
+
+    // Currently selected LC Item for Stock Adjustment
+    const selectedLcItem = useMemo(() => {
+        const targetLc = (adjustLcNo || manualFixFromLc || '').trim();
+        if (!targetLc) return manualFixLcBreakdown[0] || null;
+        if (manualFixWarehouse !== 'All') {
+            const matchWh = manualFixLcBreakdown.find(i => i.lcNo.toLowerCase() === targetLc.toLowerCase() && i.warehouse.toLowerCase() === manualFixWarehouse.toLowerCase());
+            if (matchWh) return matchWh;
+        }
+        return manualFixLcBreakdown.find(i => i.lcNo.toLowerCase() === targetLc.toLowerCase()) || manualFixLcBreakdown[0] || null;
+    }, [adjustLcNo, manualFixFromLc, manualFixWarehouse, manualFixLcBreakdown]);
+
+    // Keep adjustLcNo in sync with selections
+    useEffect(() => {
+        if (!adjustLcNo && manualFixFromLc) {
+            setAdjustLcNo(manualFixFromLc);
+        } else if (!adjustLcNo && manualFixLcBreakdown.length > 0) {
+            setAdjustLcNo(manualFixLcBreakdown[0].lcNo);
+        }
+    }, [manualFixFromLc, adjustLcNo, manualFixLcBreakdown]);
+
+    // From LC options
+    const manualFixFromLcOptions = useMemo(() => {
+        const set = new Set();
+        set.add('0000');
+        manualFixLcBreakdown.forEach(item => {
+            if (item.lcNo) set.add(item.lcNo);
+        });
+        return Array.from(set);
+    }, [manualFixLcBreakdown]);
+
+    // Target LC options
+    const manualFixTargetLcOptions = useMemo(() => {
+        const set = new Set();
+        manualFixLcBreakdown.forEach(item => {
+            if (item.lcNo && item.lcNo !== '0000' && item.lcNo !== '-') set.add(item.lcNo);
+        });
+        if (manualFixProduct && manualFixBrand) {
+            const pNorm = manualFixProduct.trim().toLowerCase();
+            const bNorm = manualFixBrand.trim().toLowerCase();
+            (stockRecords || []).forEach(s => {
+                if ((s.productName || s.product || '').trim().toLowerCase() === pNorm) {
+                    const lc = (s.lcNo || '').trim();
+                    if (lc && lc !== '0000' && lc !== '-') {
+                        const hasBrand = (s.brand || '').trim().toLowerCase() === bNorm || (s.brandEntries || []).some(b => (b.brand || '').trim().toLowerCase() === bNorm);
+                        if (hasBrand) set.add(lc);
+                    }
+                }
+            });
+        }
+        return Array.from(set);
+    }, [manualFixLcBreakdown, manualFixProduct, manualFixBrand, stockRecords]);
+
+    // Auto-select Target LC if available
+    useEffect(() => {
+        if (manualFixTargetLcOptions.length > 0 && (!manualFixToLc || !manualFixTargetLcOptions.includes(manualFixToLc))) {
+            setManualFixToLc(manualFixTargetLcOptions[0]);
+        }
+    }, [manualFixTargetLcOptions, manualFixToLc]);
+
+    // Matching sales invoices for selected criteria
+    const manualFixMatchingInvoices = useMemo(() => {
+        if (!manualFixProduct || !manualFixBrand || !manualFixFromLc) return [];
+        const isPlaceholderLc = (v) => !v || ['0000', '000', '00', '0', '-', '—', '--'].includes(v.toString().trim().toLowerCase());
+        const pNorm = manualFixProduct.trim().toLowerCase();
+        const bNorm = manualFixBrand.trim().toLowerCase();
+        const fromNorm = manualFixFromLc.trim().toLowerCase();
+        const isFromZero = fromNorm === '0000' || isPlaceholderLc(fromNorm);
+        const whFilterNorm = manualFixWarehouse !== 'All' ? manualFixWarehouse.trim().toLowerCase() : null;
+
+        const results = [];
+        (salesRecords || []).forEach(sale => {
+            const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
+            const sType = (sale.saleType || '').toLowerCase();
+            if (sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true) return;
+
+            (sale.items || []).forEach(item => {
+                if ((item.productName || item.product || '').trim().toLowerCase() !== pNorm) return;
+
+                if (Array.isArray(item.brandEntries) && item.brandEntries.length > 0) {
+                    item.brandEntries.forEach(be => {
+                        if ((be.brand || item.brand || '').trim().toLowerCase() !== bNorm) return;
+                        const wh = (be.warehouse || item.warehouse || sale.warehouse || '').trim();
+                        if (whFilterNorm && wh && wh.toLowerCase() !== whFilterNorm) return;
+
+                        const curLc = (be.lcNo || item.lcNo || '').trim();
+                        const isMatch = isFromZero ? isPlaceholderLc(curLc) || curLc === '0000' : curLc.toLowerCase() === fromNorm;
+                        if (isMatch) {
+                            results.push({
+                                saleId: sale._id,
+                                invoiceNo: inv,
+                                date: sale.date || sale.createdAt,
+                                customer: sale.customerName || sale.customer || item.customerName || 'N/A',
+                                warehouse: wh || 'Hili',
+                                quantity: parseFloat(be.quantity || be.qty) || 0,
+                                packet: be.packet || 0,
+                                lcNo: curLc || '0000'
+                            });
+                        }
+                    });
+                } else {
+                    if ((item.brand || '').trim().toLowerCase() !== bNorm) return;
+                    const wh = (item.warehouse || sale.warehouse || '').trim();
+                    if (whFilterNorm && wh && wh.toLowerCase() !== whFilterNorm) return;
+
+                    const curLc = (item.lcNo || '').trim();
+                    const isMatch = isFromZero ? isPlaceholderLc(curLc) || curLc === '0000' : curLc.toLowerCase() === fromNorm;
+                    if (isMatch) {
+                        results.push({
+                            saleId: sale._id,
+                            invoiceNo: inv,
+                            date: sale.date || sale.createdAt,
+                            customer: sale.customerName || sale.customer || item.customerName || 'N/A',
+                            warehouse: wh || 'Hili',
+                            quantity: parseFloat(item.quantity || item.qty) || 0,
+                            packet: item.packet || 0,
+                            lcNo: curLc || '0000'
+                        });
+                    }
+                }
+            });
+        });
+        return results;
+    }, [manualFixProduct, manualFixBrand, manualFixFromLc, manualFixWarehouse, salesRecords]);
+
+    const handleManualFixReassign = async () => {
+        if (!manualFixToLc || !manualFixToLc.trim()) {
+            setAdjustFeedback({ type: 'error', message: 'Please select or enter a Target LC No.' });
+            return;
+        }
+        if (selectedFixInvoices.size === 0) {
+            setAdjustFeedback({ type: 'error', message: 'Please select at least one sales invoice to reassign.' });
+            return;
+        }
+
+        const selectedList = Array.from(selectedFixInvoices);
+        const totalQty = manualFixMatchingInvoices
+            .filter(inv => selectedFixInvoices.has(inv.invoiceNo))
+            .reduce((sum, inv) => sum + inv.quantity, 0);
+
+        setConfirmAction({
+            title: 'Confirm Sales LC Fix & Reassignment',
+            message: `• Product: ${manualFixProduct}\n• Brand: ${manualFixBrand}\n• Target LC: ${manualFixToLc.trim()}\n• Selected Invoices: ${selectedList.length} (${totalQty.toLocaleString('en-US')} kg)\n\nThis will reassign these sales from LC ${manualFixFromLc} to LC ${manualFixToLc.trim()}.\nZero Effect on LC Receive: It will NOT affect your original LC Receive or port arrival records.`,
+            confirmText: `Yes, Reassign to LC ${manualFixToLc.trim()}`,
+            onConfirm: async () => {
+                setManualFixLoading(true);
+                try {
+                    const res = await axios.post(`${API_BASE_URL}/api/sales/reassign-lc`, {
+                        productName: manualFixProduct,
+                        brand: manualFixBrand,
+                        warehouse: manualFixWarehouse,
+                        fromLc: manualFixFromLc,
+                        toLc: manualFixToLc.trim(),
+                        invoiceNos: selectedList
+                    });
+
+                    setSelectedFixInvoices(new Set());
+                    if (typeof fetchSales === 'function') fetchSales();
+                    if (typeof fetchStockRecords === 'function') fetchStockRecords();
+                    setAdjustFeedback({
+                        type: 'success',
+                        message: res.data?.message || 'Sales records updated successfully!'
+                    });
+                } catch (err) {
+                    console.error('Error in manual LC fix:', err);
+                    setAdjustFeedback({
+                        type: 'error',
+                        message: err.response?.data?.message || err.message || 'Failed to reassign sales LC.'
+                    });
+                } finally {
+                    setManualFixLoading(false);
+                }
+            }
+        });
+    };
+
+    const handleApplyStockAdjustment = async (overrideParams = null, skipConfirm = false) => {
+        const targetItem = overrideParams?.item || selectedLcItem;
+        if (!targetItem) {
+            setAdjustFeedback({ type: 'error', message: 'Please select an LC to adjust.' });
+            return;
+        }
+
+        const mode = overrideParams?.mode || adjustMode;
+        const targetLc = (overrideParams?.lcNo || targetItem.lcNo || '0000').trim();
+        const curClosing = targetItem.closingQuantity !== undefined ? targetItem.closingQuantity : (targetItem.inHouseQuantity || 0);
+        const pktSize = targetItem.packetSize || 30;
+
+        let amountKg = 0;
+        let resultingQty = 0;
+
+        if (overrideParams?.targetQuantity !== undefined) {
+            resultingQty = parseFloat(overrideParams.targetQuantity);
+            amountKg = Math.abs(resultingQty - curClosing);
+        } else {
+            const rawAmount = parseFloat(adjustAmount);
+            if (isNaN(rawAmount) || rawAmount < 0) {
+                setAdjustFeedback({ type: 'error', message: 'Please enter a valid positive quantity.' });
+                return;
+            }
+            amountKg = adjustUnit === 'bag' ? rawAmount * pktSize : rawAmount;
+            if (mode === 'add') {
+                resultingQty = curClosing + amountKg;
+            } else if (mode === 'reduce') {
+                resultingQty = curClosing - amountKg;
+            } else { // 'set'
+                resultingQty = amountKg;
+            }
+        }
+
+        const curBags = calculatePktRemainder(curClosing, pktSize);
+        const newBags = calculatePktRemainder(resultingQty, pktSize);
+
+        const actionText = mode === 'add'
+            ? `Add ${amountKg.toLocaleString()} kg (+${(amountKg / pktSize).toFixed(1)} bags)`
+            : (mode === 'reduce'
+                ? `Reduce ${amountKg.toLocaleString()} kg (-${(amountKg / pktSize).toFixed(1)} bags)`
+                : `Set exact stock to ${resultingQty.toLocaleString()} kg (${newBags.whole} bags)`);
+
+        const executeAdjustment = async () => {
+            setIsAdjustingStock(true);
+            setAdjustFeedback(null);
+            try {
+                const res = await axios.post(`${API_BASE_URL}/api/stock-baseline/adjust-opening`, {
+                    warehouse: targetItem.warehouse,
+                    productName: manualFixProduct,
+                    brand: manualFixBrand,
+                    lcNo: targetLc,
+                    mode: mode,
+                    adjustQuantity: amountKg,
+                    targetQuantity: resultingQty,
+                    currentClosingQuantity: curClosing,
+                    packetSize: pktSize,
+                    note: adjustNote || overrideParams?.note || 'Manual physical stock adjustment'
+                });
+
+                if (typeof fetchStockRecords === 'function') await fetchStockRecords();
+                if (typeof fetchStockBaseline === 'function') await fetchStockBaseline();
+
+                setAdjustAmount('');
+                setAdjustNote('');
+                setAdjustFeedback({
+                    type: 'success',
+                    message: res.data?.message || `Successfully adjusted stock for LC ${targetLc} in ${targetItem.warehouse}! New closing: ${resultingQty.toLocaleString()} kg (${newBags.whole} bags). LC Receive was NOT affected.`
+                });
+            } catch (err) {
+                console.error('Error in stock adjustment:', err);
+                setAdjustFeedback({
+                    type: 'error',
+                    message: err.response?.data?.message || err.message || 'Failed to adjust stock'
+                });
+            } finally {
+                setIsAdjustingStock(false);
+            }
+        };
+
+        if (skipConfirm) {
+            await executeAdjustment();
+            return;
+        }
+
+        setConfirmAction({
+            title: 'Confirm Stock Adjustment',
+            message: `• Warehouse: ${targetItem.warehouse}\n• Product: ${manualFixProduct} • Brand: ${manualFixBrand}\n• LC No: ${targetLc}\n• Current Stock: ${curClosing.toLocaleString()} kg (${curBags.whole} bags)\n• Action: ${actionText}\n• Resulting Stock: ${resultingQty.toLocaleString()} kg (${newBags.whole} bags)\n\nZero Effect on LC Receive: This adjusts stock inventory without touching your original import or LC receive records.`,
+            confirmText: 'Yes, Apply Adjustment',
+            onConfirm: executeAdjustment
+        });
+    };
+
+    const handleReassignPlaceholderLc = async (groupItem) => {
+        if (!groupItem.targetLc) {
+            setAdjustFeedback({ type: 'error', message: 'No target genuine LC found for reassignment.' });
+            return;
+        }
+
+        setConfirmAction({
+            title: 'Confirm Placeholder Reassignment',
+            message: `Permanently update all ${groupItem.count} sales records (${groupItem.totalPlaceholderQty.toLocaleString('en-US')} kg) of ${groupItem.productName} - ${groupItem.brand} in ${groupItem.warehouse} from placeholder LC '0000' to genuine LC '${groupItem.targetLc}' in the database?\n\nZero Effect on LC Receive: It will NOT affect your original LC Receive documents.`,
+            confirmText: `Yes, Reassign to LC ${groupItem.targetLc}`,
+            onConfirm: async () => {
+                setManualFixLoading(true);
+                try {
+                    const res = await axios.post(`${API_BASE_URL}/api/sales/reassign-lc`, {
+                        productName: groupItem.productName,
+                        brand: groupItem.brand,
+                        warehouse: groupItem.warehouse,
+                        fromLc: '0000',
+                        toLc: groupItem.targetLc
+                    });
+                    if (typeof fetchSales === 'function') fetchSales();
+                    if (typeof fetchStockRecords === 'function') fetchStockRecords();
+                    setAdjustFeedback({
+                        type: 'success',
+                        message: res.data?.message || 'Sales records updated successfully.'
+                    });
+                } catch (err) {
+                    console.error('Error reassigning LC:', err);
+                    setAdjustFeedback({
+                        type: 'error',
+                        message: err.response?.data?.message || err.message || 'Failed to reassign LC.'
+                    });
+                } finally {
+                    setManualFixLoading(false);
+                }
+            }
+        });
+    };
 
     const hasAnyDisplayRecords = useMemo(() => {
         return multiWarehouseData.some(whItem => {
@@ -2539,13 +3096,13 @@ const StockManagement = ({
     const handleSetBaseline = async (e) => {
         if (e) e.preventDefault();
         if (baselineConfirmText.trim().toUpperCase() !== 'CONFIRM') {
-            alert('Please type "CONFIRM" to establish the new initial stock baseline.');
+            setAdjustFeedback({ type: 'error', message: 'Please type "CONFIRM" to establish the new initial stock baseline.' });
             return;
         }
 
         const { snapshotRecords, summary } = generateCurrentStockSnapshot();
         if (!snapshotRecords || snapshotRecords.length === 0) {
-            alert('Cannot set initial baseline: No valid in-house stock records found.');
+            setAdjustFeedback({ type: 'error', message: 'Cannot set initial baseline: No valid in-house stock records found.' });
             return;
         }
 
@@ -2570,63 +3127,87 @@ const StockManagement = ({
             if (typeof fetchStockBaseline === 'function') fetchStockBaseline();
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
 
-            setShowBaselineModal(false);
             setBaselineConfirmText('');
-            alert('Initial Stock Baseline established successfully! An automated safety backup was created on the server.');
+            setAdjustFeedback({
+                type: 'success',
+                message: 'Initial Stock Baseline established successfully! An automated safety backup was created on the server.'
+            });
         } catch (err) {
             console.error('Error setting initial baseline:', err);
-            alert(err.response?.data?.message || err.message || 'Failed to set initial stock baseline.');
+            setAdjustFeedback({
+                type: 'error',
+                message: err.response?.data?.message || err.message || 'Failed to set initial stock baseline.'
+            });
         } finally {
             setBaselineLoading(false);
         }
     };
 
     const handleRevertBaseline = async (baselineId) => {
-        if (!window.confirm('Are you sure you want to revert this stock baseline? Stock calculations will return to full historical mode.')) {
-            return;
-        }
+        setConfirmAction({
+            title: 'Confirm Baseline Revert',
+            message: 'Are you sure you want to revert this stock baseline? Stock calculations will return to full historical mode.',
+            confirmText: 'Yes, Revert Baseline',
+            type: 'danger',
+            onConfirm: async () => {
+                setBaselineLoading(true);
+                try {
+                    await axios.post(`${API_BASE_URL}/api/stock-baseline/${baselineId}/revert`);
+                    queryClient.invalidateQueries({ queryKey: ['stock-baseline'] });
+                    queryClient.invalidateQueries({ queryKey: ['stock-baseline-history'] });
+                    queryClient.invalidateQueries({ queryKey: ['stock'] });
 
-        setBaselineLoading(true);
-        try {
-            await axios.post(`${API_BASE_URL}/api/stock-baseline/${baselineId}/revert`);
-            queryClient.invalidateQueries({ queryKey: ['stock-baseline'] });
-            queryClient.invalidateQueries({ queryKey: ['stock-baseline-history'] });
-            queryClient.invalidateQueries({ queryKey: ['stock'] });
-
-            if (typeof fetchStockBaseline === 'function') fetchStockBaseline();
-            if (typeof fetchStockRecords === 'function') fetchStockRecords();
-            fetchBaselineHistory();
-            alert('Stock baseline reverted successfully!');
-        } catch (err) {
-            console.error('Error reverting baseline:', err);
-            alert(err.response?.data?.message || err.message || 'Failed to revert stock baseline.');
-        } finally {
-            setBaselineLoading(false);
-        }
+                    if (typeof fetchStockBaseline === 'function') fetchStockBaseline();
+                    if (typeof fetchStockRecords === 'function') fetchStockRecords();
+                    fetchBaselineHistory();
+                    setAdjustFeedback({
+                        type: 'success',
+                        message: 'Stock baseline reverted successfully!'
+                    });
+                } catch (err) {
+                    console.error('Error reverting baseline:', err);
+                    setAdjustFeedback({
+                        type: 'error',
+                        message: err.response?.data?.message || err.message || 'Failed to revert stock baseline.'
+                    });
+                } finally {
+                    setBaselineLoading(false);
+                }
+            }
+        });
     };
 
     const handleActivateBaseline = async (baselineId) => {
-        if (!window.confirm('Are you sure you want to activate this stock baseline?')) {
-            return;
-        }
+        setConfirmAction({
+            title: 'Confirm Activate Baseline',
+            message: 'Are you sure you want to activate this stock baseline?',
+            confirmText: 'Yes, Activate Baseline',
+            onConfirm: async () => {
+                setBaselineLoading(true);
+                try {
+                    await axios.post(`${API_BASE_URL}/api/stock-baseline/${baselineId}/activate`);
+                    queryClient.invalidateQueries({ queryKey: ['stock-baseline'] });
+                    queryClient.invalidateQueries({ queryKey: ['stock-baseline-history'] });
+                    queryClient.invalidateQueries({ queryKey: ['stock'] });
 
-        setBaselineLoading(true);
-        try {
-            await axios.post(`${API_BASE_URL}/api/stock-baseline/${baselineId}/activate`);
-            queryClient.invalidateQueries({ queryKey: ['stock-baseline'] });
-            queryClient.invalidateQueries({ queryKey: ['stock-baseline-history'] });
-            queryClient.invalidateQueries({ queryKey: ['stock'] });
-
-            if (typeof fetchStockBaseline === 'function') fetchStockBaseline();
-            if (typeof fetchStockRecords === 'function') fetchStockRecords();
-            await fetchBaselineHistory();
-            alert('Stock baseline activated successfully!');
-        } catch (err) {
-            console.error('Error activating baseline:', err);
-            alert(err.response?.data?.message || err.message || 'Failed to activate stock baseline.');
-        } finally {
-            setBaselineLoading(false);
-        }
+                    if (typeof fetchStockBaseline === 'function') fetchStockBaseline();
+                    if (typeof fetchStockRecords === 'function') fetchStockRecords();
+                    await fetchBaselineHistory();
+                    setAdjustFeedback({
+                        type: 'success',
+                        message: 'Stock baseline activated successfully!'
+                    });
+                } catch (err) {
+                    console.error('Error activating baseline:', err);
+                    setAdjustFeedback({
+                        type: 'error',
+                        message: err.response?.data?.message || err.message || 'Failed to activate stock baseline.'
+                    });
+                } finally {
+                    setBaselineLoading(false);
+                }
+            }
+        });
     };
 
     const isStockGroupSelected = (productName) => {
@@ -3005,7 +3586,7 @@ const StockManagement = ({
                                 <button
                                     onClick={() => {
                                         setShowBaselineModal(true);
-                                        setBaselineTab('preview');
+                                        setBaselineTab(activeBaseline ? 'adjust' : 'preview');
                                         setBaselineConfirmText('');
                                         setBaselineCutoffDate(getLocalDatetimeInputValue());
                                         fetchBaselineHistory();
@@ -3014,7 +3595,7 @@ const StockManagement = ({
                                         ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 hover:border-amber-400'
                                         : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400'
                                         }`}
-                                    title={activeBaseline ? "Initial Stock Baseline is Active. Click to view or manage." : "Snapshot current in-house stock as Day 1 Initial Stage."}
+                                    title={activeBaseline ? "Stock Baseline & Adjustment. Admin access only." : "Snapshot Day 1 Initial Stage & Stock Adjustment. Admin access only."}
                                 >
                                     <span className={`w-2.5 h-2.5 rounded-full ${activeBaseline ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
                                     <span>{activeBaseline ? 'Baseline Active' : 'Set Initial Stage'}</span>
@@ -5228,48 +5809,81 @@ const StockManagement = ({
                 <div className="fixed inset-0 z-[6000] flex items-center justify-center p-4 app-modal-overlay bg-black/60 backdrop-blur-xs animate-fade-in">
                     <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-scale-up">
                         {/* Modal Header */}
-                        <div className="px-6 py-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white flex items-center justify-between shadow-md shrink-0">
+                        <div className="px-6 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white flex items-center justify-between shadow-md shrink-0">
                             <div className="flex items-center gap-3">
                                 <div className="p-2.5 bg-white/15 rounded-2xl backdrop-blur-xs">
                                     <BoxIcon className="w-6 h-6 text-white" />
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-bold tracking-tight text-white">Stock Initial Stage & Rollover</h3>
-                                    <p className="text-xs text-blue-100 mt-0.5">Snapshot current in-house stock as the new Opening Baseline</p>
+                                    <h3 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                                        <span>Stock Baseline & Quantity Adjustment</span>
+                                        <span className="px-2 py-0.5 text-[10px] bg-amber-400 text-amber-950 font-black rounded-full uppercase tracking-wider">Admin Only</span>
+                                    </h3>
+                                    <p className="text-xs text-indigo-100 mt-0.5">Manage initial stage snapshots, direct stock adjustments (add/reduce/set), and sales LC allocations.</p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setShowBaselineModal(false)}
-                                className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-all"
+                                className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-all cursor-pointer"
                             >
                                 <XIcon className="w-6 h-6" />
                             </button>
                         </div>
 
                         {/* Tabs */}
-                        <div className="flex border-b border-gray-200 bg-gray-50/70 px-6 pt-3 shrink-0">
+                        <div className="flex border-b border-gray-200 bg-gray-50/70 px-6 pt-3 shrink-0 overflow-x-auto gap-1">
                             <button
-                                onClick={() => setBaselineTab('preview')}
-                                className={`pb-3 px-4 text-sm font-bold transition-all relative ${baselineTab === 'preview'
-                                    ? 'text-blue-600 border-b-2 border-blue-600'
-                                    : 'text-gray-500 hover:text-gray-700'
-                                    }`}
+                                type="button"
+                                onClick={() => setBaselineTab('adjust')}
+                                className={`pb-3 px-3.5 text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                                    baselineTab === 'adjust'
+                                        ? 'text-indigo-600 border-b-2 border-indigo-600'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                }`}
                             >
-                                Snapshot Current Stock (Initial Stage)
+                                <span>⚡</span>
+                                <span>Adjust Stock Qty</span>
                             </button>
                             <button
+                                type="button"
+                                onClick={() => setBaselineTab('reassign')}
+                                className={`pb-3 px-3.5 text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                                    baselineTab === 'reassign'
+                                        ? 'text-indigo-600 border-b-2 border-indigo-600'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                <span>🔄</span>
+                                <span>Reassign Sales</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setBaselineTab('preview')}
+                                className={`pb-3 px-3.5 text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                                    baselineTab === 'preview'
+                                        ? 'text-indigo-600 border-b-2 border-indigo-600'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                <span>📸</span>
+                                <span>Snapshot Baseline</span>
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => {
                                     setBaselineTab('history');
                                     fetchBaselineHistory();
                                 }}
-                                className={`pb-3 px-4 text-sm font-bold transition-all relative ${baselineTab === 'history'
-                                    ? 'text-blue-600 border-b-2 border-blue-600'
-                                    : 'text-gray-500 hover:text-gray-700'
-                                    }`}
+                                className={`pb-3 px-3.5 text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                                    baselineTab === 'history'
+                                        ? 'text-indigo-600 border-b-2 border-indigo-600'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                }`}
                             >
-                                Baseline History & Revert
+                                <span>📜</span>
+                                <span>Baseline History & Revert</span>
                                 {baselineHistory.length > 0 && (
-                                    <span className="ml-2 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full font-medium">
+                                    <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-gray-200 text-gray-700 rounded-full font-bold">
                                         {baselineHistory.length}
                                     </span>
                                 )}
@@ -5278,8 +5892,792 @@ const StockManagement = ({
 
                         {/* Modal Body */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                            {baselineTab === 'preview' ? (
-                                (() => {
+                            {/* Feedback Banner (Success / Error) */}
+                            {adjustFeedback && (
+                                <div className={`p-4 rounded-2xl text-xs font-semibold flex items-center justify-between gap-3 shadow-xs animate-fade-in ${
+                                    adjustFeedback.type === 'success'
+                                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
+                                        : 'bg-rose-50 border border-rose-200 text-rose-900'
+                                }`}>
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="text-base">{adjustFeedback.type === 'success' ? '✅' : '⚠️'}</span>
+                                        <span className="leading-relaxed">{adjustFeedback.message}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAdjustFeedback(null)}
+                                        className="text-gray-400 hover:text-gray-700 p-1 rounded-lg hover:bg-black/5 text-xs font-bold cursor-pointer transition-colors"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Inline Action Confirmation Prompt (No Browser Alert / Confirm) */}
+                            {confirmAction && (
+                                <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 shadow-sm space-y-3 animate-fade-in">
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 bg-amber-100 text-amber-900 rounded-xl text-base shrink-0">
+                                            ⚠️
+                                        </div>
+                                        <div className="flex-1">
+                                            <h5 className="text-xs font-bold text-amber-950 uppercase tracking-wider">
+                                                {confirmAction.title || 'Please Confirm Action'}
+                                            </h5>
+                                            <p className="text-xs text-amber-900 mt-1 whitespace-pre-line leading-relaxed font-medium">
+                                                {confirmAction.message}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-amber-200/80">
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmAction(null)}
+                                            className="px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:border-gray-300 rounded-xl hover:bg-gray-50 transition-all cursor-pointer shadow-xs active:scale-95"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                const fn = confirmAction.onConfirm;
+                                                setConfirmAction(null);
+                                                if (fn) await fn();
+                                            }}
+                                            className={`px-5 py-2 text-xs font-bold text-white rounded-xl shadow-md transition-all active:scale-95 cursor-pointer ${
+                                                confirmAction.type === 'danger'
+                                                    ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
+                                                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
+                                            }`}
+                                        >
+                                            {confirmAction.confirmText || 'Yes, Proceed'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {(baselineTab === 'adjust' || baselineTab === 'reassign') ? (
+                                <div className="space-y-5">
+                            {/* Zero Effect on LC Receive Guarantee Banner */}
+                            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-start gap-3 shadow-xs">
+                                <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
+                                    ✓
+                                </div>
+                                <div className="text-xs text-emerald-900 leading-relaxed">
+                                    <strong>Zero Effect on LC Receive:</strong> Changes made here only adjust warehouse stock allocations or reassign sales invoice LC tags in Stock Management. It will <strong>never modify or touch your original LC Receive, Deal Receive, or port arrival documents</strong>.
+                                </div>
+                            </div>
+
+                            {/* Mode Selection Tabs */}
+                            <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
+                                <button
+                                    type="button"
+                                    onClick={() => { setBaselineTab('adjust'); setConfirmAction(null); }}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                                        baselineTab === 'adjust'
+                                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    <span>⚡</span>
+                                    <span>Adjust Stock Quantity (Add / Reduce / Set)</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setBaselineTab('reassign'); setConfirmAction(null); }}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                                        baselineTab === 'reassign'
+                                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    <span>🔄</span>
+                                    <span>Reassign Sales Invoices between LCs</span>
+                                </button>
+                            </div>
+
+                            {/* Manual Selection Form */}
+                            <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-4">
+                                <h4 className="text-xs font-black text-gray-500 uppercase tracking-wider">
+                                    1. Select Product, Brand & LC Number
+                                </h4>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                    {/* Warehouse */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider pl-1">
+                                            Warehouse
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={manualFixWarehouse}
+                                                onChange={(e) => setManualFixWarehouse(e.target.value)}
+                                                className="w-full appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-xl px-4 py-2.5 pr-10 text-xs font-semibold text-gray-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-hidden transition-all cursor-pointer"
+                                            >
+                                                <option value="All">All Warehouses</option>
+                                                {warehouseOptions.map(wh => (
+                                                    <option key={wh} value={wh}>{wh}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDownIcon className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* Product */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider pl-1">
+                                            Product Name *
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={manualFixProduct}
+                                                onChange={(e) => {
+                                                    setManualFixProduct(e.target.value);
+                                                    setSelectedFixInvoices(new Set());
+                                                    setAdjustFeedback(null);
+                                                    setConfirmAction(null);
+                                                }}
+                                                className="w-full appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-xl px-4 py-2.5 pr-10 text-xs font-semibold text-gray-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-hidden transition-all cursor-pointer"
+                                            >
+                                                <option value="">-- Select Product --</option>
+                                                {manualFixProductOptions.map(p => (
+                                                    <option key={p} value={p}>{p}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDownIcon className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* Brand */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider pl-1">
+                                            Brand *
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={manualFixBrand}
+                                                onChange={(e) => {
+                                                    setManualFixBrand(e.target.value);
+                                                    setSelectedFixInvoices(new Set());
+                                                    setAdjustFeedback(null);
+                                                    setConfirmAction(null);
+                                                }}
+                                                className="w-full appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-xl px-4 py-2.5 pr-10 text-xs font-semibold text-gray-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-hidden transition-all cursor-pointer"
+                                            >
+                                                <option value="">-- Select Brand --</option>
+                                                {manualFixBrandOptions.map(b => (
+                                                    <option key={b} value={b}>{b}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDownIcon className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* LC Selection */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider pl-1">
+                                            Selected LC Number *
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={adjustLcNo || manualFixFromLc}
+                                                onChange={(e) => {
+                                                    setAdjustLcNo(e.target.value);
+                                                    setManualFixFromLc(e.target.value);
+                                                    setSelectedFixInvoices(new Set());
+                                                    setAdjustFeedback(null);
+                                                    setConfirmAction(null);
+                                                }}
+                                                className="w-full appearance-none bg-indigo-50/40 border border-indigo-200 hover:border-indigo-300 rounded-xl px-4 py-2.5 pr-10 text-xs font-bold text-indigo-950 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-hidden transition-all cursor-pointer font-mono"
+                                            >
+                                                {manualFixFromLcOptions.map(lc => (
+                                                    <option key={lc} value={lc}>{lc === '0000' ? '0000 (Placeholder)' : lc}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDownIcon className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 pointer-events-none" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {baselineTab === 'reassign' && (
+                                    <div className="pt-2 border-t border-gray-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                                        <div className="space-y-1.5 w-full sm:w-1/2">
+                                            <label className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider pl-1">
+                                                Target / To LC *
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    placeholder="e.g. 087326010601"
+                                                    value={manualFixToLc}
+                                                    onChange={(e) => setManualFixToLc(e.target.value)}
+                                                    list="manualFixTargetLcList"
+                                                    className="w-full bg-indigo-50/40 border border-indigo-200 hover:border-indigo-300 rounded-xl px-4 py-2.5 text-xs font-bold text-indigo-950 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-hidden transition-all font-mono"
+                                                />
+                                                <datalist id="manualFixTargetLcList">
+                                                    {manualFixTargetLcOptions.map(lc => (
+                                                        <option key={lc} value={lc} />
+                                                    ))}
+                                                </datalist>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Current LC Stock Breakdown Cards */}
+                            {manualFixProduct && manualFixBrand && (
+                                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-3.5">
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                                            <span>Current Stock Status for:</span>
+                                            <span className="text-gray-900 font-bold">{manualFixProduct}</span>
+                                            <span>•</span>
+                                            <span className="text-indigo-700 font-bold">{manualFixBrand}</span>
+                                        </h4>
+                                        <span className="text-xs text-gray-400 font-medium">
+                                            Click an LC card to select it for adjustment
+                                        </span>
+                                    </div>
+
+                                    {manualFixLcBreakdown.length === 0 ? (
+                                        <div className="text-xs text-gray-500 italic py-3 text-center bg-gray-50 rounded-xl">
+                                            No stock records currently found for this brand in the selected warehouse.
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                            {manualFixLcBreakdown.map((item, idx) => {
+                                                const isNeg = (item.closingQuantity || 0) < -0.001;
+                                                const isZero = Math.abs(item.closingQuantity || 0) <= 0.001;
+                                                const isSelected = (adjustLcNo || manualFixFromLc) === item.lcNo && (manualFixWarehouse === 'All' || item.warehouse.toLowerCase() === manualFixWarehouse.toLowerCase());
+                                                const pkt = calculatePktRemainder(item.closingQuantity, item.packetSize);
+
+                                                return (
+                                                    <div
+                                                        key={idx}
+                                                        onClick={() => {
+                                                            setAdjustLcNo(item.lcNo);
+                                                            setManualFixFromLc(item.lcNo);
+                                                            if (manualFixWarehouse === 'All') setManualFixWarehouse(item.warehouse);
+                                                            setAdjustFeedback(null);
+                                                            setConfirmAction(null);
+                                                        }}
+                                                        className={`p-4 rounded-2xl border text-xs flex flex-col justify-between cursor-pointer transition-all duration-200 ${
+                                                            isSelected
+                                                                ? 'bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-500 shadow-md scale-[1.01]'
+                                                                : (isNeg
+                                                                    ? 'bg-rose-50/40 border-rose-200 hover:border-rose-300 hover:shadow-xs'
+                                                                    : (isZero
+                                                                        ? 'bg-gray-50/80 border-gray-200 hover:border-gray-300 hover:shadow-xs'
+                                                                        : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-xs'))
+                                                        }`}
+                                                    >
+                                                        <div>
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <span className="font-mono font-bold text-gray-900 text-xs bg-gray-100 px-2 py-0.5 rounded-lg border border-gray-200">
+                                                                    LC: {item.lcNo}
+                                                                </span>
+                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                                    isNeg
+                                                                        ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                                                        : (isZero
+                                                                            ? 'bg-gray-100 text-gray-600 border border-gray-200'
+                                                                            : 'bg-emerald-100 text-emerald-800 border border-emerald-200')
+                                                                }`}>
+                                                                    {isNeg ? 'Pre-Sold' : (isZero ? 'Zero Stock' : 'In Stock')}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="space-y-1 mt-2">
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                                    {item.warehouse}
+                                                                </div>
+                                                                <div className={`text-lg font-black tracking-tight ${isNeg ? 'text-rose-600' : 'text-gray-900'}`}>
+                                                                    {Math.round(item.closingQuantity || 0).toLocaleString('en-US')} <span className="text-xs font-semibold text-gray-500">kg</span>
+                                                                </div>
+                                                                <div className="text-[11px] font-medium text-gray-500">
+                                                                    {pkt.whole.toLocaleString('en-US')} bags{pkt.remainder !== 0 ? ` - ${Math.abs(Math.round(pkt.remainder))} kg` : ''}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {isSelected && (
+                                                            <div className="mt-3 pt-2 border-t border-indigo-200 text-[10px] font-black text-indigo-700 flex items-center justify-center gap-1 uppercase tracking-wider">
+                                                                <span>✓</span> Selected for Adjustment
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* TAB 1: Direct Stock Adjustment Component */}
+                            {baselineTab === 'adjust' && (
+                                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-5">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                                        <div>
+                                            <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                                                <span>2. Adjust Quantity for LC:</span>
+                                                <span className="text-indigo-600 font-mono text-sm">
+                                                    {selectedLcItem?.lcNo || adjustLcNo || manualFixFromLc || 'None selected'}
+                                                </span>
+                                            </h4>
+                                            <p className="text-[11px] text-gray-500 mt-0.5">
+                                                Add or reduce stock, or set exact physical count. LC Receive records will <strong>NOT</strong> be affected.
+                                            </p>
+                                        </div>
+
+                                        {selectedLcItem && (
+                                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                                                Warehouse: {selectedLcItem.warehouse}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Selected LC Status Summary */}
+                                    {selectedLcItem ? (
+                                        <div className="bg-gradient-to-r from-gray-50 to-indigo-50/30 rounded-2xl p-4 border border-indigo-100 space-y-3">
+                                            <div className="flex flex-wrap items-center justify-between gap-4">
+                                                <div>
+                                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                                        Current Closing Stock in Warehouse
+                                                    </span>
+                                                    <div className="flex items-baseline gap-2 mt-0.5">
+                                                        <span className={`text-2xl font-black ${
+                                                            selectedLcItem.closingQuantity < -0.001 ? 'text-rose-600' : 'text-gray-900'
+                                                        }`}>
+                                                            {Math.round(selectedLcItem.closingQuantity || 0).toLocaleString('en-US')} kg
+                                                        </span>
+                                                        <span className="text-sm font-bold text-gray-600">
+                                                            ({(() => {
+                                                                const p = calculatePktRemainder(selectedLcItem.closingQuantity, selectedLcItem.packetSize || 30);
+                                                                return `${p.whole.toLocaleString('en-US')} bags${p.remainder !== 0 ? ` - ${Math.abs(Math.round(p.remainder))} kg` : ''}`;
+                                                            })()})
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    {/* Quick Zero Out Button if Negative */}
+                                                    {selectedLcItem.closingQuantity < -0.001 && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={isAdjustingStock}
+                                                            onClick={() => handleApplyStockAdjustment({
+                                                                targetQuantity: 0,
+                                                                mode: 'set',
+                                                                note: 'Zero out negative placeholder balance'
+                                                            })}
+                                                            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                                                        >
+                                                            <span>⚡</span>
+                                                            <span>One-Click Zero Out (Set to 0 kg)</span>
+                                                        </button>
+                                                    )}
+                                                    <span className="text-xs text-gray-500 bg-white px-3 py-1.5 rounded-xl border border-gray-200 font-medium">
+                                                        Bag Size: <strong className="text-gray-900">{selectedLcItem.packetSize || 30} kg</strong>
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Negative warning banner if placeholder has negative balance */}
+                                            {selectedLcItem.closingQuantity < -0.001 && (
+                                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-start gap-2 font-medium">
+                                                    <span className="text-sm">⚠️</span>
+                                                    <div>
+                                                        This LC currently has a negative balance of <strong>{Math.round(Math.abs(selectedLcItem.closingQuantity)).toLocaleString()} kg</strong>. Click <strong>"One-Click Zero Out"</strong> to eliminate the discrepancy without touching any LC receive records.
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="text-xs text-gray-500 italic p-3 bg-gray-50 rounded-xl text-center">
+                                            Please select an LC number from above to adjust.
+                                        </div>
+                                    )}
+
+                                    {/* Adjustment Mode Selection */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-2">
+                                                Select Adjustment Action
+                                            </label>
+                                            <div className="grid grid-cols-3 gap-2.5 max-w-lg">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setAdjustMode('add'); setAdjustFeedback(null); setConfirmAction(null); }}
+                                                    className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
+                                                        adjustMode === 'add'
+                                                            ? 'bg-emerald-600 text-white shadow-emerald-600/20'
+                                                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-800'
+                                                    }`}
+                                                >
+                                                    <span>➕</span>
+                                                    <span>Add (+)</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setAdjustMode('reduce'); setAdjustFeedback(null); setConfirmAction(null); }}
+                                                    className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
+                                                        adjustMode === 'reduce'
+                                                            ? 'bg-rose-600 text-white shadow-rose-600/20'
+                                                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-800'
+                                                    }`}
+                                                >
+                                                    <span>➖</span>
+                                                    <span>Reduce (-)</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setAdjustMode('set'); setAdjustFeedback(null); setConfirmAction(null); }}
+                                                    className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
+                                                        adjustMode === 'set'
+                                                            ? 'bg-indigo-600 text-white shadow-indigo-600/20'
+                                                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-800'
+                                                    }`}
+                                                >
+                                                    <span>🎯</span>
+                                                    <span>Set Exact</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Input Amount & Unit */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end max-w-2xl">
+                                            <div className="sm:col-span-2">
+                                                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                                    {adjustMode === 'add' ? 'Quantity to Add' : (adjustMode === 'reduce' ? 'Quantity to Reduce' : 'New Exact Target Stock')} *
+                                                </label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="any"
+                                                        placeholder={`Enter quantity in ${adjustUnit}...`}
+                                                        value={adjustAmount}
+                                                        onChange={(e) => { setAdjustAmount(e.target.value); setAdjustFeedback(null); setConfirmAction(null); }}
+                                                        className="w-full text-sm font-bold px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-hidden transition-all shadow-xs"
+                                                    />
+                                                    <div className="absolute right-2 top-1.5 flex items-center gap-1 bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setAdjustUnit('bag')}
+                                                            className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                                                                adjustUnit === 'bag' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-600 hover:bg-gray-200'
+                                                            }`}
+                                                        >
+                                                            Bag
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setAdjustUnit('kg')}
+                                                            className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                                                                adjustUnit === 'kg' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-600 hover:bg-gray-200'
+                                                            }`}
+                                                        >
+                                                            kg
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Note / Reason */}
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                                    Adjustment Reason
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="e.g. Physical stock count"
+                                                    value={adjustNote}
+                                                    onChange={(e) => setAdjustNote(e.target.value)}
+                                                    className="w-full text-xs font-medium px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-hidden transition-all shadow-xs"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Quick Bag Pills */}
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-[11px] text-gray-400 font-semibold mr-1">Quick Bags:</span>
+                                            {[1, 5, 10, 20, 50, 100].map(val => (
+                                                <button
+                                                    key={val}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setAdjustUnit('bag');
+                                                        setAdjustAmount(val.toString());
+                                                        setAdjustFeedback(null);
+                                                        setConfirmAction(null);
+                                                    }}
+                                                    className="px-2.5 py-1 text-xs font-bold rounded-lg border border-gray-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-gray-700 hover:text-indigo-700 transition-all cursor-pointer shadow-xs active:scale-95"
+                                                >
+                                                    {adjustMode === 'reduce' ? `-${val}` : `+${val}`} bag{val > 1 ? 's' : ''}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Real-time Resulting Stock Preview Box */}
+                                        {selectedLcItem && adjustAmount && !isNaN(parseFloat(adjustAmount)) && (
+                                            <div className="bg-indigo-50/60 border border-indigo-200 rounded-2xl p-4 space-y-2">
+                                                <span className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider">
+                                                    Live Adjustment Calculation Preview
+                                                </span>
+                                                {(() => {
+                                                    const cur = selectedLcItem.closingQuantity !== undefined ? selectedLcItem.closingQuantity : (selectedLcItem.inHouseQuantity || 0);
+                                                    const pSize = selectedLcItem.packetSize || 30;
+                                                    const rawAmt = parseFloat(adjustAmount) || 0;
+                                                    const amtKg = adjustUnit === 'bag' ? rawAmt * pSize : rawAmt;
+                                                    let resQty = cur;
+                                                    if (adjustMode === 'add') resQty = cur + amtKg;
+                                                    else if (adjustMode === 'reduce') resQty = cur - amtKg;
+                                                    else resQty = amtKg;
+
+                                                    const curB = calculatePktRemainder(cur, pSize);
+                                                    const resB = calculatePktRemainder(resQty, pSize);
+
+                                                    return (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                                            <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
+                                                                <span className="text-gray-500 block text-[10px] uppercase font-bold">Current Stock</span>
+                                                                <span className="text-sm font-black text-gray-800 block">{Math.round(cur).toLocaleString()} kg</span>
+                                                                <span className="text-[11px] text-gray-500">{curB.whole.toLocaleString()} bags</span>
+                                                            </div>
+                                                            <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
+                                                                <span className="text-gray-500 block text-[10px] uppercase font-bold">Adjustment</span>
+                                                                <span className={`text-sm font-black block ${
+                                                                    adjustMode === 'reduce' ? 'text-rose-600' : 'text-emerald-600'
+                                                                }`}>
+                                                                    {adjustMode === 'reduce' ? '-' : (adjustMode === 'add' ? '+' : '= ')}{Math.round(amtKg).toLocaleString()} kg
+                                                                </span>
+                                                                <span className="text-[11px] text-gray-500">
+                                                                    ({(amtKg / pSize).toFixed(1)} bags)
+                                                                </span>
+                                                            </div>
+                                                            <div className="bg-indigo-600 text-white p-3 rounded-xl shadow-xs">
+                                                                <span className="text-indigo-200 block text-[10px] uppercase font-bold">Resulting Closing Stock</span>
+                                                                <span className="text-base font-black block">{Math.round(resQty).toLocaleString()} kg</span>
+                                                                <span className="text-[11px] text-indigo-100">{resB.whole.toLocaleString()} bags{resB.remainder !== 0 ? ` - ${Math.abs(Math.round(resB.remainder))} kg` : ''}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+
+                                        {/* Apply Stock Adjustment Button */}
+                                        <div className="pt-2">
+                                            <button
+                                                type="button"
+                                                disabled={isAdjustingStock || !selectedLcItem || !adjustAmount || isNaN(parseFloat(adjustAmount))}
+                                                onClick={() => handleApplyStockAdjustment()}
+                                                className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
+                                            >
+                                                <span>✓</span>
+                                                <span>{isAdjustingStock ? 'Applying Stock Adjustment...' : 'Apply Stock Adjustment (Zero Effect on LC Receive)'}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* TAB 2: Matching Sales Invoices Section */}
+                            {baselineTab === 'reassign' && (
+                                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div>
+                                        <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider">
+                                            2. Select Sales Invoices to Reassign ({manualFixMatchingInvoices.length} found under LC {manualFixFromLc})
+                                        </h4>
+                                        <p className="text-[11px] text-gray-500 mt-0.5">
+                                            Select which sales to reassign to <strong>LC {manualFixToLc || '...'}</strong>.
+                                        </p>
+                                    </div>
+
+                                    {manualFixMatchingInvoices.length > 0 && (
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (selectedFixInvoices.size === manualFixMatchingInvoices.length) {
+                                                        setSelectedFixInvoices(new Set());
+                                                    } else {
+                                                        setSelectedFixInvoices(new Set(manualFixMatchingInvoices.map(i => i.invoiceNo)));
+                                                    }
+                                                }}
+                                                className="px-2.5 py-1 text-xs font-bold rounded-lg border border-gray-300 hover:bg-gray-100 text-gray-700 transition-all cursor-pointer"
+                                            >
+                                                {selectedFixInvoices.size === manualFixMatchingInvoices.length ? 'Deselect All' : 'Select All'}
+                                            </button>
+
+                                            {/* Quick select to cover negative closing */}
+                                            {(() => {
+                                                const negClosing = manualFixLcBreakdown.find(i => i.lcNo === manualFixFromLc && i.closingQuantity < -0.001);
+                                                if (negClosing) {
+                                                    const neededQty = Math.abs(negClosing.closingQuantity);
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                let acc = 0;
+                                                                const newSet = new Set();
+                                                                for (const inv of manualFixMatchingInvoices) {
+                                                                    newSet.add(inv.invoiceNo);
+                                                                    acc += inv.quantity;
+                                                                    if (acc >= neededQty) break;
+                                                                }
+                                                                setSelectedFixInvoices(newSet);
+                                                            }}
+                                                            className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 transition-all cursor-pointer"
+                                                        >
+                                                            Select to Cover Pre-Sold ({neededQty.toLocaleString('en-US')} kg)
+                                                        </button>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {manualFixMatchingInvoices.length === 0 ? (
+                                    <div className="p-8 text-center bg-gray-50 rounded-xl text-gray-500 text-xs italic">
+                                        No sales records found for {manualFixProduct || 'the selected product'} - {manualFixBrand || 'brand'} under LC {manualFixFromLc}.
+                                    </div>
+                                ) : (
+                                    <div className="border border-gray-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                                        <table className="w-full text-left text-xs border-collapse">
+                                            <thead className="bg-gray-100 sticky top-0 border-b border-gray-200 z-10">
+                                                <tr>
+                                                    <th className="px-3 py-2 w-10 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedFixInvoices.size === manualFixMatchingInvoices.length && manualFixMatchingInvoices.length > 0}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedFixInvoices(new Set(manualFixMatchingInvoices.map(i => i.invoiceNo)));
+                                                                } else {
+                                                                    setSelectedFixInvoices(new Set());
+                                                                }
+                                                            }}
+                                                            className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                        />
+                                                    </th>
+                                                    <th className="px-3 py-2 font-bold text-gray-600">Invoice No</th>
+                                                    <th className="px-3 py-2 font-bold text-gray-600">Date</th>
+                                                    <th className="px-3 py-2 font-bold text-gray-600">Customer</th>
+                                                    <th className="px-3 py-2 font-bold text-gray-600">Warehouse</th>
+                                                    <th className="px-3 py-2 font-bold text-gray-600 text-right">Sold Qty (kg)</th>
+                                                    <th className="px-3 py-2 font-bold text-gray-600 text-center">Current LC</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100 bg-white">
+                                                {manualFixMatchingInvoices.map((inv, idx) => {
+                                                    const isChecked = selectedFixInvoices.has(inv.invoiceNo);
+                                                    return (
+                                                        <tr
+                                                            key={idx}
+                                                            onClick={() => {
+                                                                const next = new Set(selectedFixInvoices);
+                                                                if (next.has(inv.invoiceNo)) next.delete(inv.invoiceNo);
+                                                                else next.add(inv.invoiceNo);
+                                                                setSelectedFixInvoices(next);
+                                                            }}
+                                                            className={`cursor-pointer transition-colors ${
+                                                                isChecked ? 'bg-indigo-50/40' : 'hover:bg-gray-50'
+                                                            }`}
+                                                        >
+                                                            <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isChecked}
+                                                                    onChange={() => {
+                                                                        const next = new Set(selectedFixInvoices);
+                                                                        if (next.has(inv.invoiceNo)) next.delete(inv.invoiceNo);
+                                                                        else next.add(inv.invoiceNo);
+                                                                        setSelectedFixInvoices(next);
+                                                                    }}
+                                                                    className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2 font-bold text-gray-900">{inv.invoiceNo}</td>
+                                                            <td className="px-3 py-2 text-gray-600">{inv.date ? String(inv.date).split('T')[0] : '—'}</td>
+                                                            <td className="px-3 py-2 font-medium text-gray-800">{inv.customer}</td>
+                                                            <td className="px-3 py-2 text-gray-600">{inv.warehouse}</td>
+                                                            <td className="px-3 py-2 text-right font-black text-gray-900">{inv.quantity.toLocaleString('en-US')} kg</td>
+                                                            <td className="px-3 py-2 text-center font-mono text-red-600 font-bold">{inv.lcNo}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* Action Bar */}
+                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="text-xs text-gray-700">
+                                        Selected: <strong>{selectedFixInvoices.size} invoices</strong>
+                                        {' '}• Total Qty:{' '}
+                                        <strong className="text-indigo-700">
+                                            {manualFixMatchingInvoices
+                                                .filter(i => selectedFixInvoices.has(i.invoiceNo))
+                                                .reduce((sum, i) => sum + i.quantity, 0)
+                                                .toLocaleString('en-US')} kg
+                                        </strong>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        disabled={manualFixLoading || selectedFixInvoices.size === 0 || !manualFixToLc}
+                                        onClick={handleManualFixReassign}
+                                        className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                                    >
+                                        {manualFixLoading ? 'Updating Invoices...' : `Fix & Reassign ${selectedFixInvoices.size} Invoices to LC ${manualFixToLc || '...'}`}
+                                    </button>
+                                </div>
+                            </div>
+                            )}
+
+                            {/* Auto-Offset Live View Toggle */}
+                            <div className="bg-white border border-indigo-100 p-4 rounded-2xl shadow-xs flex items-center justify-between gap-4">
+                                <div className="space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                        <h5 className="text-xs font-bold text-gray-900">Auto-Offset in Real-Time View</h5>
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                            isOffsetZeroLcActive ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+                                        }`}>
+                                            {isOffsetZeroLcActive ? 'Active' : 'Disabled'}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500">
+                                        Keeps Show Rate balanced on-the-fly by absorbing placeholder sales into positive LC stock.
+                                    </p>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const next = !isOffsetZeroLcActive;
+                                        setIsOffsetZeroLcActive(next);
+                                        localStorage.setItem('stock_offset_zero_lc', String(next));
+                                    }}
+                                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                                        isOffsetZeroLcActive ? 'bg-indigo-600' : 'bg-gray-300'
+                                    }`}
+                                >
+                                    <span
+                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                            isOffsetZeroLcActive ? 'translate-x-5' : 'translate-x-0'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+                        </div>
+                    ) : baselineTab === 'preview' ? (
+                        (() => {
                                     const { snapshotRecords, summary } = generateCurrentStockSnapshot();
                                     const filteredSnapshot = snapshotRecords.filter(item => {
                                         if (baselineWhFilter !== 'All' && item.warehouse !== baselineWhFilter) return false;
@@ -5386,16 +6784,19 @@ const StockManagement = ({
                                                         <span>Preview of Items Becoming Initial Stock ({filteredSnapshot.length} entries)</span>
                                                     </h4>
                                                     <div className="flex items-center gap-2">
-                                                        <select
-                                                            value={baselineWhFilter}
-                                                            onChange={(e) => setBaselineWhFilter(e.target.value)}
-                                                            className="text-xs border border-gray-300 rounded-xl px-3 py-1.5 bg-white font-medium text-gray-700 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                                                        >
-                                                            <option value="All">All Warehouses ({uniqueWhs.length})</option>
-                                                            {uniqueWhs.map(w => (
-                                                                <option key={w} value={w}>{w}</option>
-                                                            ))}
-                                                        </select>
+                                                        <div className="relative">
+                                                            <select
+                                                                value={baselineWhFilter}
+                                                                onChange={(e) => setBaselineWhFilter(e.target.value)}
+                                                                className="appearance-none text-xs border border-gray-200 hover:border-gray-300 rounded-xl px-3.5 py-1.5 pr-8 bg-white font-medium text-gray-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-xs cursor-pointer"
+                                                            >
+                                                                <option value="All">All Warehouses ({uniqueWhs.length})</option>
+                                                                {uniqueWhs.map(w => (
+                                                                    <option key={w} value={w}>{w}</option>
+                                                                ))}
+                                                            </select>
+                                                            <ChevronDownIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                                        </div>
                                                         <div className="relative">
                                                             <input
                                                                 type="text"
@@ -5614,6 +7015,7 @@ const StockManagement = ({
                                     )}
                                 </div>
                             )}
+
                         </div>
 
                         {/* Modal Footer */}
@@ -5629,6 +7031,8 @@ const StockManagement = ({
                 </div>,
                 document.body
             )}
+
+
 
         </div >
     );

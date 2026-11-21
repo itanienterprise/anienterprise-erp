@@ -4318,6 +4318,248 @@ apiRouter.delete('/api/sales/:id', async (req, res) => {
   }
 });
 
+apiRouter.post('/api/sales/reassign-lc', async (req, res) => {
+  try {
+    const userSession = req.session.user;
+    const isAdmin = userSession && (userSession.username === 'admin' || (userSession.role || '').toLowerCase() === 'admin');
+    const hasPerm = isAdmin || (userSession?.permissions?.stock?.special === true);
+    if (!hasPerm) {
+      return res.status(403).json({ message: 'Forbidden: Admin or special stock permission required' });
+    }
+
+    const { productName, brand, warehouse, fromLc = '0000', toLc, invoiceNos, maxQty } = req.body;
+    if (!toLc) {
+      return res.status(400).json({ message: 'Target LC No (toLc) is required' });
+    }
+
+    const isPlaceholderLc = (v) => !v || ['0000', '000', '00', '0', '-', '—', '--'].includes(v.toString().trim().toLowerCase());
+    const salesDocs = await Sale.find({});
+    let updatedCount = 0;
+    let totalQtyUpdated = 0;
+    const targetInvoiceSet = Array.isArray(invoiceNos) && invoiceNos.length > 0
+      ? new Set(invoiceNos.map(x => String(x).trim().toUpperCase()))
+      : null;
+
+    for (const doc of salesDocs) {
+      let sale = doc.data ? decryptData(doc.data) : doc;
+      if (sale && sale.data && typeof sale.data === 'string' && !sale.invoiceNo) {
+        try { sale = decryptData(sale.data); } catch (e) { }
+      }
+      if (!sale || !Array.isArray(sale.items)) continue;
+
+      const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
+      const sType = (sale.saleType || '').toLowerCase();
+      const isOrder = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
+      if (isOrder) continue;
+
+      if (targetInvoiceSet && !targetInvoiceSet.has(inv)) continue;
+
+      let changed = false;
+
+      sale.items.forEach(item => {
+        const pMatch = !productName || (item.productName || item.product || '').trim().toLowerCase() === productName.trim().toLowerCase();
+        if (!pMatch) return;
+
+        if (Array.isArray(item.brandEntries) && item.brandEntries.length > 0) {
+          item.brandEntries.forEach(be => {
+            const bMatch = !brand || (be.brand || item.brand || '').trim().toLowerCase() === brand.trim().toLowerCase();
+            const wMatch = !warehouse || warehouse === 'All' || warehouse === 'All Warehouses' || (be.warehouse || item.warehouse || sale.warehouse || '').trim().toLowerCase() === warehouse.trim().toLowerCase();
+            const curLc = (be.lcNo || item.lcNo || '').trim();
+            const lcMatch = fromLc ? (curLc === fromLc || (fromLc === '0000' && isPlaceholderLc(curLc))) : isPlaceholderLc(curLc);
+
+            if (bMatch && wMatch && lcMatch) {
+              const itemQty = parseFloat(be.quantity || be.qty) || 0;
+              be.lcNo = toLc;
+              totalQtyUpdated += itemQty;
+              changed = true;
+            }
+          });
+        } else {
+          const bMatch = !brand || (item.brand || '').trim().toLowerCase() === brand.trim().toLowerCase();
+          const wMatch = !warehouse || warehouse === 'All' || warehouse === 'All Warehouses' || (item.warehouse || sale.warehouse || '').trim().toLowerCase() === warehouse.trim().toLowerCase();
+          const curLc = (item.lcNo || '').trim();
+          const lcMatch = fromLc ? (curLc === fromLc || (fromLc === '0000' && isPlaceholderLc(curLc))) : isPlaceholderLc(curLc);
+
+          if (bMatch && wMatch && lcMatch) {
+            const itemQty = parseFloat(item.quantity || item.qty) || 0;
+            item.lcNo = toLc;
+            totalQtyUpdated += itemQty;
+            changed = true;
+          }
+        }
+      });
+
+      if (changed) {
+        const encrypted = encryptData(sale);
+        await Sale.findByIdAndUpdate(doc._id, { data: encrypted });
+        updatedCount++;
+        if (Array.isArray(memoryCache.sales)) {
+          const idx = memoryCache.sales.findIndex(s => String(s._id) === String(doc._id));
+          if (idx >= 0) {
+            memoryCache.sales[idx] = { ...sale, _id: doc._id };
+          }
+        }
+      }
+    }
+
+    inFlightSalesFetch = null;
+    broadcastUpdate('sales', 'update', { message: `Reassigned LC to ${toLc} across ${updatedCount} sales` });
+    broadcastUpdate('stock', 'update', { message: `Stock recalculated after LC reassignment` });
+
+    res.json({
+      message: `Successfully updated ${updatedCount} sales (${totalQtyUpdated.toLocaleString('en-US')} kg) to LC ${toLc}`,
+      updatedCount,
+      totalQtyUpdated
+    });
+  } catch (err) {
+    console.error('Error in reassign-lc:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.post(['/api/stock-baseline/adjust-opening', '/api/stock/adjust-quantity'], async (req, res) => {
+  try {
+    const userSession = req.session.user;
+    const hasPermission = !userSession || (
+      userSession.username === 'admin' ||
+      (userSession.role || '').toLowerCase() === 'admin' ||
+      (userSession.permissions && userSession.permissions.stock && (
+        userSession.permissions.stock.special === true ||
+        userSession.permissions.stock.edit === true ||
+        userSession.permissions.stock.add === true
+      ))
+    );
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Forbidden: Stock edit permission required' });
+    }
+
+    const {
+      warehouse,
+      productName,
+      brand,
+      lcNo = '0000',
+      mode = 'set', // 'set' | 'add' | 'reduce'
+      adjustQuantity,
+      targetQuantity,
+      currentClosingQuantity,
+      newQuantity,
+      note = ''
+    } = req.body;
+
+    if (!warehouse || !productName || !brand) {
+      return res.status(400).json({ message: 'Warehouse, productName, and brand are required' });
+    }
+
+    const baselines = await StockBaseline.find({});
+    let targetDoc = null;
+    let targetBaseline = null;
+
+    for (const b of baselines) {
+      const d = decryptData(b.data);
+      if (d && d.status === 'active') {
+        targetDoc = b;
+        targetBaseline = d;
+        break;
+      }
+    }
+
+    if (!targetBaseline) {
+      return res.status(404).json({ message: 'No active stock baseline found' });
+    }
+
+    const snap = targetBaseline.snapshotRecords || [];
+    const pNorm = (productName || '').trim().toLowerCase();
+    const bNorm = (brand || '').trim().toLowerCase();
+    const whNorm = (warehouse || '').trim().toLowerCase();
+    const lcNorm = (lcNo || '0000').trim().toLowerCase();
+
+    let existingIdx = snap.findIndex(r => {
+      const rWh = (r.warehouse || '').trim().toLowerCase();
+      const rP = (r.productName || r.product || '').trim().toLowerCase();
+      const rB = (r.brand || '').trim().toLowerCase();
+      const rLc = (r.lcNo || '0000').trim().toLowerCase();
+      return rWh === whNorm && rP === pNorm && rB === bNorm && rLc === lcNorm;
+    });
+
+    const existingItem = existingIdx >= 0 ? snap[existingIdx] : null;
+    const pktSize = (existingItem?.packetSize) || parseFloat(req.body.packetSize) || 30;
+
+    let delta = 0;
+    let finalTargetClosing = 0;
+
+    if (mode === 'add') {
+      delta = Math.abs(parseFloat(adjustQuantity) || 0);
+      finalTargetClosing = (parseFloat(currentClosingQuantity) || 0) + delta;
+    } else if (mode === 'reduce') {
+      delta = -Math.abs(parseFloat(adjustQuantity) || 0);
+      finalTargetClosing = (parseFloat(currentClosingQuantity) || 0) + delta;
+    } else { // 'set'
+      const target = targetQuantity !== undefined ? parseFloat(targetQuantity) : parseFloat(newQuantity);
+      if (target === undefined || isNaN(target)) {
+        return res.status(400).json({ message: 'Target quantity is required for mode: set' });
+      }
+      finalTargetClosing = target;
+      if (currentClosingQuantity !== undefined && !isNaN(parseFloat(currentClosingQuantity))) {
+        delta = target - parseFloat(currentClosingQuantity);
+      } else if (existingItem) {
+        delta = target - (parseFloat(existingItem.quantity) || 0);
+      } else {
+        delta = target;
+      }
+    }
+
+    if (existingIdx >= 0) {
+      const oldQty = parseFloat(snap[existingIdx].quantity) || 0;
+      const newQty = oldQty + delta;
+      snap[existingIdx].quantity = newQty;
+      snap[existingIdx].inHouseQuantity = newQty;
+      snap[existingIdx].packet = newQty / pktSize;
+      snap[existingIdx].inHousePacket = newQty / pktSize;
+      if (note) snap[existingIdx].adjustmentNote = note;
+    } else {
+      const initialOpening = delta;
+      snap.push({
+        warehouse: warehouse.toUpperCase(),
+        productName: productName.trim().toUpperCase(),
+        brand: brand.trim().toUpperCase(),
+        quality: '-',
+        lcNo: lcNo.trim() || '0000',
+        quantity: initialOpening,
+        inHouseQuantity: initialOpening,
+        packet: initialOpening / pktSize,
+        inHousePacket: initialOpening / pktSize,
+        packetSize: pktSize,
+        rate: 0,
+        purchasedPrice: 0,
+        unit: 'kg',
+        adjustmentNote: note || 'Manual stock adjustment'
+      });
+    }
+
+    targetBaseline.snapshotRecords = snap;
+    await StockBaseline.findByIdAndUpdate(targetDoc._id, { data: encryptData(targetBaseline) });
+
+    if (memoryCache) {
+      memoryCache.stock = null;
+    }
+
+    broadcastUpdate('stock', 'update', {
+      message: `Stock adjusted for ${productName} - ${brand} (LC ${lcNo}) in ${warehouse} by ${delta > 0 ? '+' : ''}${delta} kg. Zero effect on LC Receive.`
+    });
+    broadcastUpdate('baseline', 'update', { message: 'Baseline updated' });
+
+    res.json({
+      success: true,
+      message: `Successfully adjusted stock for ${warehouse} (${productName} - ${brand}, LC ${lcNo}). New Closing: ${finalTargetClosing.toLocaleString('en-US')} kg. LC Receive records were NOT affected.`,
+      targetQuantity: finalTargetClosing,
+      delta: delta
+    });
+  } catch (err) {
+    console.error('Error adjusting stock quantity:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 apiRouter.put('/api/sales/:id', async (req, res) => {
   try {
     const userSession = req.session.user;
@@ -5126,9 +5368,17 @@ apiRouter.get('/api/bank-dollar-rates', async (req, res) => {
         sellRate = null;
       }
 
-      // If previousRate is still null but todayDoc has a stored previousRate
+      // If previousRate is still null, check todayDoc or fallback to scraped/BANK_REGISTRY baseline
       if (previousRate == null && todayDoc?.previousRate != null) {
         previousRate = parseFloat(todayDoc.previousRate);
+      }
+      if (previousRate == null) {
+        const regPrev = scraped?.previousRate != null 
+          ? scraped.previousRate 
+          : (BANK_REGISTRY[matched?.key]?.previousRate != null ? BANK_REGISTRY[matched?.key].previousRate : null);
+        if (regPrev != null) {
+          previousRate = parseFloat(regPrev);
+        }
       }
 
       // Calculate change
@@ -5365,8 +5615,14 @@ apiRouter.post('/api/bank-dollar-rates/sync', async (req, res) => {
         todayRate: parseFloat(scraped.todayRate),
         buyRate: scraped.buyRate != null ? parseFloat(scraped.buyRate) : null,
         sellRate: scraped.sellRate != null ? parseFloat(scraped.sellRate) : parseFloat(scraped.todayRate),
+        previousRate: scraped.previousRate != null 
+          ? parseFloat(scraped.previousRate) 
+          : (existingTodayMap.get(cKey)?.dec?.previousRate != null 
+              ? parseFloat(existingTodayMap.get(cKey).dec.previousRate) 
+              : (BANK_REGISTRY[scrapedKey]?.previousRate != null ? parseFloat(BANK_REGISTRY[scrapedKey].previousRate) : null)),
         rateType: scraped.rateType || 'BC Selling (LC/Trade)',
         rateDate: scraped.rateDate || todayDate,
+        rateDateDisplay: scraped.rateDateDisplay || extractCircularDate(scraped.rateDate) || '19 Nov 2026',
         isLiveScraped: true,
         isManualOverride: false,
         source: 'Official Bank Website',

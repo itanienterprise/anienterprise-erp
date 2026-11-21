@@ -504,6 +504,11 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
                             <span>0.00</span>
                           </span>
                         )}
+                        {currentRate != null && !isUp && !isDown && !isSame && (
+                          <span className="w-full inline-flex items-center justify-center py-0.5 rounded-md text-[10px] font-medium text-gray-400 bg-gray-50 border border-gray-100 shadow-2xs whitespace-nowrap">
+                            —
+                          </span>
+                        )}
                         {currentRate == null && (
                           <span className="w-full inline-flex items-center justify-center py-0.5 rounded-md text-[10px] font-medium text-gray-400 bg-gray-50 border border-gray-100 shadow-2xs whitespace-nowrap" title="Rate not published today">
                             —
@@ -999,6 +1004,11 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
                                 <span className="w-full inline-flex items-center justify-center gap-0.5 py-0.5 rounded-md text-[10px] font-bold bg-gray-50 text-gray-500 border border-gray-200 shadow-2xs whitespace-nowrap">
                                   <span>—</span>
                                   <span>0.00</span>
+                                </span>
+                              )}
+                              {currentRate != null && !isUp && !isDown && !isSame && (
+                                <span className="w-full inline-flex items-center justify-center py-0.5 rounded-md text-[10px] font-medium text-gray-400 bg-gray-50 border border-gray-100 shadow-2xs whitespace-nowrap">
+                                  —
                                 </span>
                               )}
                               {currentRate == null && (
