@@ -52,7 +52,11 @@ const PiMobileCard = React.memo(({
         return parseFloat(record.grandTotalQuantity || record.quantity) || 0;
     }, [record.productsList, record.grandTotalQuantity, record.quantity]);
 
-    const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
+    const displayPort = useMemo(() => {
+        const actualRevs = (record.revisions || []).filter(r => r.reviseNo !== 'Original PI');
+        const latestRev = actualRevs.length > 0 ? actualRevs[actualRevs.length - 1] : null;
+        return latestRev?.port || latestRev?.portOfDischarge || record.port || record.portOfDischarge || record.portOfLoading || 'N/A';
+    }, [record.revisions, record.port, record.portOfDischarge, record.portOfLoading]);
     const hasMultipleProducts = record.productsList && record.productsList.length > 1;
 
     // Only compute entry details when card is expanded AND user has permission
@@ -439,6 +443,8 @@ const PiHistoryExplorerModal = React.memo(({
             lcDate: linkedLc?.openingDate || linkedLc?.lcDate || viewHistoryRecord.lcDate || activeRevision.lcDate || '',
             originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (viewHistoryRecord.productsList || [])),
             originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (viewHistoryRecord.ipNumbers || [])),
+            originalPort: origRev?.port || origRev?.portOfDischarge || viewHistoryRecord.port || viewHistoryRecord.portOfDischarge || '',
+            originalPortOfDischarge: origRev?.portOfDischarge || origRev?.port || viewHistoryRecord.portOfDischarge || viewHistoryRecord.port || '',
             amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
             extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
             extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
@@ -494,6 +500,8 @@ const PiHistoryExplorerModal = React.memo(({
             lcDate: linkedLc?.openingDate || linkedLc?.lcDate || viewHistoryRecord.lcDate || activeRevision.lcDate || '',
             originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (viewHistoryRecord.productsList || [])),
             originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (viewHistoryRecord.ipNumbers || [])),
+            originalPort: origRev?.port || origRev?.portOfDischarge || viewHistoryRecord.port || viewHistoryRecord.portOfDischarge || '',
+            originalPortOfDischarge: origRev?.portOfDischarge || origRev?.port || viewHistoryRecord.portOfDischarge || viewHistoryRecord.port || '',
             amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
             extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
             extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
@@ -557,6 +565,7 @@ const PiHistoryExplorerModal = React.memo(({
                 placeOfReceipt: activeRevision.placeOfReceipt && activeRevision.placeOfReceipt !== 'N/A (Historical)' ? activeRevision.placeOfReceipt : '',
                 portOfLoading: activeRevision.portOfLoading && activeRevision.portOfLoading !== 'N/A (Historical)' ? activeRevision.portOfLoading : '',
                 portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
+                port: activeRevision.port && activeRevision.port !== 'N/A (Historical)' ? activeRevision.port : (activeRevision.portOfDischarge || ''),
                 certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
                 packingType: activeRevision.packingType && activeRevision.packingType !== 'N/A (Historical)' ? activeRevision.packingType : '',
                 productsList: list,
@@ -802,6 +811,10 @@ const PiHistoryExplorerModal = React.memo(({
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port of Discharge</span>
                                             <span className="text-gray-400 font-bold text-[10px]">:</span>
                                             <span className="font-bold text-gray-800 break-words">{activeRevision.portOfDischarge || 'N/A'}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port (Final Port)</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-gray-800 break-words">{activeRevision.port || activeRevision.portOfDischarge || viewHistoryRecord?.port || 'N/A'}</span>
                                         </div>
                                     </div>
 
@@ -1308,6 +1321,7 @@ function PI({
         placeOfReceipt: '',
         portOfLoading: '',
         portOfDischarge: '',
+        port: '',
         certification: '',
         productsList: [],
         grandTotal: '',
@@ -3939,6 +3953,7 @@ function PI({
             placeOfReceipt: '',
             portOfLoading: '',
             portOfDischarge: '',
+            port: '',
             certification: '',
             packingType: '',
             productsList: [],
@@ -3969,6 +3984,7 @@ function PI({
                 placeOfReceipt: record.placeOfReceipt || 'N/A',
                 portOfLoading: record.portOfLoading || 'N/A',
                 portOfDischarge: record.portOfDischarge || 'N/A',
+                port: record.port || record.portOfDischarge || 'N/A',
                 certification: record.certification || 'N/A',
                 packingType: record.packingType || 'N/A',
                 productsList: getPiProductsList(record),
@@ -4513,6 +4529,7 @@ function PI({
                     if (matchedPort.placeOfReceipt) updated.placeOfReceipt = matchedPort.placeOfReceipt;
                     if (matchedPort.portOfLoading) updated.portOfLoading = matchedPort.portOfLoading;
                 }
+                updated.port = value;
             }
 
             if (field === 'certification') {
@@ -4584,6 +4601,7 @@ function PI({
             placeOfReceipt: pi.placeOfReceipt || '',
             portOfLoading: pi.portOfLoading || '',
             portOfDischarge: pi.portOfDischarge || '',
+            port: pi.port || pi.portOfDischarge || '',
             certification: pi.certification || '',
             packingType: pi.packingType || '',
             productsList: list,
@@ -4668,17 +4686,16 @@ function PI({
             const { list: recalculatedList, grandTotal, grandTotalQuantity } = recalcReviseProducts(updatedProductsList);
 
             let extraFields = {};
-            if (!alreadySelected && (updatedIpNumbers.length === 1 || !prev.portOfLoading)) {
+            if (!alreadySelected) {
                 if (ip.port) {
-                    if (updatedIpNumbers.length === 1) {
-                        extraFields.portOfDischarge = ip.port;
-                    }
+                    extraFields.portOfDischarge = ip.port;
+                    extraFields.port = ip.port;
                     const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === ip.port.toLowerCase().trim());
                     if (matchedPort) {
-                        if (matchedPort.placeOfReceipt && (updatedIpNumbers.length === 1 || !prev.placeOfReceipt)) {
+                        if (matchedPort.placeOfReceipt) {
                             extraFields.placeOfReceipt = matchedPort.placeOfReceipt;
                         }
-                        if (matchedPort.portOfLoading && (updatedIpNumbers.length === 1 || !prev.portOfLoading)) {
+                        if (matchedPort.portOfLoading) {
                             extraFields.portOfLoading = matchedPort.portOfLoading;
                         }
                     }
@@ -4734,6 +4751,8 @@ function PI({
             originalGrandTotalQuantity: origRev?.grandTotalQuantity || selectedPiForRevise.originalGrandTotalQuantity || selectedPiForRevise.grandTotalQuantity,
             originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName, quantity: origRev.grandTotalQuantity }] : (selectedPiForRevise.productsList || [])),
             originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (selectedPiForRevise.ipNumbers || [])),
+            originalPort: origRev?.port || origRev?.portOfDischarge || selectedPiForRevise.port || selectedPiForRevise.portOfDischarge || '',
+            originalPortOfDischarge: origRev?.portOfDischarge || origRev?.port || selectedPiForRevise.portOfDischarge || selectedPiForRevise.port || '',
             previousGrandTotal: selectedPiForRevise.grandTotal,
             previousGrandTotalQuantity: selectedPiForRevise.grandTotalQuantity,
             increaseValue: reviseFormData.increaseValue,
@@ -4803,6 +4822,8 @@ function PI({
                 originalGrandTotalQuantity: latestRev.originalGrandTotalQuantity || origRev?.grandTotalQuantity || record.originalGrandTotalQuantity || record.grandTotalQuantity,
                 originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (record.productsList || [])),
                 originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || [])),
+                originalPort: origRev?.port || origRev?.portOfDischarge || record.port || record.portOfDischarge || '',
+                originalPortOfDischarge: origRev?.portOfDischarge || origRev?.port || record.portOfDischarge || record.port || '',
                 previousGrandTotal: prevRev?.grandTotal || origRev?.grandTotal || record.grandTotal,
                 previousGrandTotalQuantity: prevRev?.grandTotalQuantity || origRev?.grandTotalQuantity || record.grandTotalQuantity,
                 linkedLc,
@@ -4953,6 +4974,7 @@ function PI({
                     placeOfReceipt: pi.placeOfReceipt,
                     portOfLoading: pi.portOfLoading,
                     portOfDischarge: pi.portOfDischarge,
+                    port: pi.port || pi.portOfDischarge || '',
                     certification: pi.certification,
                     packingType: pi.packingType || '',
                     productsList: getPiProductsList(pi),
@@ -5025,6 +5047,7 @@ function PI({
                 placeOfReceipt: reviseFormData.placeOfReceipt,
                 portOfLoading: reviseFormData.portOfLoading,
                 portOfDischarge: reviseFormData.portOfDischarge,
+                port: reviseFormData.port || reviseFormData.portOfDischarge || '',
                 certification: reviseFormData.certification,
                 packingType: reviseFormData.packingType || '',
                 productsList: reviseFormData.productsList,
@@ -5086,6 +5109,7 @@ function PI({
                     placeOfReceipt: reviseFormData.placeOfReceipt,
                     portOfLoading: reviseFormData.portOfLoading,
                     portOfDischarge: reviseFormData.portOfDischarge,
+                    port: reviseFormData.port || reviseFormData.portOfDischarge || '',
                     certification: reviseFormData.certification,
                     packingType: reviseFormData.packingType || '',
                     productsList: reviseFormData.productsList,
@@ -5162,6 +5186,7 @@ function PI({
                     placeOfReceipt: latestRev.placeOfReceipt,
                     portOfLoading: latestRev.portOfLoading,
                     portOfDischarge: latestRev.portOfDischarge,
+                    port: latestRev.port || latestRev.portOfDischarge || '',
                     certification: latestRev.certification,
                     packingType: latestRev.packingType || '',
                     productsList: latestRev.productsList || [],
@@ -5183,6 +5208,7 @@ function PI({
                         placeOfReceipt: originalRevision.placeOfReceipt && originalRevision.placeOfReceipt !== 'N/A (Historical)' ? originalRevision.placeOfReceipt : record.placeOfReceipt,
                         portOfLoading: originalRevision.portOfLoading && originalRevision.portOfLoading !== 'N/A (Historical)' ? originalRevision.portOfLoading : record.portOfLoading,
                         portOfDischarge: originalRevision.portOfDischarge && originalRevision.portOfDischarge !== 'N/A (Historical)' ? originalRevision.portOfDischarge : record.portOfDischarge,
+                        port: originalRevision.port && originalRevision.port !== 'N/A (Historical)' ? originalRevision.port : (originalRevision.portOfDischarge && originalRevision.portOfDischarge !== 'N/A (Historical)' ? originalRevision.portOfDischarge : (record.port || record.portOfDischarge || '')),
                         certification: originalRevision.certification && originalRevision.certification !== 'N/A (Historical)' ? originalRevision.certification : record.certification,
                         packingType: originalRevision.packingType && originalRevision.packingType !== 'N/A (Historical)' ? originalRevision.packingType : (record.packingType || ''),
                         productsList: originalRevision.productsList || getPiProductsList(record),
@@ -5314,7 +5340,8 @@ function PI({
                 const productListNames = (record.productsList || []).map(p => `${p.productName || ''} ${getStandardProductName(p.productName) || ''}`).join(' ');
                 const piNumbersList = (record.piNumbers || []).join(' ');
                 const ipNumbersList = (record.ipNumbers || []).join(' ');
-                const portStr = `${record.port || ''} ${record.portOfLoading || ''} ${record.portOfDischarge || ''}`;
+                const revPortStr = (record.revisions || []).map(r => `${r.port || ''} ${r.portOfDischarge || ''} ${r.portOfLoading || ''}`).join(' ');
+                const portStr = `${record.port || ''} ${record.portOfLoading || ''} ${record.portOfDischarge || ''} ${revPortStr}`;
                 const datesStr = `${record.date || ''} ${formatDate(record.date)} ${formatDate(record.createdAt)}`;
 
                 const combinedBlob = [
@@ -5408,9 +5435,11 @@ function PI({
 
             if (piFilters.port) {
                 const filterPort = piFilters.port.trim().toLowerCase();
-                const recordPort = (record.port || '').trim().toLowerCase();
-                const recordDischarge = (record.portOfDischarge || '').trim().toLowerCase();
-                const recordLoading = (record.portOfLoading || '').trim().toLowerCase();
+                const actualRevs = (record.revisions || []).filter(r => r.reviseNo !== 'Original PI');
+                const latestRev = actualRevs.length > 0 ? actualRevs[actualRevs.length - 1] : null;
+                const recordPort = (latestRev?.port || record.port || '').trim().toLowerCase();
+                const recordDischarge = (latestRev?.portOfDischarge || record.portOfDischarge || '').trim().toLowerCase();
+                const recordLoading = (latestRev?.portOfLoading || record.portOfLoading || '').trim().toLowerCase();
                 if (recordPort !== filterPort && recordDischarge !== filterPort && recordLoading !== filterPort) return false;
             }
 
@@ -7561,6 +7590,10 @@ function PI({
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Grand Total</span>
                                                 <p className="text-xs sm:text-sm font-bold text-blue-600">${parseFloat(selectedPiForRevise.grandTotal || 0).toLocaleString()}</p>
                                             </div>
+                                            <div className="bg-white/80 p-2.5 rounded-xl border border-gray-100 sm:col-span-2 lg:col-span-1 min-w-0">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Port (Final Port)</span>
+                                                <p className="text-xs sm:text-sm font-bold text-gray-800 break-words">{selectedPiForRevise.port || selectedPiForRevise.portOfDischarge || '-'}</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -7787,127 +7820,7 @@ function PI({
                                         );
                                     })()}
 
-                                    {/* First Line: Place of Receipt, Port of Loading, Port of Discharge */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 min-w-0">
-                                        {/* Place of Receipt */}
-                                        <div className="space-y-1.5 relative dropdown-container min-w-0">
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Place of Receipt</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={reviseFormData.placeOfReceipt || ''}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        setReviseFormData(prev => ({ ...prev, placeOfReceipt: val }));
-                                                        setActiveDropdown('reviseReceiptPlace');
-                                                        setHighlightedIndex(-1);
-                                                    }}
-                                                    onFocus={() => {
-                                                        setActiveDropdown('reviseReceiptPlace');
-                                                        setHighlightedIndex(-1);
-                                                    }}
-                                                    placeholder="e.g. GHOJADANGA"
-                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
-                                                    autoComplete="off"
-                                                />
-                                                {activeDropdown === 'reviseReceiptPlace' && (
-                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                                        {receiptPlaces.filter(v => !reviseFormData.placeOfReceipt || v.value.toLowerCase().includes(reviseFormData.placeOfReceipt.toLowerCase())).map((v, idx) => (
-                                                            <button
-                                                                key={v._id}
-                                                                type="button"
-                                                                onMouseDown={() => handleReviseDropdownSelect('placeOfReceipt', v.value)}
-                                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.placeOfReceipt === v.value ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                            >
-                                                                {v.value}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Port of Loading */}
-                                        <div className="space-y-1.5 relative dropdown-container min-w-0">
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port of Loading</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={reviseFormData.portOfLoading || ''}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        setReviseFormData(prev => ({ ...prev, portOfLoading: val }));
-                                                        setActiveDropdown('revisePortLoading');
-                                                        setHighlightedIndex(-1);
-                                                    }}
-                                                    onFocus={() => {
-                                                        setActiveDropdown('revisePortLoading');
-                                                        setHighlightedIndex(-1);
-                                                    }}
-                                                    placeholder="Search Port of Loading..."
-                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
-                                                    autoComplete="off"
-                                                />
-                                                {activeDropdown === 'revisePortLoading' && (
-                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                                        {ports.filter(p => p.isLoadingPort && (!reviseFormData.portOfLoading || p.name.toLowerCase().includes(reviseFormData.portOfLoading.toLowerCase()))).map((p, idx) => (
-                                                            <button
-                                                                key={p._id}
-                                                                type="button"
-                                                                onMouseDown={() => handleReviseDropdownSelect('portOfLoading', p.name)}
-                                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.portOfLoading === p.name ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                            >
-                                                                {p.name}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Port of Discharge */}
-                                        <div className="space-y-1.5 relative dropdown-container min-w-0">
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port of Discharge</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={reviseFormData.portOfDischarge || ''}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        setReviseFormData(prev => ({ ...prev, portOfDischarge: val }));
-                                                        setActiveDropdown('revisePortDischarge');
-                                                        setHighlightedIndex(-1);
-                                                    }}
-                                                    onFocus={() => {
-                                                        setActiveDropdown('revisePortDischarge');
-                                                        setHighlightedIndex(-1);
-                                                    }}
-                                                    placeholder="Search Port of Discharge..."
-                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
-                                                    autoComplete="off"
-                                                />
-                                                {activeDropdown === 'revisePortDischarge' && (
-                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                                        {ports.filter(p => !p.isLoadingPort && (!reviseFormData.portOfDischarge || p.name.toLowerCase().includes(reviseFormData.portOfDischarge.toLowerCase()))).map((p, idx) => (
-                                                            <button
-                                                                key={p._id}
-                                                                type="button"
-                                                                onMouseDown={() => handleReviseDropdownSelect('portOfDischarge', p.name)}
-                                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.portOfDischarge === p.name ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                            >
-                                                                {p.name}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Second Line: IP Search & Selection, Certification */}
+                                    {/* Line 1: IP Search & Selection, Certification */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
                                         {/* IP Search & Selection */}
                                         <div className="space-y-1.5 relative dropdown-container min-w-0">
@@ -7934,7 +7847,7 @@ function PI({
                                                 {activeDropdown === 'reviseIpNumber' && (
                                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-gray-50">
                                                         {isLoadingIpRecords || !ipRecords || ipRecords.length === 0 ? (
-                                                            <div className="px-4 py-4 text-center text-xs text-gray-500 flex items-center justify-center space-x-2">
+                                                             <div className="px-4 py-4 text-center text-xs text-gray-500 flex items-center justify-center space-x-2">
                                                                 <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                                                                 <span>Loading IP Numbers...</span>
                                                             </div>
@@ -8073,6 +7986,149 @@ function PI({
                                             </div>
                                         );
                                     })()}
+
+                                    {/* Line 2: Place of Receipt, Port of Loading, Port of Discharge, Port (Final Port) */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 min-w-0">
+                                        {/* Place of Receipt */}
+                                        <div className="space-y-1.5 relative dropdown-container min-w-0">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Place of Receipt</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.placeOfReceipt || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => ({ ...prev, placeOfReceipt: val }));
+                                                        setActiveDropdown('reviseReceiptPlace');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('reviseReceiptPlace');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="e.g. GHOJADANGA"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'reviseReceiptPlace' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {receiptPlaces.filter(v => !reviseFormData.placeOfReceipt || v.value.toLowerCase().includes(reviseFormData.placeOfReceipt.toLowerCase())).map((v, idx) => (
+                                                            <button
+                                                                key={v._id}
+                                                                type="button"
+                                                                onMouseDown={() => handleReviseDropdownSelect('placeOfReceipt', v.value)}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.placeOfReceipt === v.value ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                {v.value}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Port of Loading */}
+                                        <div className="space-y-1.5 relative dropdown-container min-w-0">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port of Loading</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.portOfLoading || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => ({ ...prev, portOfLoading: val }));
+                                                        setActiveDropdown('revisePortLoading');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('revisePortLoading');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="Search Port of Loading..."
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'revisePortLoading' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {ports.filter(p => p.isLoadingPort && (!reviseFormData.portOfLoading || p.name.toLowerCase().includes(reviseFormData.portOfLoading.toLowerCase()))).map((p, idx) => (
+                                                            <button
+                                                                key={p._id}
+                                                                type="button"
+                                                                onMouseDown={() => handleReviseDropdownSelect('portOfLoading', p.name)}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.portOfLoading === p.name ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                {p.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Port of Discharge */}
+                                        <div className="space-y-1.5 relative dropdown-container min-w-0">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port of Discharge</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.portOfDischarge || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setReviseFormData(prev => {
+                                                            const updated = { ...prev, portOfDischarge: val, port: val };
+                                                            const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === val.toLowerCase().trim());
+                                                            if (matchedPort) {
+                                                                if (matchedPort.placeOfReceipt !== undefined) updated.placeOfReceipt = matchedPort.placeOfReceipt;
+                                                                if (matchedPort.portOfLoading) updated.portOfLoading = matchedPort.portOfLoading;
+                                                            }
+                                                            return updated;
+                                                        });
+                                                        setActiveDropdown('revisePortDischarge');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveDropdown('revisePortDischarge');
+                                                        setHighlightedIndex(-1);
+                                                    }}
+                                                    placeholder="Search Port of Discharge..."
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    autoComplete="off"
+                                                />
+                                                {activeDropdown === 'revisePortDischarge' && (
+                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                        {ports.filter(p => !p.isLoadingPort && (!reviseFormData.portOfDischarge || p.name.toLowerCase().includes(reviseFormData.portOfDischarge.toLowerCase()))).map((p, idx) => (
+                                                            <button
+                                                                key={p._id}
+                                                                type="button"
+                                                                onMouseDown={() => handleReviseDropdownSelect('portOfDischarge', p.name)}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between ${highlightedIndex === idx || reviseFormData.portOfDischarge === p.name ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                {p.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Port (Final Port) */}
+                                        <div className="space-y-1.5 min-w-0">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port (Final Port)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={reviseFormData.port || ''}
+                                                    onChange={(e) => setReviseFormData(prev => ({ ...prev, port: e.target.value }))}
+                                                    placeholder="e.g. BHOMRA, BANGLADESH"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-sm"
+                                                    autoComplete="off"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     {/* IP rows - one per IP number */}
                                     {selectedPiReviseIpInfo.length > 0 ? (
@@ -8894,7 +8950,9 @@ function PI({
                                                 ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
                                                 : (parseFloat(record.grandTotalQuantity || record.quantity) || 0);
 
-                                            const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
+                                            const actualRevs = (record.revisions || []).filter(r => r.reviseNo !== 'Original PI');
+                                            const latestRev = actualRevs.length > 0 ? actualRevs[actualRevs.length - 1] : null;
+                                            const displayPort = latestRev?.port || latestRev?.portOfDischarge || record.port || record.portOfDischarge || record.portOfLoading || 'N/A';
                                             const hasMultipleProducts = record.productsList && record.productsList.length > 1;
                                             const entryInfo = canShowEntryBy ? getPiEntryDetails(record) : null;
                                             const isLcDone = checkIsLcDone(record);

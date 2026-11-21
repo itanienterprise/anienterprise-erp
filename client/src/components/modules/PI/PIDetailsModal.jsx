@@ -99,6 +99,7 @@ export const PIDetailsModal = ({
                 placeOfReceipt: resolvedPi.placeOfReceipt || 'N/A',
                 portOfLoading: resolvedPi.portOfLoading || 'N/A',
                 portOfDischarge: resolvedPi.portOfDischarge || 'N/A',
+                port: resolvedPi.port || resolvedPi.portOfDischarge || 'N/A',
                 certification: resolvedPi.certification || 'N/A',
                 packingType: resolvedPi.packingType || 'N/A',
                 productsList: getPiProductsList(resolvedPi),
@@ -264,6 +265,8 @@ export const PIDetailsModal = ({
             lcDate: linkedLcRecord?.openingDate || linkedLcRecord?.lcDate || resolvedPi.lcDate || activeRevision.lcDate || '',
             originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (resolvedPi.productsList || [])),
             originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (resolvedPi.ipNumbers || [])),
+            originalPort: origRev?.port || origRev?.portOfDischarge || resolvedPi.port || resolvedPi.portOfDischarge || '',
+            originalPortOfDischarge: origRev?.portOfDischarge || origRev?.port || resolvedPi.portOfDischarge || resolvedPi.port || '',
             amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
             extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
             extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
@@ -320,6 +323,8 @@ export const PIDetailsModal = ({
             lcDate: linkedLcRecord?.openingDate || linkedLcRecord?.lcDate || resolvedPi.lcDate || activeRevision.lcDate || '',
             originalProductsList: origRev?.productsList || (origRev?.productName ? [{ productName: origRev.productName }] : (resolvedPi.productsList || [])),
             originalIpNumbers: origRev?.ipNumbers || (origRev?.ipNumber ? String(origRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (resolvedPi.ipNumbers || [])),
+            originalPort: origRev?.port || origRev?.portOfDischarge || resolvedPi.port || resolvedPi.portOfDischarge || '',
+            originalPortOfDischarge: origRev?.portOfDischarge || origRev?.port || resolvedPi.portOfDischarge || resolvedPi.port || '',
             amendmentType: activeRevision.amendmentType || (activeRevision.reviseNo !== 'Original PI' ? 'Increase of L/C Value and Quantity' : ''),
             extendedShipmentDate: activeRevision.extendedShipmentDate || activeRevision.latestShipmentDate || '',
             extendedExpiryDate: activeRevision.extendedExpiryDate || activeRevision.expiryDate || '',
@@ -534,6 +539,10 @@ export const PIDetailsModal = ({
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port of Discharge</span>
                                             <span className="text-gray-400 font-bold text-[10px]">:</span>
                                             <span className="font-bold text-gray-800 break-words">{activeRevision.portOfDischarge || 'N/A'}</span>
+
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port (Final Port)</span>
+                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                            <span className="font-bold text-gray-800 break-words">{activeRevision.port || activeRevision.portOfDischarge || resolvedPi?.port || 'N/A'}</span>
                                         </div>
                                     </div>
 

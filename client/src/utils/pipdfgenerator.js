@@ -1083,8 +1083,15 @@ export const generatePIPDF = (record) => {
         doc.text("Buyer", pageWidth - margin - 30, y + 26, { align: 'center' });
     }
 
-    // Append Bank Application Page as Page 2 (just like Packing List & TR)
-    appendBankApplicationPage(doc, record);
+    // Append Bank Application Page as Page 2 (just like Packing List & TR) - skip for 10% PI
+    const isTenPercent = Boolean(
+        record.isTenPercent ||
+        (record.reviseNo && (record.reviseNo.includes('10%') || record.reviseNo.startsWith('10% PI'))) ||
+        (record.revisionNo && (record.revisionNo.includes('10%') || record.revisionNo.startsWith('10% PI')))
+    );
+    if (!isTenPercent) {
+        appendBankApplicationPage(doc, record);
+    }
 
     // Opening in new tab instead of direct download
     const pdfOutput = doc.output('blob');

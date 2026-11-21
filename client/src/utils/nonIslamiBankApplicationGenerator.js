@@ -112,14 +112,17 @@ export const renderNonIslamiBankApplication = (doc, record) => {
     const validProducts = productsList.filter(p => p && (p.productName || p.product));
 
     let formattedProduct = '';
-    if (validProducts.length > 1) {
+    if (validProducts.length > 0) {
         const itemsWithQty = validProducts.map(p => {
             const pName = (p.productName || p.product || '').trim();
-            const pQtyNum = parseFloat(p.quantity || p.qty || 0);
+            const pQtyNum = parseFloat(p.quantity || p.qty || (validProducts.length === 1 ? (record.grandTotalQuantity || record.quantity) : 0) || 0);
             const pQtyStr = pQtyNum > 0
                 ? `${pQtyNum.toLocaleString('en-US')} kg`
-                : (p.quantity || p.qty ? `${p.quantity || p.qty} kg` : '');
-            return pQtyStr ? `${pQtyStr} ${pName}` : pName;
+                : (p.quantity || p.qty || (validProducts.length === 1 ? (record.grandTotalQuantity || record.quantity) : '') ? `${p.quantity || p.qty || record.grandTotalQuantity || record.quantity} kg` : '');
+            if (pQtyStr && !pName.toLowerCase().includes('kg')) {
+                return `${pQtyStr} ${pName}`;
+            }
+            return pName;
         }).filter(Boolean);
 
         if (itemsWithQty.length > 0) {
@@ -128,8 +131,17 @@ export const renderNonIslamiBankApplication = (doc, record) => {
     }
 
     if (!formattedProduct) {
-        const productNames = validProducts.map(p => p.productName || p.product).filter(Boolean);
-        formattedProduct = productNames.length > 0 ? productNames.join(', ') : (record.productName || record.commodity || 'Goods');
+        const qtyNum = parseFloat(record.grandTotalQuantity || record.quantity || 0);
+        const formattedQuantity = qtyNum > 0
+            ? `${qtyNum.toLocaleString('en-US')} kg`
+            : (record.grandTotalQuantity ? `${record.grandTotalQuantity} kg` : '');
+
+        const singleProdName = (record.productName || record.commodity || 'Goods').trim();
+        if (formattedQuantity && !singleProdName.toLowerCase().includes('kg')) {
+            formattedProduct = `${formattedQuantity} ${singleProdName}`;
+        } else {
+            formattedProduct = singleProdName;
+        }
     }
 
     const countryOrigin = (record.countryOrigin || 'INDIA').trim();

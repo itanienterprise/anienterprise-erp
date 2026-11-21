@@ -314,24 +314,35 @@ export const getNewlyAddedIpDetails = (record) => {
 
     const results = [];
 
+    // Helper to find IP record from ipRecords array or snapshots
+    const findIpRec = (ipNum) => {
+        const cleanLower = String(ipNum || '').trim().toLowerCase();
+        return ipRecords.find(i => String(i.ipNumber || '').trim().toLowerCase() === cleanLower) || ipSnapshots[ipNum] || {};
+    };
+
+    // Helper to find date for an IP
+    const getIpDateFormatted = (ipRec, fallbackDate) => {
+        const rawDate = ipRec.openingDate || ipRec.date || ipRec.openDate || ipRec.ipDate || fallbackDate;
+        return formatDate(rawDate);
+    };
+
     // 1. Check if there are newly added IP numbers
     const addedIps = currentIps.filter(ip => !origIpsLower.includes(ip.toLowerCase()));
 
     if (addedIps.length > 0) {
         addedIps.forEach(ipNum => {
             const cleanIpLower = ipNum.toLowerCase();
-            const ipRec = ipRecords.find(i => String(i.ipNumber || '').trim().toLowerCase() === cleanIpLower) || ipSnapshots[ipNum] || {};
+            const ipRec = findIpRec(ipNum);
             const matchingProd = validCurrentProds.find(p =>
                 (p._fromIp && String(p._fromIp).trim().toLowerCase() === cleanIpLower) ||
                 (p.productName && ipRec.productName && p.productName.toLowerCase().trim() === ipRec.productName.toLowerCase().trim())
             );
             const newlyAddedProd = validCurrentProds.find(p => !origProds.includes((p.productName || p.product || '').trim().toLowerCase()));
             const prodName = matchingProd?.productName || newlyAddedProd?.productName || ipRec.productName || (validCurrentProds.length > 0 ? validCurrentProds[validCurrentProds.length - 1].productName : record.productName) || 'fresh apples';
-            const rawDate = ipRec.openingDate || ipRec.date || ipRec.openDate || ipRec.ipDate || record.ipDate || record.date;
             results.push({
-                productName: prodName,
+                productName: (prodName || 'FRESH APPLE').toUpperCase(),
                 ipNo: ipNum,
-                ipDate: formatDate(rawDate)
+                ipDate: getIpDateFormatted(ipRec, record.ipDate || record.date)
             });
         });
     }
@@ -341,34 +352,51 @@ export const getNewlyAddedIpDetails = (record) => {
         const newlyAddedProducts = validCurrentProds.filter(p => !origProds.includes((p.productName || p.product || '').trim().toLowerCase()));
         if (newlyAddedProducts.length > 0) {
             newlyAddedProducts.forEach(prod => {
-                const prodIp = prod._fromIp || (currentIps.length > 0 ? currentIps[currentIps.length - 1] : record.ipNumber) || '..........';
-                const cleanIpLower = String(prodIp).toLowerCase();
-                const ipRec = ipRecords.find(i => String(i.ipNumber || '').trim().toLowerCase() === cleanIpLower) || ipSnapshots[prodIp] || {};
-                const rawDate = ipRec.openingDate || ipRec.date || ipRec.openDate || ipRec.ipDate || record.ipDate || record.date;
-                results.push({
-                    productName: prod.productName || prod.product,
-                    ipNo: prodIp,
-                    ipDate: formatDate(rawDate)
-                });
+                const prodIp = prod._fromIp || (currentIps.length > 0 ? currentIps[currentIps.length - 1] : record.ipNumber);
+                if (prodIp) {
+                    const ipRec = findIpRec(prodIp);
+                    results.push({
+                        productName: (prod.productName || prod.product || 'FRESH APPLE').toUpperCase(),
+                        ipNo: prodIp,
+                        ipDate: getIpDateFormatted(ipRec, record.ipDate || record.date)
+                    });
+                }
             });
         }
     }
 
-    // 3. Fallback: if still empty (e.g. single IP or preview), take the latest product and latest IP
-    if (results.length === 0) {
-        const lastProd = validCurrentProds[validCurrentProds.length - 1] || {};
-        const lastIp = lastProd._fromIp || (currentIps.length > 0 ? currentIps[currentIps.length - 1] : record.ipNumber) || '..........';
-        const cleanIpLower = String(lastIp).toLowerCase();
-        const ipRec = ipRecords.find(i => String(i.ipNumber || '').trim().toLowerCase() === cleanIpLower) || ipSnapshots[lastIp] || {};
-        const rawDate = ipRec.openingDate || ipRec.date || ipRec.openDate || ipRec.ipDate || record.ipDate || record.date;
-        results.push({
-            productName: lastProd.productName || lastProd.product || record.productName || 'fresh apples',
-            ipNo: lastIp,
-            ipDate: formatDate(rawDate)
+    // 3. Fallback: if still empty, but current revision has IP(s), take the IP(s) and their products
+    if (results.length === 0 && (currentIps.length > 0 || (record.ipNumber && String(record.ipNumber).trim()))) {
+        const ipsToProcess = currentIps.length > 0 ? currentIps : [String(record.ipNumber).trim()];
+        ipsToProcess.forEach(ipNum => {
+            if (!ipNum) return;
+            const cleanIpLower = ipNum.toLowerCase();
+            const ipRec = findIpRec(ipNum);
+            const matchingProd = validCurrentProds.find(p =>
+                (p._fromIp && String(p._fromIp).trim().toLowerCase() === cleanIpLower) ||
+                (p.productName && ipRec.productName && p.productName.toLowerCase().trim() === ipRec.productName.toLowerCase().trim())
+            );
+            const prodName = matchingProd?.productName || ipRec.productName || (validCurrentProds.length > 0 ? validCurrentProds[0].productName : record.productName) || 'fresh apples';
+            results.push({
+                productName: (prodName || 'FRESH APPLE').toUpperCase(),
+                ipNo: ipNum,
+                ipDate: getIpDateFormatted(ipRec, record.ipDate || record.date)
+            });
         });
     }
 
-    return results;
+    // Deduplicate results by ipNo
+    const uniqueResults = [];
+    const seenIps = new Set();
+    for (const item of results) {
+        const key = String(item.ipNo || '').trim().toLowerCase();
+        if (key && !seenIps.has(key)) {
+            seenIps.add(key);
+            uniqueResults.push(item);
+        }
+    }
+
+    return uniqueResults;
 };
 
 /**
@@ -491,30 +519,42 @@ export const calculateAmendmentIncreaseValues = (record) => {
     let increaseVal = record.increaseValue !== undefined && record.increaseValue !== null && record.increaseValue !== '' && !isNaN(parseFloat(record.increaseValue))
         ? parseFloat(record.increaseValue)
         : NaN;
-    if (isNaN(increaseVal) || increaseVal <= 0) {
+    if (isNaN(increaseVal) || (increaseVal <= 0 && revisedTotalVal <= origTotalVal && prodSumValIncrease <= 0)) {
         if (revisedTotalVal > origTotalVal) {
             increaseVal = revisedTotalVal - origTotalVal;
         } else if (prodSumValIncrease > 0) {
             increaseVal = prodSumValIncrease;
-        } else if (Math.abs(revisedTotalVal - origTotalVal) > 0) {
+        } else if (Math.abs(revisedTotalVal - origTotalVal) > 0.01) {
             increaseVal = Math.abs(revisedTotalVal - origTotalVal);
         } else {
-            increaseVal = revisedTotalVal;
+            increaseVal = 0;
         }
     }
 
     let increaseQty = record.increaseQuantity !== undefined && record.increaseQuantity !== null && record.increaseQuantity !== '' && !isNaN(parseFloat(record.increaseQuantity))
         ? parseFloat(record.increaseQuantity)
         : NaN;
-    if (isNaN(increaseQty) || increaseQty <= 0) {
+    if (isNaN(increaseQty) || (increaseQty <= 0 && revisedTotalQty <= origTotalQty && prodSumQtyIncrease <= 0)) {
         if (revisedTotalQty > origTotalQty) {
             increaseQty = revisedTotalQty - origTotalQty;
         } else if (prodSumQtyIncrease > 0) {
             increaseQty = prodSumQtyIncrease;
-        } else if (Math.abs(revisedTotalQty - origTotalQty) > 0) {
+        } else if (Math.abs(revisedTotalQty - origTotalQty) > 0.01) {
             increaseQty = Math.abs(revisedTotalQty - origTotalQty);
         } else {
-            increaseQty = revisedTotalQty;
+            increaseQty = 0;
+        }
+    }
+
+    // If total value and quantity did not change, any increaseValue/increaseQuantity equal to total was an artifact of the fallback and should be 0
+    if (Math.abs(revisedTotalVal - origTotalVal) <= 0.01 && prodSumValIncrease <= 0.01) {
+        if (Math.abs(increaseVal - revisedTotalVal) <= 0.01) {
+            increaseVal = 0;
+        }
+    }
+    if (Math.abs(revisedTotalQty - origTotalQty) <= 0.01 && prodSumQtyIncrease <= 0.01) {
+        if (Math.abs(increaseQty - revisedTotalQty) <= 0.01) {
+            increaseQty = 0;
         }
     }
 
@@ -616,7 +656,11 @@ export const renderIncreaseLcValueQtyAmendmentApplication = (doc, record) => {
         increaseVal,
         revisedTotalVal,
         increaseQty,
-        revisedTotalQty
+        revisedTotalQty,
+        origTotalVal,
+        origTotalQty,
+        prodSumValIncrease,
+        prodSumQtyIncrease
     } = calculateAmendmentIncreaseValues(record);
 
     const formattedIncreaseValue = (increaseVal > 0 ? increaseVal : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -624,9 +668,22 @@ export const renderIncreaseLcValueQtyAmendmentApplication = (doc, record) => {
     const formattedIncreaseQty = (increaseQty > 0 ? increaseQty : 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     const formattedRevisedTotalQty = (revisedTotalQty > 0 ? revisedTotalQty : 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
+    // Port detection
+    const portName = (record.port || record.portOfDischarge || (actualRevs.length > 0 ? (actualRevs[actualRevs.length - 1].port || actualRevs[actualRevs.length - 1].portOfDischarge) : '') || '').trim();
+    const origPort = (record.originalPort || record.originalPortOfDischarge || origRev?.port || origRev?.portOfDischarge || '').trim();
+    const isPortChanged = Boolean(portName && (!origPort || portName.toLowerCase() !== origPort.toLowerCase()));
+
+    // Check if there is an actual increase in Value or Quantity
+    const hasRealValIncrease = (increaseVal > 0.01) || (revisedTotalVal - origTotalVal > 0.01) || (prodSumValIncrease > 0.01);
+    const hasRealQtyIncrease = (increaseQty > 0.01) || (revisedTotalQty - origTotalQty > 0.01) || (prodSumQtyIncrease > 0.01);
+    const hasRealIncrease = hasRealValIncrease || hasRealQtyIncrease;
+
     // Subject Line (Bold)
     doc.setFont('times', 'bold');
-    const subjectText = 'Subject: Application for Amendment of L/C Value, Quantity';
+    let subjectText = 'Subject: Application for Amendment of L/C Value, Quantity';
+    if (!hasRealIncrease) {
+        subjectText = portName ? 'Subject: Application for Amendment of Port' : 'Subject: Application for Amendment of L/C';
+    }
     const subjectLines = doc.splitTextToSize(subjectText, contentWidth);
     doc.text(subjectLines, marginLeft, currentY);
     currentY += (subjectLines.length * 5.6) + 2;
@@ -655,23 +712,42 @@ export const renderIncreaseLcValueQtyAmendmentApplication = (doc, record) => {
     currentY += (p2Lines.length * 5.6) + 4.5;
 
     // Body Paragraph 3 (Justified)
-    const p3Text = `Please increase the L/C value and quantity as per Proforma Invoice No. ${piNoRevised}, dated ${reviseDateFormatted} , as follows:`;
+    let p3Text = `Please increase the L/C value and quantity as per Proforma Invoice No. ${piNoRevised}, dated ${reviseDateFormatted} , as follows:`;
+    if (!hasRealIncrease) {
+        p3Text = portName
+            ? `Please amend the port as per Proforma Invoice No. ${piNoRevised}, dated ${reviseDateFormatted} , as follows:`
+            : `Please amend the above-mentioned L/C as per Proforma Invoice No. ${piNoRevised}, dated ${reviseDateFormatted} , as follows:`;
+    }
     const p3Lines = doc.splitTextToSize(p3Text, contentWidth);
     doc.text(p3Text, marginLeft, currentY, { maxWidth: contentWidth, align: 'justify', lineHeightFactor: 1.35 });
     currentY += (p3Lines.length * 5.6) + 4;
 
     // Bullet Points (Indented)
     const bulletIndent = marginLeft + 6;
-    const bullets = [
-        `•   Increase in L/C Value: USD ${formattedIncreaseValue}`,
-        `•   Revised Total L/C Value: USD ${formattedRevisedTotalValue}`,
-        `•   Increase in Quantity: ${formattedIncreaseQty} KGS`,
-        `•   Revised Total Quantity: ${formattedRevisedTotalQty} KGS`
-    ];
+    const bullets = [];
+
+    if (hasRealIncrease) {
+        bullets.push(`•   Increase in L/C Value: USD ${formattedIncreaseValue}`);
+        bullets.push(`•   Revised Total L/C Value: USD ${formattedRevisedTotalValue}`);
+        bullets.push(`•   Increase in Quantity: ${formattedIncreaseQty} KGS`);
+        bullets.push(`•   Revised Total Quantity: ${formattedRevisedTotalQty} KGS`);
+    }
+
+    if ((!hasRealIncrease && portName) || (hasRealIncrease && isPortChanged && portName)) {
+        bullets.push(`•   Revised Port : ${portName.toUpperCase()}`);
+    }
+
+    // Newly added / changed IP(s) items
+    const newIpItems = getNewlyAddedIpDetails(record);
+    newIpItems.forEach(item => {
+        bullets.push(`•   Include ${item.productName} under I.P. No. ${item.ipNo}, dated ${item.ipDate}.`);
+    });
+
     doc.setFont('times', 'normal');
     bullets.forEach(b => {
-        doc.text(b, bulletIndent, currentY);
-        currentY += 5.5;
+        const bLines = doc.splitTextToSize(b, contentWidth - 6);
+        doc.text(bLines, bulletIndent, currentY);
+        currentY += (bLines.length * 5.5);
     });
     currentY += 3;
 
@@ -837,14 +913,27 @@ export const renderCommodityDescriptionAndValueAmendmentApplication = (doc, reco
     doc.text(p3Text, marginLeft, currentY, { maxWidth: contentWidth, align: 'justify', lineHeightFactor: 1.35 });
     currentY += (p3Lines.length * 5.6) + 4;
 
+    // Port detection
+    const portName = (record.port || record.portOfDischarge || (actualRevs.length > 0 ? (actualRevs[actualRevs.length - 1].port || actualRevs[actualRevs.length - 1].portOfDischarge) : '') || '').trim();
+    const origPort = (record.originalPort || record.originalPortOfDischarge || origRev?.port || origRev?.portOfDischarge || '').trim();
+    const isPortChanged = Boolean(portName && (!origPort || portName.toLowerCase() !== origPort.toLowerCase()));
+
+    const hasRealDiff = (decreaseVal > 0.01) || (decreaseQty > 0.01) || (Math.abs(revisedTotalVal - origTotalVal) > 0.01) || (Math.abs(revisedTotalQty - origTotalQty) > 0.01);
+
     // Bullet Points (Indented)
     const bulletIndent = marginLeft + 6;
-    const bullets = [
-        `•   Decrease in L/C Value: USD ${formattedDecreaseValue}`,
-        `•   Revised Total L/C Value: USD ${formattedRevisedTotalValue}`,
-        `•   Decrease in Quantity: ${formattedDecreaseQty} KGS`,
-        `•   Revised Total Quantity: ${formattedRevisedTotalQty} KGS`
-    ];
+    const bullets = [];
+
+    if (hasRealDiff) {
+        bullets.push(`•   Decrease in L/C Value: USD ${formattedDecreaseValue}`);
+        bullets.push(`•   Revised Total L/C Value: USD ${formattedRevisedTotalValue}`);
+        bullets.push(`•   Decrease in Quantity: ${formattedDecreaseQty} KGS`);
+        bullets.push(`•   Revised Total Quantity: ${formattedRevisedTotalQty} KGS`);
+    }
+
+    if ((!hasRealDiff && portName) || (hasRealDiff && isPortChanged && portName)) {
+        bullets.push(`•   Revised Port : ${portName.toUpperCase()}`);
+    }
 
     // Newly added IP(s) items
     const newIpItems = getNewlyAddedIpDetails(record);
@@ -1183,7 +1272,9 @@ export const renderMergedAmendmentApplication = (doc, record, selections) => {
         increaseQty,
         revisedTotalQty,
         origTotalVal,
-        origTotalQty
+        origTotalQty,
+        prodSumValIncrease,
+        prodSumQtyIncrease
     } = calculateAmendmentIncreaseValues(record);
     const isValIncrease = revisedTotalVal >= origTotalVal;
     const diffVal = increaseVal;
@@ -1230,22 +1321,36 @@ export const renderMergedAmendmentApplication = (doc, record, selections) => {
     const bulletIndent = marginLeft + 6;
     const bullets = [];
 
+    // Port detection
+    const portName = (record.port || record.portOfDischarge || (actualRevs.length > 0 ? (actualRevs[actualRevs.length - 1].port || actualRevs[actualRevs.length - 1].portOfDischarge) : '') || '').trim();
+    const origPort = (record.originalPort || record.originalPortOfDischarge || origRev?.port || origRev?.portOfDischarge || '').trim();
+    const isPortChanged = Boolean(portName && (!origPort || portName.toLowerCase() !== origPort.toLowerCase()));
+
+    const hasRealValDiff = Math.abs(revisedTotalVal - origTotalVal) > 0.01;
+    const hasRealQtyDiff = Math.abs(revisedTotalQty - origTotalQty) > 0.01;
+    const hasRealDifference = hasRealValDiff || hasRealQtyDiff;
+
     if (hasOption1 || hasOption2) {
-        const valAction = (hasOption2 && !hasOption1 && !isValIncrease) ? 'Decrease in L/C Value' : (isValIncrease ? 'Increase in L/C Value' : 'Decrease in L/C Value');
-        const qtyAction = (hasOption2 && !hasOption1 && !isQtyIncrease) ? 'Decrease in Quantity' : (isQtyIncrease ? 'Increase in Quantity' : 'Decrease in Quantity');
+        if (hasRealDifference) {
+            const valAction = (hasOption2 && !hasOption1 && !isValIncrease) ? 'Decrease in L/C Value' : (isValIncrease ? 'Increase in L/C Value' : 'Decrease in L/C Value');
+            const qtyAction = (hasOption2 && !hasOption1 && !isQtyIncrease) ? 'Decrease in Quantity' : (isQtyIncrease ? 'Increase in Quantity' : 'Decrease in Quantity');
 
-        bullets.push(`•   ${valAction}: USD ${formattedDiffValue}`);
-        bullets.push(`•   Revised Total L/C Value: USD ${formattedRevisedTotalValue}`);
-        bullets.push(`•   ${qtyAction}: ${formattedDiffQty} KGS`);
-        bullets.push(`•   Revised Total Quantity: ${formattedRevisedTotalQty} KGS`);
+            bullets.push(`•   ${valAction}: USD ${formattedDiffValue}`);
+            bullets.push(`•   Revised Total L/C Value: USD ${formattedRevisedTotalValue}`);
+            bullets.push(`•   ${qtyAction}: ${formattedDiffQty} KGS`);
+            bullets.push(`•   Revised Total Quantity: ${formattedRevisedTotalQty} KGS`);
+        }
     }
 
-    if (hasOption2) {
-        const newIpItems = getNewlyAddedIpDetails(record);
-        newIpItems.forEach(item => {
-            bullets.push(`•   Include ${item.productName} under I.P. No. ${item.ipNo}, dated ${item.ipDate}.`);
-        });
+    if ((!hasRealDifference && portName) || (hasRealDifference && isPortChanged && portName)) {
+        bullets.push(`•   Revised Port : ${portName.toUpperCase()}`);
     }
+
+    // Newly added / changed IP(s) items
+    const newIpItems = getNewlyAddedIpDetails(record);
+    newIpItems.forEach(item => {
+        bullets.push(`•   Include ${item.productName} under I.P. No. ${item.ipNo}, dated ${item.ipDate}.`);
+    });
 
     if (bullets.length > 0) {
         doc.setFont('times', 'normal');
@@ -1328,6 +1433,12 @@ export const renderBankApplicationContent = (doc, record) => {
  */
 export const appendBankApplicationPage = (doc, record) => {
     if (!doc || !record) return;
+    const isTenPercent = Boolean(
+        record.isTenPercent ||
+        (record.reviseNo && (record.reviseNo.includes('10%') || record.reviseNo.startsWith('10% PI'))) ||
+        (record.revisionNo && (record.revisionNo.includes('10%') || record.revisionNo.startsWith('10% PI')))
+    );
+    if (isTenPercent) return;
     doc.addPage('a4', 'p');
     renderBankApplicationContent(doc, record);
 };

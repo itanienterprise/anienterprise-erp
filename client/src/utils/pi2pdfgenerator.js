@@ -885,8 +885,15 @@ export const generatePI2PDF = (record) => {
 
     doc.line(margin, boxBottom, pageWidth - margin, boxBottom);
 
-    // Append Bank Application Page as Page 2
-    appendBankApplicationPage(doc, record);
+    // Append Bank Application Page as Page 2 - skip for 10% PI
+    const isTenPercent = Boolean(
+        record.isTenPercent ||
+        (record.reviseNo && (record.reviseNo.includes('10%') || record.reviseNo.startsWith('10% PI'))) ||
+        (record.revisionNo && (record.revisionNo.includes('10%') || record.revisionNo.startsWith('10% PI')))
+    );
+    if (!isTenPercent) {
+        appendBankApplicationPage(doc, record);
+    }
 
     // Open in new tab
     const pdfOutput = doc.output('blob');
