@@ -33,6 +33,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { getSocket } from '../../../utils/socket';
 import BankDollarRatesWidget from './BankDollarRatesWidget';
 import './Dashboard.css';
+import { queryClient } from '../../../utils/queryClient';
 
 const formatCurrency = (val) => '৳' + Number(val || 0).toLocaleString('en-IN');
 const formatDhakaYMD = (date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(date);
@@ -341,10 +342,18 @@ const Dashboard = ({
 
   // ─── Fetch PI Records for LC/PI Comparison ─────────────────────
   const fetchPiRecords = useCallback(async () => {
+    const cached = queryClient.getQueryData(['pi']);
+    if (cached && Array.isArray(cached) && cached.length > 0) {
+      setPiRecords(cached);
+      const isFresh = queryClient.getQueryState(['pi'])?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(['pi']).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return;
+    }
     try {
       const res = await axios.get(`${API_BASE_URL}/api/pi`);
       if (Array.isArray(res.data)) {
         setPiRecords(res.data);
+        queryClient.setQueryData(['pi'], res.data);
       }
     } catch (e) {
       console.warn('Failed to fetch PI records:', e);
@@ -353,10 +362,18 @@ const Dashboard = ({
 
   // ─── Fetch LC Records (from LC Management module: 304 LCs) ──────
   const fetchLcRecords = useCallback(async () => {
+    const cached = queryClient.getQueryData(['lc-management']);
+    if (cached && Array.isArray(cached) && cached.length > 0) {
+      setLcRecords(cached);
+      const isFresh = queryClient.getQueryState(['lc-management'])?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(['lc-management']).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return;
+    }
     try {
       const res = await axios.get(`${API_BASE_URL}/api/lc-management`);
       if (Array.isArray(res.data)) {
         setLcRecords(res.data);
+        queryClient.setQueryData(['lc-management'], res.data);
       }
     } catch (e) {
       console.warn('Failed to fetch LC records:', e);
@@ -380,10 +397,18 @@ const Dashboard = ({
 
   // ─── Fetch Customer Records (for Payment Collections) ──────────
   const fetchCustomerRecords = useCallback(async () => {
+    const cached = queryClient.getQueryData(['customers']);
+    if (cached && Array.isArray(cached) && cached.length > 0) {
+      setCustomerRecords(cached);
+      const isFresh = queryClient.getQueryState(['customers'])?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(['customers']).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return;
+    }
     try {
       const res = await axios.get(`${API_BASE_URL}/api/customers`);
       if (Array.isArray(res.data)) {
         setCustomerRecords(res.data);
+        queryClient.setQueryData(['customers'], res.data);
       }
     } catch (e) {
       console.warn('Failed to load customers in dashboard:', e);

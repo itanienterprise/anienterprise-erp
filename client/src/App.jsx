@@ -117,7 +117,12 @@ function App() {
       return null;
     }
   });
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [isCheckingSession, setIsCheckingSession] = useState(() => {
+    const isRemembered = localStorage.getItem('rememberMe') === 'true';
+    const hasTabSession = sessionStorage.getItem('isAuthenticated') === 'true';
+    const savedUser = isRemembered ? localStorage.getItem('currentUser') : sessionStorage.getItem('currentUser');
+    return !savedUser || (!isRemembered && !hasTabSession);
+  });
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -743,7 +748,10 @@ function App() {
 
       // If we reach here, either rememberMe is true, or this tab has an active session
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/auth/check`);
+        const [response] = await Promise.all([
+          axios.get(`${API_BASE_URL}/api/auth/check`),
+          hydrateQueryCache().catch(() => {})
+        ]);
         if (isCancelled) return;
 
         if (response.data.authenticated) {
@@ -1958,13 +1966,16 @@ function App() {
 
   const fetchImporters = async () => {
     const cached = queryClient.getQueryData(QUERY_KEYS.importers);
-    if (cached && cached.length > 0 && importers.length === 0) {
+    if (cached && cached.length > 0) {
       setImporters(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.importers)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.importers).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return cached;
     } else if (importers.length === 0) {
       setIsLoading(true);
     }
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/importers?_t=${Date.now()}`);
+      const res = await axios.get(`${API_BASE_URL}/api/importers`);
       const data = Array.isArray(res.data) ? res.data : [];
       setImporters(data);
       queryClient.setQueryData(QUERY_KEYS.importers, data);
@@ -1977,13 +1988,16 @@ function App() {
 
   const fetchExporters = async () => {
     const cached = queryClient.getQueryData(QUERY_KEYS.exporters);
-    if (cached && cached.length > 0 && exporters.length === 0) {
+    if (cached && cached.length > 0) {
       setExporters(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.exporters)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.exporters).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return cached;
     } else if (exporters.length === 0) {
       setIsLoading(true);
     }
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/exporters?_t=${Date.now()}`);
+      const res = await axios.get(`${API_BASE_URL}/api/exporters`);
       const data = Array.isArray(res.data) ? res.data : [];
       setExporters(data);
       queryClient.setQueryData(QUERY_KEYS.exporters, data);
@@ -1996,13 +2010,16 @@ function App() {
 
   const fetchSuppliers = async () => {
     const cached = queryClient.getQueryData(QUERY_KEYS.suppliers);
-    if (cached && cached.length > 0 && suppliers.length === 0) {
+    if (cached && cached.length > 0) {
       setSuppliers(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.suppliers)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.suppliers).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return cached;
     } else if (suppliers.length === 0) {
       setIsLoading(true);
     }
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/suppliers?_t=${Date.now()}`);
+      const res = await axios.get(`${API_BASE_URL}/api/suppliers`);
       const data = Array.isArray(res.data) ? res.data : [];
       setSuppliers(data);
       queryClient.setQueryData(QUERY_KEYS.suppliers, data);
@@ -2015,13 +2032,16 @@ function App() {
 
   const fetchPorts = async () => {
     const cached = queryClient.getQueryData(QUERY_KEYS.ports);
-    if (cached && cached.length > 0 && ports.length === 0) {
+    if (cached && cached.length > 0) {
       setPorts(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.ports)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.ports).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return cached;
     } else if (ports.length === 0) {
       setIsLoading(true);
     }
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/ports?_t=${Date.now()}`);
+      const res = await axios.get(`${API_BASE_URL}/api/ports`);
       const data = Array.isArray(res.data) ? res.data : [];
       setPorts(data);
       queryClient.setQueryData(QUERY_KEYS.ports, data);
@@ -2036,6 +2056,9 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.stockBaseline);
     if (cached) {
       setActiveBaseline(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.stockBaseline)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.stockBaseline).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return cached;
     }
     try {
       const data = await queryClient.fetchQuery({
@@ -2055,13 +2078,17 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.stock);
     if (cached && cached.length > 0) {
       setAllStockRecords(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.stock)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.stock).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) {
+        return cached;
+      }
     } else {
       setIsLoading(true);
     }
     try {
-      const cacheBuster = `_t=${Date.now()}`;
       const [rawStock] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/stock?${cacheBuster}`)
+        axios.get(`${API_BASE_URL}/api/stock`)
           .then(r => Array.isArray(r.data) ? r.data : [])
           .catch(() => queryClient.getQueryData(QUERY_KEYS.stock) || []),
         fetchStockBaseline()
@@ -2079,6 +2106,11 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.warehouses);
     if (cached && cached.length > 0) {
       setWarehouseData(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.warehouses)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.warehouses).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) {
+        return cached;
+      }
     }
     try {
       const [rawWhData, rawStockData] = await Promise.all([
@@ -2158,17 +2190,22 @@ function App() {
   };
 
   const fetchSales = async (preloadedData) => {
+    if (Array.isArray(preloadedData)) {
+      setSalesRecords(preloadedData);
+      queryClient.setQueryData(QUERY_KEYS.sales, preloadedData);
+      return preloadedData;
+    }
     const cached = queryClient.getQueryData(QUERY_KEYS.sales);
-    if (cached && cached.length > 0 && salesRecords.length === 0) {
+    if (cached && cached.length > 0) {
       setSalesRecords(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.sales)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.sales).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) {
+        return cached;
+      }
     }
     try {
-      if (Array.isArray(preloadedData)) {
-        setSalesRecords(preloadedData);
-        queryClient.setQueryData(QUERY_KEYS.sales, preloadedData);
-        return preloadedData;
-      }
-      const response = await axios.get(`${API_BASE_URL}/api/sales?_t=${Date.now()}`);
+      const response = await axios.get(`${API_BASE_URL}/api/sales`);
       const data = Array.isArray(response.data) ? response.data : [];
       setSalesRecords(data);
       queryClient.setQueryData(QUERY_KEYS.sales, data);
@@ -2182,6 +2219,9 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.damages);
     if (cached && cached.length > 0) {
       setDamages(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.damages)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.damages).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return cached;
     }
     try {
       const data = await queryClient.fetchQuery({
@@ -2201,12 +2241,15 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.returns);
     if (cached && cached.length > 0) {
       setReturnsList(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.returns)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.returns).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return cached;
     }
     try {
       const data = await queryClient.fetchQuery({
         queryKey: QUERY_KEYS.returns,
         queryFn: async () => {
-          const response = await axios.get(`${API_BASE_URL}/api/returns?_t=${Date.now()}`);
+          const response = await axios.get(`${API_BASE_URL}/api/returns`);
           return Array.isArray(response.data) ? response.data : [];
         }
       });
@@ -2221,6 +2264,9 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.products);
     if (cached && cached.length > 0) {
       setProducts(cached);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.products)?.dataUpdatedAt && 
+                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.products).dataUpdatedAt < 1000 * 60 * 5);
+      if (isFresh) return cached;
     } else {
       setIsLoading(true);
     }
@@ -2228,7 +2274,7 @@ function App() {
       const data = await queryClient.fetchQuery({
         queryKey: QUERY_KEYS.products,
         queryFn: async () => {
-          const response = await axios.get(`${API_BASE_URL}/api/products?_t=${Date.now()}`);
+          const response = await axios.get(`${API_BASE_URL}/api/products`);
           const rawData = Array.isArray(response.data) ? response.data : [];
           rawData.forEach(p => {
             if (p.brands && Array.isArray(p.brands)) {
