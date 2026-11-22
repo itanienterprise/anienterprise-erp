@@ -3701,19 +3701,19 @@ function PackingList({
                     className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
                 >
                     <div
-                        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200 text-left"
+                        className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200 text-left"
                         role="dialog"
                         aria-modal="true"
                     >
                         {/* Header */}
-                        <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between bg-gray-50/50">
-                            <div className="flex items-center gap-3.5">
-                                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${emptyFieldsModal.hasDuplicateInvoice ? 'bg-amber-50 border-amber-300 text-amber-600' : 'bg-amber-50 border-amber-200 text-amber-600'}`}>
+                        <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4 bg-gray-50/50">
+                            <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${emptyFieldsModal.hasDuplicateInvoice ? 'bg-amber-50 border-amber-300 text-amber-600' : 'bg-amber-50 border-amber-200 text-amber-600'}`}>
                                     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                     </svg>
                                 </div>
-                                <div>
+                                <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <h3 className="text-base font-black text-gray-900 tracking-tight">
                                             {emptyFieldsModal.hasDuplicateInvoice && emptyFieldsModal.emptyFields.length > 0
@@ -3723,17 +3723,17 @@ function PackingList({
                                                     : 'Empty Fields Detected'}
                                         </h3>
                                         {emptyFieldsModal.hasDuplicateInvoice && (
-                                            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                                                Duplicate Invoice No
+                                            <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                                                Duplicate Invoice
                                             </span>
                                         )}
                                         {emptyFieldsModal.emptyFields.length > 0 && (
-                                            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                                            <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200 shrink-0">
                                                 {emptyFieldsModal.emptyFields.length} Unfilled
                                             </span>
                                         )}
                                     </div>
-                                    <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                    <p className="text-xs text-gray-500 font-medium mt-1 leading-normal">
                                         {emptyFieldsModal.hasDuplicateInvoice && emptyFieldsModal.emptyFields.length > 0
                                             ? `A duplicate invoice number and ${emptyFieldsModal.emptyFields.length} unfilled field${emptyFieldsModal.emptyFields.length === 1 ? '' : 's'} were detected. Please review before saving.`
                                             : emptyFieldsModal.hasDuplicateInvoice
@@ -3745,7 +3745,7 @@ function PackingList({
                             <button
                                 type="button"
                                 onClick={() => setEmptyFieldsModal({ isOpen: false, emptyFields: [], hasDuplicateInvoice: false, duplicateInvoiceInfo: null, onConfirm: null })}
-                                className="p-1.5 rounded-xl hover:bg-gray-200/70 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer shrink-0"
+                                className="p-1.5 rounded-xl hover:bg-gray-200/70 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer shrink-0 mt-0.5"
                             >
                                 <XIcon className="w-5 h-5" />
                             </button>
@@ -3755,22 +3755,23 @@ function PackingList({
                         <div className="p-6 py-5 overflow-y-auto max-h-[46vh] space-y-4 bg-white">
                             {/* Duplicate Invoice Warning Section */}
                             {emptyFieldsModal.hasDuplicateInvoice && (
-                                <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl space-y-2">
-                                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
-                                        <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl flex items-start gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-amber-100 border border-amber-200/80 flex items-center justify-center text-amber-700 shrink-0 mt-0.5">
+                                        <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                         </svg>
-                                        <span>Duplicate Invoice Number Detected</span>
                                     </div>
-                                    <div className="text-xs text-amber-900 leading-relaxed">
-                                        Invoice No <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-amber-300 text-amber-950">{formData.packingListNumber}</span> already exists in the system
-                                        {emptyFieldsModal.duplicateInvoiceInfo?.partyName ? (
-                                            <> (Party: <strong>{emptyFieldsModal.duplicateInvoiceInfo.partyName}</strong>{emptyFieldsModal.duplicateInvoiceInfo?.date ? `, Date: ${emptyFieldsModal.duplicateInvoiceInfo.date}` : ''})</>
-                                        ) : ''}.
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                                            Duplicate Invoice Number Detected
+                                        </div>
+                                        <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                                            Invoice No <span className="font-mono font-bold bg-white px-1.5 py-0.5 rounded border border-amber-300 text-amber-950 inline-block align-middle mx-0.5">{formData.packingListNumber}</span> already exists in the system
+                                            {emptyFieldsModal.duplicateInvoiceInfo?.partyName ? (
+                                                <> (Party: <strong>{emptyFieldsModal.duplicateInvoiceInfo.partyName}</strong>{emptyFieldsModal.duplicateInvoiceInfo?.date ? `, Date: ${emptyFieldsModal.duplicateInvoiceInfo.date}` : ''})</>
+                                            ) : ''}.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-amber-800 bg-amber-100/60 p-2 rounded-lg font-medium leading-relaxed">
-                                        ℹ️ If you need to use this Invoice No twice (e.g. split shipment, 2nd truck/container), click <strong>{emptyFieldsModal.emptyFields.length > 0 ? 'Allow & Confirm' : 'Confirm & Allow'}</strong>. If not, click <strong>Keep Editing</strong> to enter a different Invoice No.
-                                    </p>
                                 </div>
                             )}
 
