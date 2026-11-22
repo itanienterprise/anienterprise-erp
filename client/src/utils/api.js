@@ -115,6 +115,11 @@ axios.interceptors.request.use((config) => {
         } catch (_) {}
     }
 
+    // Strip volatile _t cache-busting timestamps from GET queries so TanStack Query, IndexedDB, and server memoryCache work across all modules
+    if ((config.method || 'get').toLowerCase() === 'get' && cleanPath.includes('_t=')) {
+        cleanPath = cleanPath.replace(/([?&])_t=\d+(&|$)/, (m, p1, p2) => (p2 === '&' ? p1 : '')).replace(/[?&]$/, '');
+    }
+
     config._originalUrl = cleanPath;
 
     // Capture original details for the gateway

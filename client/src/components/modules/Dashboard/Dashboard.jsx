@@ -128,14 +128,16 @@ const PALETTE = [
   '#f97316', '#84cc16', '#a855f7', '#64748b'
 ];
 
+const DEFAULT_EMPTY_ARRAY = [];
+
 const Dashboard = ({
   currentUser,
-  salesRecords = [],
-  stockRecords = [],
-  lcStockRecords = [],
-  products = [],
-  warehouseData = [],
-  customerRecords: initialCustomerRecords = [],
+  salesRecords = DEFAULT_EMPTY_ARRAY,
+  stockRecords = DEFAULT_EMPTY_ARRAY,
+  lcStockRecords = DEFAULT_EMPTY_ARRAY,
+  products = DEFAULT_EMPTY_ARRAY,
+  warehouseData = DEFAULT_EMPTY_ARRAY,
+  customerRecords: initialCustomerRecords = DEFAULT_EMPTY_ARRAY,
   onNavigate
 }) => {
   // ─── Dashboard Stats & Backend State ──────────────────────────
@@ -168,18 +170,6 @@ const Dashboard = ({
 
   // ─── Customer Records (for Payment Collections) ───────────────
   const [customerRecords, setCustomerRecords] = useState(initialCustomerRecords || []);
-
-  useEffect(() => {
-    if (!initialCustomerRecords || initialCustomerRecords.length === 0) {
-      axios.get(`${API_BASE_URL}/api/customers`).then(res => {
-        if (Array.isArray(res.data) && res.data.length > 0) {
-          setCustomerRecords(res.data);
-        }
-      }).catch(err => {
-        console.warn('Dashboard customers fetch fallback error:', err);
-      });
-    }
-  }, [initialCustomerRecords]);
 
   // ─── Card 1: Attendance & Working Time State ──────────────────
   const [attendanceViewMode, setAttendanceViewMode] = useState('attendance'); // 'attendance' | 'workingTime'
@@ -421,8 +411,7 @@ const Dashboard = ({
     fetchPiRecords();
     fetchLcRecords();
     fetchUserProfile();
-    fetchCustomerRecords();
-  }, [fetchDashboardStats, fetchTodos, fetchPiRecords, fetchLcRecords, fetchUserProfile, fetchCustomerRecords]);
+  }, [fetchDashboardStats, fetchTodos, fetchPiRecords, fetchLcRecords, fetchUserProfile]);
 
   useEffect(() => {
     if (initialCustomerRecords && initialCustomerRecords.length > 0) {
@@ -986,20 +975,25 @@ const Dashboard = ({
 
   // ─── CARD 5: Collection vs Sales Bar Chart Data ────────────────
   const collectionSalesData = useMemo(() => {
-    // Flatten customer payment collection history
-    const allCollections = [];
-    (customerRecords || []).forEach(cust => {
-      if (Array.isArray(cust.paymentHistory)) {
-        cust.paymentHistory.forEach(p => {
-          if (p && p.date) {
-            allCollections.push({
-              date: String(p.date || '').slice(0, 10),
-              amount: parseFloat(p.amount || 0)
-            });
-          }
-        });
-      }
-    });
+    // Prefer server-aggregated recentCollections from statsData (bandwidth optimization), fallback to customerRecords
+    const allCollections = (statsData?.recentCollections && statsData.recentCollections.length > 0)
+      ? statsData.recentCollections
+      : [];
+
+    if (allCollections.length === 0 && customerRecords && customerRecords.length > 0) {
+      customerRecords.forEach(cust => {
+        if (Array.isArray(cust.paymentHistory)) {
+          cust.paymentHistory.forEach(p => {
+            if (p && p.date) {
+              allCollections.push({
+                date: String(p.date || '').slice(0, 10),
+                amount: parseFloat(p.amount || 0)
+              });
+            }
+          });
+        }
+      });
+    }
 
     const allSalesList = (salesRecords || []).map(s => ({
       date: String(s.date || (s.createdAt ? String(s.createdAt).slice(0, 10) : '')).slice(0, 10),
@@ -1242,7 +1236,7 @@ const Dashboard = ({
       maxVal,
       timeframe: collectionTimeframe
     };
-  }, [weeklyDaysList, salesRecords, customerRecords, collectionTimeframe]);
+  }, [weeklyDaysList, salesRecords, statsData?.recentCollections, customerRecords, collectionTimeframe]);
 
   // ─── CARD 7: Leaflet Map Setup ─────────────────────────────────
   const hubsKey = useMemo(() => JSON.stringify(statsData?.logisticsHubs || []), [statsData?.logisticsHubs]);

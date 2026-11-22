@@ -147,6 +147,8 @@ const memoryCache = {
   purchases: null,
   purchaseReceives: null,
   customers: null,
+  customersLightweight: null,
+  employeesLightweight: null,
   warehouses: null,
   insurancePayments: null,
   cnfPayments: null,
@@ -195,9 +197,13 @@ const invalidateMemoryCache = (modName, options = {}) => {
   }
   if (['customer', 'customers', 'payment-collection', 'paymentcollection', 'payments', 'pay-to-customer', 'paytocustomer'].includes(mod)) {
     memoryCache.customers = null;
+    memoryCache.customersLightweight = null;
     if (!options?.preserveSalesCache) {
       memoryCache.sales = null;
     }
+  }
+  if (['employee', 'employees'].includes(mod)) {
+    memoryCache.employeesLightweight = null;
   }
   if (['warehouse', 'warehouses', 'transfer', 'transfers'].includes(mod)) {
     memoryCache.warehouses = null;
@@ -330,6 +336,13 @@ const generalLimiter = rateLimit({
 });
 
 // Middleware
+// 0. HTTP Compression (Gzip / Deflate for minimal bandwidth usage across all routes)
+const compression = require('compression');
+app.use(compression({
+  threshold: 1024,
+  level: 6
+}));
+
 // 1. HTTP Security Headers
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
@@ -1600,6 +1613,36 @@ apiRouter.get('/api/dashboard/stats', async (req, res) => {
       { name: 'Dhaka Regional Hub', type: 'Warehouse', lat: 23.8103, lng: 90.4125, description: 'Central Distribution Center' }
     ];
 
+    // Compute recent collections for Dashboard Card 5 (Collection vs Sales)
+    // Avoids requiring the client to download the entire 2.3 MB customer database
+    let recentCollections = [];
+    try {
+      let custDocs = memoryCache.customers;
+      if (!custDocs || !Array.isArray(custDocs)) {
+        const records = await Customer.find().lean();
+        custDocs = records.map(r => {
+          const d = decryptRecordWithUnwrap(r.data);
+          return d || {};
+        });
+        memoryCache.customers = custDocs;
+      }
+
+      custDocs.forEach(cust => {
+        if (Array.isArray(cust.paymentHistory)) {
+          cust.paymentHistory.forEach(p => {
+            if (p && p.date && p.amount) {
+              recentCollections.push({
+                date: String(p.date).slice(0, 10),
+                amount: parseFloat(p.amount) || 0
+              });
+            }
+          });
+        }
+      });
+    } catch (collErr) {
+      console.warn('[Dashboard] Collections aggregation warning:', collErr.message);
+    }
+
     res.json({
       success: true,
       currentUser: {
@@ -1615,7 +1658,8 @@ apiRouter.get('/api/dashboard/stats', async (req, res) => {
       activeEmployeeEmpId,
       recentLogs,
       trackedDevices,
-      logisticsHubs
+      logisticsHubs,
+      recentCollections
     });
   } catch (err) {
     console.error('Dashboard stats API error:', err);
@@ -3894,19 +3938,47 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
 
 apiRouter.get('/api/customers', async (req, res) => {
   try {
+    const isLightweight = req.query.lightweight === 'true' || req.query.dropdown === 'true' || req.query.summary === 'true';
     if (req.query._t || req.query._nocache) {
       memoryCache.customers = null;
+      memoryCache.customersLightweight = null;
     }
-    if (memoryCache.customers) {
+    if (isLightweight && memoryCache.customersLightweight) {
+      return res.json(memoryCache.customersLightweight);
+    }
+    if (!isLightweight && memoryCache.customers) {
       return res.json(memoryCache.customers);
     }
+
     const records = await Customer.find().sort({ createdAt: -1 });
-    const decryptedCustomers = records.map(record => {
+    const fullDecrypted = [];
+    const lightDecrypted = [];
+
+    records.forEach(record => {
       const decrypted = decryptData(record.data);
-      return { ...decrypted, _id: record._id, createdAt: record.createdAt };
+      if (decrypted) {
+        const item = { ...decrypted, _id: record._id, createdAt: record.createdAt };
+        fullDecrypted.push(item);
+
+        lightDecrypted.push({
+          _id: record._id,
+          customerId: decrypted.customerId || '',
+          companyName: decrypted.companyName || '',
+          customerName: decrypted.customerName || '',
+          phone: decrypted.phone || '',
+          address: decrypted.address || '',
+          location: decrypted.location || '',
+          customerType: decrypted.customerType || '',
+          status: decrypted.status || 'Active',
+          createdAt: record.createdAt
+        });
+      }
     });
-    memoryCache.customers = decryptedCustomers;
-    res.json(decryptedCustomers);
+
+    memoryCache.customers = fullDecrypted;
+    memoryCache.customersLightweight = lightDecrypted;
+
+    res.json(isLightweight ? lightDecrypted : fullDecrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -7121,8 +7193,33 @@ apiRouter.get('/api/employees', async (req, res) => {
     }
   }
 
+  const isLightweight = req.query.lightweight === 'true' || req.query.dropdown === 'true';
+  const includeFullPhoto = req.query.fullPhoto === 'true';
+
   try {
     const records = await Employee.find().sort({ createdAt: -1 });
+
+    // In lightweight dropdown mode, return immediately without loading heavy base64 user photos
+    if (isLightweight) {
+      const lightList = records.map(r => {
+        let d = decryptData(r.data);
+        if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
+          try { d = decryptData(d.data); } catch (e) { }
+        }
+        return {
+          _id: r._id,
+          employeeId: d?.employeeId || '',
+          name: d?.name || d?.fullName || d?.username || '',
+          role: d?.role || '',
+          designation: d?.designation || '',
+          department: d?.department || '',
+          phone: d?.phone || '',
+          email: d?.email || '',
+          status: d?.status || 'Active'
+        };
+      });
+      return res.json(lightList);
+    }
 
     // Fetch user profile photos and avatar photos to attach
     const usersWithPhotos = await User.find(
@@ -7147,8 +7244,14 @@ apiRouter.get('/api/employees', async (req, res) => {
       if (d && d.role) {
         d.role = await resolveRoleToDisplay(d.role);
       }
-      const profilePhoto = (d && d.employeeId && userPhotoMap[d.employeeId]) || d?.profilePhoto || null;
+      const rawFullPhoto = (d && d.employeeId && userPhotoMap[d.employeeId]) || d?.profilePhoto || null;
       const avatarPhoto = (d && d.employeeId && userAvatarMap[d.employeeId]) || d?.avatarPhoto || null;
+
+      // Bandwidth optimization: only send heavy 700KB profilePhoto when explicitly requested
+      // For general list/table views, avatarPhoto (or small photo) is used for thumbnail display
+      const profilePhoto = includeFullPhoto
+        ? rawFullPhoto
+        : (avatarPhoto || (rawFullPhoto && rawFullPhoto.length < 50000 ? rawFullPhoto : null));
 
       if (!hasFullEmployeePerm) {
         return {
@@ -7170,6 +7273,26 @@ apiRouter.get('/api/employees', async (req, res) => {
       return { ...d, _id: r._id, createdAt: r.createdAt, profilePhoto, avatarPhoto };
     }));
     res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Single employee detail query (includes full-resolution photo on demand)
+apiRouter.get('/api/employees/:id', async (req, res) => {
+  const user = req.session?.user;
+  if (!user) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+    let d = decryptData(employee.data);
+    if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
+      try { d = decryptData(d.data); } catch (e) { }
+    }
+    const userDoc = d?.employeeId ? await User.findOne({ username: d.employeeId }, 'profilePhoto avatarPhoto') : null;
+    const profilePhoto = userDoc?.profilePhoto || d?.profilePhoto || null;
+    const avatarPhoto = userDoc?.avatarPhoto || d?.avatarPhoto || null;
+    res.json({ ...d, _id: employee._id, createdAt: employee.createdAt, profilePhoto, avatarPhoto });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

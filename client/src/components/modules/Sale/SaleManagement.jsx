@@ -84,7 +84,7 @@ const SaleManagement = ({
 
     const fetchEmployees = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`).catch(() => ({ data: [] }));
+            const response = await axios.get(`${API_BASE_URL}/api/employees?lightweight=true`).catch(() => ({ data: [] }));
             const rawData = Array.isArray(response.data) ? response.data : [];
             const map = {};
             const firstMap = {};
@@ -1538,14 +1538,14 @@ const SaleManagement = ({
     };
 
     async function fetchCustomers() {
-        const cached = queryClient.getQueryData(['customers']);
+        const cached = queryClient.getQueryData(['customers-lightweight']) || queryClient.getQueryData(['customers']);
         if (cached && cached.length > 0) {
             setCustomers(cached);
         }
         try {
             const data = await queryClient.fetchQuery({
-                queryKey: ['customers'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/customers`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryKey: ['customers-lightweight'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/customers?lightweight=true`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setCustomers(Array.isArray(data) ? data : []);
         } catch (error) {

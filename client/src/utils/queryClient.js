@@ -12,6 +12,17 @@ export const queryClient = new QueryClient({
     },
 });
 
+// Enhance queryClient.fetchQuery to respect the 5-minute staleTime across all modules.
+// In TanStack Query v5, fetchQuery defaults internal staleTime to 0, which previously caused
+// modules to bypass caching and re-download megabytes of data on every view switch.
+const originalFetchQuery = queryClient.fetchQuery.bind(queryClient);
+queryClient.fetchQuery = function (options) {
+    if (options && typeof options === 'object' && options.staleTime === undefined) {
+        options = { ...options, staleTime: 1000 * 60 * 5 };
+    }
+    return originalFetchQuery(options);
+};
+
 const QUERY_PREFIX = 'query:';
 
 const serializeKey = (queryKey) => {

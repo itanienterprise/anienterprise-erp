@@ -89,7 +89,7 @@ const SalesReport = ({
     useEffect(() => {
         const fetchCustomers = async () => {
             try {
-                const res = await axios.get('/api/customers');
+                const res = await axios.get('/api/customers?lightweight=true');
                 const data = res.data?.data || res.data || [];
                 const map = {};
                 data.forEach(c => {

@@ -398,7 +398,7 @@ const Attendance = ({ currentUser }) => {
   }, silent);
 
   const fetchEmployees = () => load('employees', async () => {
-    const r = await axios.get(`${API_BASE_URL}/api/employees`);
+    const r = await axios.get(`${API_BASE_URL}/api/employees?lightweight=true`);
     setEmployees(r.data || []);
   });
 

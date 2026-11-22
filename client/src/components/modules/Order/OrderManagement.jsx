@@ -614,8 +614,8 @@ const OrderManagement = ({
     const fetchCustomers = async () => {
         try {
             const list = await queryClient.fetchQuery({
-                queryKey: ['customers'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/customers`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryKey: ['customers-lightweight'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/customers?lightweight=true`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setCustomers(list);
         } catch (err) {

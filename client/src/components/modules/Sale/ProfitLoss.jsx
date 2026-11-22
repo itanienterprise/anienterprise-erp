@@ -4,6 +4,7 @@ import {
   DollarSignIcon, ReceiptIcon, SearchIcon, XIcon, BoxIcon
 } from '../../Icons';
 import axios from '../../../utils/api';
+import { queryClient } from '../../../utils/queryClient';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { getAdjustedLcValues, getCogNetBillBdt, getRecCostingKg, calculateLcConclusion } from '../../../utils/lcValueUtils';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -325,22 +326,26 @@ export default function ProfitLoss({ salesRecords, products }) {
   useEffect(() => {
     const fetchLCData = async () => {
       try {
+        const queryFetch = (key, url) => queryClient.fetchQuery({
+          queryKey: [key],
+          queryFn: () => axios.get(`${API_BASE_URL}${url}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+        });
         const [lcRes, expRes, insRes, stockRes, damageRes, cogRes, retRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/lc-management`),
-          axios.get(`${API_BASE_URL}/api/lc-expenses`),
-          axios.get(`${API_BASE_URL}/api/insurance-payments`),
-          axios.get(`${API_BASE_URL}/api/stock`),
-          axios.get(`${API_BASE_URL}/api/damages`),
-          axios.get(`${API_BASE_URL}/api/cost-of-goods`),
-          axios.get(`${API_BASE_URL}/api/returns`).catch(() => ({ data: [] }))
+          queryFetch('lc-management', '/api/lc-management'),
+          queryFetch('lc-expenses', '/api/lc-expenses'),
+          queryFetch('insurance-payments', '/api/insurance-payments'),
+          queryFetch('stock', '/api/stock'),
+          queryFetch('damages', '/api/damages'),
+          queryFetch('cost-of-goods', '/api/cost-of-goods'),
+          queryFetch('returns', '/api/returns')
         ]);
-        setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
-        setLcExpenses(Array.isArray(expRes.data) ? expRes.data : []);
-        setInsurancePayments(Array.isArray(insRes.data) ? insRes.data : []);
-        setStockRecords(Array.isArray(stockRes.data) ? stockRes.data : []);
-        setDamages(Array.isArray(damageRes.data) ? damageRes.data : []);
-        setCostOfGoodsRecords(Array.isArray(cogRes.data) ? cogRes.data : []);
-        setReturnsRecords(Array.isArray(retRes?.data) ? retRes.data : []);
+        setLcRecords(Array.isArray(lcRes) ? lcRes : []);
+        setLcExpenses(Array.isArray(expRes) ? expRes : []);
+        setInsurancePayments(Array.isArray(insRes) ? insRes : []);
+        setStockRecords(Array.isArray(stockRes) ? stockRes : []);
+        setDamages(Array.isArray(damageRes) ? damageRes : []);
+        setCostOfGoodsRecords(Array.isArray(cogRes) ? cogRes : []);
+        setReturnsRecords(Array.isArray(retRes) ? retRes : []);
       } catch (error) {
         console.error('Error fetching LC, expenses, stock, damage, returns, and cost of goods data:', error);
       }

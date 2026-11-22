@@ -245,7 +245,7 @@ const Token = ({ currentUser, addNotification }) => {
             setIsLoading(true);
         }
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/tokens?_t=${Date.now()}`);
+            const res = await axios.get(`${API_BASE_URL}/api/tokens`);
             setTokens(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error('Error fetching tokens:', error);
@@ -261,7 +261,7 @@ const Token = ({ currentUser, addNotification }) => {
 
     const fetchEmployees = useCallback(async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/employees?_t=${Date.now()}`);
+            const res = await axios.get(`${API_BASE_URL}/api/employees?lightweight=true`);
             const rawData = Array.isArray(res.data) ? res.data : [];
             const list = rawData.map(e => {
                 let d = e;

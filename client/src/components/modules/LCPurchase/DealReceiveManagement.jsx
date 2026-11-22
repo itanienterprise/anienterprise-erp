@@ -425,23 +425,23 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
             const [dealsRes, supRes, prodRes, cogsRes, stocksRes] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['lc-purchases'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-purchases?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/lc-purchases`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['suppliers'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/suppliers?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/suppliers`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['products'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/products?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/products`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['cost-of-goods'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['stock'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
                 })
             ]);
             if (Array.isArray(dealsRes)) setDealsList(dealsRes);
@@ -461,15 +461,15 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
             const [res, cogsRes, stocksRes] = await Promise.all([
                 queryClient.fetchQuery({
                     queryKey: ['deal-receives'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/deal-receives?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/deal-receives`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['cost-of-goods'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
                 }),
                 queryClient.fetchQuery({
                     queryKey: ['stock'],
-                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
+                    queryFn: () => axios.get(`${API_BASE_URL}/api/stock`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
                 })
             ]);
             setRecords(Array.isArray(res) ? res : []);
@@ -929,7 +929,7 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
             );
             if (!deal) return;
 
-            const rRes = await axios.get(`${API_BASE_URL}/api/deal-receives?_t=${Date.now()}`);
+            const rRes = await axios.get(`${API_BASE_URL}/api/deal-receives`);
             const allReceives = Array.isArray(rRes.data) ? rRes.data : [];
             const cleanPId = String(deal.purchaseId || '').replace(/-/g, '');
             const matchingReceives = allReceives.filter(r =>
