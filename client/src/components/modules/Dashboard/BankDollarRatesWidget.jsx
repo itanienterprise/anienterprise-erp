@@ -76,11 +76,31 @@ const formatRateDate = (dateStr) => {
 };
 
 const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
-  const [ratesData, setRatesData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [ratesData, setRatesData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('bank_dollar_rates_cache');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    try {
+      const saved = localStorage.getItem('bank_dollar_rates_cache');
+      return !saved || JSON.parse(saved).length === 0;
+    } catch (e) {
+      return true;
+    }
+  });
   const [isSyncing, setIsSyncing] = useState(false);
   const [filterType, setFilterType] = useState('all'); // 'all' | 'increase' | 'decrease'
-  const [lastSyncTime, setLastSyncTime] = useState('');
+  const [lastSyncTime, setLastSyncTime] = useState(() => {
+    try {
+      return localStorage.getItem('bank_dollar_rates_last_sync') || '';
+    } catch (e) {
+      return '';
+    }
+  });
 
   // Custom Serial Order (Persisted in localStorage)
   const [customSerialOrder, setCustomSerialOrder] = useState(() => {
@@ -98,14 +118,34 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
   const [modalTab, setModalTab] = useState('order'); // 'order' | 'rates'
   const [modalBanks, setModalBanks] = useState([]);
   const [draggedIdx, setDraggedIdx] = useState(null);
-  const [editableRates, setEditableRates] = useState({});
+  const [editableRates, setEditableRates] = useState(() => {
+    try {
+      const saved = localStorage.getItem('bank_dollar_rates_cache');
+      const list = saved ? JSON.parse(saved) : [];
+      const initial = {};
+      list.forEach(b => {
+        initial[b.bankName] = {
+          todayRate: b.todayRate != null ? String(b.todayRate) : '',
+          previousRate: b.previousRate != null ? String(b.previousRate) : ''
+        };
+      });
+      return initial;
+    } catch (e) {
+      return {};
+    }
+  });
   const [savingBank, setSavingBank] = useState(null);
   const [saveSuccessBank, setSaveSuccessBank] = useState(null);
+
+  const hasCachedRatesRef = useRef(ratesData.length > 0);
+  useEffect(() => {
+    hasCachedRatesRef.current = ratesData.length > 0;
+  }, [ratesData]);
 
   const fetchRates = useCallback(async (refresh = false) => {
     try {
       if (refresh) setIsSyncing(true);
-      else setIsLoading(true);
+      else if (!hasCachedRatesRef.current) setIsLoading(true);
 
       const url = `${API_BASE_URL}/api/bank-dollar-rates${refresh ? '?refresh=true' : ''}`;
       const res = await axios.get(url);
@@ -113,11 +153,15 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
         // Exclude any non-BD banks
         const bdOnly = res.data.filter(r => !isForeignBank(r.bankName));
         setRatesData(bdOnly);
-        if (bdOnly[0]?.lastUpdated) {
-          setLastSyncTime(bdOnly[0].lastUpdated);
-        } else {
-          setLastSyncTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
-        }
+        try {
+          localStorage.setItem('bank_dollar_rates_cache', JSON.stringify(bdOnly));
+        } catch (e) {}
+
+        const syncTime = bdOnly[0]?.lastUpdated || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        setLastSyncTime(syncTime);
+        try {
+          localStorage.setItem('bank_dollar_rates_last_sync', syncTime);
+        } catch (e) {}
 
         // Initialize editable rates map
         const initialRates = {};

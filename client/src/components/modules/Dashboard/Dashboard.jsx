@@ -138,9 +138,32 @@ const Dashboard = ({
   onNavigate
 }) => {
   // ─── Dashboard Stats & Backend State ──────────────────────────
-  const [statsData, setStatsData] = useState(null);
-  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const userStatsCacheKey = useMemo(() => {
+    const id = currentUser?._id || currentUser?.id || currentUser?.username || 'default';
+    return `dashboard_stats_cache_${id}`;
+  }, [currentUser]);
+
+  const userProfileCacheKey = useMemo(() => {
+    const id = currentUser?._id || currentUser?.id || currentUser?.username || 'default';
+    return `dashboard_user_profile_${id}`;
+  }, [currentUser]);
+
+  const [statsData, setStatsData] = useState(() => {
+    try {
+      const id = currentUser?._id || currentUser?.id || currentUser?.username || 'default';
+      const cached = localStorage.getItem(`dashboard_stats_cache_${id}`);
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(() => !statsData);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
+
+  const hasStatsRef = useRef(!!statsData);
+  useEffect(() => {
+    hasStatsRef.current = !!statsData;
+  }, [statsData]);
 
   // ─── Customer Records (for Payment Collections) ───────────────
   const [customerRecords, setCustomerRecords] = useState(initialCustomerRecords || []);
@@ -159,7 +182,15 @@ const Dashboard = ({
 
   // ─── Card 1: Attendance & Working Time State ──────────────────
   const [attendanceViewMode, setAttendanceViewMode] = useState('attendance'); // 'attendance' | 'workingTime'
-  const [userProfile, setUserProfile] = useState(null);
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      const id = currentUser?._id || currentUser?.id || currentUser?.username || 'default';
+      const cached = localStorage.getItem(`dashboard_user_profile_${id}`);
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [isSyncingAttendance, setIsSyncingAttendance] = useState(false);
   const [attendanceWeekOffset, setAttendanceWeekOffset] = useState(0);
 
@@ -230,12 +261,19 @@ const Dashboard = ({
   // ─── Fetch Dashboard Backend Data ──────────────────────────────
   const fetchDashboardStats = useCallback(async (customOffset = null) => {
     try {
-      setIsLoadingStats(true);
       const targetOffset = customOffset !== null ? customOffset : attendanceWeekOffset;
+      if (!hasStatsRef.current || targetOffset !== 0) {
+        setIsLoadingStats(true);
+      }
       const offsetQuery = targetOffset !== 0 ? `&weekOffset=${targetOffset}` : '';
       const res = await axios.get(`${API_BASE_URL}/api/dashboard/stats?mode=personal${offsetQuery}`);
       if (res.data && res.data.success) {
         setStatsData(res.data);
+        if (targetOffset === 0) {
+          try {
+            localStorage.setItem(userStatsCacheKey, JSON.stringify(res.data));
+          } catch (e) {}
+        }
       }
     } catch (err) {
       console.warn('Dashboard stats fetch failed:', err);
@@ -243,7 +281,7 @@ const Dashboard = ({
       setIsLoadingStats(false);
       setLastRefreshed(new Date());
     }
-  }, [attendanceWeekOffset]);
+  }, [attendanceWeekOffset, userStatsCacheKey]);
 
   const handleWeekChange = (offset) => {
     setAttendanceWeekOffset(offset);
@@ -331,11 +369,14 @@ const Dashboard = ({
       const res = await axios.get(`${API_BASE_URL}/api/profile`);
       if (res.data) {
         setUserProfile(res.data);
+        try {
+          localStorage.setItem(userProfileCacheKey, JSON.stringify(res.data));
+        } catch (e) {}
       }
     } catch (e) {
       console.warn('Failed to load user profile in dashboard:', e);
     }
-  }, []);
+  }, [userProfileCacheKey]);
 
   // ─── Fetch Customer Records (for Payment Collections) ──────────
   const fetchCustomerRecords = useCallback(async () => {
@@ -454,7 +495,7 @@ const Dashboard = ({
         formattedDate: wd.formattedDate || formatDateDMY(wd.date)
       }));
     }
-    // Fallback standard 7 days Saturday to Friday in local time
+    // Fallback standard 7 days Saturday to Friday in local time without fake dummy punch data
     const dayNames = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     const now = new Date();
     const todayDay = now.getDay(); // 0: Sun, 1: Mon, ..., 6: Sat
@@ -477,11 +518,11 @@ const Dashboard = ({
         date: dateStr,
         formattedDate,
         isToday,
-        activeHours: isToday ? 4.5 : (name === 'Friday' ? 0 : 8),
-        status: name === 'Friday' ? 'Weekend' : (isToday ? 'Active' : 'Present'),
-        inTime: name === 'Friday' ? '--:--' : (isToday ? '09:30 AM' : '09:15 AM'),
-        outTime: name === 'Friday' ? '--:--' : (isToday ? '--:--' : '06:00 PM'),
-        attendanceStatus: name === 'Friday' ? 'WEEKEND' : (isToday ? 'PRESENT' : 'PRESENT')
+        activeHours: 0,
+        status: name === 'Friday' ? 'Weekend' : (isToday ? 'Active' : 'Absent'),
+        inTime: '--:--',
+        outTime: '--:--',
+        attendanceStatus: name === 'Friday' ? 'WEEKEND' : (isToday ? 'ACTIVE' : 'ABSENT')
       };
     });
   }, [statsData, formatDateDMY]);
@@ -1413,7 +1454,33 @@ const Dashboard = ({
                     </div>
 
                     {/* ─── VIEW 1: ATTENDANCE (In Time, Out Time, Status from Attendance Module) ─── */}
-                    {attendanceViewMode === 'attendance' ? (
+                    {isLoadingStats && !statsData ? (
+                      <div className="space-y-1 mt-2">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-2 py-1.5 grid grid-cols-12 gap-1 border-b border-gray-100">
+                          <span className="col-span-4">DAY (SAT - FRI)</span>
+                          <span className="col-span-3 text-center">IN TIME</span>
+                          <span className="col-span-3 text-center">OUT TIME</span>
+                          <span className="col-span-2 text-right">STATUS</span>
+                        </div>
+                        {[...Array(7)].map((_, idx) => (
+                          <div key={idx} className="grid grid-cols-12 gap-1 items-center py-2 px-2 rounded-xl min-h-[42px] animate-pulse">
+                            <div className="col-span-4 space-y-1">
+                              <div className="h-3.5 bg-gray-200 rounded w-20"></div>
+                              <div className="h-2.5 bg-gray-100 rounded w-14"></div>
+                            </div>
+                            <div className="col-span-3 flex justify-center">
+                              <div className="h-3.5 bg-gray-100 rounded w-16"></div>
+                            </div>
+                            <div className="col-span-3 flex justify-center">
+                              <div className="h-3.5 bg-gray-100 rounded w-16"></div>
+                            </div>
+                            <div className="col-span-2 flex justify-end">
+                              <div className="h-5 bg-gray-100 rounded-full w-14"></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : attendanceViewMode === 'attendance' ? (
                       <div className="space-y-1 mt-2">
                         <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-2 py-1.5 grid grid-cols-12 gap-1 border-b border-gray-100">
                           <span className="col-span-4">DAY (SAT - FRI)</span>
@@ -1549,11 +1616,17 @@ const Dashboard = ({
                   <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-gray-500 min-h-[34px]">
                     {attendanceViewMode === 'attendance' ? (
                       <>
-                        <div className="flex flex-wrap items-center gap-3 text-xs">
-                          <span>Present: <strong className="text-emerald-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'PRESENT' || d.attendanceStatus === 'LATE' || d.attendanceStatus === 'HALF_DAY').length}</strong></span>
-                          <span>Late: <strong className="text-amber-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'LATE').length}</strong></span>
-                          <span>Absent: <strong className="text-rose-500">{weeklyDaysList.filter(d => (d.attendanceStatus === 'ABSENT' || !d.attendanceStatus) && d.dayName !== 'Friday' && (attendanceWeekOffset !== 0 || !d.isToday)).length}</strong></span>
-                        </div>
+                        {isLoadingStats && !statsData ? (
+                          <div className="flex items-center gap-2 animate-pulse">
+                            <div className="h-3.5 bg-gray-200 rounded w-44"></div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-3 text-xs">
+                            <span>Present: <strong className="text-emerald-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'PRESENT' || d.attendanceStatus === 'LATE' || d.attendanceStatus === 'HALF_DAY').length}</strong></span>
+                            <span>Late: <strong className="text-amber-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'LATE').length}</strong></span>
+                            <span>Absent: <strong className="text-rose-500">{weeklyDaysList.filter(d => (d.attendanceStatus === 'ABSENT' || !d.attendanceStatus) && d.dayName !== 'Friday' && (attendanceWeekOffset !== 0 || !d.isToday)).length}</strong></span>
+                          </div>
+                        )}
 
                         {/* Previous Week / Current Week Button */}
                         {attendanceWeekOffset === 0 ? (
