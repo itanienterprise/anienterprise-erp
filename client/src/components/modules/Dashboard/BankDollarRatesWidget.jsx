@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { API_BASE_URL } from '../../../utils/helpers';
@@ -141,12 +141,16 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
     fetchRates();
   }, [fetchRates]);
 
-  // Real-time socket sync
+  // Real-time socket sync with debounce to prevent socket storms
+  const lastSocketSyncRef = useRef(0);
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
     const handler = (data) => {
       if (data?.module === 'bank-dollar-rates') {
+        const now = Date.now();
+        if (now - lastSocketSyncRef.current < 4000) return;
+        lastSocketSyncRef.current = now;
         fetchRates(false);
       }
     };

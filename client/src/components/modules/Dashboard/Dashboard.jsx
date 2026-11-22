@@ -251,12 +251,17 @@ const Dashboard = ({
   };
 
   // Real-time synchronization via Socket.IO for Attendance & Biometrics
+  const lastAttendanceSocketSyncRef = useRef(0);
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
     const handleAttendanceUpdate = (data) => {
       const mod = (data?.module || '').toLowerCase().trim();
-      if (mod === 'attendance' || mod === 'attendances' || mod === 'all') {
+      // Listen specifically for attendance log updates with an 8-second debounce to prevent socket storms
+      if (mod === 'attendance' || mod === 'attendances') {
+        const now = Date.now();
+        if (now - lastAttendanceSocketSyncRef.current < 8000) return;
+        lastAttendanceSocketSyncRef.current = now;
         fetchDashboardStats();
       }
     };
@@ -1174,6 +1179,9 @@ const Dashboard = ({
   }, [weeklyDaysList, salesRecords, customerRecords, collectionTimeframe]);
 
   // ─── CARD 7: Leaflet Map Setup ─────────────────────────────────
+  const hubsKey = useMemo(() => JSON.stringify(statsData?.logisticsHubs || []), [statsData?.logisticsHubs]);
+  const devicesKey = useMemo(() => JSON.stringify(statsData?.trackedDevices || []), [statsData?.trackedDevices]);
+
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -1264,7 +1272,7 @@ const Dashboard = ({
         });
       }
     }
-  }, [statsData, mapTab]);
+  }, [hubsKey, devicesKey, mapTab]);
 
   // Clean up Leaflet on unmount
   useEffect(() => {

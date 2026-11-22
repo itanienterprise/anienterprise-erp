@@ -9454,7 +9454,7 @@ async function processEmployeeDay(employeeId, date) {
 let lastDashboardAttendanceProcessTime = 0;
 let dashboardAttendanceProcessPromise = null;
 
-async function processAttendanceForDate(date) {
+async function processAttendanceForDate(date, shouldBroadcast = true) {
   let targetDate = (date || '').trim();
   if (!targetDate) {
     targetDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
@@ -9591,9 +9591,12 @@ async function processAttendanceForDate(date) {
     }
   }
 
-  try {
-    broadcastUpdate('attendance', 'logs_updated', { date: targetDate, processed });
-  } catch (_) {}
+  // Only broadcast if explicitly requested and actual punch logs were updated
+  if (shouldBroadcast && processed > 0) {
+    try {
+      broadcastUpdate('attendance', 'logs_updated', { date: targetDate, processed });
+    } catch (_) {}
+  }
 
   return { targetDate, processed, totalEmployees: allEmployees.length };
 }
@@ -9603,13 +9606,14 @@ async function triggerDashboardAutoProcess(todayDhaka, weekDateStrings = []) {
   if (dashboardAttendanceProcessPromise) {
     return dashboardAttendanceProcessPromise;
   }
-  if (now - lastDashboardAttendanceProcessTime < 2500) {
+  // Cooldown throttle to prevent rapid hammering of the attendance processing engine
+  if (now - lastDashboardAttendanceProcessTime < 15000) {
     return { skipped: true };
   }
   lastDashboardAttendanceProcessTime = now;
   dashboardAttendanceProcessPromise = (async () => {
-    // 1. Process today (primary target)
-    const todayRes = await processAttendanceForDate(todayDhaka);
+    // 1. Process today (shouldBroadcast=false to avoid runaway websocket loops when loading dashboard)
+    const todayRes = await processAttendanceForDate(todayDhaka, false);
 
     // 2. Also check if any past days in current week have unprocessed punches
     if (Array.isArray(weekDateStrings)) {
@@ -9623,7 +9627,7 @@ async function triggerDashboardAutoProcess(todayDhaka, weekDateStrings = []) {
           processed: { $ne: true }
         });
         if (hasUnprocessed) {
-          await processAttendanceForDate(dStr);
+          await processAttendanceForDate(dStr, false);
         }
       }
     }
