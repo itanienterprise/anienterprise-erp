@@ -4449,7 +4449,7 @@ apiRouter.post(['/api/stock-baseline/adjust-opening', '/api/stock/adjust-quantit
       warehouse,
       productName,
       brand,
-      lcNo = '0000',
+      lcNo = '',
       mode = 'set', // 'set' | 'add' | 'reduce'
       adjustQuantity,
       targetQuantity,
@@ -4483,14 +4483,18 @@ apiRouter.post(['/api/stock-baseline/adjust-opening', '/api/stock/adjust-quantit
     const pNorm = (productName || '').trim().toLowerCase();
     const bNorm = (brand || '').trim().toLowerCase();
     const whNorm = (warehouse || '').trim().toLowerCase();
-    const lcNorm = (lcNo || '0000').trim().toLowerCase();
+    const rawLc = (lcNo !== undefined && lcNo !== null ? String(lcNo) : '').trim();
+    const isTargetBlank = !rawLc || rawLc === '0000' || rawLc === '-';
+    const cleanLc = isTargetBlank ? '' : rawLc;
 
     let existingIdx = snap.findIndex(r => {
       const rWh = (r.warehouse || '').trim().toLowerCase();
       const rP = (r.productName || r.product || '').trim().toLowerCase();
       const rB = (r.brand || '').trim().toLowerCase();
-      const rLc = (r.lcNo || '0000').trim().toLowerCase();
-      return rWh === whNorm && rP === pNorm && rB === bNorm && rLc === lcNorm;
+      const rLc = (r.lcNo || '').trim();
+      const isRBlank = !rLc || rLc === '0000' || rLc === '-';
+      const matchLc = isTargetBlank ? isRBlank : rLc.toLowerCase() === cleanLc.toLowerCase();
+      return rWh === whNorm && rP === pNorm && rB === bNorm && matchLc;
     });
 
     const existingItem = existingIdx >= 0 ? snap[existingIdx] : null;
@@ -4527,6 +4531,9 @@ apiRouter.post(['/api/stock-baseline/adjust-opening', '/api/stock/adjust-quantit
       snap[existingIdx].inHouseQuantity = newQty;
       snap[existingIdx].packet = newQty / pktSize;
       snap[existingIdx].inHousePacket = newQty / pktSize;
+      if (isTargetBlank && snap[existingIdx].lcNo === '0000') {
+        snap[existingIdx].lcNo = '';
+      }
       if (note) snap[existingIdx].adjustmentNote = note;
     } else {
       const initialOpening = delta;
@@ -4535,7 +4542,7 @@ apiRouter.post(['/api/stock-baseline/adjust-opening', '/api/stock/adjust-quantit
         productName: productName.trim().toUpperCase(),
         brand: brand.trim().toUpperCase(),
         quality: '-',
-        lcNo: lcNo.trim() || '0000',
+        lcNo: cleanLc,
         quantity: initialOpening,
         inHouseQuantity: initialOpening,
         packet: initialOpening / pktSize,
@@ -4555,14 +4562,16 @@ apiRouter.post(['/api/stock-baseline/adjust-opening', '/api/stock/adjust-quantit
       memoryCache.stock = null;
     }
 
+    const displayLc = cleanLc || 'Blank / No LC';
+
     broadcastUpdate('stock', 'update', {
-      message: `Stock adjusted for ${productName} - ${brand} (LC ${lcNo}) in ${warehouse} by ${delta > 0 ? '+' : ''}${delta} kg. Zero effect on LC Receive.`
+      message: `Stock adjusted for ${productName} - ${brand} (${displayLc}) in ${warehouse} by ${delta > 0 ? '+' : ''}${delta} kg. Zero effect on LC Receive.`
     });
     broadcastUpdate('baseline', 'update', { message: 'Baseline updated' });
 
     res.json({
       success: true,
-      message: `Successfully adjusted stock for ${warehouse} (${productName} - ${brand}, LC ${lcNo}). New Closing: ${finalTargetClosing.toLocaleString('en-US')} kg. LC Receive records were NOT affected.`,
+      message: `Successfully adjusted stock for ${warehouse} (${productName} - ${brand}, ${displayLc}). New Closing: ${finalTargetClosing.toLocaleString('en-US')} kg. LC Receive records were NOT affected.`,
       targetQuantity: finalTargetClosing,
       delta: delta
     });

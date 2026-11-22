@@ -165,7 +165,7 @@ const StockManagement = ({
     const [manualFixWarehouse, setManualFixWarehouse] = useState('All');
     const [manualFixProduct, setManualFixProduct] = useState('');
     const [manualFixBrand, setManualFixBrand] = useState('');
-    const [manualFixFromLc, setManualFixFromLc] = useState('0000');
+    const [manualFixFromLc, setManualFixFromLc] = useState('');
     const [manualFixToLc, setManualFixToLc] = useState('');
     const [selectedFixInvoices, setSelectedFixInvoices] = useState(new Set());
     const [manualFixLoading, setManualFixLoading] = useState(false);
@@ -2600,7 +2600,7 @@ const StockManagement = ({
                 const first = groupedDiscrepancies[0];
                 setManualFixProduct(first.productName || '');
                 setManualFixBrand(first.brand || '');
-                setManualFixFromLc('0000');
+                setManualFixFromLc('');
                 if (first.targetLc) setManualFixToLc(first.targetLc);
                 if (first.warehouse) setManualFixWarehouse(first.warehouse);
             } else if (!manualFixProduct && manualFixProductOptions.length > 0) {
@@ -2643,9 +2643,10 @@ const StockManagement = ({
                 if ((prod.productName || '').trim().toLowerCase() === pNorm) {
                     (prod.brandList || []).forEach(b => {
                         if ((b.brand || '').trim().toLowerCase() === bNorm) {
+                            const rawLc = (b.lcNo || '').trim();
                             list.push({
                                 warehouse: whName,
-                                lcNo: (b.lcNo || '0000').trim(),
+                                lcNo: (rawLc === '0000' || rawLc === '-') ? '' : rawLc,
                                 rate: b.rate || b.purchasedPrice,
                                 openingQuantity: b.openingQuantity || 0,
                                 inHouseQuantity: b.inHouseQuantity !== undefined ? b.inHouseQuantity : (b.closingQuantity || 0),
@@ -2664,8 +2665,9 @@ const StockManagement = ({
                 if ((snap.productName || '').trim().toLowerCase() === pNorm && (snap.brand || '').trim().toLowerCase() === bNorm) {
                     const snapWh = (snap.warehouse || '').trim();
                     if (manualFixWarehouse !== 'All' && snapWh.toLowerCase() !== manualFixWarehouse.toLowerCase()) return;
-                    const snapLc = (snap.lcNo || '0000').trim();
-                    const alreadyExists = list.some(l => l.warehouse.toLowerCase() === snapWh.toLowerCase() && l.lcNo.toLowerCase() === snapLc.toLowerCase());
+                    const rawSnapLc = (snap.lcNo || '').trim();
+                    const snapLc = (rawSnapLc === '0000' || rawSnapLc === '-') ? '' : rawSnapLc;
+                    const alreadyExists = list.some(l => l.warehouse.toLowerCase() === snapWh.toLowerCase() && (l.lcNo || '').toLowerCase() === snapLc.toLowerCase());
                     if (!alreadyExists) {
                         list.push({
                             warehouse: snapWh,
@@ -2686,32 +2688,63 @@ const StockManagement = ({
 
     // Currently selected LC Item for Stock Adjustment
     const selectedLcItem = useMemo(() => {
-        const targetLc = (adjustLcNo || manualFixFromLc || '').trim();
-        if (!targetLc) return manualFixLcBreakdown[0] || null;
+        if (!manualFixProduct || !manualFixBrand) return null;
+
+        const targetLc = (adjustLcNo !== undefined && adjustLcNo !== null ? adjustLcNo : (manualFixFromLc || '')).trim();
+        const isTargetBlank = !targetLc || targetLc === '0000' || targetLc === '-';
+
         if (manualFixWarehouse !== 'All') {
-            const matchWh = manualFixLcBreakdown.find(i => i.lcNo.toLowerCase() === targetLc.toLowerCase() && i.warehouse.toLowerCase() === manualFixWarehouse.toLowerCase());
+            const matchWh = manualFixLcBreakdown.find(i => {
+                const iWh = (i.warehouse || '').toLowerCase() === manualFixWarehouse.toLowerCase();
+                const iBlank = !i.lcNo || i.lcNo === '' || i.lcNo === '0000' || i.lcNo === '-';
+                if (isTargetBlank) return iWh && iBlank;
+                return iWh && (i.lcNo || '').toLowerCase() === targetLc.toLowerCase();
+            });
             if (matchWh) return matchWh;
         }
-        return manualFixLcBreakdown.find(i => i.lcNo.toLowerCase() === targetLc.toLowerCase()) || manualFixLcBreakdown[0] || null;
-    }, [adjustLcNo, manualFixFromLc, manualFixWarehouse, manualFixLcBreakdown]);
+
+        const matchAny = manualFixLcBreakdown.find(i => {
+            const iBlank = !i.lcNo || i.lcNo === '' || i.lcNo === '0000' || i.lcNo === '-';
+            if (isTargetBlank) return iBlank;
+            return (i.lcNo || '').toLowerCase() === targetLc.toLowerCase();
+        });
+        if (matchAny) return matchAny;
+
+        if (isTargetBlank) {
+            const fallbackWh = (manualFixWarehouse && manualFixWarehouse !== 'All')
+                ? manualFixWarehouse
+                : (manualFixLcBreakdown[0]?.warehouse || warehouseOptions[0] || 'Hili');
+            const targetPkt = manualFixLcBreakdown[0]?.packetSize ||
+                products.find(p => (p.name || p.productName || '').trim().toLowerCase() === manualFixProduct.trim().toLowerCase())?.packetSize || 30;
+            return {
+                warehouse: fallbackWh,
+                lcNo: '',
+                rate: 0,
+                openingQuantity: 0,
+                inHouseQuantity: 0,
+                closingQuantity: 0,
+                packetSize: targetPkt
+            };
+        }
+
+        return manualFixLcBreakdown[0] || null;
+    }, [adjustLcNo, manualFixFromLc, manualFixWarehouse, manualFixLcBreakdown, manualFixProduct, manualFixBrand, warehouseOptions, products]);
 
     // Keep adjustLcNo in sync with selections
     useEffect(() => {
         if (!adjustLcNo && manualFixFromLc) {
             setAdjustLcNo(manualFixFromLc);
-        } else if (!adjustLcNo && manualFixLcBreakdown.length > 0) {
-            setAdjustLcNo(manualFixLcBreakdown[0].lcNo);
         }
-    }, [manualFixFromLc, adjustLcNo, manualFixLcBreakdown]);
+    }, [manualFixFromLc, adjustLcNo]);
 
     // From LC options
     const manualFixFromLcOptions = useMemo(() => {
         const set = new Set();
-        set.add('0000');
         manualFixLcBreakdown.forEach(item => {
-            if (item.lcNo) set.add(item.lcNo);
+            const clean = (item.lcNo || '').trim();
+            if (clean && clean !== '0000' && clean !== '-') set.add(clean);
         });
-        return Array.from(set);
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
     }, [manualFixLcBreakdown]);
 
     // Target LC options
@@ -2745,12 +2778,12 @@ const StockManagement = ({
 
     // Matching sales invoices for selected criteria
     const manualFixMatchingInvoices = useMemo(() => {
-        if (!manualFixProduct || !manualFixBrand || !manualFixFromLc) return [];
+        if (!manualFixProduct || !manualFixBrand || manualFixFromLc === undefined || manualFixFromLc === null) return [];
         const isPlaceholderLc = (v) => !v || ['0000', '000', '00', '0', '-', '—', '--'].includes(v.toString().trim().toLowerCase());
         const pNorm = manualFixProduct.trim().toLowerCase();
         const bNorm = manualFixBrand.trim().toLowerCase();
-        const fromNorm = manualFixFromLc.trim().toLowerCase();
-        const isFromZero = fromNorm === '0000' || isPlaceholderLc(fromNorm);
+        const fromNorm = (manualFixFromLc || '').trim().toLowerCase();
+        const isFromZero = fromNorm === '0000' || isPlaceholderLc(fromNorm) || fromNorm === '';
         const whFilterNorm = manualFixWarehouse !== 'All' ? manualFixWarehouse.trim().toLowerCase() : null;
 
         const results = [];
@@ -2769,7 +2802,7 @@ const StockManagement = ({
                         if (whFilterNorm && wh && wh.toLowerCase() !== whFilterNorm) return;
 
                         const curLc = (be.lcNo || item.lcNo || '').trim();
-                        const isMatch = isFromZero ? isPlaceholderLc(curLc) || curLc === '0000' : curLc.toLowerCase() === fromNorm;
+                        const isMatch = isFromZero ? (isPlaceholderLc(curLc) || curLc === '0000' || curLc === '') : curLc.toLowerCase() === fromNorm;
                         if (isMatch) {
                             results.push({
                                 saleId: sale._id,
@@ -2779,7 +2812,7 @@ const StockManagement = ({
                                 warehouse: wh || 'Hili',
                                 quantity: parseFloat(be.quantity || be.qty) || 0,
                                 packet: be.packet || 0,
-                                lcNo: curLc || '0000'
+                                lcNo: curLc || ''
                             });
                         }
                     });
@@ -2789,7 +2822,7 @@ const StockManagement = ({
                     if (whFilterNorm && wh && wh.toLowerCase() !== whFilterNorm) return;
 
                     const curLc = (item.lcNo || '').trim();
-                    const isMatch = isFromZero ? isPlaceholderLc(curLc) || curLc === '0000' : curLc.toLowerCase() === fromNorm;
+                    const isMatch = isFromZero ? (isPlaceholderLc(curLc) || curLc === '0000' || curLc === '') : curLc.toLowerCase() === fromNorm;
                     if (isMatch) {
                         results.push({
                             saleId: sale._id,
@@ -2799,7 +2832,7 @@ const StockManagement = ({
                             warehouse: wh || 'Hili',
                             quantity: parseFloat(item.quantity || item.qty) || 0,
                             packet: item.packet || 0,
-                            lcNo: curLc || '0000'
+                            lcNo: curLc || ''
                         });
                     }
                 }
@@ -2862,12 +2895,15 @@ const StockManagement = ({
     const handleApplyStockAdjustment = async (overrideParams = null, skipConfirm = false) => {
         const targetItem = overrideParams?.item || selectedLcItem;
         if (!targetItem) {
-            setAdjustFeedback({ type: 'error', message: 'Please select an LC to adjust.' });
+            setAdjustFeedback({ type: 'error', message: 'Please select a product and brand to adjust.' });
             return;
         }
 
         const mode = overrideParams?.mode || adjustMode;
-        const targetLc = (overrideParams?.lcNo || targetItem.lcNo || '0000').trim();
+        const rawTargetLc = (overrideParams?.lcNo !== undefined ? overrideParams.lcNo : (targetItem?.lcNo !== undefined ? targetItem.lcNo : (adjustLcNo || ''))).trim();
+        const isTargetBlank = !rawTargetLc || rawTargetLc === '0000' || rawTargetLc === '-';
+        const targetLc = isTargetBlank ? '' : rawTargetLc;
+        const displayLc = isTargetBlank ? 'Blank / No LC' : targetLc;
         const curClosing = targetItem.closingQuantity !== undefined ? targetItem.closingQuantity : (targetItem.inHouseQuantity || 0);
         const pktSize = targetItem.packetSize || 30;
 
@@ -2926,7 +2962,7 @@ const StockManagement = ({
                 setAdjustNote('');
                 setAdjustFeedback({
                     type: 'success',
-                    message: res.data?.message || `Successfully adjusted stock for LC ${targetLc} in ${targetItem.warehouse}! New closing: ${resultingQty.toLocaleString()} kg (${newBags.whole} bags). LC Receive was NOT affected.`
+                    message: res.data?.message || `Successfully adjusted stock${isTargetBlank ? ' (Blank / No LC)' : ` for LC ${targetLc}`} in ${targetItem.warehouse}! New closing: ${resultingQty.toLocaleString()} kg (${newBags.whole} bags). LC Receive was NOT affected.`
                 });
             } catch (err) {
                 console.error('Error in stock adjustment:', err);
@@ -2946,7 +2982,7 @@ const StockManagement = ({
 
         setConfirmAction({
             title: 'Confirm Stock Adjustment',
-            message: `• Warehouse: ${targetItem.warehouse}\n• Product: ${manualFixProduct} • Brand: ${manualFixBrand}\n• LC No: ${targetLc}\n• Current Stock: ${curClosing.toLocaleString()} kg (${curBags.whole} bags)\n• Action: ${actionText}\n• Resulting Stock: ${resultingQty.toLocaleString()} kg (${newBags.whole} bags)\n\nZero Effect on LC Receive: This adjusts stock inventory without touching your original import or LC receive records.`,
+            message: `• Warehouse: ${targetItem.warehouse}\n• Product: ${manualFixProduct} • Brand: ${manualFixBrand}\n• LC No: ${displayLc}\n• Current Stock: ${curClosing.toLocaleString()} kg (${curBags.whole} bags)\n• Action: ${actionText}\n• Resulting Stock: ${resultingQty.toLocaleString()} kg (${newBags.whole} bags)\n\nZero Effect on LC Receive: This adjusts stock inventory without touching your original import or LC receive records.`,
             confirmText: 'Yes, Apply Adjustment',
             onConfirm: executeAdjustment
         });
@@ -6076,11 +6112,11 @@ const StockManagement = ({
                                     {/* LC Selection */}
                                     <div className="space-y-1.5">
                                         <label className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider pl-1">
-                                            Selected LC Number *
+                                            Selected LC Number
                                         </label>
                                         <div className="relative">
                                             <select
-                                                value={adjustLcNo || manualFixFromLc}
+                                                value={adjustLcNo}
                                                 onChange={(e) => {
                                                     setAdjustLcNo(e.target.value);
                                                     setManualFixFromLc(e.target.value);
@@ -6090,8 +6126,9 @@ const StockManagement = ({
                                                 }}
                                                 className="w-full appearance-none bg-indigo-50/40 border border-indigo-200 hover:border-indigo-300 rounded-xl px-4 py-2.5 pr-10 text-xs font-bold text-indigo-950 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-hidden transition-all cursor-pointer font-mono"
                                             >
+                                                <option value="">-- Blank / No LC --</option>
                                                 {manualFixFromLcOptions.map(lc => (
-                                                    <option key={lc} value={lc}>{lc === '0000' ? '0000 (Placeholder)' : lc}</option>
+                                                    <option key={lc} value={lc}>{lc}</option>
                                                 ))}
                                             </select>
                                             <ChevronDownIcon className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 pointer-events-none" />
@@ -6149,15 +6186,18 @@ const StockManagement = ({
                                             {manualFixLcBreakdown.map((item, idx) => {
                                                 const isNeg = (item.closingQuantity || 0) < -0.001;
                                                 const isZero = Math.abs(item.closingQuantity || 0) <= 0.001;
-                                                const isSelected = (adjustLcNo || manualFixFromLc) === item.lcNo && (manualFixWarehouse === 'All' || item.warehouse.toLowerCase() === manualFixWarehouse.toLowerCase());
+                                                const isBlank = !item.lcNo || item.lcNo === '' || item.lcNo === '0000' || item.lcNo === '-';
+                                                const isSelected = isBlank
+                                                    ? (!adjustLcNo || adjustLcNo === '' || adjustLcNo === '0000')
+                                                    : ((adjustLcNo || '').toLowerCase() === (item.lcNo || '').toLowerCase());
                                                 const pkt = calculatePktRemainder(item.closingQuantity, item.packetSize);
 
                                                 return (
                                                     <div
                                                         key={idx}
                                                         onClick={() => {
-                                                            setAdjustLcNo(item.lcNo);
-                                                            setManualFixFromLc(item.lcNo);
+                                                            setAdjustLcNo(isBlank ? '' : item.lcNo);
+                                                            setManualFixFromLc(isBlank ? '' : item.lcNo);
                                                             if (manualFixWarehouse === 'All') setManualFixWarehouse(item.warehouse);
                                                             setAdjustFeedback(null);
                                                             setConfirmAction(null);
@@ -6175,7 +6215,7 @@ const StockManagement = ({
                                                         <div>
                                                             <div className="flex justify-between items-center mb-2">
                                                                 <span className="font-mono font-bold text-gray-900 text-xs bg-gray-100 px-2 py-0.5 rounded-lg border border-gray-200">
-                                                                    LC: {item.lcNo}
+                                                                    {isBlank ? 'Blank / No LC' : `LC: ${item.lcNo}`}
                                                                 </span>
                                                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                                                                     isNeg
@@ -6220,9 +6260,9 @@ const StockManagement = ({
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
                                         <div>
                                             <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider flex items-center gap-2">
-                                                <span>2. Adjust Quantity for LC:</span>
+                                                <span>2. Adjust Quantity for:</span>
                                                 <span className="text-indigo-600 font-mono text-sm">
-                                                    {selectedLcItem?.lcNo || adjustLcNo || manualFixFromLc || 'None selected'}
+                                                    {selectedLcItem ? (selectedLcItem.lcNo && selectedLcItem.lcNo !== '0000' ? `LC ${selectedLcItem.lcNo}` : 'Blank / No LC') : (manualFixProduct && manualFixBrand ? 'Blank / No LC' : 'None selected')}
                                                 </span>
                                             </h4>
                                             <p className="text-[11px] text-gray-500 mt-0.5">
@@ -6288,14 +6328,14 @@ const StockManagement = ({
                                                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-start gap-2 font-medium">
                                                     <span className="text-sm">⚠️</span>
                                                     <div>
-                                                        This LC currently has a negative balance of <strong>{Math.round(Math.abs(selectedLcItem.closingQuantity)).toLocaleString()} kg</strong>. Click <strong>"One-Click Zero Out"</strong> to eliminate the discrepancy without touching any LC receive records.
+                                                        This stock currently has a negative balance of <strong>{Math.round(Math.abs(selectedLcItem.closingQuantity)).toLocaleString()} kg</strong>. Click <strong>"One-Click Zero Out"</strong> to eliminate the discrepancy without touching any LC receive records.
                                                     </div>
                                                 </div>
                                             )}
                                         </div>
                                     ) : (
                                         <div className="text-xs text-gray-500 italic p-3 bg-gray-50 rounded-xl text-center">
-                                            Please select an LC number from above to adjust.
+                                            Please select a product and brand from above to adjust.
                                         </div>
                                     )}
 
@@ -6489,7 +6529,7 @@ const StockManagement = ({
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <div>
                                         <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider">
-                                            2. Select Sales Invoices to Reassign ({manualFixMatchingInvoices.length} found under LC {manualFixFromLc})
+                                            2. Select Sales Invoices to Reassign ({manualFixMatchingInvoices.length} found under {manualFixFromLc ? `LC ${manualFixFromLc}` : 'Blank / No LC'})
                                         </h4>
                                         <p className="text-[11px] text-gray-500 mt-0.5">
                                             Select which sales to reassign to <strong>LC {manualFixToLc || '...'}</strong>.
