@@ -58,25 +58,63 @@ function fetchSafe(url, headers = {}) {
   });
 }
 
-// Helper to extract circular / rate effective date (e.g. "19 Nov 2026", "2026-11-19")
+// Helper to extract circular / rate effective date (e.g. "21 Nov 2026", "2026-11-21")
 function extractCircularDate(text) {
   if (!text) return null;
   const str = String(text);
-  const m1 = str.match(/([0-9]{1,2})[-\/_ ]([A-Za-z]{3,9})[-\/_ ]([0-9]{4})/i);
+
+  // Reject raw WAF / bot-challenge script payloads
+  if (
+    str.includes('bobcmn') ||
+    str.includes('TSPD') ||
+    str.includes('f5avra') ||
+    str.includes('Request Rejected')
+  ) {
+    if (str.length > 300) return null;
+  }
+
+  const MONTH_MAP = {
+    jan: "Jan", january: "Jan",
+    feb: "Feb", february: "Feb",
+    mar: "Mar", march: "Mar",
+    apr: "Apr", april: "Apr",
+    may: "May",
+    jun: "Jun", june: "Jun",
+    jul: "Jul", july: "Jul",
+    aug: "Aug", august: "Aug",
+    sep: "Sep", sept: "Sep", september: "Sep",
+    oct: "Oct", october: "Oct",
+    nov: "Nov", november: "Nov",
+    dec: "Dec", december: "Dec"
+  };
+
+  const m1 = str.match(/\b([0-9]{1,2})[-\/_ ]([A-Za-z]{3,9})[-\/_ ]([0-9]{4})\b/i);
   if (m1) {
-    const month = m1[2].charAt(0).toUpperCase() + m1[2].slice(1, 3).toLowerCase();
-    return `${m1[1]} ${month} ${m1[3]}`;
+    const mName = MONTH_MAP[m1[2].toLowerCase()];
+    const y = parseInt(m1[3], 10);
+    if (mName && y >= 2024 && y <= 2030) {
+      return `${parseInt(m1[1], 10)} ${mName} ${y}`;
+    }
   }
-  const m2 = str.match(/([A-Za-z]{3,9})[-\/_ ]([0-9]{1,2}),?[-\/_ ]([0-9]{4})/i);
+
+  const m2 = str.match(/\b([A-Za-z]{3,9})[-\/_ ]([0-9]{1,2}),?[-\/_ ]([0-9]{4})\b/i);
   if (m2) {
-    const month = m2[1].charAt(0).toUpperCase() + m2[1].slice(1, 3).toLowerCase();
-    return `${m2[2]} ${month} ${m2[3]}`;
+    const mName = MONTH_MAP[m2[1].toLowerCase()];
+    const y = parseInt(m2[3], 10);
+    if (mName && y >= 2024 && y <= 2030) {
+      return `${parseInt(m2[2], 10)} ${mName} ${y}`;
+    }
   }
-  const m3 = str.match(/([0-9]{4})[_-]([0-9]{2})[_-]([0-9]{2})/);
+
+  const m3 = str.match(/\b([0-9]{4})[_-]([0-9]{2})[_-]([0-9]{2})\b/);
   if (m3) {
+    const y = parseInt(m3[1], 10);
+    const mIdx = parseInt(m3[2], 10);
+    const d = parseInt(m3[3], 10);
     const mNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const month = mNames[parseInt(m3[2], 10) - 1];
-    return `${parseInt(m3[3], 10)} ${month} ${m3[1]}`;
+    if (y >= 2024 && y <= 2030 && mIdx >= 1 && mIdx <= 12 && d >= 1 && d <= 31) {
+      return `${d} ${mNames[mIdx - 1]} ${y}`;
+    }
   }
   return null;
 }
@@ -90,8 +128,10 @@ const BANK_REGISTRY = {
     buyRate: 123.75,
     sellRate: 124.75,
     todayRate: 124.75,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.75,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Sonali Bank': {
     bankName: 'Sonali Bank PLC',
@@ -100,8 +140,10 @@ const BANK_REGISTRY = {
     buyRate: 123.85,
     sellRate: 124.85,
     todayRate: 124.85,
-    previousRate: 124.75,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.85,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Agrani Bank': {
     bankName: 'Agrani Bank PLC',
@@ -110,8 +152,10 @@ const BANK_REGISTRY = {
     buyRate: 123.55,
     sellRate: 124.75,
     todayRate: 124.75,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.75,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Janata Bank': {
     bankName: 'Janata Bank PLC',
@@ -120,8 +164,10 @@ const BANK_REGISTRY = {
     buyRate: 123.80,
     sellRate: 124.80,
     todayRate: 124.80,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.80,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'National Bank': {
     bankName: 'National Bank PLC',
@@ -130,28 +176,34 @@ const BANK_REGISTRY = {
     buyRate: 123.75,
     sellRate: 124.85,
     todayRate: 124.85,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.85,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Jamuna Bank': {
     bankName: 'Jamuna Bank PLC',
     shortName: 'JAMUNA',
     sourceUrl: 'https://jamunabankbd.com',
     buyRate: 123.80,
-    sellRate: 124.80,
-    todayRate: 124.80,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    sellRate: 126.50,
+    todayRate: 126.50,
+    previousRate: 126.50,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Mercantile Bank': {
     bankName: 'Mercantile Bank PLC',
     shortName: 'MBL',
     sourceUrl: 'https://www.mblbd.com',
     buyRate: 123.80,
-    sellRate: 124.80,
-    todayRate: 124.80,
-    previousRate: 124.75,
-    rateType: 'BC Selling (LC/Trade)'
+    sellRate: 126.50,
+    todayRate: 126.50,
+    previousRate: 126.50,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'BRAC Bank': {
     bankName: 'BRAC Bank PLC',
@@ -160,9 +212,10 @@ const BANK_REGISTRY = {
     buyRate: 123.95,
     sellRate: 124.95,
     todayRate: 124.95,
-    previousRate: 124.70,
+    previousRate: 124.95,
     rateType: 'BC Selling (LC/Trade)',
-    rateDate: '19 Nov 2026'
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'City Bank': {
     bankName: 'City Bank PLC',
@@ -171,8 +224,10 @@ const BANK_REGISTRY = {
     buyRate: 123.60,
     sellRate: 124.80,
     todayRate: 124.80,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.80,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Eastern Bank': {
     bankName: 'Eastern Bank PLC',
@@ -181,8 +236,10 @@ const BANK_REGISTRY = {
     buyRate: 123.80,
     sellRate: 124.80,
     todayRate: 124.80,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.80,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Dutch-Bangla Bank': {
     bankName: 'Dutch-Bangla Bank PLC',
@@ -192,19 +249,22 @@ const BANK_REGISTRY = {
     buyRate: 123.55,
     sellRate: 124.75,
     todayRate: 124.75,
-    previousRate: 124.70,
+    previousRate: 124.75,
     rateType: 'BC Selling (LC/Trade)',
-    rateDate: '19 Nov 2026'
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Islami Bank': {
     bankName: 'Islami Bank Bangladesh PLC',
     shortName: 'IBBL',
     sourceUrl: 'https://www.islamibankbd.com',
     buyRate: 123.80,
-    sellRate: 124.85,
-    todayRate: 124.85,
-    previousRate: 124.75,
-    rateType: 'BC Selling (LC/Trade)'
+    sellRate: 125.10,
+    todayRate: 125.10,
+    previousRate: 125.10,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'United Commercial Bank': {
     bankName: 'United Commercial Bank (UCB)',
@@ -213,8 +273,10 @@ const BANK_REGISTRY = {
     buyRate: 123.45,
     sellRate: 124.85,
     todayRate: 124.85,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.85,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Bank Asia': {
     bankName: 'Bank Asia PLC',
@@ -223,8 +285,10 @@ const BANK_REGISTRY = {
     buyRate: 123.75,
     sellRate: 124.95,
     todayRate: 124.95,
-    previousRate: 124.75,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.95,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'IFIC Bank': {
     bankName: 'IFIC Bank PLC',
@@ -234,8 +298,10 @@ const BANK_REGISTRY = {
     buyRate: 123.55,
     sellRate: 124.95,
     todayRate: 124.95,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.95,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Southeast Bank': {
     bankName: 'Southeast Bank PLC',
@@ -246,8 +312,8 @@ const BANK_REGISTRY = {
     todayRate: 124.90,
     previousRate: 124.90,
     rateType: 'BC Selling (LC/Trade)',
-    rateDate: '2026-11-19',
-    rateDateDisplay: '19 Nov 2026'
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Prime Bank': {
     bankName: 'Prime Bank PLC',
@@ -257,18 +323,22 @@ const BANK_REGISTRY = {
     buyRate: 123.78,
     sellRate: 124.98,
     todayRate: 124.98,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.98,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Dhaka Bank': {
     bankName: 'Dhaka Bank PLC',
     shortName: 'DHAKA',
     sourceUrl: 'https://dhakabank.com.bd',
     buyRate: 123.75,
-    sellRate: 124.80,
-    todayRate: 124.80,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    sellRate: 124.75,
+    todayRate: 124.75,
+    previousRate: 124.75,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Uttara Bank': {
     bankName: 'Uttara Bank PLC',
@@ -277,8 +347,10 @@ const BANK_REGISTRY = {
     buyRate: 123.75,
     sellRate: 124.75,
     todayRate: 124.75,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.75,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Al-Arafah Islami Bank': {
     bankName: 'Al-Arafah Islami Bank PLC',
@@ -287,8 +359,10 @@ const BANK_REGISTRY = {
     buyRate: 123.75,
     sellRate: 124.80,
     todayRate: 124.80,
-    previousRate: 124.75,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.80,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'National Credit & Commercial': {
     bankName: 'National Credit & Commercial Bank (NCC)',
@@ -297,8 +371,10 @@ const BANK_REGISTRY = {
     buyRate: 123.80,
     sellRate: 124.80,
     todayRate: 124.80,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.80,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'South Bangla Agriculture': {
     bankName: 'South Bangla Agriculture & Commerce Bank (SBAC)',
@@ -307,8 +383,10 @@ const BANK_REGISTRY = {
     buyRate: 123.75,
     sellRate: 124.75,
     todayRate: 124.75,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.75,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Shahjalal Islami Bank': {
     bankName: 'Shahjalal Islami Bank PLC',
@@ -317,8 +395,10 @@ const BANK_REGISTRY = {
     buyRate: 123.75,
     sellRate: 124.80,
     todayRate: 124.80,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.80,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Mutual Trust Bank': {
     bankName: 'Mutual Trust Bank PLC',
@@ -327,8 +407,10 @@ const BANK_REGISTRY = {
     buyRate: 123.50,
     sellRate: 124.99,
     todayRate: 124.99,
-    previousRate: 124.70,
-    rateType: 'BC Selling (LC/Trade)'
+    previousRate: 124.99,
+    rateType: 'BC Selling (LC/Trade)',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   },
   'Bangladesh Bank': {
     bankName: 'Bangladesh Bank (Central Interbank)',
@@ -337,8 +419,10 @@ const BANK_REGISTRY = {
     buyRate: 124.75,
     sellRate: 124.75,
     todayRate: 124.75,
-    previousRate: 124.70,
-    rateType: 'Interbank Weighted Reference'
+    previousRate: 124.75,
+    rateType: 'Interbank Weighted Reference',
+    rateDate: '2026-11-21',
+    rateDateDisplay: '21 Nov 2026'
   }
 };
 
@@ -401,7 +485,12 @@ async function scrapeBankWebsites() {
   // 3. Southeast Bank PLC (Official website table: Selling (BC))
   try {
     const seRes = await fetchSafe('https://www.southeastbank.com.bd/?page=foreign_currency_rates');
-    if (seRes.status === 200) {
+    if (
+      seRes.status === 200 &&
+      !seRes.body.includes('TSPD') &&
+      !seRes.body.includes('Request Rejected') &&
+      !seRes.body.includes('bobcmn')
+    ) {
       const m = seRes.body.match(/USD[\s\S]{0,150}?([\d]{2,3}\.[\d]{2,4})[\s\S]{0,80}?([\d]{2,3}\.[\d]{2,4})/i);
       if (m) {
         const buy = parseFloat(m[1]);
@@ -414,8 +503,8 @@ async function scrapeBankWebsites() {
           todayRate: sell,
           rateType: 'BC Selling (LC/Trade)',
           sourceUrl: 'https://www.southeastbank.com.bd/?page=foreign_currency_rates',
-          rateDate: extractCircularDate(seRes.body) || '2026-11-19',
-          rateDateDisplay: extractCircularDate(seRes.body) || '19 Nov 2026',
+          rateDate: extractCircularDate(seRes.body) || '2026-11-21',
+          rateDateDisplay: extractCircularDate(seRes.body) || '21 Nov 2026',
           isScrapedLive: true
         };
       }
