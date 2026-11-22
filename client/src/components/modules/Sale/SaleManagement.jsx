@@ -2390,13 +2390,18 @@ const SaleManagement = ({
                     const l = (entry.lcNo || '').trim().toLowerCase();
                     const key = `${p}:::${b}:::${w}:::${l}`;
 
+                    // If LC No is "Advance", allow Saleable Wh Stock < Qty
+                    if (l === 'advance') {
+                        continue;
+                    }
+
                     const availableStock = remainingStockMap.has(key) ? remainingStockMap.get(key) : (parseFloat(entry.warehouseQty) || 0);
                     const reqQty = isBag ? (parseFloat(entry.bag) || 0) : (parseFloat(entry.quantity) || 0);
 
                     if (reqQty > 0 && availableStock < reqQty) {
                         const pName = item.productName || `Product #${i + 1}`;
                         const bName = entry.brand || entry.brandName || `Row #${j + 1}`;
-                        const msg = `Cannot confirm sale: Saleable Wh Stock (${availableStock.toLocaleString('en-IN')} ${unit}) is less than quantity (${reqQty.toLocaleString('en-IN')} ${unit}) for ${pName} (${bName}). Saleable Wh Stock must be greater than or equal to quantity.`;
+                        const msg = `Cannot confirm sale: Saleable Wh Stock (${availableStock.toLocaleString('en-IN')} ${unit}) is less than quantity (${reqQty.toLocaleString('en-IN')} ${unit}) for ${pName} (${bName}). Saleable Wh Stock must be greater than or equal to quantity (or select LC No Advance).`;
                         setSubmitStatus('error');
                         setSubmitError(msg);
                         showNotificationModal('Stock Deficit Error', msg, 'danger');
@@ -7661,6 +7666,11 @@ const SaleManagement = ({
                                                 const l = (be.lcNo || '').trim().toLowerCase();
                                                 const key = `${p}:::${b}:::${w}:::${l}`;
 
+                                                // If LC No is "Advance", allow Saleable Wh Stock < Qty
+                                                if (l === 'advance') {
+                                                    continue;
+                                                }
+
                                                 const available = runningStockMap.has(key) ? runningStockMap.get(key) : (parseFloat(be.warehouseQty) || 0);
                                                 const q = isBag ? (parseFloat(be.bag) || 0) : (parseFloat(be.quantity) || 0);
 
@@ -7682,7 +7692,7 @@ const SaleManagement = ({
                                         if (!deficitEntry) return null;
                                         return (
                                             <p className="text-red-600 text-xs font-bold text-center mb-2 px-4 py-1.5 bg-red-50 border border-red-200 rounded-lg">
-                                                ⚠️ Saleable Wh Stock ({deficitEntry.wh.toLocaleString('en-IN')} {deficitEntry.unit}) is less than Qty ({deficitEntry.q.toLocaleString('en-IN')} {deficitEntry.unit}) for {deficitEntry.product} ({deficitEntry.brand}). It must be ≥ Qty to confirm.
+                                                ⚠️ Saleable Wh Stock ({deficitEntry.wh.toLocaleString('en-IN')} {deficitEntry.unit}) is less than Qty ({deficitEntry.q.toLocaleString('en-IN')} {deficitEntry.unit}) for {deficitEntry.product} ({deficitEntry.brand}). It must be ≥ Qty to confirm, or select LC No Advance.
                                             </p>
                                         );
                                     })()}
