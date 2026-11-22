@@ -249,6 +249,16 @@ const Dashboard = ({
     return hasPermission(currentUser, 'dashboard', widgetKey);
   }, [currentUser]);
 
+  const canSyncAttendance = useMemo(() => {
+    if (!currentUser) return false;
+    const roleLower = (currentUser.role || '').toLowerCase().trim();
+    const username = (currentUser.username || '').toLowerCase().trim();
+    if (username === 'admin' || roleLower === 'admin' || roleLower === 'administrator' || roleLower === 'superadmin') {
+      return true;
+    }
+    return hasPermission(currentUser, 'attendance', 'special') || hasPermission(currentUser, 'attendance', 'edit');
+  }, [currentUser]);
+
   // ─── Fetch Dashboard Backend Data ──────────────────────────────
   const fetchDashboardStats = useCallback(async (customOffset = null) => {
     try {
@@ -1672,17 +1682,24 @@ const Dashboard = ({
                           </button>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={handleManualAttendanceSync}
-                          disabled={isSyncingAttendance}
-                          title="Click to re-process and sync today's attendance punches from biometric device"
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 cursor-pointer transition-colors group"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                          <span>Attendance Module Synced</span>
-                          <RefreshIcon className={`w-3.5 h-3.5 text-blue-500 group-hover:rotate-180 transition-transform duration-500 ${isSyncingAttendance ? 'animate-spin' : ''}`} />
-                        </button>
+                        {canSyncAttendance ? (
+                          <button
+                            type="button"
+                            onClick={handleManualAttendanceSync}
+                            disabled={isSyncingAttendance}
+                            title="Click to re-process and sync today's attendance punches from biometric device"
+                            className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 cursor-pointer transition-colors group"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span>Attendance Module Synced</span>
+                            <RefreshIcon className={`w-3.5 h-3.5 text-blue-500 group-hover:rotate-180 transition-transform duration-500 ${isSyncingAttendance ? 'animate-spin' : ''}`} />
+                          </button>
+                        ) : (
+                          <div className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            <span>Attendance Module Synced</span>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
@@ -1726,7 +1743,7 @@ const Dashboard = ({
 
           {/* Card 2: Bank Dollar Rates (placed in Row 1) */}
           {canAccess('bankDollarRates', 'bank') ? (
-            <BankDollarRatesWidget onNavigate={onNavigate} className="xl:col-span-3" />
+            <BankDollarRatesWidget currentUser={currentUser} onNavigate={onNavigate} className="xl:col-span-3" />
           ) : null}
 
           {/* Card 3: LC / IP / Pie Chart (Product & Profit) */}

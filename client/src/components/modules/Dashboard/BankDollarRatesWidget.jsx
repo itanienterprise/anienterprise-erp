@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { getSocket } from '../../../utils/socket';
+import { hasPermission } from '../../../utils/permissionHelper';
 import BankLogo from '../Bank/BankLogo';
 import { RefreshIcon } from '../../Icons';
 
@@ -75,7 +76,29 @@ const formatRateDate = (dateStr) => {
   return str;
 };
 
-const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
+const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = '' }) => {
+  const currentUser = useMemo(() => {
+    if (propUser) return propUser;
+    try {
+      const saved = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  }, [propUser]);
+
+  const canSyncDollarRates = useMemo(() => {
+    if (!currentUser) return false;
+    const roleLower = (currentUser.role || '').toLowerCase().trim();
+    const username = (currentUser.username || '').toLowerCase().trim();
+    if (roleLower === 'admin' || username === 'admin') return true;
+
+    return (
+      hasPermission(currentUser, 'dashboard', 'syncDollarRates') ||
+      hasPermission(currentUser, 'bank', 'syncDollarRates')
+    );
+  }, [currentUser]);
+
   const [ratesData, setRatesData] = useState(() => {
     try {
       const saved = localStorage.getItem('bank_dollar_rates_cache');
@@ -205,7 +228,17 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
   }, [fetchRates]);
 
   const handleSyncFromWebsites = async () => {
-    await fetchRates(true);
+    if (!canSyncDollarRates) return;
+    try {
+      setIsSyncing(true);
+      await axios.post(`${API_BASE_URL}/api/bank-dollar-rates/sync`);
+      await fetchRates(false);
+    } catch (err) {
+      console.warn('Bank rate sync error:', err);
+      await fetchRates(true);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Open Reorder Modal and initialize with active custom serial order
@@ -611,16 +644,18 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
               Synced {lastSyncTime}
             </span>
           )}
-          <button
-            type="button"
-            onClick={handleSyncFromWebsites}
-            disabled={isSyncing}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-indigo-600 rounded-lg text-[11px] font-semibold border border-gray-200/80 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
-            title="Sync live rates from bank portals"
-          >
-            <RefreshIcon className={`w-3 h-3 ${isSyncing ? 'animate-spin text-indigo-600' : ''}`} />
-            <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
-          </button>
+          {canSyncDollarRates && (
+            <button
+              type="button"
+              onClick={handleSyncFromWebsites}
+              disabled={isSyncing}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-indigo-600 rounded-lg text-[11px] font-semibold border border-gray-200/80 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+              title="Sync live rates from bank portals (updates for all users)"
+            >
+              <RefreshIcon className={`w-3 h-3 ${isSyncing ? 'animate-spin text-indigo-600' : ''}`} />
+              <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -666,17 +701,19 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
                 >
                   ⇅ Arrange Order
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setModalTab('rates')}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold cursor-pointer transition-all ${
-                    modalTab === 'rates'
-                      ? 'bg-white text-indigo-700 shadow-xs font-bold'
-                      : 'text-gray-500 hover:text-gray-800'
-                  }`}
-                >
-                  ✏️ Edit Dollar Rates
-                </button>
+                {canSyncDollarRates && (
+                  <button
+                    type="button"
+                    onClick={() => setModalTab('rates')}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold cursor-pointer transition-all ${
+                      modalTab === 'rates'
+                        ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                        : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    ✏️ Edit Dollar Rates
+                  </button>
+                )}
               </div>
 
               {modalTab === 'order' && (

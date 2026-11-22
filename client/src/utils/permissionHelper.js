@@ -221,7 +221,8 @@ export const MODULES_LIST = [
         key: 'bank',
         label: 'Bank Management',
         specialLabels: [
-            { key: 'openingBalance', label: 'Opening Balance Activation' }
+            { key: 'openingBalance', label: 'Opening Balance Activation' },
+            { key: 'syncDollarRates', label: 'Sync Bank Dollar Rates' }
         ]
     },
     {
@@ -328,6 +329,7 @@ export const MODULES_LIST = [
         specialLabels: [
             { key: 'profile', label: 'Profile & Weekly Activity' },
             { key: 'bankDollarRates', label: 'Bank Dollar Rates' },
+            { key: 'syncDollarRates', label: 'Sync Bank Dollar Rates' },
             { key: 'lcGraph', label: 'Weekly/Daily LC Line Graph' },
             { key: 'pieChart', label: 'Product & IP Pie Chart' },
             { key: 'orderSales', label: 'Order & Sales Donut' },
@@ -483,9 +485,10 @@ export const getDefaultPermissionsForRole = (role) => {
 
     // Ensure dashboard defaults are populated for all roles unless overridden
     if (!defaults['dashboard'] || defaults['dashboard'].view === false) {
+        const canSyncByDefault = (roleLower === 'admin' || roleLower === 'incharge' || roleLower === 'accounts manager');
         defaults['dashboard'] = {
             view: true, add: true, edit: true, delete: false, special: true,
-            profile: true, bankDollarRates: true, lcGraph: true, pieChart: true, orderSales: true,
+            profile: true, bankDollarRates: true, syncDollarRates: canSyncByDefault, lcGraph: true, pieChart: true, orderSales: true,
             collectionSales: true, todoList: true, locationMap: true, recentActivity: true
         };
     }
@@ -579,6 +582,13 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
             if (currentUser.permissions.dashboard[checkAction] !== undefined) {
                 return !!currentUser.permissions.dashboard[checkAction];
             }
+            if (checkAction === 'syncDollarRates') {
+                if (currentUser.permissions.bank && currentUser.permissions.bank.syncDollarRates !== undefined) {
+                    return !!currentUser.permissions.bank.syncDollarRates;
+                }
+                const defaults = getDefaultPermissionsForRole(currentUser.role);
+                return !!(defaults.dashboard?.syncDollarRates || defaults.bank?.syncDollarRates);
+            }
             if (checkAction !== 'view' && currentUser.permissions.dashboard.view !== undefined) {
                 return !!currentUser.permissions.dashboard.view;
             }
@@ -587,7 +597,22 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
         if (defaults.dashboard && defaults.dashboard[checkAction] !== undefined) {
             return !!defaults.dashboard[checkAction];
         }
+        if (checkAction === 'syncDollarRates') {
+            return !!(defaults.bank?.syncDollarRates || defaults.dashboard?.syncDollarRates);
+        }
         return true;
+    }
+
+    // Special check for bank syncDollarRates
+    if (moduleName === 'bank' && checkAction === 'syncDollarRates') {
+        if (currentUser.permissions?.bank?.syncDollarRates !== undefined) {
+            return !!currentUser.permissions.bank.syncDollarRates;
+        }
+        if (currentUser.permissions?.dashboard?.syncDollarRates !== undefined) {
+            return !!currentUser.permissions.dashboard.syncDollarRates;
+        }
+        const defaults = getDefaultPermissionsForRole(currentUser.role);
+        return !!(defaults.bank?.syncDollarRates || defaults.dashboard?.syncDollarRates);
     }
 
     // Special fallback for attendance if not explicitly defined in custom permissions
