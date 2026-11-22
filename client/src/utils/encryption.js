@@ -42,20 +42,23 @@ export const decryptData = (ciphertext) => {
         const decryptedData = JSON.parse(utf8Str);
 
         // Bounded cache maintenance (FIFO pruning of oldest entries)
-        if (decryptionCache.size >= MAX_DECRYPTION_CACHE_SIZE) {
-            const keysToDelete = [];
-            let pruned = 0;
-            for (const key of decryptionCache.keys()) {
-                keysToDelete.push(key);
-                pruned++;
-                if (pruned >= 600) break;
+        // Only cache small-to-medium strings (< 50KB) to prevent multi-megabyte ciphertext memory leaks
+        if (ciphertext.length < 50000) {
+            if (decryptionCache.size >= MAX_DECRYPTION_CACHE_SIZE) {
+                const keysToDelete = [];
+                let pruned = 0;
+                for (const key of decryptionCache.keys()) {
+                    keysToDelete.push(key);
+                    pruned++;
+                    if (pruned >= 600) break;
+                }
+                for (const k of keysToDelete) {
+                    decryptionCache.delete(k);
+                }
             }
-            for (const k of keysToDelete) {
-                decryptionCache.delete(k);
-            }
-        }
 
-        decryptionCache.set(ciphertext, decryptedData);
+            decryptionCache.set(ciphertext, decryptedData);
+        }
         if (decryptedData && typeof decryptedData === 'object') {
             return Array.isArray(decryptedData) ? decryptedData.slice() : { ...decryptedData };
         }
