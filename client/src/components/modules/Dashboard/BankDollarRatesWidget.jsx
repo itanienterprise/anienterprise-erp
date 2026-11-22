@@ -448,9 +448,24 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <h4 className="text-xs font-bold text-gray-800 group-hover:text-indigo-900 truncate">
-                            {bank.bankName}
-                          </h4>
+                          {bank.sourceUrl ? (
+                            <a
+                              href={bank.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-bold text-gray-800 hover:text-indigo-600 truncate flex items-center gap-1 transition-colors"
+                              title={`Open official portal: ${bank.sourceUrl}`}
+                            >
+                              <span className="truncate">{bank.bankName}</span>
+                              <svg className="w-2.5 h-2.5 text-gray-400 group-hover:text-indigo-600 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                          ) : (
+                            <h4 className="text-xs font-bold text-gray-800 group-hover:text-indigo-900 truncate">
+                              {bank.bankName}
+                            </h4>
+                          )}
                           {bank.isCompanyBank && (
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" title="Configured in your company bank accounts"></span>
                           )}
@@ -735,7 +750,23 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
                           <BankLogo bankName={bank.bankName} className="w-full h-full object-contain" />
                         </div>
                         <div className="min-w-0">
-                          <h4 className="text-xs font-bold text-gray-800 truncate">{bank.bankName}</h4>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-xs font-bold text-gray-800 truncate">{bank.bankName}</h4>
+                            {bank.sourceUrl && (
+                              <a
+                                href={bank.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-0.5"
+                                title={`Check official website: ${bank.sourceUrl}`}
+                              >
+                                <span>portal</span>
+                                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            )}
+                          </div>
                           <span className="text-[10px] text-gray-400">
                             {bank.isManualOverride ? 'Manual Entry' : 'Live Portal'}
                           </span>
@@ -950,9 +981,24 @@ const BankDollarRatesWidget = ({ onNavigate, className = '' }) => {
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5">
-                                <h4 className="text-xs font-bold text-gray-800 truncate" title={bank.bankName}>
-                                  {bank.bankName}
-                                </h4>
+                                {bank.sourceUrl ? (
+                                  <a
+                                    href={bank.sourceUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs font-bold text-gray-800 hover:text-indigo-600 truncate flex items-center gap-1 transition-colors"
+                                    title={`Open official portal: ${bank.sourceUrl}`}
+                                  >
+                                    <span className="truncate">{bank.bankName}</span>
+                                    <svg className="w-2.5 h-2.5 text-gray-400 hover:text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                  </a>
+                                ) : (
+                                  <h4 className="text-xs font-bold text-gray-800 truncate" title={bank.bankName}>
+                                    {bank.bankName}
+                                  </h4>
+                                )}
                                 {bank.isCompanyBank && (
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" title="Configured in company accounts"></span>
                                 )}

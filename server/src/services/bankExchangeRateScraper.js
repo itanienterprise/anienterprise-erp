@@ -307,13 +307,13 @@ const BANK_REGISTRY = {
     bankName: 'Southeast Bank PLC',
     shortName: 'SEBL',
     sourceUrl: 'https://www.southeastbank.com.bd/?page=foreign_currency_rates',
-    buyRate: 123.80,
-    sellRate: 124.90,
-    todayRate: 124.90,
+    buyRate: 123.65,
+    sellRate: 124.75,
+    todayRate: 124.75,
     previousRate: 124.90,
     rateType: 'BC Selling (LC/Trade)',
-    rateDate: '2026-11-21',
-    rateDateDisplay: '21 Nov 2026'
+    rateDate: '2026-11-22',
+    rateDateDisplay: '22 Nov 2026'
   },
   'Prime Bank': {
     bankName: 'Prime Bank PLC',
@@ -484,17 +484,27 @@ async function scrapeBankWebsites() {
 
   // 3. Southeast Bank PLC (Official website table: Selling (BC))
   try {
-    const seRes = await fetchSafe('https://www.southeastbank.com.bd/?page=foreign_currency_rates');
+    let seRes = await fetchSafe('https://www.southeastbank.com.bd/?page=foreign_currency_rates', {
+      'User-Agent': 'curl/8.4.0',
+      'Accept': '*/*'
+    });
+    if (seRes.status !== 200 || seRes.body.includes('bobcmn')) {
+      seRes = await fetchSafe('https://www.southeastbank.com.bd/?page=foreign_currency_rates', {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'Accept': '*/*'
+      });
+    }
     if (
       seRes.status === 200 &&
-      !seRes.body.includes('TSPD') &&
-      !seRes.body.includes('Request Rejected') &&
-      !seRes.body.includes('bobcmn')
+      !seRes.body.includes('bobcmn') &&
+      !seRes.body.includes('Please enable JavaScript')
     ) {
       const m = seRes.body.match(/USD[\s\S]{0,150}?([\d]{2,3}\.[\d]{2,4})[\s\S]{0,80}?([\d]{2,3}\.[\d]{2,4})/i);
       if (m) {
         const buy = parseFloat(m[1]);
         const sell = parseFloat(m[2]);
+        const todayDhaka = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+        const todayDhakaDisplay = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Dhaka' }).format(new Date());
         results['Southeast Bank'] = {
           bankName: 'Southeast Bank PLC',
           shortName: 'SEBL',
@@ -503,8 +513,8 @@ async function scrapeBankWebsites() {
           todayRate: sell,
           rateType: 'BC Selling (LC/Trade)',
           sourceUrl: 'https://www.southeastbank.com.bd/?page=foreign_currency_rates',
-          rateDate: extractCircularDate(seRes.body) || '2026-11-21',
-          rateDateDisplay: extractCircularDate(seRes.body) || '21 Nov 2026',
+          rateDate: extractCircularDate(seRes.body) || todayDhaka,
+          rateDateDisplay: extractCircularDate(seRes.body) || todayDhakaDisplay,
           isScrapedLive: true
         };
       }

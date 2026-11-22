@@ -538,10 +538,53 @@ const CostOfGoods = ({
         setDealReceiveDropdownOpen(false);
     };
 
+    // Filter out Deal Receives already used in Cost of Goods entries
+    // When editing an existing COG entry, permit its own currently assigned Deal Receive
+    const availableDealReceives = useMemo(() => {
+        if (!Array.isArray(dealReceives) || dealReceives.length === 0) return [];
+
+        const usedRefIds = new Set();
+        const usedReceiveIds = new Set();
+        const currentEditIdStr = editingId ? String(editingId).trim() : null;
+
+        (records || []).forEach(cog => {
+            // When editing, do not treat the currently edited COG record's deal receive as "used" elsewhere
+            if (currentEditIdStr && String(cog._id || '').trim() === currentEditIdStr) {
+                return;
+            }
+
+            if (cog.dealReceiveRefId) {
+                usedRefIds.add(String(cog.dealReceiveRefId).trim());
+            }
+            if (cog.dealReceiveId) {
+                const normId = String(cog.dealReceiveId).trim().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                if (normId) usedReceiveIds.add(normId);
+            }
+        });
+
+        const selectedRefId = formData.dealReceiveRefId ? String(formData.dealReceiveRefId).trim() : null;
+        const selectedRecId = formData.dealReceiveId ? String(formData.dealReceiveId).trim().replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : null;
+
+        return dealReceives.filter(dr => {
+            const drRefId = String(dr._id || '').trim();
+            const drRecId = String(dr.receiveId || '').trim().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+            // Always allow the currently selected deal receive in this form
+            if (selectedRefId && drRefId && drRefId === selectedRefId) return true;
+            if (selectedRecId && drRecId && drRecId === selectedRecId) return true;
+
+            // Filter out if already used in another COG entry
+            if (drRefId && usedRefIds.has(drRefId)) return false;
+            if (drRecId && usedReceiveIds.has(drRecId)) return false;
+
+            return true;
+        });
+    }, [dealReceives, records, editingId, formData.dealReceiveRefId, formData.dealReceiveId]);
+
     const filteredDealReceives = useMemo(() => {
         const q = dealReceiveSearchQuery.trim().toLowerCase();
-        if (!q) return dealReceives;
-        return dealReceives.filter(dr => {
+        if (!q) return availableDealReceives;
+        return availableDealReceives.filter(dr => {
             const drId = String(dr.receiveId || '').toLowerCase();
             const pId = String(dr.purchaseId || '').toLowerCase().replace(/-/g, '');
             const prod = String(dr.product || '').toLowerCase();
@@ -549,7 +592,7 @@ const CostOfGoods = ({
             const truck = String(dr.truckNo || (Array.isArray(dr.truckNumbers) ? dr.truckNumbers.join(' ') : '')).toLowerCase();
             return drId.includes(q) || pId.includes(q) || prod.includes(q) || sup.includes(q) || truck.includes(q);
         });
-    }, [dealReceives, dealReceiveSearchQuery]);
+    }, [availableDealReceives, dealReceiveSearchQuery]);
 
     const handleDealReceiveKeyDown = (e) => {
         const filtered = filteredDealReceives;
@@ -1372,7 +1415,11 @@ const CostOfGoods = ({
                             </button>
                             {canCreate && (
                                 <button
-                                    onClick={() => { resetForm(); setShowForm(true); }}
+                                    onClick={() => {
+                                        resetForm();
+                                        fetchDealReceives();
+                                        setShowForm(true);
+                                    }}
                                     className="w-full md:w-auto px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center gap-2 text-sm"
                                 >
                                     <PlusIcon className="w-4 h-4" />
@@ -2068,6 +2115,7 @@ const CostOfGoods = ({
                                                 setDealReceiveDropdownOpen(true);
                                                 setDealReceiveSearchQuery('');
                                                 setHighlightedDealReceiveIndex(-1);
+                                                fetchDealReceives();
                                             }}
                                             onKeyDown={handleDealReceiveKeyDown}
                                             autoComplete="off"
@@ -2137,7 +2185,9 @@ const CostOfGoods = ({
                                                 })
                                             ) : (
                                                 <div className="px-4 py-4 text-center text-gray-400 text-xs">
-                                                    No Deal Receive found
+                                                    {dealReceiveSearchQuery.trim()
+                                                        ? 'No matching Deal Receive found'
+                                                        : 'No available Deal Receive (already recorded in Cost of Goods)'}
                                                 </div>
                                             )}
                                         </div>
