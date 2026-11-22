@@ -10114,7 +10114,13 @@ class ZkLiveConnectionManager {
     const cleanPort = Number(port) || 4370;
     if (!cleanIp) throw new Error('Device IP address is required.');
 
+    const pollIntervalMs = Number(process.env.ZK_LIVE_POLL_INTERVAL_MS) || 25000;
+
     if (this.status === 'connected' && this.ip === cleanIp && this.port === cleanPort) {
+      // Ensure poll interval is actively ticking
+      if (!this.pollInterval) {
+        this.startPolling(pollIntervalMs);
+      }
       return this.getStatus();
     }
 
@@ -10129,11 +10135,8 @@ class ZkLiveConnectionManager {
     this.broadcastStatus();
 
     try {
-      // Immediate sync of recent punches on connection
-      const syncResult = await this.syncNow();
-      if (this.lastError && !syncResult) {
-        throw new Error(this.lastError);
-      }
+      // Immediate sync of recent punches on connection with generous timeout
+      await this.syncNow();
 
       this.status = 'connected';
       this.connectedAt = new Date();
@@ -10143,8 +10146,7 @@ class ZkLiveConnectionManager {
       console.log(`[ZKLive] Connected successfully to ZKTeco device at ${this.ip}:${this.port}. Auto-sync active.`);
       this.broadcastStatus();
 
-      // Poll every 10 seconds for new punches (matching UI interval and giving device socket recycle time)
-      const pollIntervalMs = Number(process.env.ZK_LIVE_POLL_INTERVAL_MS) || 10000;
+      // Poll every 25 seconds for new punches (allowing socket TIME_WAIT recycling on embedded ZKTeco hardware)
       this.startPolling(pollIntervalMs);
 
       return this.getStatus();
@@ -10164,9 +10166,10 @@ class ZkLiveConnectionManager {
     if (this.isSyncing || !this.ip) return null;
     this.isSyncing = true;
     try {
-      const { records } = await fetchZkAttendances(this.ip, this.port, 10000, {
+      // Use 25s timeout and limit of 2000 to reliably fetch recent logs from device
+      const { records } = await fetchZkAttendances(this.ip, this.port, 25000, {
         latestOnly: true,
-        limit: 1000,
+        limit: 2000,
         fetchUsers: false
       });
 
@@ -10196,6 +10199,9 @@ class ZkLiveConnectionManager {
           count: result.newInserted,
           message: `${result.newInserted} new punch(es) captured from device`
         });
+        try {
+          broadcastUpdate('attendance', 'punch_created', { count: result.newInserted });
+        } catch (_) {}
       }
       this.broadcastStatus();
       return { success: true, ...result };
@@ -10203,11 +10209,13 @@ class ZkLiveConnectionManager {
       this.consecutiveFailures++;
       const errorMsg = formatZkError(err);
       this.lastError = errorMsg;
-      if (this.consecutiveFailures >= 3) {
-        console.warn(`[ZKLive] syncNow error (${this.consecutiveFailures}):`, errorMsg);
+      if (this.consecutiveFailures >= 2) {
+        console.warn(`[ZKLive] syncNow notice (${this.consecutiveFailures}):`, errorMsg);
         if (this.status === 'connected') {
           this.status = 'error';
           this.broadcastStatus();
+        }
+        if (this.shouldStayConnected) {
           this.scheduleReconnect();
         }
       }
@@ -10217,17 +10225,20 @@ class ZkLiveConnectionManager {
     }
   }
 
-  startPolling(intervalMs = 10000) {
+  startPolling(intervalMs = 25000) {
     if (this.pollInterval) clearInterval(this.pollInterval);
-    this.pollInterval = setInterval(() => {
+    this.pollInterval = setInterval(async () => {
       if ((this.status === 'connected' || this.shouldStayConnected) && !this.isSyncing) {
-        this.syncNow().catch(() => {});
+        try {
+          await this.syncNow();
+        } catch (_) {}
       }
     }, intervalMs);
   }
 
   scheduleReconnect() {
     if (!this.shouldStayConnected || this.reconnectTimer) return;
+    const pollIntervalMs = Number(process.env.ZK_LIVE_POLL_INTERVAL_MS) || 25000;
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
       if (this.shouldStayConnected && this.ip) {
@@ -10237,10 +10248,17 @@ class ZkLiveConnectionManager {
           if (this.consecutiveFailures === 0) {
             this.status = 'connected';
             this.broadcastStatus();
+            if (!this.pollInterval) {
+              this.startPolling(pollIntervalMs);
+            }
+          } else {
+            this.scheduleReconnect();
           }
-        } catch (_) {}
+        } catch (_) {
+          this.scheduleReconnect();
+        }
       }
-    }, 10000);
+    }, 15000);
   }
 
   async disconnect(userInitiated = true) {
