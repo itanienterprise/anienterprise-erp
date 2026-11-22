@@ -65,20 +65,25 @@ const securityMiddleware = (req, res, next) => {
         }
     }
 
-    // 5. Intercept Response to Encrypt it
-    const originalJson = res.json;
-    res.json = function (data) {
-        // Don't encrypt error messages if they should be readable for debugging
-        if (res.statusCode >= 400) {
-            return originalJson.call(this, data);
-        }
+    // 5. Intercept Response to Encrypt it (opt-in via header or env flag)
+    // Sending standard JSON allows HTTP gzip/brotli compression to achieve 90-97% bandwidth reduction,
+    // and eliminates heavy client-side AES decryption CPU consumption for thousands of records.
+    const shouldEncryptResponse = req.headers['x-encrypt-response'] === 'true' || process.env.ENCRYPT_API_RESPONSES === 'true';
+    if (shouldEncryptResponse) {
+        const originalJson = res.json;
+        res.json = function (data) {
+            // Don't encrypt error messages if they should be readable for debugging
+            if (res.statusCode >= 400) {
+                return originalJson.call(this, data);
+            }
 
-        const encryptedResponse = {
-            payload: encryptData(data),
-            timestamp: Date.now()
+            const encryptedResponse = {
+                payload: encryptData(data),
+                timestamp: Date.now()
+            };
+            return originalJson.call(this, encryptedResponse);
         };
-        return originalJson.call(this, encryptedResponse);
-    };
+    }
 
     next();
 };

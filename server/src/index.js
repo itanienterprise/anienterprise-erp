@@ -229,6 +229,13 @@ const invalidateMemoryCache = (modName, options = {}) => {
   if (['product', 'products'].includes(mod)) {
     memoryCache.products = null;
   }
+  if (['pi', 'pis', 'proforma-invoice'].includes(mod)) {
+    memoryCache.pi = null;
+  }
+  if (['packing-list', 'packing-lists', 'packinglist', 'packinglists'].includes(mod)) {
+    memoryCache.packingLists = null;
+    memoryCache.packingListsLightweight = null;
+  }
 };
 
 const broadcastUpdate = (moduleName, action = 'update', payload = {}) => {
@@ -427,6 +434,9 @@ app.use(async (req, res, next) => {
       const signed = 's:' + cookieSignature.sign(sessionId, sessionSecret);
       const existing = req.headers.cookie ? `${req.headers.cookie}; ` : '';
       req.headers.cookie = `${existing}erp_session=${encodeURIComponent(signed)}`;
+      if (req.cookies) {
+        req.cookies['erp_session'] = signed;
+      }
     }
   } catch (e) {
     console.error('[Session Bridge] Error synthesizing session cookie:', e);
@@ -2481,7 +2491,8 @@ let inFlightIpFetch = null;
 
 apiRouter.get('/api/ip-records', async (req, res) => {
   try {
-    const isLightweight = req.query.lightweight === 'true' || req.query.excludeAttachments === 'true';
+    // Default to lightweight (exclude 15MB base64 attachments) unless explicit includeAttachments=true
+    const isLightweight = req.query.includeAttachments !== 'true';
     const noCache = req.query._nocache === 'true';
 
     const sendFormattedResponse = (data) => {
@@ -6805,27 +6816,42 @@ apiRouter.put('/api/pi/:id', async (req, res) => {
   }
 });
 
+let inFlightPiFetch = null;
+
 apiRouter.get('/api/pi', async (req, res) => {
   try {
-    const records = await PI.find().sort({ createdAt: -1 });
-    const decrypted = records.map(r => {
-      const d = decryptData(r.data);
-      const actualRevs = (d?.revisions || []).filter(rev => rev.reviseNo !== 'Original PI');
-      let effectiveCreatedAt = r.createdAt;
-      if (actualRevs.length > 0) {
-        const lastRev = actualRevs[actualRevs.length - 1];
-        effectiveCreatedAt = lastRev.createdAt || d.lastRevisedAt || lastRev.reviseDate || r.createdAt;
-      }
-      return {
-        ...d,
-        _id: r._id,
-        createdAt: effectiveCreatedAt,
-        originalCreatedAt: r.createdAt,
-        piNumber: d?.piNumber || r.piNumber,
-        piNumbers: d?.piNumbers || (d?.piNumber ? d.piNumber.split(',').map(s => s.trim()).filter(Boolean) : (r.piNumber ? r.piNumber.split(',').map(s => s.trim()).filter(Boolean) : []))
-      };
-    });
-    res.json(decrypted);
+    const noCache = req.query._nocache === 'true';
+    if (!noCache && memoryCache.pi) {
+      return res.json(memoryCache.pi);
+    }
+    if (!inFlightPiFetch) {
+      inFlightPiFetch = (async () => {
+        const records = await PI.find().sort({ createdAt: -1 }).lean();
+        const decrypted = records.map(r => {
+          const d = decryptData(r.data);
+          const actualRevs = (d?.revisions || []).filter(rev => rev.reviseNo !== 'Original PI');
+          let effectiveCreatedAt = r.createdAt;
+          if (actualRevs.length > 0) {
+            const lastRev = actualRevs[actualRevs.length - 1];
+            effectiveCreatedAt = lastRev.createdAt || d.lastRevisedAt || lastRev.reviseDate || r.createdAt;
+          }
+          return {
+            ...d,
+            _id: r._id,
+            createdAt: effectiveCreatedAt,
+            originalCreatedAt: r.createdAt,
+            piNumber: d?.piNumber || r.piNumber,
+            piNumbers: d?.piNumbers || (d?.piNumber ? d.piNumber.split(',').map(s => s.trim()).filter(Boolean) : (r.piNumber ? r.piNumber.split(',').map(s => s.trim()).filter(Boolean) : []))
+          };
+        });
+        memoryCache.pi = decrypted;
+        return decrypted;
+      })().finally(() => {
+        inFlightPiFetch = null;
+      });
+    }
+    const data = await inFlightPiFetch;
+    res.json(data);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -6886,14 +6912,61 @@ apiRouter.put('/api/packing-lists/:id', async (req, res) => {
   }
 });
 
+let inFlightPackingListFetch = null;
+
 apiRouter.get('/api/packing-lists', async (req, res) => {
   try {
-    const records = await PackingList.find().sort({ createdAt: -1 });
-    const decrypted = records.map(r => {
-      const d = decryptData(r.data);
-      return { ...d, _id: r._id, createdAt: r.createdAt };
-    });
-    res.json(decrypted);
+    const isFull = req.query.fullImage === 'true' || req.query.includeImage === 'true';
+    const noCache = req.query._nocache === 'true';
+    if (!noCache) {
+      if (isFull && memoryCache.packingLists) {
+        return res.json(memoryCache.packingLists);
+      }
+      if (!isFull && memoryCache.packingListsLightweight) {
+        return res.json(memoryCache.packingListsLightweight);
+      }
+    }
+    if (!inFlightPackingListFetch) {
+      inFlightPackingListFetch = (async () => {
+        const records = await PackingList.find().sort({ createdAt: -1 }).lean();
+        const full = [];
+        const light = [];
+        records.forEach(r => {
+          const d = decryptData(r.data);
+          if (d) {
+            const item = { ...d, _id: r._id, createdAt: r.createdAt };
+            full.push(item);
+            const lightItem = { ...item };
+            if (lightItem.productsImage) {
+              lightItem.hasImage = true;
+              delete lightItem.productsImage;
+            } else {
+              lightItem.hasImage = false;
+            }
+            light.push(lightItem);
+          }
+        });
+        memoryCache.packingLists = full;
+        memoryCache.packingListsLightweight = light;
+        return { full, light };
+      })().finally(() => {
+        inFlightPackingListFetch = null;
+      });
+    }
+    const { full, light } = await inFlightPackingListFetch;
+    res.json(isFull ? full : light);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Single Packing List detail (for viewing/editing with full productsImage)
+apiRouter.get('/api/packing-lists/:id', async (req, res) => {
+  try {
+    const record = await PackingList.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: 'Packing List record not found' });
+    const decrypted = decryptData(record.data);
+    res.json({ ...decrypted, _id: record._id, createdAt: record.createdAt });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

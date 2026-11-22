@@ -1491,8 +1491,8 @@ function PI({
     const fetchEmployees = async () => {
         try {
             const rawData = await queryClient.fetchQuery({
-                queryKey: ['employees'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryKey: ['employees', 'lightweight'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees?lightweight=true`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             const map = {};
             const fullMap = {};
@@ -2109,7 +2109,7 @@ function PI({
         try {
             // Concurrently fetch PI records and LC records (lightweight and critical for LC Done check)
             const [piRes, lcData] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/pi?_t=${Date.now()}`),
+                axios.get(`${API_BASE_URL}/api/pi`),
                 queryClient.fetchQuery({
                     queryKey: ['lc-management'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
@@ -2168,8 +2168,9 @@ function PI({
         window.addEventListener('erp_data_updated', onCustomEvent);
 
         const pollTimer = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
             fetchRecords(false);
-        }, 30000);
+        }, 60000);
 
         return () => {
             clearTimeout(idleTimer);

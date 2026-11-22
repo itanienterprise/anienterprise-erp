@@ -283,6 +283,7 @@ const Customer = ({
         window.addEventListener('erp_data_updated', onCustomEvent);
 
         const pollTimer = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
             fetchCustomers(true);
         }, 60000);
 

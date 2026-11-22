@@ -1396,8 +1396,9 @@ const SaleManagement = ({
         };
         window.addEventListener('erp_data_updated', onCustomEvent);
 
-        // Fallback polling every 60s while viewing SaleManagement to ensure consistency without excessive CPU/network load
+        // Fallback polling every 60s while viewing SaleManagement to ensure consistency (paused when tab hidden)
         const pollTimer = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
             fetchSales();
         }, 60000);
 

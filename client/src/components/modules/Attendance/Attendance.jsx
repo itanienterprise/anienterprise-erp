@@ -465,8 +465,12 @@ const Attendance = ({ currentUser }) => {
       handleConnectLive(savedIp, 4370).catch(() => {});
     }
 
-    // Auto-refresh live feed and summary silently every 4 seconds
-    const iv = setInterval(() => { fetchSummary(true); fetchLive(true); }, 4000);
+    // Periodic fallback refresh (real-time punches and attendance changes are pushed instantly via Socket.IO below; pauses when tab hidden)
+    const iv = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchSummary(true);
+      fetchLive(true);
+    }, 30000);
     return () => clearInterval(iv);
   }, [canEdit]);
 

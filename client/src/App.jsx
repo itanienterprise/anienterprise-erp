@@ -10,18 +10,69 @@ import {
 import { encryptData, decryptData } from './utils/encryption';
 import { API_BASE_URL, formatDate, parseDate, SortIcon } from './utils/helpers';
 import CustomDatePicker from './components/shared/CustomDatePicker';
-import Importer from './components/modules/Importer/Importer';
-import Exporter from './components/modules/Exporter/Exporter';
-import Supplier from './components/modules/Supplier/Supplier';
-import CnF from './components/modules/CnF/CnF';
-import Port from './components/modules/Port/Port';
-import IPManagement from './components/modules/IPManagement/IPManagement';
-import PI from './components/modules/PI/PI';
-import PackingList from './components/modules/PackingList/PackingList';
-import TRSetup from './components/modules/TRSetup/TRSetup';
 import { queryClient, hydrateQueryCache, clearPersistentQueryCache } from './utils/queryClient';
 import { QUERY_KEYS } from './hooks/useQueries';
 import { getSocket } from './utils/socket';
+import { calculateStockData } from './utils/stockHelpers';
+import LoginPage from './components/auth/LoginPage';
+import Dashboard from './components/modules/Dashboard/Dashboard';
+import NotificationMenu from './components/modules/Notification/NotificationMenu';
+import ErrorBoundary from './components/shared/ErrorBoundary';
+
+// Code-split / on-demand module loading to drastically reduce initial page download bandwidth
+const Importer = React.lazy(() => import('./components/modules/Importer/Importer'));
+const Exporter = React.lazy(() => import('./components/modules/Exporter/Exporter'));
+const Supplier = React.lazy(() => import('./components/modules/Supplier/Supplier'));
+const CnF = React.lazy(() => import('./components/modules/CnF/CnF'));
+const Port = React.lazy(() => import('./components/modules/Port/Port'));
+const IPManagement = React.lazy(() => import('./components/modules/IPManagement/IPManagement'));
+const PI = React.lazy(() => import('./components/modules/PI/PI'));
+const PackingList = React.lazy(() => import('./components/modules/PackingList/PackingList'));
+const TRSetup = React.lazy(() => import('./components/modules/TRSetup/TRSetup'));
+const ProductManagement = React.lazy(() => import('./components/modules/Product/ProductManagement'));
+const Customer = React.lazy(() => import('./components/modules/Customer/Customer'));
+const LCReceive = React.lazy(() => import('./components/modules/LCReceive/LCReceive'));
+const CnFPayment = React.lazy(() => import('./components/modules/CnF/CnFPayment'));
+const WarehouseManagement = React.lazy(() => import('./components/modules/Warehouse/WarehouseManagement'));
+const DamageManagement = React.lazy(() => import('./components/modules/Warehouse/DamageManagement'));
+const TransferManagement = React.lazy(() => import('./components/modules/Transfer/TransferManagement'));
+const StockManagement = React.lazy(() => import("./components/modules/StockManagement/StockManagement"));
+const StockReport = React.lazy(() => import('./components/modules/StockManagement/StockReport'));
+const LCReport = React.lazy(() => import('./components/modules/LCReceive/LCReport'));
+const ProductHistoryReport = React.lazy(() => import('./components/modules/StockManagement/ProductHistoryReport'));
+const SalesReport = React.lazy(() => import('./components/modules/Sale/SalesReport'));
+const SaleManagement = React.lazy(() => import('./components/modules/Sale/SaleManagement'));
+const PurchaseManagement = React.lazy(() => import('./components/modules/Purchase/PurchaseManagement'));
+const LCPurchaseManagement = React.lazy(() => import('./components/modules/LCPurchase/LCPurchaseManagement'));
+const DealReceiveManagement = React.lazy(() => import('./components/modules/LCPurchase/DealReceiveManagement'));
+const PurchaseReceiveManagement = React.lazy(() => import('./components/modules/PurchaseReceive/PurchaseReceiveManagement'));
+const OrderManagement = React.lazy(() => import('./components/modules/Order/OrderManagement'));
+const ProfitLoss = React.lazy(() => import('./components/modules/Sale/ProfitLoss'));
+const EmployeeManagement = React.lazy(() => import('./components/modules/Employee/EmployeeManagement'));
+const SystemAccess = React.lazy(() => import('./components/modules/Employee/SystemAccess'));
+const RoleCreation = React.lazy(() => import('./components/modules/Employee/RoleCreation'));
+const PaymentCollection = React.lazy(() => import('./components/modules/PaymentCollection/PaymentCollection'));
+const PayToCustomer = React.lazy(() => import('./components/modules/PayToCustomer/PayToCustomer'));
+const Bank = React.lazy(() => import('./components/modules/Bank/Bank'));
+const Deposit = React.lazy(() => import('./components/modules/Bank/Deposit'));
+const Withdrawal = React.lazy(() => import('./components/modules/Bank/Withdrawal'));
+const FundTransfer = React.lazy(() => import('./components/modules/Bank/FundTransfer'));
+const Statement = React.lazy(() => import('./components/modules/Bank/Statement'));
+const PattyCash = React.lazy(() => import('./components/modules/PattyCash/PattyCash'));
+const Insurance = React.lazy(() => import('./components/modules/Insurance/Insurance'));
+const InsurancePayment = React.lazy(() => import('./components/modules/Insurance/InsurancePayment'));
+const LCManagement = React.lazy(() => import('./components/modules/LCManagement/LCManagement'));
+const LCGatePass = React.lazy(() => import('./components/modules/LCManagement/LCGatePass'));
+const LCExpense = React.lazy(() => import('./components/modules/LCManagement/LCExpense'));
+const MarginReturn = React.lazy(() => import('./components/modules/LCManagement/MarginReturn'));
+const Profile = React.lazy(() => import('./components/modules/Profile/Profile'));
+const ReturnProduct = React.lazy(() => import('./components/modules/ReturnProduct/ReturnProduct'));
+const BackupRestore = React.lazy(() => import('./components/modules/BackupRestore/BackupRestore'));
+const CostOfGoods = React.lazy(() => import('./components/modules/CostOfGoods/CostOfGoods'));
+const Token = React.lazy(() => import('./components/modules/Token/Token'));
+const LogManagement = React.lazy(() => import('./components/modules/Log/LogManagement'));
+const Attendance = React.lazy(() => import('./components/modules/Attendance/Attendance'));
+const MdmManagement = React.lazy(() => import('./components/modules/MDM/MdmManagement'));
 
 const dbName = 'erp_backup_db';
 const storeName = 'settings';
@@ -43,55 +94,6 @@ const getDirHandle = () => {
     request.onerror = () => resolve(null);
   });
 };
-import ProductManagement from './components/modules/Product/ProductManagement';
-import Customer from './components/modules/Customer/Customer';
-import LCReceive from './components/modules/LCReceive/LCReceive';
-import CnFPayment from './components/modules/CnF/CnFPayment';
-import WarehouseManagement from './components/modules/Warehouse/WarehouseManagement';
-import DamageManagement from './components/modules/Warehouse/DamageManagement';
-import TransferManagement from './components/modules/Transfer/TransferManagement';
-import StockManagement from "./components/modules/StockManagement/StockManagement";
-import StockReport from './components/modules/StockManagement/StockReport';
-import LCReport from './components/modules/LCReceive/LCReport';
-import ProductHistoryReport from './components/modules/StockManagement/ProductHistoryReport';
-import SalesReport from './components/modules/Sale/SalesReport';
-import SaleManagement from './components/modules/Sale/SaleManagement';
-import PurchaseManagement from './components/modules/Purchase/PurchaseManagement';
-import LCPurchaseManagement from './components/modules/LCPurchase/LCPurchaseManagement';
-import DealReceiveManagement from './components/modules/LCPurchase/DealReceiveManagement';
-import PurchaseReceiveManagement from './components/modules/PurchaseReceive/PurchaseReceiveManagement';
-import OrderManagement from './components/modules/Order/OrderManagement';
-import ProfitLoss from './components/modules/Sale/ProfitLoss';
-import EmployeeManagement from './components/modules/Employee/EmployeeManagement';
-import SystemAccess from './components/modules/Employee/SystemAccess';
-import RoleCreation from './components/modules/Employee/RoleCreation';
-import PaymentCollection from './components/modules/PaymentCollection/PaymentCollection';
-import PayToCustomer from './components/modules/PayToCustomer/PayToCustomer';
-import Bank from './components/modules/Bank/Bank';
-import Deposit from './components/modules/Bank/Deposit';
-import Withdrawal from './components/modules/Bank/Withdrawal';
-import FundTransfer from './components/modules/Bank/FundTransfer';
-import Statement from './components/modules/Bank/Statement';
-import PattyCash from './components/modules/PattyCash/PattyCash';
-import Insurance from './components/modules/Insurance/Insurance';
-import InsurancePayment from './components/modules/Insurance/InsurancePayment';
-import LCManagement from './components/modules/LCManagement/LCManagement';
-import LCGatePass from './components/modules/LCManagement/LCGatePass';
-import LCExpense from './components/modules/LCManagement/LCExpense';
-import MarginReturn from './components/modules/LCManagement/MarginReturn';
-import { calculateStockData } from './utils/stockHelpers';
-import LoginPage from './components/auth/LoginPage';
-import Profile from './components/modules/Profile/Profile';
-import NotificationMenu from './components/modules/Notification/NotificationMenu';
-import ReturnProduct from './components/modules/ReturnProduct/ReturnProduct';
-import BackupRestore from './components/modules/BackupRestore/BackupRestore';
-import CostOfGoods from './components/modules/CostOfGoods/CostOfGoods';
-import Token from './components/modules/Token/Token';
-import LogManagement from './components/modules/Log/LogManagement';
-import Attendance from './components/modules/Attendance/Attendance';
-import MdmManagement from './components/modules/MDM/MdmManagement';
-import Dashboard from './components/modules/Dashboard/Dashboard';
-import ErrorBoundary from './components/shared/ErrorBoundary';
 
 import { initActivityTracker } from './utils/activityTracker';
 import { hasPermission } from './utils/permissionHelper';
@@ -201,8 +203,11 @@ function App() {
     let interval;
     if (!isCheckingSession && isAuthenticated && currentUser) {
       fetchNotifications();
-      // Socket.IO receives real-time 'data_updated' for 'notifications'. Polling at 30s is a fallback.
-      interval = setInterval(fetchNotifications, 30000);
+      // Socket.IO receives real-time 'data_updated' for 'notifications'. Polling at 60s is a fallback, paused when tab is inactive.
+      interval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        fetchNotifications();
+      }, 60000);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -662,7 +667,10 @@ function App() {
     let interval;
     if (!isCheckingSession && isAuthenticated && currentUser) {
       fetchPendingEntriesImmediate();
-      interval = setInterval(fetchPendingEntriesImmediate, 60000);
+      interval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        fetchPendingEntriesImmediate();
+      }, 60000);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -815,8 +823,9 @@ function App() {
     checkSession();
 
     // Poll every 60 seconds so any permission changes made by admin
-    // are automatically reflected in all logged-in users without re-login
+    // are automatically reflected in all logged-in users without re-login (pauses when tab is hidden)
     const sessionPollInterval = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const response = await axios.get(`${API_BASE_URL}/api/auth/check`);
         if (response.data.authenticated) {
@@ -1080,9 +1089,12 @@ function App() {
       }
     };
 
-    // Run check immediately, then check every 15 seconds
+    // Run check immediately, then check every 60 seconds (paused when tab is hidden)
     checkAndDownloadNewFiles();
-    const intervalId = setInterval(checkAndDownloadNewFiles, 15000);
+    const intervalId = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      checkAndDownloadNewFiles();
+    }, 60000);
 
     return () => clearInterval(intervalId);
   }, [isAuthenticated, currentUser]);
@@ -4628,7 +4640,14 @@ function App() {
         >
           <div key={currentView} data-current-view={currentView} className="page-transition-enter min-h-full">
             <ErrorBoundary key={currentView}>
-              {renderContent()}
+              <React.Suspense fallback={
+                <div className="flex flex-col items-center justify-center p-12 min-h-[400px] text-gray-400">
+                  <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
+                  <span className="text-xs font-medium">Loading module...</span>
+                </div>
+              }>
+                {renderContent()}
+              </React.Suspense>
             </ErrorBoundary>
           </div>
         </main>
@@ -4666,92 +4685,94 @@ function App() {
         </div>
       )}
 
-      {/* LC Receive Report Modal */}
-      {showLcReport && (
-        <LCReport
-          isOpen={showLcReport}
-          onClose={() => setShowLcReport(false)}
-          stockRecords={lcStockRecords}
-          lcFilters={lcFilters}
-          setLcFilters={setLcFilters}
-          lcReceiveRecords={lcReceiveRecords}
-          lcReceiveSummary={lcReceiveSummary}
-          fetchSales={fetchSales}
-        />
-      )}
+      <React.Suspense fallback={null}>
+        {/* LC Receive Report Modal */}
+        {showLcReport && (
+          <LCReport
+            isOpen={showLcReport}
+            onClose={() => setShowLcReport(false)}
+            stockRecords={lcStockRecords}
+            lcFilters={lcFilters}
+            setLcFilters={setLcFilters}
+            lcReceiveRecords={lcReceiveRecords}
+            lcReceiveSummary={lcReceiveSummary}
+            fetchSales={fetchSales}
+          />
+        )}
 
-      {/* Stock Report Modal */}
-      {showStockReport && (
-        <StockReport
-          isOpen={showStockReport}
-          onClose={() => setShowStockReport(false)}
-          stockRecords={stockRecords}
-          warehouseData={warehouseData}
-          stockFilters={stockFilters}
-          setStockFilters={setStockFilters}
-          stockData={stockData}
-          salesRecords={salesRecords}
-          products={products}
-          damages={damages}
-          showRate={showRate}
-          activeBaseline={activeBaseline}
-          returnsList={returnsList}
-        />
-      )}
+        {/* Stock Report Modal */}
+        {showStockReport && (
+          <StockReport
+            isOpen={showStockReport}
+            onClose={() => setShowStockReport(false)}
+            stockRecords={stockRecords}
+            warehouseData={warehouseData}
+            stockFilters={stockFilters}
+            setStockFilters={setStockFilters}
+            stockData={stockData}
+            salesRecords={salesRecords}
+            products={products}
+            damages={damages}
+            showRate={showRate}
+            activeBaseline={activeBaseline}
+            returnsList={returnsList}
+          />
+        )}
 
-      {/* Product History Report Modal */}
-      {showProductHistoryReport && (
-        <ProductHistoryReport
-          isOpen={showProductHistoryReport}
-          onClose={() => setShowProductHistoryReport(false)}
-          reportData={productHistoryReportData}
-          currentUser={currentUser}
-        />
-      )}
+        {/* Product History Report Modal */}
+        {showProductHistoryReport && (
+          <ProductHistoryReport
+            isOpen={showProductHistoryReport}
+            onClose={() => setShowProductHistoryReport(false)}
+            reportData={productHistoryReportData}
+            currentUser={currentUser}
+          />
+        )}
 
-      {/* Sales Report Modal */}
-      {showSalesReport && (
-        <SalesReport
-          isOpen={showSalesReport}
-          onClose={() => setShowSalesReport(false)}
-          salesRecords={filteredSalesForReport}
-          allSalesRecords={salesRecords}
-          saleFilters={saleFilters}
-          setSaleFilters={setSaleFilters}
-          searchQuery={salesReportSearchQuery}
-          saleType={currentView === 'order-sale-section' ? 'Order' : currentView === 'border-sale-section' ? 'Border' : 'General'}
-          products={products}
-          stockRecords={allStockRecords && allStockRecords.length > 0 ? allStockRecords : stockRecords}
-          warehouseData={warehouseData}
-          damages={damages}
-          activeBaseline={activeBaseline}
-        />
-      )}
+        {/* Sales Report Modal */}
+        {showSalesReport && (
+          <SalesReport
+            isOpen={showSalesReport}
+            onClose={() => setShowSalesReport(false)}
+            salesRecords={filteredSalesForReport}
+            allSalesRecords={salesRecords}
+            saleFilters={saleFilters}
+            setSaleFilters={setSaleFilters}
+            searchQuery={salesReportSearchQuery}
+            saleType={currentView === 'order-sale-section' ? 'Order' : currentView === 'border-sale-section' ? 'Border' : 'General'}
+            products={products}
+            stockRecords={allStockRecords && allStockRecords.length > 0 ? allStockRecords : stockRecords}
+            warehouseData={warehouseData}
+            damages={damages}
+            activeBaseline={activeBaseline}
+          />
+        )}
 
-      {showProfile && (
-        <Profile
-          currentUser={currentUser}
-          onClose={() => setShowProfile(false)}
-          onProfileUpdate={(updatedUser) => {
-            setCurrentUser(prev => {
-              const merged = { ...prev, ...updatedUser };
-              localStorage.setItem('currentUser', JSON.stringify(merged));
-              return merged;
-            });
-          }}
-          onPhotoUpdate={(newPhoto, newAvatar) => {
-            setCurrentUser(prev => {
-              const updated = {
-                ...prev,
-                ...(newPhoto !== undefined ? { profilePhoto: newPhoto } : {}),
-                ...(newAvatar !== undefined ? { avatarPhoto: newAvatar } : {})
-              };
-              localStorage.setItem('currentUser', JSON.stringify(updated));
-              return updated;
-            });
-          }}
-        />
-      )}
+        {showProfile && (
+          <Profile
+            currentUser={currentUser}
+            onClose={() => setShowProfile(false)}
+            onProfileUpdate={(updatedUser) => {
+              setCurrentUser(prev => {
+                const merged = { ...prev, ...updatedUser };
+                localStorage.setItem('currentUser', JSON.stringify(merged));
+                return merged;
+              });
+            }}
+            onPhotoUpdate={(newPhoto, newAvatar) => {
+              setCurrentUser(prev => {
+                const updated = {
+                  ...prev,
+                  ...(newPhoto !== undefined ? { profilePhoto: newPhoto } : {}),
+                  ...(newAvatar !== undefined ? { avatarPhoto: newAvatar } : {})
+                };
+                localStorage.setItem('currentUser', JSON.stringify(updated));
+                return updated;
+              });
+            }}
+          />
+        )}
+      </React.Suspense>
     </div>
   );
 }

@@ -154,8 +154,8 @@ function IPManagement({
     const fetchEmployees = async () => {
         try {
             const rawData = await queryClient.ensureQueryData({
-                queryKey: ['employees'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryKey: ['employees', 'lightweight'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees?lightweight=true`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             const map = {};
             const fullMap = {};
@@ -507,6 +507,7 @@ function IPManagement({
         window.addEventListener('erp_data_updated', onCustomEvent);
 
         const pollTimer = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
             fetchIpRecords(true);
         }, 60000);
 

@@ -599,6 +599,7 @@ const OrderManagement = ({
         window.addEventListener('erp_data_updated', onCustomEvent);
 
         const pollTimer = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
             fetchOrders();
         }, 60000);
 

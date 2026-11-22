@@ -370,8 +370,9 @@ function PackingList({
         window.addEventListener('erp_data_updated', onCustomEvent);
 
         const pollTimer = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
             fetchRecords(true);
-        }, 30000);
+        }, 60000);
 
         return () => {
             if (socket) {
@@ -483,8 +484,8 @@ function PackingList({
     const fetchEmployees = async () => {
         try {
             const rawData = await queryClient.fetchQuery({
-                queryKey: ['employees'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/employees`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryKey: ['employees', 'lightweight'],
+                queryFn: () => axios.get(`${API_BASE_URL}/api/employees?lightweight=true`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             const map = {};
             const fullMap = {};
@@ -740,28 +741,28 @@ function PackingList({
         }
         try {
             // 1. Fetch Packing Lists first and render table instantly!
-            const res = await axios.get(`${API_BASE_URL}/api/packing-lists?_t=${Date.now()}`);
+            const res = await axios.get(`${API_BASE_URL}/api/packing-lists`);
             const plData = Array.isArray(res.data) ? res.data : [];
             setRecords(plData);
             queryClient.setQueryData(['packing-lists'], plData);
             queryClient.setQueryData(['packingLists'], plData);
             if (!silent) setIsLoading(false);
 
-            // 2. Fetch secondary data in background
+            // 2. Fetch secondary data in background using ensureQueryData to avoid redundant network hits
             const [piData, lcData, bankData, ipData, notifRes] = await Promise.all([
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['pi'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/pi`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['lc-management'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/lc-management`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['banks'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/banks`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
-                queryClient.fetchQuery({
+                queryClient.ensureQueryData({
                     queryKey: ['ip-records'],
                     queryFn: () => axios.get(`${API_BASE_URL}/api/ip-records?excludeAttachments=true`).then(r => Array.isArray(r.data) ? r.data : [])
                 }),
@@ -1494,6 +1495,13 @@ function PackingList({
             entryBy: record.entryBy || record.createdBy || '',
             entryByName: record.entryByName || record.createdByName || ''
         });
+        if (record.hasImage && !record.productsImage && record._id) {
+            axios.get(`${API_BASE_URL}/api/packing-lists/${record._id}`).then(res => {
+                if (res.data?.productsImage) {
+                    setFormData(prev => ({ ...prev, productsImage: res.data.productsImage }));
+                }
+            }).catch(() => {});
+        }
         setShowForm(true);
     };
 
