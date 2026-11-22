@@ -210,6 +210,14 @@ const EmployeeManagement = ({
     }, []);
 
     useEffect(() => {
+        // In mobile mode, disable long press selection in Employee module
+        if (typeof window !== 'undefined' && window.innerWidth < 768 && isSelectionMode) {
+            setIsSelectionMode?.(false);
+            setSelectedItems?.(new Set());
+        }
+    }, [isSelectionMode, setIsSelectionMode, setSelectedItems]);
+
+    useEffect(() => {
         const handleClickOutside = (event) => {
             if (event.target && !document.body.contains(event.target)) {
                 return;
@@ -939,13 +947,8 @@ const EmployeeManagement = ({
                                     getFilteredAndSortedData().map(e => (
                                         <div
                                             key={e._id}
-                                            onMouseDown={() => startLongPress(e._id)}
-                                            onMouseUp={endLongPress}
-                                            onTouchStart={() => startLongPress(e._id)}
-                                            onTouchEnd={endLongPress}
-                                            onClick={() => isSelectionMode ? toggleSelection(e._id) : setViewData(e)}
-                                            className={`relative aspect-[3/4] min-h-[220px] rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between p-2.5 select-none cursor-pointer group active:scale-[0.98] ${selectedItems.has(e._id) ? 'ring-3 ring-blue-500 shadow-blue-200' : 'border border-gray-200/60'
-                                                }`}
+                                            onClick={() => setViewData(e)}
+                                            className="relative aspect-[3/4] min-h-[220px] rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between p-2.5 select-none cursor-pointer group active:scale-[0.98] border border-gray-200/60"
                                         >
                                             {/* Full-Card Background Photo or Details Card Fallback */}
                                             {e.profilePhoto ? (
@@ -984,17 +987,6 @@ const EmployeeManagement = ({
 
                                             {/* Top Header: ID Badge (Left Aligned) */}
                                             <div className="relative z-10 flex items-center justify-start gap-2 w-full">
-                                                {/* Multi-select Checkbox */}
-                                                {isSelectionMode && (
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedItems.has(e._id)}
-                                                        onChange={(ev) => { ev.stopPropagation(); toggleSelection(e._id); }}
-                                                        className="w-4 h-4 accent-blue-600 rounded cursor-pointer"
-                                                        onClick={(ev) => ev.stopPropagation()}
-                                                    />
-                                                )}
-
                                                 <span className="text-[10px] font-mono font-bold text-white/95 bg-black/40 backdrop-blur-md border border-white/20 px-2.5 py-0.5 rounded-full truncate max-w-[90px] shadow-xs">
                                                     {e.employeeId}
                                                 </span>
