@@ -501,6 +501,8 @@ const LCExpense = require('./models/LCExpense');
 const MarginReturn = require('./models/MarginReturn');
 const PI = require('./models/PI');
 const PackingList = require('./models/PackingList');
+// Ensure packingListNumber uniqueness index is dropped to allow intentional duplicates
+PackingList.collection.dropIndex('packingListNumber_1').catch(() => {});
 const TRSetup = require('./models/TRSetup');
 const MetaData = require('./models/MetaData');
 const CnFPayment = require('./models/CnFPayment');

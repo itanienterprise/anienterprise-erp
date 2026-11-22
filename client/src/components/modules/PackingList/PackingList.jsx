@@ -174,6 +174,8 @@ function PackingList({
     const [emptyFieldsModal, setEmptyFieldsModal] = useState({
         isOpen: false,
         emptyFields: [],
+        hasDuplicateInvoice: false,
+        duplicateInvoiceInfo: null,
         onConfirm: null
     });
     const [searchQuery, setSearchQuery] = useState('');
@@ -1383,19 +1385,22 @@ function PackingList({
     const handleSubmit = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
 
-        if (isDuplicateInvoiceNumber) {
-            showToast('Duplicate Invoice No detected! Each Packing List must have a unique invoice number.', 'error');
-            return;
-        }
-
         const emptyFields = getEmptyFieldsForPackingList(formData);
 
-        if (emptyFields.length > 0) {
+        if (isDuplicateInvoiceNumber || emptyFields.length > 0) {
             setEmptyFieldsModal({
                 isOpen: true,
                 emptyFields,
+                hasDuplicateInvoice: isDuplicateInvoiceNumber,
+                duplicateInvoiceInfo: duplicateInvoiceMatch,
                 onConfirm: () => {
-                    setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null });
+                    setEmptyFieldsModal({
+                        isOpen: false,
+                        emptyFields: [],
+                        hasDuplicateInvoice: false,
+                        duplicateInvoiceInfo: null,
+                        onConfirm: null
+                    });
                     executeSubmit();
                 }
             });
@@ -1734,14 +1739,16 @@ function PackingList({
         );
     }, [formData.packingListNumber, existingInvoiceNumbers]);
 
-    const isDuplicateInvoiceNumber = useMemo(() => {
-        if (!formData.packingListNumber || !formData.packingListNumber.trim()) return false;
+    const duplicateInvoiceMatch = useMemo(() => {
+        if (!formData.packingListNumber || !formData.packingListNumber.trim()) return null;
         const cleanNum = formData.packingListNumber.trim().toLowerCase();
-        return (records || []).some(r => {
+        return (records || []).find(r => {
             const num = (r.packingListNumber || r.invoiceNo || '').trim().toLowerCase();
             return num && num === cleanNum && r._id !== editingId;
-        });
+        }) || null;
     }, [formData.packingListNumber, records, editingId]);
+
+    const isDuplicateInvoiceNumber = !!duplicateInvoiceMatch;
 
     const filteredTrSetups = useMemo(() => {
         const query = (formData.trName || '').trim().toLowerCase();
@@ -2315,7 +2322,7 @@ function PackingList({
                                 <div className="flex items-center justify-between">
                                     <label className="text-sm font-medium text-gray-700">Invoice No*</label>
                                     {isDuplicateInvoiceNumber && (
-                                        <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                                        <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
                                             ⚠️ Duplicate Invoice No
                                         </span>
                                     )}
@@ -2331,7 +2338,7 @@ function PackingList({
                                         required
                                         autoComplete="off"
                                         placeholder="Invoice No"
-                                        className={`w-full px-4 py-2 bg-white/50 border rounded-lg focus:ring-2 outline-none transition-all ${isDuplicateInvoiceNumber ? 'border-red-500 bg-red-50/30 text-red-900 focus:ring-red-500 focus:border-red-500' : 'border-gray-200 focus:ring-blue-500'}`}
+                                        className={`w-full px-4 py-2 bg-white/50 border rounded-lg focus:ring-2 outline-none transition-all ${isDuplicateInvoiceNumber ? 'border-amber-400 bg-amber-50/20 text-gray-900 focus:ring-amber-500 focus:border-amber-500' : 'border-gray-200 focus:ring-blue-500'}`}
                                     />
                                     {activeDropdown === 'invoiceNo' && filteredInvoiceSuggestions.length > 0 && (
                                         <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar p-1">
@@ -2355,11 +2362,11 @@ function PackingList({
                                     )}
                                 </div>
                                 {isDuplicateInvoiceNumber && (
-                                    <p className="text-xs text-red-600 font-semibold flex items-center gap-1 mt-1 animate-in fade-in duration-200">
-                                        <svg className="w-3.5 h-3.5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <p className="text-xs text-amber-700 font-semibold flex items-center gap-1 mt-1 animate-in fade-in duration-200">
+                                        <svg className="w-3.5 h-3.5 shrink-0 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                         </svg>
-                                        <span>Duplicate Invoice No detected! This Invoice No already exists and cannot be saved.</span>
+                                        <span>Duplicate Invoice No detected! If you need it twice, you can allow it when saving.</span>
                                     </p>
                                 )}
                             </div>
@@ -3212,8 +3219,8 @@ function PackingList({
                             </button>
                             <button
                                 type="submit"
-                                disabled={isSubmitting || isDuplicateInvoiceNumber}
-                                className={`px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:scale-100 disabled:opacity-50 ${(isSubmitting || isDuplicateInvoiceNumber) ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
+                                disabled={isSubmitting}
+                                className={`px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:scale-100 disabled:opacity-50 ${isSubmitting ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
                             >
                                 {editingId ? 'Update Record' : 'Save Packing List'}
                             </button>
@@ -3688,7 +3695,7 @@ function PackingList({
                 />
             )}
 
-            {/* Empty Fields Alert Modal */}
+            {/* Empty Fields / Duplicate Invoice Alert Modal */}
             {emptyFieldsModal.isOpen && createPortal(
                 <div
                     className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
@@ -3701,53 +3708,97 @@ function PackingList({
                         {/* Header */}
                         <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between bg-gray-50/50">
                             <div className="flex items-center gap-3.5">
-                                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
+                                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${emptyFieldsModal.hasDuplicateInvoice ? 'bg-amber-50 border-amber-300 text-amber-600' : 'bg-amber-50 border-amber-200 text-amber-600'}`}>
                                     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                     </svg>
                                 </div>
                                 <div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <h3 className="text-base font-black text-gray-900 tracking-tight">
-                                            Empty Fields Detected
+                                            {emptyFieldsModal.hasDuplicateInvoice && emptyFieldsModal.emptyFields.length > 0
+                                                ? 'Review Before Saving'
+                                                : emptyFieldsModal.hasDuplicateInvoice
+                                                    ? 'Duplicate Invoice No Detected'
+                                                    : 'Empty Fields Detected'}
                                         </h3>
-                                        <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                                            {emptyFieldsModal.emptyFields.length}
-                                        </span>
+                                        {emptyFieldsModal.hasDuplicateInvoice && (
+                                            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                                Duplicate Invoice No
+                                            </span>
+                                        )}
+                                        {emptyFieldsModal.emptyFields.length > 0 && (
+                                            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                                                {emptyFieldsModal.emptyFields.length} Unfilled
+                                            </span>
+                                        )}
                                     </div>
                                     <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                        The following {emptyFieldsModal.emptyFields.length === 1 ? 'field is' : `${emptyFieldsModal.emptyFields.length} fields are`} currently empty in this Packing List. Please review before saving.
+                                        {emptyFieldsModal.hasDuplicateInvoice && emptyFieldsModal.emptyFields.length > 0
+                                            ? `A duplicate invoice number and ${emptyFieldsModal.emptyFields.length} unfilled field${emptyFieldsModal.emptyFields.length === 1 ? '' : 's'} were detected. Please review before saving.`
+                                            : emptyFieldsModal.hasDuplicateInvoice
+                                                ? 'This Invoice No is already used in an existing Packing List. Please review before saving.'
+                                                : `The following ${emptyFieldsModal.emptyFields.length === 1 ? 'field is' : `${emptyFieldsModal.emptyFields.length} fields are`} currently empty in this Packing List. Please review before saving.`}
                                     </p>
                                 </div>
                             </div>
                             <button
                                 type="button"
-                                onClick={() => setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null })}
+                                onClick={() => setEmptyFieldsModal({ isOpen: false, emptyFields: [], hasDuplicateInvoice: false, duplicateInvoiceInfo: null, onConfirm: null })}
                                 className="p-1.5 rounded-xl hover:bg-gray-200/70 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer shrink-0"
                             >
                                 <XIcon className="w-5 h-5" />
                             </button>
                         </div>
 
-                        {/* Body - Scrollable list of empty fields */}
-                        <div className="p-6 py-5 overflow-y-auto max-h-[46vh] space-y-3 bg-white">
-                            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                                Missing / Unfilled Fields
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                {emptyFieldsModal.emptyFields.map((field, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="flex items-center gap-2 px-3 py-2 bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 transition-colors"
-                                    >
-                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
-                                        <span className="truncate font-semibold" title={field}>{field}</span>
+                        {/* Body */}
+                        <div className="p-6 py-5 overflow-y-auto max-h-[46vh] space-y-4 bg-white">
+                            {/* Duplicate Invoice Warning Section */}
+                            {emptyFieldsModal.hasDuplicateInvoice && (
+                                <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl space-y-2">
+                                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
+                                        <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <span>Duplicate Invoice Number Detected</span>
                                     </div>
-                                ))}
-                            </div>
-                            <div className="mt-4 p-3 bg-blue-50/60 border border-blue-100 rounded-xl text-xs text-blue-700 flex items-start gap-2">
+                                    <div className="text-xs text-amber-900 leading-relaxed">
+                                        Invoice No <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-amber-300 text-amber-950">{formData.packingListNumber}</span> already exists in the system
+                                        {emptyFieldsModal.duplicateInvoiceInfo?.partyName ? (
+                                            <> (Party: <strong>{emptyFieldsModal.duplicateInvoiceInfo.partyName}</strong>{emptyFieldsModal.duplicateInvoiceInfo?.date ? `, Date: ${emptyFieldsModal.duplicateInvoiceInfo.date}` : ''})</>
+                                        ) : ''}.
+                                    </div>
+                                    <p className="text-[11px] text-amber-800 bg-amber-100/60 p-2 rounded-lg font-medium leading-relaxed">
+                                        ℹ️ If you need to use this Invoice No twice (e.g. split shipment, 2nd truck/container), click <strong>{emptyFieldsModal.emptyFields.length > 0 ? 'Allow & Confirm' : 'Confirm & Allow'}</strong>. If not, click <strong>Keep Editing</strong> to enter a different Invoice No.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Missing / Unfilled Fields List */}
+                            {emptyFieldsModal.emptyFields.length > 0 && (
+                                <div className="space-y-2.5">
+                                    <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                                        Missing / Unfilled Fields ({emptyFieldsModal.emptyFields.length})
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {emptyFieldsModal.emptyFields.map((field, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="flex items-center gap-2 px-3 py-2 bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 transition-colors"
+                                            >
+                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                                                <span className="truncate font-semibold" title={field}>{field}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-xl text-xs text-blue-700 flex items-start gap-2">
                                 <span className="text-blue-500 font-bold shrink-0">ℹ</span>
-                                <span>You can click <strong>Keep Editing</strong> to complete these fields, or click <strong>Confirm</strong> to proceed and save anyway.</span>
+                                <span>
+                                    You can click <strong>Keep Editing</strong> to {emptyFieldsModal.hasDuplicateInvoice ? 'edit the Invoice No or complete fields' : 'complete these fields'}, or click <strong>{emptyFieldsModal.hasDuplicateInvoice ? 'Allow & Confirm' : 'Confirm'}</strong> to proceed and save anyway.
+                                </span>
                             </div>
                         </div>
 
@@ -3755,7 +3806,15 @@ function PackingList({
                         <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex items-center justify-end gap-3">
                             <button
                                 type="button"
-                                onClick={() => setEmptyFieldsModal({ isOpen: false, emptyFields: [], onConfirm: null })}
+                                onClick={() => {
+                                    setEmptyFieldsModal({ isOpen: false, emptyFields: [], hasDuplicateInvoice: false, duplicateInvoiceInfo: null, onConfirm: null });
+                                    setTimeout(() => {
+                                        if (emptyFieldsModal.hasDuplicateInvoice && invoiceRef.current) {
+                                            const inputEl = invoiceRef.current.querySelector('input');
+                                            if (inputEl) inputEl.focus();
+                                        }
+                                    }, 100);
+                                }}
                                 className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-bold text-sm transition-all shadow-sm active:scale-95 cursor-pointer"
                             >
                                 Keep Editing
@@ -3770,7 +3829,7 @@ function PackingList({
                                 className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm active:scale-95 flex items-center gap-2 cursor-pointer"
                             >
                                 <CheckIcon className="w-4 h-4" />
-                                <span>Confirm</span>
+                                <span>{emptyFieldsModal.hasDuplicateInvoice ? 'Allow & Confirm' : 'Confirm'}</span>
                             </button>
                         </div>
                     </div>

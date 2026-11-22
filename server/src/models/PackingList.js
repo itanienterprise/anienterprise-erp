@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const packingListSchema = new mongoose.Schema({
-    packingListNumber: { type: String, unique: true, sparse: true },
+    packingListNumber: { type: String, sparse: true },
     data: { type: String, required: true },
     createdAt: { type: Date, default: Date.now }
 });
