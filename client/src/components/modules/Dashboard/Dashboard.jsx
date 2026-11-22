@@ -1371,6 +1371,306 @@ const Dashboard = ({
     return `${Math.floor(diff / 86400)}d ago`;
   };
 
+  const renderAttendanceSection = () => (
+    <>
+      <div>
+        {/* Header with Attendance / Working Time Toggle */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-gray-100">
+          <div className="flex items-center justify-center sm:justify-start gap-2 text-center sm:text-left">
+            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
+              <UserIcon className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <h2 className="text-xs sm:text-sm font-bold text-gray-900 leading-tight">
+                {attendanceViewMode === 'attendance' ? 'Attendance & Biometrics' : 'Working Time Tracker'}
+              </h2>
+              <p className="text-[10px] text-gray-400">
+                {attendanceViewMode === 'attendance' ? 'In/Out Times & Day Status' : 'Weekly Tracked Hours'}
+              </p>
+            </div>
+          </div>
+
+          {/* Attendance vs Working Time Toggle */}
+          <div className="flex sm:inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setAttendanceViewMode('attendance')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center px-2.5 py-1.5 sm:py-1 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${attendanceViewMode === 'attendance'
+                ? 'bg-white text-blue-600 shadow-xs'
+                : 'text-gray-500 hover:text-gray-800'
+                }`}
+            >
+              Attendance
+            </button>
+            <button
+              type="button"
+              onClick={() => setAttendanceViewMode('workingTime')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center px-2.5 py-1.5 sm:py-1 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${attendanceViewMode === 'workingTime'
+                ? 'bg-white text-blue-600 shadow-xs'
+                : 'text-gray-500 hover:text-gray-800'
+                }`}
+            >
+              Working Time
+            </button>
+          </div>
+        </div>
+
+        {/* ─── VIEW 1: ATTENDANCE (In Time, Out Time, Status from Attendance Module) ─── */}
+        {isLoadingStats && !statsData ? (
+          <div className="space-y-1 mt-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-2 py-1.5 grid grid-cols-12 gap-1 border-b border-gray-100">
+              <span className="col-span-4">DAY (SAT - FRI)</span>
+              <span className="col-span-3 text-center">IN TIME</span>
+              <span className="col-span-3 text-center">OUT TIME</span>
+              <span className="col-span-2 text-right">STATUS</span>
+            </div>
+            {[...Array(7)].map((_, idx) => (
+              <div key={idx} className="grid grid-cols-12 gap-1 items-center py-2 px-2 rounded-xl min-h-[42px] animate-pulse">
+                <div className="col-span-4 space-y-1">
+                  <div className="h-3.5 bg-gray-200 rounded w-20"></div>
+                  <div className="h-2.5 bg-gray-100 rounded w-14"></div>
+                </div>
+                <div className="col-span-3 flex justify-center">
+                  <div className="h-3.5 bg-gray-100 rounded w-16"></div>
+                </div>
+                <div className="col-span-3 flex justify-center">
+                  <div className="h-3.5 bg-gray-100 rounded w-16"></div>
+                </div>
+                <div className="col-span-2 flex justify-end">
+                  <div className="h-5 bg-gray-100 rounded-full w-14"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : attendanceViewMode === 'attendance' ? (
+          <div className="space-y-1 mt-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-2 py-1.5 grid grid-cols-12 gap-1 border-b border-gray-100">
+              <span className="col-span-4">DAY (SAT - FRI)</span>
+              <span className="col-span-3 text-center">IN TIME</span>
+              <span className="col-span-3 text-center">OUT TIME</span>
+              <span className="col-span-2 text-right">STATUS</span>
+            </div>
+
+            {weeklyDaysList.map((day) => {
+              const isWeekend = day.dayName === 'Friday' || day.attendanceStatus === 'WEEKEND';
+              const statusStr = (day.attendanceStatus || (isWeekend ? 'WEEKEND' : (day.isToday ? 'ACTIVE' : 'ABSENT'))).toUpperCase();
+
+              const renderStatusBadge = () => {
+                switch (statusStr) {
+                  case 'PRESENT':
+                    return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">Present</span>;
+                  case 'LATE':
+                    return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">Late</span>;
+                  case 'HALF_DAY':
+                    return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap">Half Day</span>;
+                  case 'LEAVE':
+                    return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 whitespace-nowrap">Leave</span>;
+                  case 'WEEKEND':
+                    return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">Weekend</span>;
+                  case 'ACTIVE':
+                    return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">Active</span>;
+                  default:
+                    return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200 whitespace-nowrap">Absent</span>;
+                }
+              };
+
+              return (
+                <div
+                  key={day.dayName}
+                  className={`grid grid-cols-12 gap-1 items-center py-1.5 px-2 rounded-xl min-h-[42px] transition-all ${day.isToday ? 'bg-blue-50/70 border border-blue-200/80 shadow-2xs' : 'hover:bg-gray-50'
+                    }`}
+                >
+                  {/* Day & Date */}
+                  <div className="col-span-4 flex flex-col justify-center">
+                    <span className={`text-xs sm:text-[13px] font-bold leading-tight ${day.isToday ? 'text-blue-700' : 'text-gray-800'}`}>
+                      {day.dayName}
+                    </span>
+                    <span className={`text-[11px] font-medium leading-normal ${day.isToday ? 'text-blue-600/80' : 'text-gray-500'}`}>
+                      {day.formattedDate || formatDateDMY(day.date)}
+                    </span>
+                  </div>
+
+                  {/* In Time */}
+                  <div className="col-span-3 text-center">
+                    <span className={`text-xs sm:text-[13px] ${day.inTime && day.inTime !== '--:--' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
+                      {isWeekend ? '--:--' : (day.inTime || '--:--')}
+                    </span>
+                  </div>
+
+                  {/* Out Time */}
+                  <div className="col-span-3 text-center">
+                    <span className={`text-xs sm:text-[13px] ${day.outTime && day.outTime !== '--:--' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
+                      {isWeekend ? '--:--' : (day.outTime || '--:--')}
+                    </span>
+                  </div>
+
+                  {/* Status */}
+                  <div className="col-span-2 text-right">
+                    {renderStatusBadge()}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ─── VIEW 2: WORKING TIME (Visual Progress Bar & Active Hours) ─── */
+          <div className="space-y-1 mt-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-2 py-1.5 grid grid-cols-12 gap-1 border-b border-gray-100">
+              <span className="col-span-4">DAY (SAT - FRI)</span>
+              <span className="col-span-6 text-center">WORKING HOURS</span>
+              <span className="col-span-2 text-right">STATUS</span>
+            </div>
+
+            {weeklyDaysList.map((day) => {
+              const hours = parseFloat(day.attendanceHours !== undefined && day.attendanceHours !== null && day.attendanceHours > 0 ? day.attendanceHours : (day.activeHours || day.attendanceHours)) || 0;
+              const maxHours = 8;
+              const progressPct = Math.min(100, Math.round((hours / maxHours) * 100));
+              const isWeekend = day.dayName === 'Friday' || day.attendanceStatus === 'WEEKEND';
+
+              return (
+                <div
+                  key={day.dayName}
+                  className={`grid grid-cols-12 gap-1 items-center py-1.5 px-2 rounded-xl min-h-[42px] transition-all ${day.isToday ? 'bg-blue-50/70 border border-blue-200/80 shadow-2xs' : 'hover:bg-gray-50'
+                    }`}
+                >
+                  {/* Day & Date - IDENTICAL geometry & typography to Attendance view */}
+                  <div className="col-span-4 flex flex-col justify-center">
+                    <span className={`text-xs sm:text-[13px] font-bold leading-tight ${day.isToday ? 'text-blue-700' : 'text-gray-800'}`}>
+                      {day.dayName}
+                    </span>
+                    <span className={`text-[11px] font-medium leading-normal ${day.isToday ? 'text-blue-600/80' : 'text-gray-500'}`}>
+                      {day.formattedDate || formatDateDMY(day.date)}
+                    </span>
+                  </div>
+
+                  {/* Horizontal Progress Bar */}
+                  <div className="col-span-6 px-1 flex items-center">
+                    <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden relative">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${isWeekend
+                          ? 'bg-gray-300'
+                          : day.isToday
+                            ? 'bg-blue-600'
+                            : hours > 0
+                              ? 'bg-amber-400'
+                              : 'bg-transparent'
+                          }`}
+                        style={{ width: `${isWeekend ? 0 : Math.max(hours > 0 ? 10 : 0, progressPct)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  {/* Hours Tag - Aligned to exact same position and width as Status badge */}
+                  <div className="col-span-2 text-right">
+                    <span className={`text-xs sm:text-[13px] font-bold ${isWeekend ? 'text-gray-400' : day.isToday ? 'text-blue-600' : 'text-gray-800'
+                      }`}>
+                      {isWeekend ? 'Weekend' : `${hours}h`}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Footer Total */}
+      <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-gray-500 min-h-[34px]">
+        {attendanceViewMode === 'attendance' ? (
+          <>
+            {isLoadingStats && !statsData ? (
+              <div className="flex items-center justify-center sm:justify-start gap-2 animate-pulse w-full sm:w-auto">
+                <div className="h-3.5 bg-gray-200 rounded w-44"></div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs w-full sm:w-auto">
+                <span>Present: <strong className="text-emerald-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'PRESENT' || d.attendanceStatus === 'LATE' || d.attendanceStatus === 'HALF_DAY').length}</strong></span>
+                <span>Late: <strong className="text-amber-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'LATE').length}</strong></span>
+                <span>Absent: <strong className="text-rose-500">{weeklyDaysList.filter(d => (d.attendanceStatus === 'ABSENT' || !d.attendanceStatus) && d.dayName !== 'Friday' && (attendanceWeekOffset !== 0 || !d.isToday)).length}</strong></span>
+              </div>
+            )}
+
+            {/* Previous Week / Current Week Button */}
+            {attendanceWeekOffset === 0 ? (
+              <button
+                type="button"
+                onClick={() => handleWeekChange(-1)}
+                disabled={isLoadingStats}
+                className="inline-flex items-center justify-center gap-1 w-full sm:w-auto px-2.5 py-1.5 sm:py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 border border-gray-200/80 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                title="View previous week attendance"
+              >
+                <ChevronLeftIcon className="w-3.5 h-3.5 text-gray-500" />
+                <span>Previous Week</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleWeekChange(0)}
+                disabled={isLoadingStats}
+                className="inline-flex items-center justify-center gap-1 w-full sm:w-auto px-2.5 py-1.5 sm:py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                title="Return to current week"
+              >
+                <span>Current Week</span>
+                <ChevronRightIcon className="w-3.5 h-3.5 text-blue-600" />
+              </button>
+            )}
+
+            {canSyncAttendance ? (
+              <button
+                type="button"
+                onClick={handleManualAttendanceSync}
+                disabled={isSyncingAttendance}
+                title="Click to re-process and sync today's attendance punches from biometric device"
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center justify-center sm:justify-start gap-1.5 w-full sm:w-auto cursor-pointer transition-colors group"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Attendance Module Synced</span>
+                <RefreshIcon className={`w-3.5 h-3.5 text-blue-500 group-hover:rotate-180 transition-transform duration-500 ${isSyncingAttendance ? 'animate-spin' : ''}`} />
+              </button>
+            ) : (
+              <div className="text-xs font-semibold text-gray-500 flex items-center justify-center sm:justify-start gap-1.5 w-full sm:w-auto">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>Attendance Module Synced</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-center sm:justify-start gap-2 w-full sm:w-auto">
+              <span className="text-xs font-medium text-gray-500">Total Weekly Time:</span>
+              <span className="font-bold text-gray-900 text-sm sm:text-base">{weeklyTotalHours} Hours</span>
+            </div>
+
+            {/* Previous Week / Current Week Button (Working Time Mode) */}
+            {attendanceWeekOffset === 0 ? (
+              <button
+                type="button"
+                onClick={() => handleWeekChange(-1)}
+                disabled={isLoadingStats}
+                className="inline-flex items-center justify-center gap-1 w-full sm:w-auto px-2.5 py-1.5 sm:py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 border border-gray-200/80 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                title="View previous week working hours"
+              >
+                <ChevronLeftIcon className="w-3.5 h-3.5 text-gray-500" />
+                <span>Previous Week</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleWeekChange(0)}
+                disabled={isLoadingStats}
+                className="inline-flex items-center justify-center gap-1 w-full sm:w-auto px-2.5 py-1.5 sm:py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                title="Return to current week"
+              >
+                <span>Current Week</span>
+                <ChevronRightIcon className="w-3.5 h-3.5 text-blue-600" />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="dashboard-container space-y-6 pb-12 font-sans">
       {/* ─── ROW 1: Profile & Attendance (Left) | Bank Dollar Rates | Pie Chart ── */}
@@ -1380,58 +1680,39 @@ const Dashboard = ({
           {/* Card 1: Profile & Attendance (Left: Portrait Card, Right: Days List) */}
           {canAccess('profile', 'attendance') ? (
             <div className="dash-card xl:col-span-6 bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 h-full items-stretch">
-
-                {/* LEFT SIDE: Profile Card (Desktop: Portrait full card | Mobile: Compact Banner with overflowing portrait image on left) */}
-                <div className="md:col-span-5 relative rounded-2xl select-none bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 md:bg-slate-900 p-4 sm:p-5 min-h-[145px] md:min-h-[380px] flex flex-col justify-center md:justify-end overflow-visible md:overflow-hidden mt-6 md:mt-0 border border-slate-800/80 md:border-none shadow-md md:shadow-none">
-                  {/* Desktop Full-Card Background Photo or Fallback (hidden on mobile) */}
+              
+              {/* ─── DESKTOP VIEW (md: and above): EXACT ORIGINAL LAYOUT AND STYLING ─── */}
+              <div className="hidden md:grid md:grid-cols-12 gap-5 h-full items-stretch">
+                {/* LEFT SIDE: Profile Card */}
+                <div className="md:col-span-5 relative rounded-2xl select-none md:bg-slate-900 p-4 sm:p-5 min-h-[380px] flex flex-col justify-end overflow-hidden border-none shadow-none">
                   {profilePhoto ? (
                     <img
                       src={profilePhoto}
                       alt={profileName}
-                      className="hidden md:block absolute inset-0 w-full h-full object-cover object-top"
+                      className="absolute inset-0 w-full h-full object-cover object-top"
                     />
                   ) : (
-                    <div className="hidden md:flex absolute inset-0 w-full h-full bg-slate-800 items-center justify-center">
+                    <div className="flex absolute inset-0 w-full h-full bg-slate-800 items-center justify-center">
                       <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl font-extrabold text-white shadow-xl">
                         {profileName.charAt(0).toUpperCase()}
                       </div>
                     </div>
                   )}
 
-                  {/* Desktop Faded Effect overlay from bottom up (hidden on mobile) */}
-                  <div className="hidden md:block absolute inset-x-0 bottom-0 h-44 sm:h-52 pointer-events-none bg-gradient-to-t from-slate-950 via-slate-950/75 via-65% to-transparent"></div>
+                  {/* Desktop Faded Effect overlay from bottom up */}
+                  <div className="absolute inset-x-0 bottom-0 h-44 sm:h-52 pointer-events-none bg-gradient-to-t from-slate-950 via-slate-950/75 via-65% to-transparent"></div>
 
-                  {/* Mobile Overflowing Portrait Image (< md: positioned left, popping -top-7 out of the card boundary) */}
-                  <div className="md:hidden absolute left-2 sm:left-4 -top-7 bottom-0 w-36 sm:w-44 pointer-events-none flex items-end justify-center">
-                    {profilePhoto ? (
-                      <div className="relative w-full h-[calc(100%+28px)] flex items-end">
-                        <img
-                          src={profilePhoto}
-                          alt={profileName}
-                          className="w-full h-full object-cover object-top rounded-2xl shadow-2xl border-2 border-slate-700/60"
-                        />
-                        {/* Soft blend gradient at bottom of mobile photo */}
-                        <div className="absolute inset-x-0 bottom-0 h-10 rounded-b-2xl bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent pointer-events-none" />
-                      </div>
-                    ) : (
-                      <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-2xl font-extrabold text-white shadow-xl mb-3">
-                        {profileName.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Welcome Info Content: Welcome Name, Designation, Department (Mobile: Right side, Desktop: Bottom) */}
-                  <div className="relative z-10 flex flex-col max-w-[54%] sm:max-w-[58%] md:max-w-none w-full ml-auto md:ml-0 py-1 md:py-0 pl-2 sm:pl-0">
-                    <p className="text-xs sm:text-base md:text-lg font-bold text-blue-400 md:text-white tracking-tight drop-shadow-sm uppercase md:normal-case">Welcome,</p>
-                    <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-tight drop-shadow-md truncate">
+                  {/* Welcome Info Content: Welcome Name, Designation, Department */}
+                  <div className="relative z-10 flex flex-col w-full py-1 md:py-0">
+                    <p className="text-base md:text-lg font-bold text-white tracking-tight drop-shadow-sm">Welcome,</p>
+                    <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-tight drop-shadow-md truncate">
                       {profileName}
                     </h2>
-                    <p className="text-xs sm:text-sm font-semibold text-blue-300 md:text-blue-400 mt-0.5 sm:mt-1 drop-shadow-sm truncate">
+                    <p className="text-sm font-semibold text-blue-400 mt-0.5 sm:mt-1 drop-shadow-sm truncate">
                       {profileDesignation}
                     </p>
                     {profileDepartment && (
-                      <p className="text-[11px] sm:text-xs text-white/80 mt-0.5 drop-shadow-sm truncate">
+                      <p className="text-xs text-white/80 mt-0.5 drop-shadow-sm truncate">
                         {profileDepartment}
                       </p>
                     )}
@@ -1440,304 +1721,54 @@ const Dashboard = ({
 
                 {/* RIGHT SIDE: Saturday - Friday Attendance & Working Time Track */}
                 <div className="md:col-span-7 flex flex-col justify-between">
-                  <div>
-                    {/* Header with Attendance / Working Time Toggle */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-                          <UserIcon className="w-3.5 h-3.5" />
-                        </div>
-                        <div>
-                          <h2 className="text-xs sm:text-sm font-bold text-gray-900 leading-tight">
-                            {attendanceViewMode === 'attendance' ? 'Attendance & Biometrics' : 'Working Time Tracker'}
-                          </h2>
-                          <p className="text-[10px] text-gray-400">
-                            {attendanceViewMode === 'attendance' ? 'In/Out Times & Day Status' : 'Weekly Tracked Hours'}
-                          </p>
-                        </div>
-                      </div>
+                  {renderAttendanceSection()}
+                </div>
+              </div>
 
-                      {/* Attendance vs Working Time Toggle */}
-                      <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => setAttendanceViewMode('attendance')}
-                          className={`px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${attendanceViewMode === 'attendance'
-                            ? 'bg-white text-blue-600 shadow-xs'
-                            : 'text-gray-500 hover:text-gray-800'
-                            }`}
-                        >
-                          Attendance
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAttendanceViewMode('workingTime')}
-                          className={`px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${attendanceViewMode === 'workingTime'
-                            ? 'bg-white text-blue-600 shadow-xs'
-                            : 'text-gray-500 hover:text-gray-800'
-                            }`}
-                        >
-                          Working Time
-                        </button>
+              {/* ─── MOBILE VIEW (< md): IMAGE 2 DESIGN WITH FADED OVERLAPPING ATTENDANCE ─── */}
+              <div className="md:hidden flex flex-col">
+                {/* Profile Card (Matching Image 2 Reference - Increased Height) */}
+                <div className="relative rounded-2xl select-none bg-slate-900 h-[460px] sm:h-[500px] flex flex-col justify-end overflow-hidden shadow-lg border border-slate-800/80">
+                  {profilePhoto ? (
+                    <img
+                      src={profilePhoto}
+                      alt={profileName}
+                      className="absolute inset-0 w-full h-full object-cover object-top"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 w-full h-full bg-slate-800 flex items-center justify-center">
+                      <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl font-extrabold text-white shadow-xl">
+                        {profileName.charAt(0).toUpperCase()}
                       </div>
                     </div>
+                  )}
 
-                    {/* ─── VIEW 1: ATTENDANCE (In Time, Out Time, Status from Attendance Module) ─── */}
-                    {isLoadingStats && !statsData ? (
-                      <div className="space-y-1 mt-2">
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-2 py-1.5 grid grid-cols-12 gap-1 border-b border-gray-100">
-                          <span className="col-span-4">DAY (SAT - FRI)</span>
-                          <span className="col-span-3 text-center">IN TIME</span>
-                          <span className="col-span-3 text-center">OUT TIME</span>
-                          <span className="col-span-2 text-right">STATUS</span>
-                        </div>
-                        {[...Array(7)].map((_, idx) => (
-                          <div key={idx} className="grid grid-cols-12 gap-1 items-center py-2 px-2 rounded-xl min-h-[42px] animate-pulse">
-                            <div className="col-span-4 space-y-1">
-                              <div className="h-3.5 bg-gray-200 rounded w-20"></div>
-                              <div className="h-2.5 bg-gray-100 rounded w-14"></div>
-                            </div>
-                            <div className="col-span-3 flex justify-center">
-                              <div className="h-3.5 bg-gray-100 rounded w-16"></div>
-                            </div>
-                            <div className="col-span-3 flex justify-center">
-                              <div className="h-3.5 bg-gray-100 rounded w-16"></div>
-                            </div>
-                            <div className="col-span-2 flex justify-end">
-                              <div className="h-5 bg-gray-100 rounded-full w-14"></div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : attendanceViewMode === 'attendance' ? (
-                      <div className="space-y-1 mt-2">
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-2 py-1.5 grid grid-cols-12 gap-1 border-b border-gray-100">
-                          <span className="col-span-4">DAY (SAT - FRI)</span>
-                          <span className="col-span-3 text-center">IN TIME</span>
-                          <span className="col-span-3 text-center">OUT TIME</span>
-                          <span className="col-span-2 text-right">STATUS</span>
-                        </div>
+                  {/* Faded Effect overlay from bottom up */}
+                  <div className="absolute inset-x-0 bottom-0 h-60 pointer-events-none bg-gradient-to-t from-slate-950 via-slate-950/80 via-60% to-transparent"></div>
 
-                        {weeklyDaysList.map((day) => {
-                          const isWeekend = day.dayName === 'Friday' || day.attendanceStatus === 'WEEKEND';
-                          const statusStr = (day.attendanceStatus || (isWeekend ? 'WEEKEND' : (day.isToday ? 'ACTIVE' : 'ABSENT'))).toUpperCase();
-
-                          const renderStatusBadge = () => {
-                            switch (statusStr) {
-                              case 'PRESENT':
-                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">Present</span>;
-                              case 'LATE':
-                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">Late</span>;
-                              case 'HALF_DAY':
-                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap">Half Day</span>;
-                              case 'LEAVE':
-                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 whitespace-nowrap">Leave</span>;
-                              case 'WEEKEND':
-                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">Weekend</span>;
-                              case 'ACTIVE':
-                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">Active</span>;
-                              default:
-                                return <span className="inline-block px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200 whitespace-nowrap">Absent</span>;
-                            }
-                          };
-
-                          return (
-                            <div
-                              key={day.dayName}
-                              className={`grid grid-cols-12 gap-1 items-center py-1.5 px-2 rounded-xl min-h-[42px] transition-all ${day.isToday ? 'bg-blue-50/70 border border-blue-200/80 shadow-2xs' : 'hover:bg-gray-50'
-                                }`}
-                            >
-                              {/* Day & Date */}
-                              <div className="col-span-4 flex flex-col justify-center">
-                                <span className={`text-xs sm:text-[13px] font-bold leading-tight ${day.isToday ? 'text-blue-700' : 'text-gray-800'}`}>
-                                  {day.dayName}
-                                </span>
-                                <span className={`text-[11px] font-medium leading-normal ${day.isToday ? 'text-blue-600/80' : 'text-gray-500'}`}>
-                                  {day.formattedDate || formatDateDMY(day.date)}
-                                </span>
-                              </div>
-
-                              {/* In Time */}
-                              <div className="col-span-3 text-center">
-                                <span className={`text-xs sm:text-[13px] ${day.inTime && day.inTime !== '--:--' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
-                                  {isWeekend ? '--:--' : (day.inTime || '--:--')}
-                                </span>
-                              </div>
-
-                              {/* Out Time */}
-                              <div className="col-span-3 text-center">
-                                <span className={`text-xs sm:text-[13px] ${day.outTime && day.outTime !== '--:--' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
-                                  {isWeekend ? '--:--' : (day.outTime || '--:--')}
-                                </span>
-                              </div>
-
-                              {/* Status */}
-                              <div className="col-span-2 text-right">
-                                {renderStatusBadge()}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      /* ─── VIEW 2: WORKING TIME (Visual Progress Bar & Active Hours) ─── */
-                      <div className="space-y-1 mt-2">
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-2 py-1.5 grid grid-cols-12 gap-1 border-b border-gray-100">
-                          <span className="col-span-4">DAY (SAT - FRI)</span>
-                          <span className="col-span-6 text-center">WORKING HOURS</span>
-                          <span className="col-span-2 text-right">STATUS</span>
-                        </div>
-
-                        {weeklyDaysList.map((day) => {
-                          const hours = parseFloat(day.attendanceHours !== undefined && day.attendanceHours !== null && day.attendanceHours > 0 ? day.attendanceHours : (day.activeHours || day.attendanceHours)) || 0;
-                          const maxHours = 8;
-                          const progressPct = Math.min(100, Math.round((hours / maxHours) * 100));
-                          const isWeekend = day.dayName === 'Friday' || day.attendanceStatus === 'WEEKEND';
-
-                          return (
-                            <div
-                              key={day.dayName}
-                              className={`grid grid-cols-12 gap-1 items-center py-1.5 px-2 rounded-xl min-h-[42px] transition-all ${day.isToday ? 'bg-blue-50/70 border border-blue-200/80 shadow-2xs' : 'hover:bg-gray-50'
-                                }`}
-                            >
-                              {/* Day & Date - IDENTICAL geometry & typography to Attendance view */}
-                              <div className="col-span-4 flex flex-col justify-center">
-                                <span className={`text-xs sm:text-[13px] font-bold leading-tight ${day.isToday ? 'text-blue-700' : 'text-gray-800'}`}>
-                                  {day.dayName}
-                                </span>
-                                <span className={`text-[11px] font-medium leading-normal ${day.isToday ? 'text-blue-600/80' : 'text-gray-500'}`}>
-                                  {day.formattedDate || formatDateDMY(day.date)}
-                                </span>
-                              </div>
-
-                              {/* Horizontal Progress Bar */}
-                              <div className="col-span-6 px-1 flex items-center">
-                                <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden relative">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-300 ${isWeekend
-                                      ? 'bg-gray-300'
-                                      : day.isToday
-                                        ? 'bg-blue-600'
-                                        : hours > 0
-                                          ? 'bg-amber-400'
-                                          : 'bg-transparent'
-                                      }`}
-                                    style={{ width: `${isWeekend ? 0 : Math.max(hours > 0 ? 10 : 0, progressPct)}%` }}
-                                  ></div>
-                                </div>
-                              </div>
-
-                              {/* Hours Tag - Aligned to exact same position and width as Status badge */}
-                              <div className="col-span-2 text-right">
-                                <span className={`text-xs sm:text-[13px] font-bold ${isWeekend ? 'text-gray-400' : day.isToday ? 'text-blue-600' : 'text-gray-800'
-                                  }`}>
-                                  {isWeekend ? 'Weekend' : `${hours}h`}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Footer Total */}
-                  <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-gray-500 min-h-[34px]">
-                    {attendanceViewMode === 'attendance' ? (
-                      <>
-                        {isLoadingStats && !statsData ? (
-                          <div className="flex items-center gap-2 animate-pulse">
-                            <div className="h-3.5 bg-gray-200 rounded w-44"></div>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap items-center gap-3 text-xs">
-                            <span>Present: <strong className="text-emerald-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'PRESENT' || d.attendanceStatus === 'LATE' || d.attendanceStatus === 'HALF_DAY').length}</strong></span>
-                            <span>Late: <strong className="text-amber-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'LATE').length}</strong></span>
-                            <span>Absent: <strong className="text-rose-500">{weeklyDaysList.filter(d => (d.attendanceStatus === 'ABSENT' || !d.attendanceStatus) && d.dayName !== 'Friday' && (attendanceWeekOffset !== 0 || !d.isToday)).length}</strong></span>
-                          </div>
-                        )}
-
-                        {/* Previous Week / Current Week Button */}
-                        {attendanceWeekOffset === 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => handleWeekChange(-1)}
-                            disabled={isLoadingStats}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 border border-gray-200/80 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
-                            title="View previous week attendance"
-                          >
-                            <ChevronLeftIcon className="w-3.5 h-3.5 text-gray-500" />
-                            <span>Previous Week</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleWeekChange(0)}
-                            disabled={isLoadingStats}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
-                            title="Return to current week"
-                          >
-                            <span>Current Week</span>
-                            <ChevronRightIcon className="w-3.5 h-3.5 text-blue-600" />
-                          </button>
-                        )}
-
-                        {canSyncAttendance ? (
-                          <button
-                            type="button"
-                            onClick={handleManualAttendanceSync}
-                            disabled={isSyncingAttendance}
-                            title="Click to re-process and sync today's attendance punches from biometric device"
-                            className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 cursor-pointer transition-colors group"
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <span>Attendance Module Synced</span>
-                            <RefreshIcon className={`w-3.5 h-3.5 text-blue-500 group-hover:rotate-180 transition-transform duration-500 ${isSyncingAttendance ? 'animate-spin' : ''}`} />
-                          </button>
-                        ) : (
-                          <div className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span>Attendance Module Synced</span>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-gray-500">Total Weekly Time:</span>
-                          <span className="font-bold text-gray-900 text-sm sm:text-base">{weeklyTotalHours} Hours</span>
-                        </div>
-
-                        {/* Previous Week / Current Week Button (Working Time Mode) */}
-                        {attendanceWeekOffset === 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => handleWeekChange(-1)}
-                            disabled={isLoadingStats}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 border border-gray-200/80 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
-                            title="View previous week working hours"
-                          >
-                            <ChevronLeftIcon className="w-3.5 h-3.5 text-gray-500" />
-                            <span>Previous Week</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleWeekChange(0)}
-                            disabled={isLoadingStats}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
-                            title="Return to current week"
-                          >
-                            <span>Current Week</span>
-                            <ChevronRightIcon className="w-3.5 h-3.5 text-blue-600" />
-                          </button>
-                        )}
-                      </>
+                  {/* Welcome Info Content */}
+                  <div className="relative z-10 flex flex-col w-full pb-16 px-4 sm:px-5">
+                    <p className="text-xs font-bold text-blue-400 tracking-tight drop-shadow-sm uppercase">Welcome,</p>
+                    <h2 className="text-xl font-extrabold text-white tracking-tight leading-tight drop-shadow-md truncate">
+                      {profileName}
+                    </h2>
+                    <p className="text-xs font-semibold text-blue-300 mt-0.5 drop-shadow-sm truncate">
+                      {profileDesignation}
+                    </p>
+                    {profileDepartment && (
+                      <p className="text-[11px] text-white/80 mt-0.5 drop-shadow-sm truncate">
+                        {profileDepartment}
+                      </p>
                     )}
                   </div>
                 </div>
 
+                {/* Attendance with Faded Glassmorphism Overlap on Profile Card */}
+                <div className="-mt-14 relative z-20 bg-gradient-to-b from-white/85 via-white/95 to-white backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-3.5 flex flex-col justify-between">
+                  {renderAttendanceSection()}
+                </div>
               </div>
+
             </div>
           ) : null}
 

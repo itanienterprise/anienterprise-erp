@@ -420,18 +420,18 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
     <div className={`dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between ${className}`}>
       <div>
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-gray-100 min-h-[46px] gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 min-h-[46px] gap-2.5">
+          <div className="flex items-center justify-center sm:justify-start gap-2 text-center sm:text-left">
             <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 flex-shrink-0">
               <BanknotesIcon className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
-              <h2 className="text-sm font-bold text-gray-900 truncate">Bank Dollar Rates</h2>
-              <p className="text-[11px] text-gray-400 truncate">Prev vs Today Comparison</p>
+            <div>
+              <h2 className="text-sm font-bold text-gray-900 leading-tight">Bank Dollar Rates</h2>
+              <p className="text-[11px] text-gray-400">Prev vs Today Comparison</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center justify-center sm:justify-end gap-2 w-full sm:w-auto flex-shrink-0">
             {/* Filter pills: Up / Down */}
             <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
               {[
@@ -442,7 +442,7 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
                   key={f.id}
                   type="button"
                   onClick={() => setFilterType(filterType === f.id ? 'all' : f.id)}
-                  className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
                     filterType === f.id
                       ? 'bg-white text-indigo-700 shadow-xs font-bold'
                       : 'text-gray-500 hover:text-gray-800'
@@ -458,7 +458,7 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
             <button
               type="button"
               onClick={() => handleOpenSortModal('order')}
-              className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 hover:bg-indigo-50 text-gray-700 hover:text-indigo-600 rounded-lg text-[11px] font-semibold border border-gray-200/70 transition-all cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 hover:bg-indigo-50 text-gray-700 hover:text-indigo-600 rounded-lg text-[11px] font-semibold border border-gray-200/70 transition-all cursor-pointer shadow-2xs"
               title="Customize Bank Order or Rates"
             >
               <ArrowsUpDownIcon className="w-3.5 h-3.5" />
@@ -500,10 +500,10 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
             <>
               <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 select-none border-b border-gray-100 mb-1">
                 <span className="flex-1">Bank</span>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="w-14 text-right">Prev</span>
-                  <span className="w-16 text-right">Today</span>
-                  <span className="w-14 text-center">Change</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                  <span className="hidden sm:inline-block w-14 text-right">Prev</span>
+                  <span className="w-14 sm:w-16 text-right">Today</span>
+                  <span className="w-13 sm:w-14 text-center">Change</span>
                 </div>
               </div>
               {filteredRates.map((bank) => {
@@ -523,7 +523,7 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
                       <div className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-200/60 flex items-center justify-center flex-shrink-0 overflow-hidden p-0.5">
                         <BankLogo bankName={bank.bankName} className="w-full h-full object-contain" />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           {bank.sourceUrl ? (
                             <a
@@ -548,8 +548,8 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
                           )}
                         </div>
                         
-                        {/* Clean subtitle showing last dollar rate getting date */}
-                        <p className="text-[10px] text-gray-400 truncate">
+                        {/* Clean subtitle showing last dollar rate getting date & mobile prev rate */}
+                        <p className="text-[10px] text-gray-400 truncate flex items-center">
                           {formatRateDate(bank.rateDateDisplay || bank.rateDate) ? (
                             <span
                               className={currentRate != null ? 'text-gray-400' : 'text-amber-600 font-medium'}
@@ -562,26 +562,31 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
                           ) : (
                             '—'
                           )}
+                          {prevRate != null && !isNaN(prevRate) && (
+                            <span className="sm:hidden text-gray-500 font-medium ml-1.5 whitespace-nowrap">
+                              • Prev: ৳{Number(prevRate).toFixed(2)}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
 
-                    {/* Center & Right: Prev in its own column, Today in its own column, Change in its own column */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <div className="w-14 text-right tabular-nums">
+                    {/* Center & Right: Prev in its own column on desktop, Today in its own column, Change in its own column */}
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                      <div className="hidden sm:block w-14 text-right tabular-nums">
                         <span className="text-[11px] font-semibold text-gray-500 whitespace-nowrap">
                           {prevRate != null && !isNaN(prevRate) ? `৳${Number(prevRate).toFixed(2)}` : '—'}
                         </span>
                       </div>
 
-                      <div className="w-16 text-right tabular-nums">
+                      <div className="w-14 sm:w-16 text-right tabular-nums">
                         <span className="text-xs font-extrabold text-gray-900 whitespace-nowrap">
                           {currentRate != null && !isNaN(currentRate) ? `৳${Number(currentRate).toFixed(2)}` : '—'}
                         </span>
                       </div>
 
                       {/* Right: Increase / Decrease Symbol & Amount */}
-                      <div className="w-14 flex items-center justify-center flex-shrink-0">
+                      <div className="w-13 sm:w-14 flex items-center justify-center flex-shrink-0">
                         {currentRate != null && isUp && (
                           <span className="w-full inline-flex items-center justify-center gap-0.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs whitespace-nowrap">
                             <span>▲</span>
@@ -621,9 +626,9 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
       </div>
 
       {/* Footer */}
-      <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 flex-shrink-0 gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[11px] flex items-center gap-1 text-gray-500 truncate">
+      <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-500 flex-shrink-0 gap-2">
+        <div className="flex items-center justify-center sm:justify-start gap-2 w-full sm:w-auto">
+          <span className="text-[11px] flex items-center gap-1 text-gray-500">
             <span>Source:</span>
             <strong className="text-gray-700">Official Bank Portals</strong>
           </span>
@@ -638,7 +643,7 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
           </button>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center justify-center sm:justify-end gap-2 w-full sm:w-auto flex-shrink-0">
           {lastSyncTime && (
             <span className="text-[10px] text-gray-400">
               Synced {lastSyncTime}
@@ -1020,21 +1025,21 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
               </div>
             </div>
 
-            {/* Lines of 10 Banks Grid - No Scroll */}
-            <div className="p-3.5 sm:p-4 bg-white flex-1">
+            {/* Lines of 10 Banks Grid - No Scroll on desktop, scrollable on mobile */}
+            <div className="p-2 sm:p-4 bg-white flex-1 overflow-y-auto max-h-[75vh] sm:max-h-none sm:overflow-visible">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 items-start">
                 {chunksOfTen.map((chunk, chunkIdx) => (
                   <div
                     key={chunkIdx}
-                    className="flex flex-col space-y-1.5 bg-gray-50/70 p-2.5 rounded-2xl border border-gray-200/80"
+                    className="flex flex-col space-y-1.5 bg-gray-50/70 p-2 sm:p-2.5 rounded-2xl border border-gray-200/80"
                   >
                     {/* Column Table Header */}
-                    <div className="flex items-center justify-between px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 select-none border-b border-gray-200/60 pb-1 mb-0.5">
+                    <div className="flex items-center justify-between px-2.5 sm:px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 select-none border-b border-gray-200/60 pb-1 mb-0.5">
                       <span className="flex-1 pl-1">Bank</span>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="w-16 text-right">Prev</span>
-                        <span className="w-16 text-right">Today</span>
-                        <span className="w-14 text-center">Change</span>
+                      <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                        <span className="hidden sm:inline-block w-16 text-right">Prev</span>
+                        <span className="w-14 sm:w-16 text-right">Today</span>
+                        <span className="w-13 sm:w-14 text-center">Change</span>
                       </div>
                     </div>
 
@@ -1050,14 +1055,14 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
                       return (
                         <div
                           key={bank._id || bank.bankName}
-                          className="flex items-center justify-between px-3 py-2 rounded-xl border border-gray-100 hover:border-indigo-200 bg-white shadow-2xs hover:shadow-xs text-xs transition-all"
+                          className="flex items-center justify-between px-2 sm:px-3 py-2 rounded-xl border border-gray-100 hover:border-indigo-200 bg-white shadow-2xs hover:shadow-xs text-xs transition-all"
                         >
-                          {/* Left: Serial + Logo + Bank Name & Circular Date */}
-                          <div className="flex items-center gap-2 min-w-0 flex-1 pr-2.5">
-                            <span className="w-5.5 h-5.5 rounded-md bg-gray-100 text-gray-500 font-bold text-[11px] flex items-center justify-center flex-shrink-0">
+                          {/* Left: Serial + Logo + Bank Name & Subtitle */}
+                          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 pr-1.5 sm:pr-2.5">
+                            <span className="w-5 h-5 sm:w-5.5 sm:h-5.5 rounded-md bg-gray-100 text-gray-500 font-bold text-[10px] sm:text-[11px] flex items-center justify-center flex-shrink-0">
                               {serialNo}
                             </span>
-                            <div className="w-6 h-6 rounded-lg bg-gray-50 border border-gray-200/60 flex items-center justify-center flex-shrink-0 overflow-hidden p-0.5">
+                            <div className="w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-lg bg-gray-50 border border-gray-200/60 flex items-center justify-center flex-shrink-0 overflow-hidden p-0.5">
                               <BankLogo bankName={bank.bankName} className="w-full h-full object-contain" />
                             </div>
                             <div className="min-w-0 flex-1">
@@ -1084,7 +1089,7 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" title="Configured in company accounts"></span>
                                 )}
                               </div>
-                              <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                              <p className="text-[10px] text-gray-400 truncate mt-0.5 flex items-center">
                                 {formatRateDate(bank.rateDateDisplay || bank.rateDate) ? (
                                   <span
                                     className={currentRate != null ? 'text-gray-400' : 'text-amber-600 font-medium'}
@@ -1097,28 +1102,33 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
                                 ) : (
                                   '—'
                                 )}
+                                {prevRate != null && !isNaN(prevRate) && (
+                                  <span className="sm:hidden text-gray-500 font-medium ml-1.5 whitespace-nowrap">
+                                    • Prev: ৳{Number(prevRate).toFixed(2)}
+                                  </span>
+                                )}
                               </p>
                             </div>
                           </div>
 
-                          {/* Center & Right: Prev in its own column, Today in its own column, Change in its own column */}
-                          <div className="flex items-center gap-2 flex-shrink-0">
+                          {/* Center & Right: Prev in its own column on desktop, Today in its own column, Change in its own column */}
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                             {/* Prev Rate Column */}
-                            <div className="w-16 text-right tabular-nums">
+                            <div className="hidden sm:block w-16 text-right tabular-nums">
                               <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">
                                 {prevRate != null && !isNaN(prevRate) ? `৳${Number(prevRate).toFixed(2)}` : '—'}
                               </span>
                             </div>
 
                             {/* Today Rate Column */}
-                            <div className="w-16 text-right tabular-nums">
+                            <div className="w-14 sm:w-16 text-right tabular-nums">
                               <span className="text-xs sm:text-[13px] font-extrabold text-gray-900 whitespace-nowrap">
                                 {currentRate != null && !isNaN(currentRate) ? `৳${Number(currentRate).toFixed(2)}` : '—'}
                               </span>
                             </div>
 
                             {/* Change Badge Column */}
-                            <div className="w-14 flex items-center justify-center flex-shrink-0">
+                            <div className="w-13 sm:w-14 flex items-center justify-center flex-shrink-0">
                               {currentRate != null && isUp && (
                                 <span className="w-full inline-flex items-center justify-center gap-0.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs whitespace-nowrap">
                                   <span>▲</span>
