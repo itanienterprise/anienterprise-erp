@@ -14,6 +14,7 @@ import PaginationBar from '../../shared/PaginationBar';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { calculateStockData, isLcMatch, calculatePktRemainder, safeParse } from '../../../utils/stockHelpers';
+import '../Sale/SaleManagement.css';
 
 const getSafeString = (val) => {
     if (!val) return '';

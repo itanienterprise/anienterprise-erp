@@ -1660,6 +1660,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
         if (autoRefreshInterval > 0) {
             timerRef.current = setInterval(() => {
+                if (typeof document !== 'undefined' && document.hidden) return;
                 if (fetchLogsRef.current) {
                     fetchLogsRef.current(false);
                 }

@@ -20,6 +20,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { getCogNetBillBdt, isProductMatch, getLcMilestoneFinances } from '../../../utils/lcValueUtils';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { getSocket } from '../../../utils/socket';
+import './LCManagement.css';
 
 const gridColsClassMap = {
     1: 'md:grid-cols-1',
