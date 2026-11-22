@@ -580,14 +580,16 @@ const seedAdminUser = async () => {
   try {
     const userCount = await User.countDocuments();
     if (userCount === 0) {
-      const hashedPassword = await hashPassword('admin123');
+      const defaultUsername = process.env.DEFAULT_ADMIN_USERNAME || 'admin';
+      const defaultPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+      const hashedPassword = await hashPassword(defaultPassword);
       const adminUser = new User({
-        username: 'admin',
+        username: defaultUsername,
         password: hashedPassword,
         role: 'admin'
       });
       await adminUser.save();
-      console.log('Default admin user created successfully.');
+      console.log(`Default admin user (${defaultUsername}) created successfully.`);
     }
   } catch (error) {
     console.error('Error seeding admin user:', error);

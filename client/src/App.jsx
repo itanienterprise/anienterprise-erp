@@ -19,7 +19,7 @@ import IPManagement from './components/modules/IPManagement/IPManagement';
 import PI from './components/modules/PI/PI';
 import PackingList from './components/modules/PackingList/PackingList';
 import TRSetup from './components/modules/TRSetup/TRSetup';
-import { queryClient } from './utils/queryClient';
+import { queryClient, hydrateQueryCache, clearPersistentQueryCache } from './utils/queryClient';
 import { QUERY_KEYS } from './hooks/useQueries';
 import { getSocket } from './utils/socket';
 
@@ -230,6 +230,7 @@ function App() {
         localStorage.removeItem('isAuthenticated');
         localStorage.removeItem('rememberMe');
         localStorage.removeItem('erp_session_token');
+        clearPersistentQueryCache();
       } else if (msg.type === 'LOGIN') {
         if (msg.user) {
           setIsAuthenticated(true);
@@ -352,6 +353,9 @@ function App() {
       sessionStorage.removeItem('isAuthenticated');
       sessionStorage.removeItem('erp_session_token');
       sessionStorage.removeItem('erp_session_id');
+
+      // Purge secure encrypted offline cache
+      clearPersistentQueryCache();
 
       // Notify other open tabs of logout
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -764,6 +768,7 @@ function App() {
             localStorage.setItem('rememberMe', 'true');
             localStorage.setItem('isAuthenticated', 'true');
           }
+          hydrateQueryCache().catch(() => {});
         } else {
           setIsAuthenticated(false);
           setCurrentUser(null);
@@ -776,6 +781,7 @@ function App() {
           sessionStorage.removeItem('isAuthenticated');
           sessionStorage.removeItem('erp_session_token');
           sessionStorage.removeItem('erp_session_id');
+          clearPersistentQueryCache();
         }
       } catch (err) {
         if (!isCancelled) {
@@ -864,6 +870,7 @@ function App() {
       sessionStorage.removeItem('isAuthenticated');
       sessionStorage.removeItem('erp_session_token');
       sessionStorage.removeItem('erp_session_id');
+      clearPersistentQueryCache();
     };
     window.addEventListener('erp:auth_unauthorized', handleAuthUnauthorized);
     return () => window.removeEventListener('erp:auth_unauthorized', handleAuthUnauthorized);
@@ -2151,6 +2158,10 @@ function App() {
   };
 
   const fetchSales = async (preloadedData) => {
+    const cached = queryClient.getQueryData(QUERY_KEYS.sales);
+    if (cached && cached.length > 0 && salesRecords.length === 0) {
+      setSalesRecords(cached);
+    }
     try {
       if (Array.isArray(preloadedData)) {
         setSalesRecords(preloadedData);
@@ -2637,10 +2648,14 @@ function App() {
   };
 
   const fetchEmployees = async () => {
-    setIsLoading(true);
+    const cached = queryClient.getQueryData(QUERY_KEYS.employees);
+    if (!cached || cached.length === 0) {
+      setIsLoading(true);
+    }
     try {
-      await axios.get(`${API_BASE_URL}/api/employees`);
-      // Employees are fetched at the component level, but this keeps the pattern consistent
+      const res = await axios.get(`${API_BASE_URL}/api/employees`);
+      const data = Array.isArray(res.data) ? res.data : [];
+      queryClient.setQueryData(QUERY_KEYS.employees, data);
     } catch (error) {
       console.error('Error fetching employees:', error);
     } finally {
@@ -2649,10 +2664,17 @@ function App() {
   };
 
   const fetchCnFs = async () => {
-    setIsLoading(true);
+    const cached = queryClient.getQueryData(QUERY_KEYS.cnfs);
+    if (cached && cached.length > 0 && cnfs.length === 0) {
+      setCnfs(cached);
+    } else if (cnfs.length === 0) {
+      setIsLoading(true);
+    }
     try {
       const response = await axios.get(`${API_BASE_URL}/api/cnfs`);
-      setCnfs(Array.isArray(response.data) ? response.data : []);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setCnfs(data);
+      queryClient.setQueryData(QUERY_KEYS.cnfs, data);
     } catch (error) {
       console.error('Error fetching C&Fs:', error);
     } finally {
