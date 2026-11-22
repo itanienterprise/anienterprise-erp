@@ -939,21 +939,21 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
   return (
     <div className="space-y-6">
       {/* Top Banner / Header */}
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3.5 sm:gap-4 bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
         {/* Left: Title & Subtitle */}
         <div className="shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-              <ArrowLeftRightIcon className="w-6 h-6" />
+            <div className="p-2 sm:p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+              <ArrowLeftRightIcon className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
                 Fund Transfer
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                <span className="text-[10px] sm:text-xs font-semibold px-2 sm:px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                   Bank to Bank
                 </span>
               </h1>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 line-clamp-1 sm:line-clamp-none">
                 Transfer funds between company bank accounts with real-time balance ledger synchronization
               </p>
             </div>
@@ -962,14 +962,14 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
 
         {/* Center: Search Bar */}
         <div className="w-full lg:flex-1 lg:max-w-md mx-auto relative group">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+          <div className="absolute inset-y-0 left-0 pl-3 sm:pl-3.5 flex items-center pointer-events-none">
             <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
           </div>
           <input
             type="text"
             placeholder="Search by bank, account, ref no, remarks..."
             autoComplete="off"
-            className="h-10 block w-full pl-10 pr-9 bg-gray-50/80 border border-gray-200 rounded-xl text-xs sm:text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all shadow-xs"
+            className="h-9 sm:h-10 block w-full pl-9 sm:pl-10 pr-8 sm:pr-9 bg-gray-50/80 border border-gray-200 rounded-xl text-xs sm:text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all shadow-xs"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -985,104 +985,111 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
         </div>
 
         {/* Right: Filter, Report, New Transfer */}
-        <div className="flex items-center justify-end gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
           {/* Filter Button & Dropdown */}
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-initial">
             <button
               ref={filterButtonRef}
               type="button"
               onClick={() => setShowFilterPanel(prev => !prev)}
-              className={`h-10 flex items-center justify-center gap-1.5 px-3.5 rounded-xl border text-xs sm:text-sm font-semibold transition cursor-pointer active:scale-95 shadow-xs ${
+              className={`w-full sm:w-auto h-9 sm:h-10 flex items-center justify-center gap-1.5 px-3 sm:px-3.5 rounded-xl border text-xs sm:text-sm font-semibold transition cursor-pointer active:scale-95 shadow-xs ${
                 isFilterActive || showFilterPanel
                   ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-xs'
                   : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
               }`}
             >
-              <FunnelIcon className={`w-4 h-4 ${isFilterActive || showFilterPanel ? 'text-blue-600' : 'text-gray-400'}`} />
+              <FunnelIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFilterActive || showFilterPanel ? 'text-blue-600' : 'text-gray-400'}`} />
               <span>Filter</span>
               {isFilterActive && (
-                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse ml-0.5" />
+                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-blue-600 animate-pulse ml-0.5" />
               )}
             </button>
 
             {/* Filter Dropdown Panel */}
             {showFilterPanel && (
-              <div
-                ref={filterPanelRef}
-                className="absolute top-full right-0 mt-2 w-80 sm:w-96 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-150 text-left"
-              >
-                <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-                  <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                    <FunnelIcon className="w-4 h-4 text-blue-600" />
-                    Filter Fund Transfers
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={() => setShowFilterPanel(false)}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer"
-                  >
-                    <XIcon className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <CustomDatePicker
-                      label="Start Date"
-                      value={filters.startDate}
-                      onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                      compact={true}
-                    />
-                    <CustomDatePicker
-                      label="End Date"
-                      value={filters.endDate}
-                      onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                      compact={true}
-                    />
-                  </div>
-
-                  <SearchableFilterSelect
-                    label="Source (From) Bank"
-                    value={filters.fromBankName}
-                    onChange={(b) => setFilters(prev => ({ ...prev, fromBankName: b }))}
-                    options={registeredBankNames}
-                    placeholder="All Banks"
-                  />
-
-                  <SearchableFilterSelect
-                    label="Destination (To) Bank"
-                    value={filters.toBankName}
-                    onChange={(b) => setFilters(prev => ({ ...prev, toBankName: b }))}
-                    options={registeredBankNames}
-                    placeholder="All Banks"
-                  />
-
-                  <SearchableFilterSelect
-                    label="Transfer Mode"
-                    value={filters.transferType}
-                    onChange={(t) => setFilters(prev => ({ ...prev, transferType: t }))}
-                    options={TRANSFER_TYPES}
-                    placeholder="All Transfer Modes"
-                  />
-
-                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                    <button
-                      type="button"
-                      onClick={resetFilters}
-                      className="flex-1 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition cursor-pointer"
-                    >
-                      Reset
-                    </button>
+              <>
+                {/* Mobile backdrop */}
+                <div
+                  className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[2005] sm:hidden"
+                  onClick={() => setShowFilterPanel(false)}
+                />
+                <div
+                  ref={filterPanelRef}
+                  className="fixed inset-x-3.5 top-24 sm:absolute sm:inset-auto sm:top-full sm:left-auto sm:right-0 sm:mt-2 w-auto sm:w-96 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[2010] p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-200 text-left max-h-[calc(90vh-100px)] overflow-y-auto sm:overflow-visible"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                    <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                      <FunnelIcon className="w-4 h-4 text-blue-600" />
+                      Filter Fund Transfers
+                    </h4>
                     <button
                       type="button"
                       onClick={() => setShowFilterPanel(false)}
-                      className="flex-1 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition shadow-xs cursor-pointer"
+                      className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer"
                     >
-                      Apply
+                      <XIcon className="w-4 h-4" />
                     </button>
                   </div>
+
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <CustomDatePicker
+                        label="Start Date"
+                        value={filters.startDate}
+                        onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                        compact={true}
+                      />
+                      <CustomDatePicker
+                        label="End Date"
+                        value={filters.endDate}
+                        onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                        compact={true}
+                      />
+                    </div>
+
+                    <SearchableFilterSelect
+                      label="Source (From) Bank"
+                      value={filters.fromBankName}
+                      onChange={(b) => setFilters(prev => ({ ...prev, fromBankName: b }))}
+                      options={registeredBankNames}
+                      placeholder="All Banks"
+                    />
+
+                    <SearchableFilterSelect
+                      label="Destination (To) Bank"
+                      value={filters.toBankName}
+                      onChange={(b) => setFilters(prev => ({ ...prev, toBankName: b }))}
+                      options={registeredBankNames}
+                      placeholder="All Banks"
+                    />
+
+                    <SearchableFilterSelect
+                      label="Transfer Mode"
+                      value={filters.transferType}
+                      onChange={(t) => setFilters(prev => ({ ...prev, transferType: t }))}
+                      options={TRANSFER_TYPES}
+                      placeholder="All Transfer Modes"
+                    />
+
+                    <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={resetFilters}
+                        className="flex-1 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowFilterPanel(false)}
+                        className="flex-1 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition shadow-xs cursor-pointer"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
 
@@ -1090,9 +1097,9 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
           <button
             type="button"
             onClick={() => setShowReportFormatModal(true)}
-            className="h-10 flex items-center justify-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 text-xs sm:text-sm transition-all active:scale-95 cursor-pointer"
+            className="flex-1 sm:flex-initial h-9 sm:h-10 flex items-center justify-center gap-1.5 px-3 sm:px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 text-xs sm:text-sm transition-all active:scale-95 cursor-pointer whitespace-nowrap"
           >
-            <BarChartIcon className="w-4 h-4" />
+            <BarChartIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span>Report</span>
           </button>
 
@@ -1101,9 +1108,9 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
             <button
               type="button"
               onClick={openAddModal}
-              className="h-10 flex items-center justify-center gap-1.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition shadow-sm shadow-blue-500/20 active:scale-[0.98] cursor-pointer"
+              className="flex-1 sm:flex-initial h-9 sm:h-10 flex items-center justify-center gap-1.5 px-3 sm:px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition shadow-sm shadow-blue-500/20 active:scale-[0.98] cursor-pointer whitespace-nowrap"
             >
-              <PlusIcon className="w-4 h-4" />
+              <PlusIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span>New Transfer</span>
             </button>
           )}
@@ -1111,60 +1118,60 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         {/* Total Transfers Amount */}
-        <div className="bg-white p-4.5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Total Transferred</span>
-            <div className="text-xl font-bold text-gray-900 mt-1">
+        <div className="bg-white p-3 sm:p-4.5 rounded-xl sm:rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+          <div className="min-w-0 pr-1 sm:pr-2">
+            <span className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider block truncate">Total Transferred</span>
+            <div className="text-base sm:text-xl font-bold text-gray-900 mt-0.5 sm:mt-1 truncate">
               ৳{stats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">{stats.totalCount} total transfers</span>
+            <span className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 block truncate">{stats.totalCount} total transfers</span>
           </div>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-            <DollarSignIcon className="w-6 h-6" />
+          <div className="p-2 sm:p-3 bg-blue-50 text-blue-600 rounded-lg sm:rounded-xl shrink-0">
+            <DollarSignIcon className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* This Month's Transfers */}
-        <div className="bg-white p-4.5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">This Month</span>
-            <div className="text-xl font-bold text-blue-600 mt-1">
+        <div className="bg-white p-3 sm:p-4.5 rounded-xl sm:rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+          <div className="min-w-0 pr-1 sm:pr-2">
+            <span className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider block truncate">This Month</span>
+            <div className="text-base sm:text-xl font-bold text-blue-600 mt-0.5 sm:mt-1 truncate">
               ৳{stats.thisMonthAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">{stats.thisMonthCount} transfers recorded</span>
+            <span className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 block truncate">{stats.thisMonthCount} transfers</span>
           </div>
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-            <CalendarIcon className="w-6 h-6" />
+          <div className="p-2 sm:p-3 bg-indigo-50 text-indigo-600 rounded-lg sm:rounded-xl shrink-0">
+            <CalendarIcon className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Today's Transfers */}
-        <div className="bg-white p-4.5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Today</span>
-            <div className="text-xl font-bold text-emerald-600 mt-1">
+        <div className="bg-white p-3 sm:p-4.5 rounded-xl sm:rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+          <div className="min-w-0 pr-1 sm:pr-2">
+            <span className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider block truncate">Today</span>
+            <div className="text-base sm:text-xl font-bold text-emerald-600 mt-0.5 sm:mt-1 truncate">
               ৳{stats.todayAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">{stats.todayCount} transfers today</span>
+            <span className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 block truncate">{stats.todayCount} transfers today</span>
           </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-            <ArrowLeftRightIcon className="w-6 h-6" />
+          <div className="p-2 sm:p-3 bg-emerald-50 text-emerald-600 rounded-lg sm:rounded-xl shrink-0">
+            <ArrowLeftRightIcon className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Registered Banks */}
-        <div className="bg-white p-4.5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Registered Banks</span>
-            <div className="text-xl font-bold text-gray-900 mt-1">
+        <div className="bg-white p-3 sm:p-4.5 rounded-xl sm:rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+          <div className="min-w-0 pr-1 sm:pr-2">
+            <span className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider block truncate">Registered Banks</span>
+            <div className="text-base sm:text-xl font-bold text-gray-900 mt-0.5 sm:mt-1 truncate">
               {registeredBankNames.length} Banks
             </div>
-            <span className="text-[11px] text-gray-400 mt-0.5 block">Active bank accounts</span>
+            <span className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 block truncate">Active accounts</span>
           </div>
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-            <BuildingIcon className="w-6 h-6" />
+          <div className="p-2 sm:p-3 bg-amber-50 text-amber-600 rounded-lg sm:rounded-xl shrink-0">
+            <BuildingIcon className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
         </div>
       </div>
@@ -1324,57 +1331,96 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
         {/* Mobile Cards View */}
         <div className="block md:hidden divide-y divide-gray-100">
           {isLoading ? (
-            <div className="py-8 text-center text-gray-400 text-xs">
-              Loading fund transfers...
+            <div className="py-8 text-center text-gray-400 text-xs flex flex-col items-center justify-center gap-2">
+              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <span>Loading fund transfers...</span>
             </div>
           ) : filteredTransfers.length === 0 ? (
-            <div className="py-8 text-center text-gray-400 text-xs">
-              No fund transfers found
+            <div className="py-8 text-center text-gray-400 text-xs flex flex-col items-center justify-center gap-2">
+              <ArrowLeftRightIcon className="w-7 h-7 text-gray-300" />
+              <p className="font-semibold text-gray-600">No fund transfers found</p>
+              <p className="text-[11px] text-gray-400">
+                {isFilterActive || searchQuery ? 'Try adjusting your search or filters' : 'Tap "+ New Transfer" to record one'}
+              </p>
             </div>
           ) : (
             filteredTransfers.map((ft, idx) => (
               <div
                 key={ft._id || idx}
-                className="p-4 space-y-3 hover:bg-gray-50/80 transition"
+                className="p-3.5 space-y-2.5 hover:bg-gray-50/80 transition active:bg-gray-100/60 cursor-pointer"
                 onClick={() => setViewingTransfer(ft)}
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-500">
-                    {formatDate(ft.date || ft.transferDate || ft.createdAt)}
-                  </span>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                {/* Card Top: Date & Mode & Ref */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-bold text-gray-800">
+                      {formatDate(ft.date || ft.transferDate || ft.createdAt)}
+                    </span>
+                    {ft.referenceNo && (
+                      <span className="text-[10px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded truncate max-w-[120px]">
+                        #{ft.referenceNo}
+                      </span>
+                    )}
+                  </div>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
                     {ft.transferType || 'Online Banking'}
                   </span>
                 </div>
 
-                {/* Transfer route summary */}
-                <div className="bg-gray-50 p-3 rounded-xl space-y-2 border border-gray-100">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-400 font-semibold uppercase text-[10px]">From:</span>
-                    <span className="font-bold text-gray-900">{ft.fromBankName} ({ft.fromAccountNo || 'A/C'})</span>
+                {/* Transfer route summary with Bank Logos */}
+                <div className="bg-gray-50/90 p-2.5 rounded-xl space-y-1.5 border border-gray-200/60">
+                  {/* From Bank */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-1.5 w-14 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                      <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">From:</span>
+                    </div>
+                    <BankLogo bankName={ft.fromBankName} className="w-5 h-5 rounded shrink-0 shadow-2xs" />
+                    <span className="font-bold text-gray-900 text-xs truncate">{ft.fromBankName}</span>
+                    <span className="text-[10px] font-mono text-gray-500 truncate ml-auto shrink-0">
+                      {ft.fromAccountNo ? `A/C ${ft.fromAccountNo}` : ''}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-center">
-                    <ArrowLeftRightIcon className="w-4 h-4 text-blue-500" />
+
+                  {/* Flow Arrow aligned under bank logos */}
+                  <div className="flex items-center gap-2 -my-0.5">
+                    <div className="w-14 shrink-0" />
+                    <div className="w-5 flex justify-center items-center shrink-0">
+                      <div className="w-4 h-4 rounded-full bg-blue-100/80 text-blue-600 flex items-center justify-center">
+                        <ArrowRightIcon className="w-2.5 h-2.5 rotate-90" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-400 font-semibold uppercase text-[10px]">To:</span>
-                    <span className="font-bold text-gray-900">{ft.toBankName} ({ft.toAccountNo || 'A/C'})</span>
+
+                  {/* To Bank */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-1.5 w-14 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">To:</span>
+                    </div>
+                    <BankLogo bankName={ft.toBankName} className="w-5 h-5 rounded shrink-0 shadow-2xs" />
+                    <span className="font-bold text-gray-900 text-xs truncate">{ft.toBankName}</span>
+                    <span className="text-[10px] font-mono text-gray-500 truncate ml-auto shrink-0">
+                      {ft.toAccountNo ? `A/C ${ft.toAccountNo}` : ''}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
+                {/* Card Bottom: Amount & Actions */}
+                <div className="flex items-center justify-between pt-0.5">
                   <div>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Amount</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Transferred Amount</span>
                     <span className="font-extrabold text-blue-600 text-base">
                       ৳{Number(ft.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={() => setViewingTransfer(ft)}
-                      className="p-1.5 text-gray-500 hover:text-blue-600 rounded-lg hover:bg-gray-100"
+                      title="View Voucher"
+                      className="p-1.5 text-gray-500 hover:text-blue-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
                     >
                       <EyeIcon className="w-4 h-4" />
                     </button>
@@ -1382,7 +1428,8 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                       <button
                         type="button"
                         onClick={() => openEditModal(ft)}
-                        className="p-1.5 text-gray-500 hover:text-amber-600 rounded-lg hover:bg-gray-100"
+                        title="Edit Transfer"
+                        className="p-1.5 text-gray-500 hover:text-amber-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
                       >
                         <EditIcon className="w-4 h-4" />
                       </button>
@@ -1391,7 +1438,8 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                       <button
                         type="button"
                         onClick={() => handleDeleteTransfer(ft._id)}
-                        className="p-1.5 text-gray-500 hover:text-rose-600 rounded-lg hover:bg-gray-100"
+                        title="Delete Transfer"
+                        className="p-1.5 text-gray-500 hover:text-rose-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
                       >
                         <TrashIcon className="w-4 h-4" />
                       </button>
@@ -1413,10 +1461,10 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
             onClick={() => { if (!isSubmitting) { setShowModal(false); resetForm(); } }}
           />
 
-          {/* Modal Dialog Card (Compact, zero-scroll layout) */}
-          <div className="relative bg-white rounded-2xl w-full max-w-4xl shadow-2xl border border-gray-100 flex flex-col z-10 my-auto animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="px-5 py-3 bg-gray-50/90 border-b border-gray-100 flex items-center justify-between shrink-0 rounded-t-2xl">
+          {/* Modal Dialog Card (Responsive bounded modal with pinned header and footer) */}
+          <div className="relative bg-white rounded-2xl w-full max-w-4xl shadow-2xl border border-gray-100 flex flex-col z-10 max-h-[76vh] sm:max-h-[88vh] overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header - Pinned at top */}
+            <div className="px-4 sm:px-5 py-2.5 sm:py-3 bg-gray-50/90 border-b border-gray-100 flex items-center justify-between shrink-0 rounded-t-2xl">
               <div className="flex items-center gap-2.5">
                 <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
                   <ArrowLeftRightIcon className="w-4 h-4" />
@@ -1439,222 +1487,224 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
               </button>
             </div>
 
-            {/* Modal Form - Compact grid without scroll */}
-            <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3.5">
-              {/* Row 1: Date, Mode, Amount, Reference # in 4 columns */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <CustomDatePicker
-                  label="Transfer Date"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  required
-                  compact={true}
-                />
+            {/* Modal Form - Scrollable body with pinned footer */}
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden min-h-0">
+              <div className="p-3.5 sm:p-5 space-y-3 sm:space-y-3.5 overflow-y-auto overscroll-contain flex-1 min-h-0">
+                {/* Row 1: Date, Mode, Amount, Reference # in 4 columns */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <CustomDatePicker
+                    label="Transfer Date"
+                    value={formData.date}
+                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                    required
+                    compact={true}
+                  />
 
-                <div>
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                    Transfer Mode
-                  </label>
-                  <select
-                    value={formData.transferType}
-                    onChange={(e) => setFormData(prev => ({ ...prev, transferType: e.target.value }))}
-                    className="w-full h-9 px-2.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  >
-                    {TRANSFER_TYPES.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
+                      Transfer Mode
+                    </label>
+                    <select
+                      value={formData.transferType}
+                      onChange={(e) => setFormData(prev => ({ ...prev, transferType: e.target.value }))}
+                      className="w-full h-9 px-2.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    >
+                      {TRANSFER_TYPES.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div>
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                    Amount (৳) *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">৳</span>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
+                      Amount (৳) *
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">৳</span>
+                      <input
+                        type="number"
+                        step="any"
+                        required
+                        min="0.01"
+                        value={formData.amount}
+                        onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                        placeholder="0.00"
+                        className="w-full h-9 pl-6 pr-2.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs sm:text-sm font-bold text-blue-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
+                      Ref / Cheque #
+                    </label>
                     <input
-                      type="number"
-                      step="any"
-                      required
-                      min="0.01"
-                      value={formData.amount}
-                      onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                      placeholder="0.00"
-                      className="w-full h-9 pl-6 pr-2.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs sm:text-sm font-bold text-blue-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      type="text"
+                      value={formData.referenceNo}
+                      onChange={(e) => setFormData(prev => ({ ...prev, referenceNo: e.target.value }))}
+                      placeholder="e.g. TR-20261101"
+                      className="w-full h-9 px-2.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-mono outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                    Ref / Cheque #
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.referenceNo}
-                    onChange={(e) => setFormData(prev => ({ ...prev, referenceNo: e.target.value }))}
-                    placeholder="e.g. TR-20261101"
-                    className="w-full h-9 px-2.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-mono outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
-                  />
+                {/* Row 2: Side-by-Side Source (From) & Destination (To) Boxes */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Source Account Box (From) */}
+                  <div className="p-3 bg-rose-50/40 rounded-xl border border-rose-100 space-y-2">
+                    <div className="flex items-center gap-1.5 text-rose-700 font-bold text-[11px] uppercase tracking-wider">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      <span>Source Account (From - Debit)</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <SearchableFilterSelect
+                        label="From Bank *"
+                        value={formData.fromBankName}
+                        onChange={handleFromBankChange}
+                        options={registeredBankNames}
+                        placeholder="Select Bank"
+                        required
+                        inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-rose-500/20"
+                      />
+
+                      <SearchableFilterSelect
+                        label="Account No *"
+                        value={formData.fromAccountNo}
+                        onChange={handleFromAccountChange}
+                        options={fromAvailableAccounts.map(b => ({
+                          value: b.accountNo,
+                          label: b.accountNo || '(No Account No)',
+                          sublabel: [b.branch, b.accountName].filter(Boolean).join(' • ')
+                        }))}
+                        placeholder={formData.fromBankName ? "Select Account No" : "Select bank first"}
+                        required
+                        inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold text-gray-900 outline-none focus:ring-2 focus:ring-rose-500/20"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
+                          Account Name
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.fromAccountName}
+                          onChange={(e) => setFormData(prev => ({ ...prev, fromAccountName: e.target.value }))}
+                          placeholder="Auto-filled Account Name"
+                          className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-rose-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
+                          Branch
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.fromBranch}
+                          onChange={(e) => setFormData(prev => ({ ...prev, fromBranch: e.target.value }))}
+                          placeholder="Auto-filled Branch"
+                          className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-rose-500/20"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Destination Account Box (To) */}
+                  <div className="p-3 bg-emerald-50/40 rounded-xl border border-emerald-100 space-y-2">
+                    <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[11px] uppercase tracking-wider">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span>Destination Account (To - Credit)</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <SearchableFilterSelect
+                        label="To Bank *"
+                        value={formData.toBankName}
+                        onChange={handleToBankChange}
+                        options={registeredBankNames}
+                        placeholder="Select Bank"
+                        required
+                        inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+
+                      <SearchableFilterSelect
+                        label="Account No *"
+                        value={formData.toAccountNo}
+                        onChange={handleToAccountChange}
+                        options={toAvailableAccounts.map(b => ({
+                          value: b.accountNo,
+                          label: b.accountNo || '(No Account No)',
+                          sublabel: [b.branch, b.accountName].filter(Boolean).join(' • ')
+                        }))}
+                        placeholder={formData.toBankName ? "Select Account No" : "Select bank first"}
+                        required
+                        inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold text-gray-900 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
+                          Account Name
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.toAccountName}
+                          onChange={(e) => setFormData(prev => ({ ...prev, toAccountName: e.target.value }))}
+                          placeholder="Auto-filled Account Name"
+                          className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
+                          Branch
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.toBranch}
+                          onChange={(e) => setFormData(prev => ({ ...prev, toBranch: e.target.value }))}
+                          placeholder="Auto-filled Branch"
+                          className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 3: Transferred By & Remarks in 2 columns */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
+                      Transferred By / Authorized By
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.transferredBy}
+                      onChange={(e) => setFormData(prev => ({ ...prev, transferredBy: e.target.value }))}
+                      placeholder="Officer / Manager name"
+                      className="w-full h-9 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
+                      Remarks / Purpose
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.remarks}
+                      onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                      placeholder="Purpose of fund transfer..."
+                      className="w-full h-9 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Row 2: Side-by-Side Source (From) & Destination (To) Boxes */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Source Account Box (From) */}
-                <div className="p-3 bg-rose-50/40 rounded-xl border border-rose-100 space-y-2">
-                  <div className="flex items-center gap-1.5 text-rose-700 font-bold text-[11px] uppercase tracking-wider">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                    <span>Source Account (From - Debit)</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <SearchableFilterSelect
-                      label="From Bank *"
-                      value={formData.fromBankName}
-                      onChange={handleFromBankChange}
-                      options={registeredBankNames}
-                      placeholder="Select Bank"
-                      required
-                      inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-rose-500/20"
-                    />
-
-                    <SearchableFilterSelect
-                      label="Account No *"
-                      value={formData.fromAccountNo}
-                      onChange={handleFromAccountChange}
-                      options={fromAvailableAccounts.map(b => ({
-                        value: b.accountNo,
-                        label: b.accountNo || '(No Account No)',
-                        sublabel: [b.branch, b.accountName].filter(Boolean).join(' • ')
-                      }))}
-                      placeholder={formData.fromBankName ? "Select Account No" : "Select bank first"}
-                      required
-                      inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold text-gray-900 outline-none focus:ring-2 focus:ring-rose-500/20"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
-                        Account Name
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.fromAccountName}
-                        onChange={(e) => setFormData(prev => ({ ...prev, fromAccountName: e.target.value }))}
-                        placeholder="Auto-filled Account Name"
-                        className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-rose-500/20"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
-                        Branch
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.fromBranch}
-                        onChange={(e) => setFormData(prev => ({ ...prev, fromBranch: e.target.value }))}
-                        placeholder="Auto-filled Branch"
-                        className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-rose-500/20"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Destination Account Box (To) */}
-                <div className="p-3 bg-emerald-50/40 rounded-xl border border-emerald-100 space-y-2">
-                  <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[11px] uppercase tracking-wider">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>Destination Account (To - Credit)</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <SearchableFilterSelect
-                      label="To Bank *"
-                      value={formData.toBankName}
-                      onChange={handleToBankChange}
-                      options={registeredBankNames}
-                      placeholder="Select Bank"
-                      required
-                      inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    />
-
-                    <SearchableFilterSelect
-                      label="Account No *"
-                      value={formData.toAccountNo}
-                      onChange={handleToAccountChange}
-                      options={toAvailableAccounts.map(b => ({
-                        value: b.accountNo,
-                        label: b.accountNo || '(No Account No)',
-                        sublabel: [b.branch, b.accountName].filter(Boolean).join(' • ')
-                      }))}
-                      placeholder={formData.toBankName ? "Select Account No" : "Select bank first"}
-                      required
-                      inputClassName="w-full h-8.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold text-gray-900 outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
-                        Account Name
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.toAccountName}
-                        onChange={(e) => setFormData(prev => ({ ...prev, toAccountName: e.target.value }))}
-                        placeholder="Auto-filled Account Name"
-                        className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-0.5">
-                        Branch
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.toBranch}
-                        onChange={(e) => setFormData(prev => ({ ...prev, toBranch: e.target.value }))}
-                        placeholder="Auto-filled Branch"
-                        className="w-full h-8 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 3: Transferred By & Remarks in 2 columns */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                    Transferred By / Authorized By
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.transferredBy}
-                    onChange={(e) => setFormData(prev => ({ ...prev, transferredBy: e.target.value }))}
-                    placeholder="Officer / Manager name"
-                    className="w-full h-9 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5 mb-1">
-                    Remarks / Purpose
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.remarks}
-                    onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
-                    placeholder="Purpose of fund transfer..."
-                    className="w-full h-9 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-              </div>
-
-              {/* Submit Buttons Bar */}
-              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
+              {/* Submit Buttons Bar - Pinned at bottom */}
+              <div className="px-4 sm:px-5 py-2.5 sm:py-3 bg-gray-50/90 border-t border-gray-100 flex items-center justify-end gap-2.5 shrink-0 rounded-b-2xl">
                 <button
                   type="button"
                   onClick={() => { setShowModal(false); resetForm(); }}
@@ -1685,7 +1735,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
 
       {/* Viewing Transfer Voucher Modal */}
       {viewingTransfer && typeof document !== 'undefined' && document.body && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4">
           {/* Full Screen Backdrop */}
           <div
             className="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
@@ -1693,9 +1743,9 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
           />
 
           {/* Dialog Card */}
-          <div className="relative bg-white rounded-2xl w-full max-w-xl shadow-2xl border border-gray-100 overflow-hidden z-10 my-auto animate-in zoom-in-95 duration-200">
+          <div className="relative bg-white rounded-2xl w-full max-w-xl shadow-2xl border border-gray-100 overflow-hidden z-10 max-h-[76vh] sm:max-h-[88vh] flex flex-col animate-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
                   <FileTextIcon className="w-5 h-5" />
@@ -1727,7 +1777,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
             </div>
 
             {/* Voucher Body */}
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1 min-h-0">
               {/* Amount Highlight */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
                 <div>
@@ -1811,7 +1861,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+            <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between shrink-0">
               <span className="text-[11px] text-gray-400">
                 ID: <span className="font-mono">{viewingTransfer._id}</span>
               </span>
