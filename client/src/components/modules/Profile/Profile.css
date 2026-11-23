@@ -22,8 +22,13 @@
 }
 
 @keyframes profile-fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 @keyframes profile-zoom {
@@ -31,6 +36,7 @@
         opacity: 0;
         transform: scale(0.92) translateY(16px);
     }
+
     to {
         opacity: 1;
         transform: scale(1) translateY(0);
@@ -48,7 +54,7 @@
     background: #0f172a;
     border-radius: 44px;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 
+    box-shadow:
         0 35px 80px -15px rgba(0, 0, 0, 0.75),
         0 15px 35px -8px rgba(0, 0, 0, 0.4);
     overflow: hidden;
@@ -117,15 +123,13 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(
-        180deg,
-        rgba(0, 0, 0, 0.25) 0%,
-        rgba(0, 0, 0, 0.02) 25%,
-        rgba(15, 23, 42, 0.2) 45%,
-        rgba(15, 23, 42, 0.65) 65%,
-        rgba(15, 23, 42, 0.92) 85%,
-        rgba(15, 23, 42, 0.98) 100%
-    );
+    background: linear-gradient(180deg,
+            rgba(0, 0, 0, 0.25) 0%,
+            rgba(0, 0, 0, 0.02) 25%,
+            rgba(15, 23, 42, 0.2) 45%,
+            rgba(15, 23, 42, 0.65) 65%,
+            rgba(15, 23, 42, 0.92) 85%,
+            rgba(15, 23, 42, 0.98) 100%);
 }
 
 /* ─── Top Floating Action Bar ─────────────────────────────────────────── */
@@ -210,8 +214,15 @@
 }
 
 @keyframes profile-toast-in {
-    from { opacity: 0; transform: translate(-50%, -6px); }
-    to { opacity: 1; transform: translate(-50%, 0); }
+    from {
+        opacity: 0;
+        transform: translate(-50%, -6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
 }
 
 /* ─── Bottom Information Section ─────────────────────────────────────── */
@@ -566,7 +577,7 @@
     transition: all 0.2s;
 }
 
-.profile-edit-group > input.profile-drawer-input {
+.profile-edit-group>input.profile-drawer-input {
     padding-left: 0.75rem;
 }
 
@@ -677,7 +688,9 @@
 }
 
 @keyframes profile-spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* ─── Crop / Reposition Modal ─────────────────────────────────────────── */
@@ -890,23 +903,36 @@
 
 /* ── Notification deep-link row highlight ─────────────────── */
 @keyframes notif-cell-glow {
-    0%   { background-color: #fde047 !important; color: #000000 !important; }
-    20%  { background-color: #fef08a !important; color: #000000 !important; }
-    60%  { background-color: #fef9c3 !important; }
-    100% { background-color: transparent !important; }
+    0% {
+        background-color: #fde047 !important;
+        color: #000000 !important;
+    }
+
+    20% {
+        background-color: #fef08a !important;
+        color: #000000 !important;
+    }
+
+    60% {
+        background-color: #fef9c3 !important;
+    }
+
+    100% {
+        background-color: transparent !important;
+    }
 }
 
 .notif-row-highlight {
     animation: notif-cell-glow 4.5s ease-out forwards !important;
 }
 
-.notif-row-highlight > td,
-.notif-row-highlight > th {
+.notif-row-highlight>td,
+.notif-row-highlight>th {
     animation: notif-cell-glow 4.5s ease-out forwards !important;
     transition: none !important;
 }
 
-.notif-row-highlight > td:first-child,
-.notif-row-highlight > th:first-child {
+.notif-row-highlight>td:first-child,
+.notif-row-highlight>th:first-child {
     border-left: 4px solid #eab308 !important;
 }
