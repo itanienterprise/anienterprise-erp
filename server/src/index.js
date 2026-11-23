@@ -10365,6 +10365,7 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
 
   let newInserted = 0;
   let skippedDuplicates = 0;
+  const newlyInsertedDates = new Set();
   const BATCH_SIZE = 500;
 
   for (let i = 0; i < validPunches.length; i += BATCH_SIZE) {
@@ -10452,6 +10453,12 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
     if (toInsert.length > 0) {
       await AttendancePunch.insertMany(toInsert, { ordered: false });
       newInserted += toInsert.length;
+      for (const item of toInsert) {
+        try {
+          const dStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(item.punchTime);
+          newlyInsertedDates.add(dStr);
+        } catch (_) { }
+      }
       try {
         broadcastUpdate('attendance', 'punch_created', { count: toInsert.length });
       } catch (_) { }
@@ -10463,15 +10470,25 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
     return { newInserted: 0, skippedDuplicates };
   }
 
-  // Auto-process today's attendance logs ONLY when new punches were actually inserted
+  // Auto-process attendance logs for all affected dates (prioritizing recent dates)
   try {
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
-    await processAttendanceForDate(todayStr);
+    newlyInsertedDates.add(todayStr);
+
+    // Auto-process up to the 31 most recent affected dates
+    const datesToProcess = Array.from(newlyInsertedDates).sort().reverse().slice(0, 31);
+    for (const d of datesToProcess) {
+      await processAttendanceForDate(d, false);
+    }
+    console.log(`[Attendance] Auto-processed daily attendance for ${datesToProcess.length} date(s) (including ${todayStr}).`);
+    try {
+      broadcastUpdate('attendance', 'logs_processed', { dates: datesToProcess });
+    } catch (_) { }
   } catch (err) {
-    console.warn('[Attendance] Auto-process today warning:', err.message);
+    console.warn('[Attendance] Auto-process attendance warning:', err.message);
   }
 
-  return { newInserted, skippedDuplicates };
+  return { newInserted, skippedDuplicates, processedDates: Array.from(newlyInsertedDates).slice(0, 31) };
 }
 
 // ─── Persistent ZKTeco Live Connection Manager ───────────────────────────────
