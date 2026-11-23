@@ -10853,7 +10853,7 @@ const ZKLib = require('node-zklib');
 const axios = require('axios');
 
 // Configuration
-const DEVICE_IP     = process.env.DEVICE_IP || '192.168.1.201';
+const DEVICE_IP     = process.env.DEVICE_IP || '192.168.0.74';
 const DEVICE_PORT   = parseInt(process.env.DEVICE_PORT || '4370');
 const ERP_SERVER_URL= process.env.ERP_SERVER_URL || '${proto}://${host}';
 const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL || '60'); // in seconds
