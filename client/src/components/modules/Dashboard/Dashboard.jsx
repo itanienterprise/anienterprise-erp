@@ -1749,7 +1749,7 @@ const Dashboard = ({
                   <div className="absolute inset-x-0 bottom-0 h-60 pointer-events-none bg-gradient-to-t from-slate-950 via-slate-950/80 via-60% to-transparent"></div>
 
                   {/* Welcome Info Content */}
-                  <div className="relative z-10 flex flex-col w-full pb-16 px-4 sm:px-5">
+                  <div className="relative z-10 flex flex-col w-full pb-4 px-4 sm:px-5">
                     <p className="text-xs font-bold text-blue-400 tracking-tight drop-shadow-sm uppercase">Welcome,</p>
                     <h2 className="text-xl font-extrabold text-white tracking-tight leading-tight drop-shadow-md truncate">
                       {profileName}
@@ -1765,8 +1765,8 @@ const Dashboard = ({
                   </div>
                 </div>
 
-                {/* Attendance with Faded Glassmorphism Overlap on Profile Card */}
-                <div className="-mt-14 relative z-20 bg-gradient-to-b from-white/85 via-white/95 to-white backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-3.5 flex flex-col justify-between">
+                {/* Attendance Card */}
+                <div className="mt-4 relative bg-white rounded-2xl border border-gray-100 shadow-xs p-3.5 flex flex-col justify-between">
                   {renderAttendanceSection()}
                 </div>
               </div>
