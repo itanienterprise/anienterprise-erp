@@ -483,14 +483,22 @@ const Attendance = ({ currentUser }) => {
   // Real-time synchronization via Socket.IO
   useEffect(() => {
     const socket = getSocket();
-    const handleRealtimeUpdate = (data) => {
-      const mod = (data?.module || '').toLowerCase().trim();
-      if (!mod || ['attendance', 'attendances', 'all'].includes(mod)) {
+    let debounceTimer = null;
+    const triggerDebouncedFetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
         fetchSummary(true);
         fetchLive(true);
         if (activeTab === 'logs') fetchLogs(true);
         if (activeTab === 'punches') fetchPunches(true);
         if (activeTab === 'device') fetchUnmappedEnrolls(true);
+      }, 750);
+    };
+
+    const handleRealtimeUpdate = (data) => {
+      const mod = (data?.module || '').toLowerCase().trim();
+      if (!mod || ['attendance', 'attendances', 'all'].includes(mod)) {
+        triggerDebouncedFetch();
       }
     };
 
@@ -498,19 +506,25 @@ const Attendance = ({ currentUser }) => {
       if (st) setDeviceLiveStatus(st);
     };
 
+    let lastBulkToastAt = 0;
     const handleLivePunch = (p) => {
-      fetchSummary(true);
-      fetchLive(true);
-      if (activeTab === 'logs') fetchLogs(true);
-      if (activeTab === 'punches') fetchPunches(true);
+      triggerDebouncedFetch();
       if (p && p.message) {
+        const now = Date.now();
+        // If bulk historical sync, throttle toast notifications so UI doesn't flicker
+        if (p.isBulk && (now - lastBulkToastAt) < 3500) {
+          return;
+        }
+        if (p.isBulk) lastBulkToastAt = now;
+
         setLivePunchToast({
           message: p.message,
           employeeName: p.employeeName,
           punchTime: p.punchTime || new Date(),
+          isBulk: !!p.isBulk,
           id: Date.now()
         });
-        setTimeout(() => setLivePunchToast(null), 6000);
+        setTimeout(() => setLivePunchToast(null), p.isBulk ? 3500 : 6000);
       }
     };
 
@@ -523,6 +537,7 @@ const Attendance = ({ currentUser }) => {
     window.addEventListener('erp_data_updated', onCustomEvent);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       if (socket) {
         socket.off('data_updated', handleRealtimeUpdate);
         socket.off('zk_device_status', handleDeviceStatus);
@@ -749,7 +764,7 @@ const Attendance = ({ currentUser }) => {
           top: 24,
           right: 24,
           zIndex: 9999,
-          background: '#065f46',
+          background: livePunchToast.isBulk ? '#064e3b' : '#065f46',
           color: '#ffffff',
           padding: '14px 20px',
           borderRadius: 12,
@@ -758,11 +773,13 @@ const Attendance = ({ currentUser }) => {
           alignItems: 'center',
           gap: 14,
           animation: 'fadeIn 0.25s ease-out',
-          border: '1px solid #34d399'
+          border: livePunchToast.isBulk ? '1px solid #10b981' : '1px solid #34d399'
         }}>
-          <span style={{ fontSize: '1.4rem' }}>⚡</span>
+          <span style={{ fontSize: '1.4rem' }}>{livePunchToast.isBulk ? '🔄' : '⚡'}</span>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', letterSpacing: '0.01em' }}>Live Punch Detected</div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', letterSpacing: '0.01em' }}>
+              {livePunchToast.isBulk ? 'Historical Punch Sync' : 'Live Punch Detected'}
+            </div>
             <div style={{ fontSize: '0.8rem', color: '#a7f3d0', marginTop: 2 }}>{livePunchToast.message}</div>
           </div>
           <button
@@ -1036,10 +1053,14 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
               className="att-btn att-btn-secondary att-btn-sm"
               onClick={onQuickSync}
               disabled={syncingDevice}
-              title="Sync latest punches directly from ZKTeco device (LAN IP)"
+              title={deviceLiveStatus?.connected && deviceLiveStatus?.mode === 'ADMS'
+                ? "Cloud ADMS is connected & pushing in real-time. Manual sync is optional."
+                : "Sync latest punches directly from ZKTeco device (LAN IP)"}
             >
               <IcoDevice />
-              {syncingDevice ? 'Syncing Device…' : 'Sync Device'}
+              {syncingDevice
+                ? 'Syncing Device…'
+                : (deviceLiveStatus?.connected && deviceLiveStatus?.mode === 'ADMS' ? '⚡ ADMS Auto-Push' : 'Sync Device')}
             </button>
           )}
           {canEdit && (
@@ -2733,22 +2754,38 @@ const DeviceTab = ({
             {deviceLiveStatus?.connected && deviceLiveStatus?.mode === 'ADMS' ? (
               <div style={{
                 marginBottom: 16,
-                padding: '12px 16px',
+                padding: '14px 18px',
                 background: '#f0fdf4',
                 border: '1px solid #86efac',
                 borderRadius: 10,
                 display: 'flex',
-                alignItems: 'center',
-                gap: 12
+                flexDirection: 'column',
+                gap: 8
               }}>
-                <span className="att-live-dot" style={{ width: 10, height: 10, background: '#16a34a', boxShadow: '0 0 0 3px rgba(22, 163, 74, 0.25)' }} />
-                <div>
-                  <div style={{ fontWeight: 700, color: '#14532d', fontSize: '0.88rem' }}>
-                    Cloud ADMS Connected: {deviceLiveStatus.sn || 'F8 Device'} ({deviceLiveStatus.ip})
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span className="att-live-dot" style={{ width: 10, height: 10, background: '#16a34a', boxShadow: '0 0 0 3px rgba(22, 163, 74, 0.25)' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#14532d', fontSize: '0.88rem' }}>
+                      Cloud ADMS Connected: {deviceLiveStatus.sn || 'F8 Device'} ({deviceLiveStatus.ip})
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: '#166534', marginTop: 2 }}>
+                      Heartbeat active · Auto-receiving real-time biometric punches · Session punches captured: <strong>{deviceLiveStatus.totalPunchesSession || 0}</strong>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.76rem', color: '#166534', marginTop: 2 }}>
-                    Heartbeat active · Auto-receiving real-time biometric punches · Session punches captured: <strong>{deviceLiveStatus.totalPunchesSession || 0}</strong>
-                  </div>
+                </div>
+                <div style={{
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  background: '#dcfce7',
+                  border: '1px solid #bbf7d0',
+                  fontSize: '0.74rem',
+                  color: '#15803d',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}>
+                  <span style={{ fontWeight: 700 }}>✓ Fully Automated:</span>
+                  <span>Whenever employees scan their finger, punches push instantly to ERP. Daily attendance is computed automatically — you do not need to click "Sync Device" or "Process Date".</span>
                 </div>
               </div>
             ) : (

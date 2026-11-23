@@ -9925,16 +9925,23 @@ setTimeout(fixShiftedPunches, 3500);
 // Middleware for /iclock and /cdata to accept raw text payloads from ZKTeco devices
 app.use(['/iclock', '/cdata'], express.text({ type: ['text/*', 'application/octet-stream', '*/*'], limit: '10mb' }));
 
-// ─── ZKTeco Cloud ADMS Live Connection Tracker ──────────────────────────────
+// ─── ZKTeco Cloud ADMS Live Connection Tracker & Sync Stamp Storage ─────────
+const admsDeviceStampMap = new Map();
+
 const admsLiveTracker = {
   lastSeen: null,
   sn: null,
   ip: null,
   totalPunches: 0,
   lastPunchAt: null,
-  touch(sn, ip) {
+  lastStamp: '0',
+  touch(sn, ip, stamp) {
     this.sn = sn || this.sn || 'F8-DEVICE';
     this.ip = ip || this.ip;
+    if (stamp) {
+      this.lastStamp = String(stamp);
+      admsDeviceStampMap.set(this.sn, String(stamp));
+    }
     this.lastSeen = new Date();
   },
   recordPunch(count = 1) {
@@ -9959,6 +9966,7 @@ const admsLiveTracker = {
       lastSyncAt: this.lastSeen,
       lastPunchAt: this.lastPunchAt,
       totalPunchesSession: this.totalPunches,
+      lastStamp: this.lastStamp,
       lastError: null
     };
   }
@@ -9991,9 +9999,9 @@ app.get(['/iclock/cdata', '/cdata', '/api/attendance/device/push'], (req, res) =
     io.emit('zk_device_status', getCombinedDeviceStatus());
   } catch (_) { }
 
+  const currentStamp = admsDeviceStampMap.get(sn) || admsLiveTracker.lastStamp || '0';
   res.set('Content-Type', 'text/plain');
-  // Stamp=0 instructs device to upload all attendance punch records if not already synced
-  res.send(`GET OPTION FROM: ${sn}\nStamp=0\nOpStamp=0\nPhotoStamp=0\nErrorDelay=60\nDelay=30\nTransTimes=00:00;14:05\nTransInterval=1\nTransFlag=1111000000\nTimeZone=6\nRealtime=1\nEncrypt=0\nServerVersion=3.1.1\n`);
+  res.send(`GET OPTION FROM: ${sn}\nStamp=${currentStamp}\nOpStamp=0\nPhotoStamp=0\nErrorDelay=60\nDelay=30\nTransTimes=00:00;14:05\nTransInterval=1\nTransFlag=1111000000\nTimeZone=6\nRealtime=1\nEncrypt=0\nServerVersion=3.1.1\n`);
 });
 
 // ZKTeco heartbeat / command polling: GET /iclock/getrequest?SN=...
@@ -10039,9 +10047,10 @@ app.post(['/iclock/cdata', '/cdata', '/api/attendance/device/push'], async (req,
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const table = req.query.table || req.query.Table || '';
     const rawBody = typeof req.body === 'string' ? req.body : (Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body || {}));
+    const stamp = req.query.Stamp || req.query.stamp;
 
-    console.log(`[ZKTeco ADMS] Data push from device SN: ${sn}, table: ${table}, bodyLength: ${rawBody.length}`);
-    admsLiveTracker.touch(sn, clientIp);
+    console.log(`[ZKTeco ADMS] Data push from device SN: ${sn}, table: ${table}, stamp: ${stamp || 'none'}, bodyLength: ${rawBody.length}`);
+    admsLiveTracker.touch(sn, clientIp, stamp);
 
     const punches = [];
 
@@ -10071,9 +10080,9 @@ app.post(['/iclock/cdata', '/cdata', '/api/attendance/device/push'], async (req,
       // Format B: Query params or JSON body (single punch fallback)
       const raw = { ...req.query, ...(typeof req.body === 'object' ? req.body : {}) };
       const enrollId = parseInt(raw.PIN || raw.pin || raw.UserId || 0, 10);
-      const stamp = raw.Stamp || raw.stamp || raw.DateTime || raw.datetime;
-      if (enrollId > 0 && stamp) {
-        const punchTime = parsePunchTimestamp(stamp);
+      const singleStamp = raw.Stamp || raw.stamp || raw.DateTime || raw.datetime;
+      if (enrollId > 0 && singleStamp) {
+        const punchTime = parsePunchTimestamp(singleStamp);
         const checked = parseInt(raw.Checked || raw.checked || 0, 10);
         const punchTypeMap = { 0: 'IN', 1: 'OUT', 2: 'BREAK_OUT', 3: 'BREAK_IN' };
         punches.push({
@@ -10089,15 +10098,23 @@ app.post(['/iclock/cdata', '/cdata', '/api/attendance/device/push'], async (req,
 
     if (punches.length > 0) {
       const result = await ingestPunchRecords(punches, `F8-${sn}`);
-      admsLiveTracker.recordPunch(result.newInserted || punches.length);
-      console.log(`[ZKTeco ADMS] Ingested ${punches.length} punch(es) (${result.newInserted} new, ${result.skippedDuplicates} duplicates) from ${sn}`);
-      io.emit('zk_live_punch', {
-        count: result.newInserted || punches.length,
-        message: `${result.newInserted || punches.length} new punch(es) captured via Cloud ADMS`
-      });
-      try {
-        broadcastUpdate('attendance', 'punch_created', { count: result.newInserted || punches.length });
-      } catch (_) { }
+      const newlyCount = Number(result?.newInserted || 0);
+      console.log(`[ZKTeco ADMS] Processed ${punches.length} punch(es) (${newlyCount} new, ${result.skippedDuplicates} duplicates) from ${sn}`);
+
+      // Only emit socket events if actual new records were inserted
+      if (newlyCount > 0) {
+        admsLiveTracker.recordPunch(newlyCount);
+        io.emit('zk_live_punch', {
+          count: newlyCount,
+          isBulk: punches.length > 5,
+          message: punches.length > 5
+            ? `Syncing device history: ${newlyCount} punch(es) imported`
+            : `${newlyCount} new punch(es) captured via Cloud ADMS`
+        });
+        try {
+          broadcastUpdate('attendance', 'punch_created', { count: newlyCount });
+        } catch (_) { }
+      }
     }
 
     try {
@@ -10105,7 +10122,7 @@ app.post(['/iclock/cdata', '/cdata', '/api/attendance/device/push'], async (req,
     } catch (_) { }
 
     res.set('Content-Type', 'text/plain');
-    res.send(`OK: ${punches.length || 1}\n`);
+    res.send('OK\n');
   } catch (err) {
     console.error('[ZKTeco ADMS] Push processing error:', err.message);
     res.set('Content-Type', 'text/plain');
@@ -10341,6 +10358,31 @@ async function fetchZkAttendances(ip, port = 4370, timeout = 30000, options = {}
   return { records, users };
 }
 
+// ─── Background Debounced Attendance Date Processing ────────────────────────
+let debounceProcessTimer = null;
+const pendingDatesToProcess = new Set();
+
+function scheduleAttendanceDateProcessing(dates) {
+  if (!Array.isArray(dates) || dates.length === 0) return;
+  dates.forEach(d => pendingDatesToProcess.add(d));
+  if (debounceProcessTimer) clearTimeout(debounceProcessTimer);
+  debounceProcessTimer = setTimeout(async () => {
+    const toProcess = Array.from(pendingDatesToProcess).sort().reverse().slice(0, 31);
+    pendingDatesToProcess.clear();
+    for (const d of toProcess) {
+      try {
+        await processAttendanceForDate(d, false);
+      } catch (err) {
+        console.warn(`[Attendance] Background auto-process error for ${d}:`, err.message);
+      }
+    }
+    console.log(`[Attendance] Background completed attendance calculation for ${toProcess.length} date(s).`);
+    try {
+      broadcastUpdate('attendance', 'logs_processed', { dates: toProcess });
+    } catch (_) { }
+  }, 2500);
+}
+
 // ─── Punch Record Ingestion Pipeline ─────────────────────────────────────────
 async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
   if (!punches || punches.length === 0) return { newInserted: 0, skippedDuplicates: 0 };
@@ -10470,20 +10512,16 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
     return { newInserted: 0, skippedDuplicates };
   }
 
-  // Auto-process attendance logs for all affected dates (prioritizing recent dates)
+  // Auto-process attendance logs: calculate today immediately, debounce historical dates
   try {
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
     newlyInsertedDates.add(todayStr);
 
-    // Auto-process up to the 31 most recent affected dates
-    const datesToProcess = Array.from(newlyInsertedDates).sort().reverse().slice(0, 31);
-    for (const d of datesToProcess) {
-      await processAttendanceForDate(d, false);
-    }
-    console.log(`[Attendance] Auto-processed daily attendance for ${datesToProcess.length} date(s) (including ${todayStr}).`);
-    try {
-      broadcastUpdate('attendance', 'logs_processed', { dates: datesToProcess });
-    } catch (_) { }
+    // Compute today immediately so real-time dashboard is instant
+    await processAttendanceForDate(todayStr, false);
+
+    // Schedule remaining dates for debounced background processing
+    scheduleAttendanceDateProcessing(Array.from(newlyInsertedDates));
   } catch (err) {
     console.warn('[Attendance] Auto-process attendance warning:', err.message);
   }
