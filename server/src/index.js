@@ -10535,7 +10535,7 @@ class ZkLiveConnectionManager {
 
     try {
       // Immediate sync of recent punches on connection with generous timeout
-      await this.syncNow();
+      await this.syncNow(true);
 
       this.status = 'connected';
       this.connectedAt = new Date();
@@ -10553,20 +10553,18 @@ class ZkLiveConnectionManager {
       const errorMsg = formatZkError(err);
       this.status = 'error';
       this.lastError = errorMsg;
+      this.shouldStayConnected = false;
       this.broadcastStatus();
-      if (this.shouldStayConnected) {
-        this.scheduleReconnect();
-      }
       throw new Error(errorMsg);
     }
   }
 
-  async syncNow() {
+  async syncNow(throwOnError = false) {
     if (this.isSyncing || !this.ip) return null;
     this.isSyncing = true;
     try {
-      // Use 25s timeout and limit of 2000 to reliably fetch recent logs from device
-      const { records } = await fetchZkAttendances(this.ip, this.port, 25000, {
+      // Use 15s timeout and limit of 2000 to reliably fetch recent logs from device
+      const { records } = await fetchZkAttendances(this.ip, this.port, 15000, {
         latestOnly: true,
         limit: 2000,
         fetchUsers: false
@@ -10608,7 +10606,11 @@ class ZkLiveConnectionManager {
       this.consecutiveFailures++;
       const errorMsg = formatZkError(err);
       this.lastError = errorMsg;
-      if (this.consecutiveFailures >= 2) {
+      if (this.consecutiveFailures >= 5) {
+        this.shouldStayConnected = false;
+        console.warn(`[ZKLive] Auto-reconnect stopped for ${this.ip}:${this.port} after ${this.consecutiveFailures} consecutive timeouts.`);
+        this.broadcastStatus();
+      } else if (this.consecutiveFailures >= 2) {
         console.warn(`[ZKLive] syncNow notice (${this.consecutiveFailures}):`, errorMsg);
         if (this.status === 'connected') {
           this.status = 'error';
@@ -10617,6 +10619,9 @@ class ZkLiveConnectionManager {
         if (this.shouldStayConnected) {
           this.scheduleReconnect();
         }
+      }
+      if (throwOnError) {
+        throw err;
       }
       return null;
     } finally {
@@ -10728,11 +10733,11 @@ apiRouter.post('/api/attendance/device/sync-ip', verifyPermission('attendance', 
   if (!ZKLib) {
     return res.status(500).json({ message: 'node-zklib is not installed or available on this server.' });
   }
-  const { ip, port = 4370, timeout = 30000 } = req.body;
+  const { ip, port = 4370, timeout = 12000 } = req.body;
   if (!ip) return res.status(400).json({ message: 'Device IP address is required (e.g. 192.168.1.201).' });
 
   try {
-    const { records, users } = await fetchZkAttendances(ip, Number(port) || 4370, Number(timeout) || 30000, {
+    const { records, users } = await fetchZkAttendances(ip, Number(port) || 4370, Number(timeout) || 12000, {
       latestOnly: req.body.fullSync ? false : true,
       limit: Number(req.body.limit) || 2000,
       fullSync: !!req.body.fullSync
