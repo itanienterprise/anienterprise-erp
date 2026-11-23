@@ -825,6 +825,7 @@ const Attendance = ({ currentUser }) => {
           processing={processing}
           canEdit={canEdit}
           canViewAll={canViewAll}
+          deviceLiveStatus={deviceLiveStatus}
         />
       )}
 
@@ -964,7 +965,7 @@ const Attendance = ({ currentUser }) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Dashboard Tab
 // ═══════════════════════════════════════════════════════════════════════════════
-const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefresh, onProcess, onQuickSync, syncingDevice, processing, canEdit, canViewAll }) => {
+const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefresh, onProcess, onQuickSync, syncingDevice, processing, canEdit, canViewAll, deviceLiveStatus = {} }) => {
   const [mobileView, setMobileView] = useState('cards'); // 'cards' | 'table'
   const mappingMap = useMemo(() => {
     const map = new Map();
