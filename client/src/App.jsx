@@ -11,6 +11,7 @@ import { encryptData, decryptData } from './utils/encryption';
 import { API_BASE_URL, formatDate, parseDate, SortIcon } from './utils/helpers';
 import CustomDatePicker from './components/shared/CustomDatePicker';
 import { queryClient, hydrateQueryCache, clearPersistentQueryCache } from './utils/queryClient';
+import { safeStorage, cleanStorageQuota, sanitizeUserForStorage } from './utils/storageHelper';
 import { QUERY_KEYS } from './hooks/useQueries';
 import { getSocket } from './utils/socket';
 import { calculateStockData } from './utils/stockHelpers';
@@ -236,27 +237,28 @@ function App() {
         setIsAuthenticated(false);
         setCurrentUser(null);
         sessionStorage.clear();
-        localStorage.removeItem('currentUser');
-        localStorage.removeItem('isAuthenticated');
-        localStorage.removeItem('rememberMe');
-        localStorage.removeItem('erp_session_token');
+        safeStorage.removeItem(localStorage, 'currentUser');
+        safeStorage.removeItem(localStorage, 'isAuthenticated');
+        safeStorage.removeItem(localStorage, 'rememberMe');
+        safeStorage.removeItem(localStorage, 'erp_session_token');
         clearPersistentQueryCache();
       } else if (msg.type === 'LOGIN') {
         if (msg.user) {
           setIsAuthenticated(true);
           setCurrentUser(msg.user);
-          sessionStorage.setItem('isAuthenticated', 'true');
-          sessionStorage.setItem('currentUser', JSON.stringify(msg.user));
-          localStorage.setItem('currentUser', JSON.stringify(msg.user));
+          const safeUser = sanitizeUserForStorage(msg.user);
+          safeStorage.setItem(sessionStorage, 'isAuthenticated', 'true');
+          safeStorage.setItem(sessionStorage, 'currentUser', JSON.stringify(safeUser));
+          safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safeUser));
           if (msg.sessionToken) {
-            sessionStorage.setItem('erp_session_token', msg.sessionToken);
+            safeStorage.setItem(sessionStorage, 'erp_session_token', msg.sessionToken);
             if (msg.rememberMe) {
-              localStorage.setItem('erp_session_token', msg.sessionToken);
+              safeStorage.setItem(localStorage, 'erp_session_token', msg.sessionToken);
             }
           }
           if (msg.rememberMe) {
-            localStorage.setItem('rememberMe', 'true');
-            localStorage.setItem('isAuthenticated', 'true');
+            safeStorage.setItem(localStorage, 'rememberMe', 'true');
+            safeStorage.setItem(localStorage, 'isAuthenticated', 'true');
           }
         }
       }
@@ -282,39 +284,41 @@ function App() {
     setCurrentUser(user);
     setSidebarOpen(false);
 
+    const safeUser = sanitizeUserForStorage(user);
+
     // Active session for current tab/window
-    sessionStorage.setItem('isAuthenticated', 'true');
-    sessionStorage.setItem('currentUser', JSON.stringify(user));
-    localStorage.setItem('currentUser', JSON.stringify(user));
+    safeStorage.setItem(sessionStorage, 'isAuthenticated', 'true');
+    safeStorage.setItem(sessionStorage, 'currentUser', JSON.stringify(safeUser));
+    safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safeUser));
 
     if (sessionToken) {
-      sessionStorage.setItem('erp_session_token', sessionToken);
+      safeStorage.setItem(sessionStorage, 'erp_session_token', sessionToken);
       if (rememberMe) {
-        localStorage.setItem('erp_session_token', sessionToken);
+        safeStorage.setItem(localStorage, 'erp_session_token', sessionToken);
       } else {
-        localStorage.removeItem('erp_session_token');
+        safeStorage.removeItem(localStorage, 'erp_session_token');
       }
     }
 
     if (sessionId) {
-      sessionStorage.setItem('erp_session_id', sessionId);
+      safeStorage.setItem(sessionStorage, 'erp_session_id', sessionId);
       if (rememberMe) {
-        localStorage.setItem('erp_session_id', sessionId);
+        safeStorage.setItem(localStorage, 'erp_session_id', sessionId);
       } else {
-        localStorage.removeItem('erp_session_id');
+        safeStorage.removeItem(localStorage, 'erp_session_id');
       }
     }
 
     if (rememberMe) {
-      localStorage.setItem('rememberMe', 'true');
-      localStorage.setItem('isAuthenticated', 'true');
+      safeStorage.setItem(localStorage, 'rememberMe', 'true');
+      safeStorage.setItem(localStorage, 'isAuthenticated', 'true');
     } else {
-      localStorage.removeItem('rememberMe');
-      localStorage.removeItem('isAuthenticated');
+      safeStorage.removeItem(localStorage, 'rememberMe');
+      safeStorage.removeItem(localStorage, 'isAuthenticated');
     }
 
     setCurrentView('dashboard');
-    localStorage.setItem('currentView', 'dashboard');
+    safeStorage.setItem(localStorage, 'currentView', 'dashboard');
 
     // Notify other open tabs of login
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -708,24 +712,25 @@ function App() {
 
             if (responseData && !isCancelled) {
               adoptedFromOtherTab = true;
-              sessionStorage.setItem('isAuthenticated', 'true');
-              sessionStorage.setItem('currentUser', JSON.stringify(responseData.user));
-              localStorage.setItem('currentUser', JSON.stringify(responseData.user));
+              const safeAdopted = sanitizeUserForStorage(responseData.user);
+              safeStorage.setItem(sessionStorage, 'isAuthenticated', 'true');
+              safeStorage.setItem(sessionStorage, 'currentUser', JSON.stringify(safeAdopted));
+              safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safeAdopted));
               if (responseData.sessionToken) {
-                sessionStorage.setItem('erp_session_token', responseData.sessionToken);
+                safeStorage.setItem(sessionStorage, 'erp_session_token', responseData.sessionToken);
                 if (responseData.rememberMe) {
-                  localStorage.setItem('erp_session_token', responseData.sessionToken);
+                  safeStorage.setItem(localStorage, 'erp_session_token', responseData.sessionToken);
                 }
               }
               if (responseData.sessionId) {
-                sessionStorage.setItem('erp_session_id', responseData.sessionId);
+                safeStorage.setItem(sessionStorage, 'erp_session_id', responseData.sessionId);
                 if (responseData.rememberMe) {
-                  localStorage.setItem('erp_session_id', responseData.sessionId);
+                  safeStorage.setItem(localStorage, 'erp_session_id', responseData.sessionId);
                 }
               }
               if (responseData.rememberMe) {
-                localStorage.setItem('rememberMe', 'true');
-                localStorage.setItem('isAuthenticated', 'true');
+                safeStorage.setItem(localStorage, 'rememberMe', 'true');
+                safeStorage.setItem(localStorage, 'isAuthenticated', 'true');
               }
             }
           } catch (e) { }
@@ -736,15 +741,15 @@ function App() {
           if (!isCancelled) {
             setIsAuthenticated(false);
             setCurrentUser(null);
-            localStorage.removeItem('currentUser');
-            localStorage.removeItem('isAuthenticated');
-            localStorage.removeItem('rememberMe');
-            localStorage.removeItem('erp_session_token');
-            localStorage.removeItem('erp_session_id');
-            sessionStorage.removeItem('currentUser');
-            sessionStorage.removeItem('isAuthenticated');
-            sessionStorage.removeItem('erp_session_token');
-            sessionStorage.removeItem('erp_session_id');
+            safeStorage.removeItem(localStorage, 'currentUser');
+            safeStorage.removeItem(localStorage, 'isAuthenticated');
+            safeStorage.removeItem(localStorage, 'rememberMe');
+            safeStorage.removeItem(localStorage, 'erp_session_token');
+            safeStorage.removeItem(localStorage, 'erp_session_id');
+            safeStorage.removeItem(sessionStorage, 'currentUser');
+            safeStorage.removeItem(sessionStorage, 'isAuthenticated');
+            safeStorage.removeItem(sessionStorage, 'erp_session_token');
+            safeStorage.removeItem(sessionStorage, 'erp_session_id');
             try {
               await axios.post(`${API_BASE_URL}/api/auth/logout`);
             } catch (e) { }
@@ -758,60 +763,71 @@ function App() {
       try {
         const [response] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/auth/check`),
-          hydrateQueryCache().catch(() => {})
+          hydrateQueryCache().catch(() => { })
         ]);
         if (isCancelled) return;
 
         if (response.data.authenticated) {
           setIsAuthenticated(true);
           setCurrentUser(response.data.user);
-          sessionStorage.setItem('isAuthenticated', 'true');
-          sessionStorage.setItem('currentUser', JSON.stringify(response.data.user));
-          localStorage.setItem('currentUser', JSON.stringify(response.data.user));
-          if (response.data.sessionToken) {
-            sessionStorage.setItem('erp_session_token', response.data.sessionToken);
-            if (response.data.rememberMe) {
-              localStorage.setItem('erp_session_token', response.data.sessionToken);
+          const safeUser = sanitizeUserForStorage(response.data.user);
+          try {
+            safeStorage.setItem(sessionStorage, 'isAuthenticated', 'true');
+            safeStorage.setItem(sessionStorage, 'currentUser', JSON.stringify(safeUser));
+            safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safeUser));
+            if (response.data.sessionToken) {
+              safeStorage.setItem(sessionStorage, 'erp_session_token', response.data.sessionToken);
+              if (response.data.rememberMe) {
+                safeStorage.setItem(localStorage, 'erp_session_token', response.data.sessionToken);
+              }
             }
-          }
-          if (response.data.sessionId) {
-            sessionStorage.setItem('erp_session_id', response.data.sessionId);
-            if (response.data.rememberMe) {
-              localStorage.setItem('erp_session_id', response.data.sessionId);
+            if (response.data.sessionId) {
+              safeStorage.setItem(sessionStorage, 'erp_session_id', response.data.sessionId);
+              if (response.data.rememberMe) {
+                safeStorage.setItem(localStorage, 'erp_session_id', response.data.sessionId);
+              }
             }
+            if (response.data.rememberMe) {
+              safeStorage.setItem(localStorage, 'rememberMe', 'true');
+              safeStorage.setItem(localStorage, 'isAuthenticated', 'true');
+            }
+          } catch (storageErr) {
+            console.warn('Non-critical storage issue during session sync:', storageErr);
           }
-          if (response.data.rememberMe) {
-            localStorage.setItem('rememberMe', 'true');
-            localStorage.setItem('isAuthenticated', 'true');
-          }
-          hydrateQueryCache().catch(() => {});
+          hydrateQueryCache().catch(() => { });
         } else {
           setIsAuthenticated(false);
           setCurrentUser(null);
-          localStorage.removeItem('currentUser');
-          localStorage.removeItem('isAuthenticated');
-          localStorage.removeItem('rememberMe');
-          localStorage.removeItem('erp_session_token');
-          localStorage.removeItem('erp_session_id');
-          sessionStorage.removeItem('currentUser');
-          sessionStorage.removeItem('isAuthenticated');
-          sessionStorage.removeItem('erp_session_token');
-          sessionStorage.removeItem('erp_session_id');
+          safeStorage.removeItem(localStorage, 'currentUser');
+          safeStorage.removeItem(localStorage, 'isAuthenticated');
+          safeStorage.removeItem(localStorage, 'rememberMe');
+          safeStorage.removeItem(localStorage, 'erp_session_token');
+          safeStorage.removeItem(localStorage, 'erp_session_id');
+          safeStorage.removeItem(sessionStorage, 'currentUser');
+          safeStorage.removeItem(sessionStorage, 'isAuthenticated');
+          safeStorage.removeItem(sessionStorage, 'erp_session_token');
+          safeStorage.removeItem(sessionStorage, 'erp_session_id');
           clearPersistentQueryCache();
         }
       } catch (err) {
         if (!isCancelled) {
-          setIsAuthenticated(false);
-          setCurrentUser(null);
-          localStorage.removeItem('currentUser');
-          localStorage.removeItem('isAuthenticated');
-          localStorage.removeItem('rememberMe');
-          localStorage.removeItem('erp_session_token');
-          localStorage.removeItem('erp_session_id');
-          sessionStorage.removeItem('currentUser');
-          sessionStorage.removeItem('isAuthenticated');
-          sessionStorage.removeItem('erp_session_token');
-          sessionStorage.removeItem('erp_session_id');
+          // If server explicitly responds with 401 or 403, session is invalid
+          const isExplicitAuthFailure = err.response && (err.response.status === 401 || err.response.status === 403);
+          if (isExplicitAuthFailure || !isRemembered) {
+            setIsAuthenticated(false);
+            setCurrentUser(null);
+            safeStorage.removeItem(localStorage, 'currentUser');
+            safeStorage.removeItem(localStorage, 'isAuthenticated');
+            safeStorage.removeItem(localStorage, 'rememberMe');
+            safeStorage.removeItem(localStorage, 'erp_session_token');
+            safeStorage.removeItem(localStorage, 'erp_session_id');
+            safeStorage.removeItem(sessionStorage, 'currentUser');
+            safeStorage.removeItem(sessionStorage, 'isAuthenticated');
+            safeStorage.removeItem(sessionStorage, 'erp_session_token');
+            safeStorage.removeItem(sessionStorage, 'erp_session_id');
+          } else {
+            console.warn('Network issue during auth check; maintaining cached session state:', err);
+          }
         }
       } finally {
         if (!isCancelled) {
@@ -834,8 +850,9 @@ function App() {
             // Only update if permissions actually changed to avoid unnecessary re-renders
             if (JSON.stringify(prev?.permissions) !== JSON.stringify(fresh?.permissions) ||
               prev?.role !== fresh?.role || prev?.status !== fresh?.status) {
-              localStorage.setItem('currentUser', JSON.stringify(fresh));
-              sessionStorage.setItem('currentUser', JSON.stringify(fresh));
+              const safeFresh = sanitizeUserForStorage(fresh);
+              safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safeFresh));
+              safeStorage.setItem(sessionStorage, 'currentUser', JSON.stringify(safeFresh));
               return fresh;
             }
             return prev;
@@ -844,13 +861,13 @@ function App() {
           // Session expired
           setIsAuthenticated(false);
           setCurrentUser(null);
-          localStorage.removeItem('currentUser');
-          localStorage.removeItem('isAuthenticated');
-          localStorage.removeItem('rememberMe');
-          localStorage.removeItem('erp_session_token');
-          sessionStorage.removeItem('currentUser');
-          sessionStorage.removeItem('isAuthenticated');
-          sessionStorage.removeItem('erp_session_token');
+          safeStorage.removeItem(localStorage, 'currentUser');
+          safeStorage.removeItem(localStorage, 'isAuthenticated');
+          safeStorage.removeItem(localStorage, 'rememberMe');
+          safeStorage.removeItem(localStorage, 'erp_session_token');
+          safeStorage.removeItem(sessionStorage, 'currentUser');
+          safeStorage.removeItem(sessionStorage, 'isAuthenticated');
+          safeStorage.removeItem(sessionStorage, 'erp_session_token');
         }
       } catch (e) {
         if (e.response && (e.response.status === 401 || e.response.status === 403)) {
@@ -970,7 +987,8 @@ function App() {
             if (currentEmp) {
               const updatedUser = { ...currentUser, name: currentEmp.name };
               setCurrentUser(updatedUser);
-              localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+              const safeUser = sanitizeUserForStorage(updatedUser);
+              safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safeUser));
             }
           })
           .catch(err => console.error('Error fetching name:', err));
@@ -991,12 +1009,13 @@ function App() {
                 avatarPhoto: res.data.avatarPhoto || null,
                 name: prev?.name || res.data.name
               };
-              localStorage.setItem('currentUser', JSON.stringify(updated));
+              const safe = sanitizeUserForStorage(updated);
+              safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safe));
               return updated;
             });
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [isAuthenticated, currentUser?.username, currentUser?.profilePhoto, currentUser?.avatarPhoto]);
 
@@ -1668,18 +1687,18 @@ function App() {
                       type === 'customer' ? 'customers' :
                         type === 'bank' ? 'banks' :
                           type === 'deposit' ? 'deposits' :
-                          type === 'withdrawal' ? 'withdrawals' :
-                          type === 'fund-transfer' ? 'fund-transfers' :
-                          type === 'patty-cash' ? 'patty-cash' :
-                            type === 'indian-bank' ? 'indian-banks' :
-                            type === 'cnf' ? 'cnfs' :
-                              type === 'pi' ? 'pi' :
-                                type === 'lc-expense' ? 'lc-expenses' :
-                                  type === 'packing-list' ? 'packing-lists' :
-                                    type === 'tr-setup' ? 'tr-setups' :
-                                      type === 'cost-of-goods' ? 'cost-of-goods' :
-                                        type === 'insurance' ? 'insurance' :
-                                          'stock';
+                            type === 'withdrawal' ? 'withdrawals' :
+                              type === 'fund-transfer' ? 'fund-transfers' :
+                                type === 'patty-cash' ? 'patty-cash' :
+                                  type === 'indian-bank' ? 'indian-banks' :
+                                    type === 'cnf' ? 'cnfs' :
+                                      type === 'pi' ? 'pi' :
+                                        type === 'lc-expense' ? 'lc-expenses' :
+                                          type === 'packing-list' ? 'packing-lists' :
+                                            type === 'tr-setup' ? 'tr-setups' :
+                                              type === 'cost-of-goods' ? 'cost-of-goods' :
+                                                type === 'insurance' ? 'insurance' :
+                                                  'stock';
 
 
     try {
@@ -1806,26 +1825,26 @@ function App() {
         // Optimistic query cache update and invalidation for all ERP entities
         const qKey = type === 'sales' ? QUERY_KEYS.sales :
           type === 'importer' ? QUERY_KEYS.importers :
-          type === 'exporter' ? QUERY_KEYS.exporters :
-          type === 'supplier' ? QUERY_KEYS.suppliers :
-          type === 'port' ? QUERY_KEYS.ports :
-          type === 'product' ? QUERY_KEYS.products :
-          type === 'employees' ? QUERY_KEYS.employees :
-          type === 'stock' ? QUERY_KEYS.stock :
-          type === 'cnf' ? QUERY_KEYS.cnfs :
-          type === 'warehouse' ? QUERY_KEYS.warehouses :
-          type === 'customer' ? ['customers'] :
-          type === 'bank' ? ['banks'] :
-          type === 'patty-cash' ? ['pattyCash'] :
-          type === 'indian-bank' ? ['indianBanks'] :
-          type === 'insurance' ? ['insurance'] :
-          type === 'damage' ? QUERY_KEYS.damages :
-          type === 'pi' ? ['pi'] :
-          type === 'lc-expense' ? ['lcExpenses'] :
-          type === 'packing-list' ? ['packing-lists'] :
-          type === 'tr-setup' ? ['tr-setups'] :
-          type === 'cost-of-goods' ? ['cost-of-goods'] :
-          type === 'ip' ? ['ip-records'] : [type];
+            type === 'exporter' ? QUERY_KEYS.exporters :
+              type === 'supplier' ? QUERY_KEYS.suppliers :
+                type === 'port' ? QUERY_KEYS.ports :
+                  type === 'product' ? QUERY_KEYS.products :
+                    type === 'employees' ? QUERY_KEYS.employees :
+                      type === 'stock' ? QUERY_KEYS.stock :
+                        type === 'cnf' ? QUERY_KEYS.cnfs :
+                          type === 'warehouse' ? QUERY_KEYS.warehouses :
+                            type === 'customer' ? ['customers'] :
+                              type === 'bank' ? ['banks'] :
+                                type === 'patty-cash' ? ['pattyCash'] :
+                                  type === 'indian-bank' ? ['indianBanks'] :
+                                    type === 'insurance' ? ['insurance'] :
+                                      type === 'damage' ? QUERY_KEYS.damages :
+                                        type === 'pi' ? ['pi'] :
+                                          type === 'lc-expense' ? ['lcExpenses'] :
+                                            type === 'packing-list' ? ['packing-lists'] :
+                                              type === 'tr-setup' ? ['tr-setups'] :
+                                                type === 'cost-of-goods' ? ['cost-of-goods'] :
+                                                  type === 'ip' ? ['ip-records'] : [type];
 
         if (type === 'packing-list') queryClient.invalidateQueries({ queryKey: ['packingLists'] });
         if (type === 'tr-setup') queryClient.invalidateQueries({ queryKey: ['trSetups'] });
@@ -1980,8 +1999,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.importers);
     if (cached && cached.length > 0) {
       setImporters(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.importers)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.importers).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.importers)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.importers).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return cached;
     } else if (importers.length === 0) {
       setIsLoading(true);
@@ -2002,8 +2021,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.exporters);
     if (cached && cached.length > 0) {
       setExporters(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.exporters)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.exporters).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.exporters)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.exporters).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return cached;
     } else if (exporters.length === 0) {
       setIsLoading(true);
@@ -2024,8 +2043,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.suppliers);
     if (cached && cached.length > 0) {
       setSuppliers(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.suppliers)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.suppliers).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.suppliers)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.suppliers).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return cached;
     } else if (suppliers.length === 0) {
       setIsLoading(true);
@@ -2046,8 +2065,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.ports);
     if (cached && cached.length > 0) {
       setPorts(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.ports)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.ports).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.ports)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.ports).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return cached;
     } else if (ports.length === 0) {
       setIsLoading(true);
@@ -2068,8 +2087,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.stockBaseline);
     if (cached) {
       setActiveBaseline(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.stockBaseline)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.stockBaseline).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.stockBaseline)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.stockBaseline).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return cached;
     }
     try {
@@ -2090,8 +2109,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.stock);
     if (cached && cached.length > 0) {
       setAllStockRecords(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.stock)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.stock).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.stock)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.stock).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) {
         return cached;
       }
@@ -2118,8 +2137,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.warehouses);
     if (cached && cached.length > 0) {
       setWarehouseData(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.warehouses)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.warehouses).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.warehouses)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.warehouses).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) {
         return cached;
       }
@@ -2210,8 +2229,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.sales);
     if (cached && cached.length > 0) {
       setSalesRecords(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.sales)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.sales).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.sales)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.sales).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) {
         return cached;
       }
@@ -2231,8 +2250,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.damages);
     if (cached && cached.length > 0) {
       setDamages(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.damages)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.damages).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.damages)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.damages).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return cached;
     }
     try {
@@ -2253,8 +2272,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.returns);
     if (cached && cached.length > 0) {
       setReturnsList(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.returns)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.returns).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.returns)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.returns).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return cached;
     }
     try {
@@ -2276,8 +2295,8 @@ function App() {
     const cached = queryClient.getQueryData(QUERY_KEYS.products);
     if (cached && cached.length > 0) {
       setProducts(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.products)?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(QUERY_KEYS.products).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(QUERY_KEYS.products)?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(QUERY_KEYS.products).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return cached;
     } else {
       setIsLoading(true);
@@ -4600,11 +4619,10 @@ function App() {
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className={`relative p-2 rounded-full transition-all duration-300 ${
-                  isSocketConnected
-                    ? 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50'
-                    : 'text-orange-500 hover:text-orange-600 hover:bg-orange-50'
-                } ${showNotifications ? 'bg-gray-100 shadow-inner' : ''}`}
+                className={`relative p-2 rounded-full transition-all duration-300 ${isSocketConnected
+                  ? 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50'
+                  : 'text-orange-500 hover:text-orange-600 hover:bg-orange-50'
+                  } ${showNotifications ? 'bg-gray-100 shadow-inner' : ''}`}
                 title={isSocketConnected ? `Live real-time connected (${socketId || 'Active'})` : 'Connecting to real-time server...'}
                 aria-label="Notifications"
               >
@@ -4755,7 +4773,8 @@ function App() {
             onProfileUpdate={(updatedUser) => {
               setCurrentUser(prev => {
                 const merged = { ...prev, ...updatedUser };
-                localStorage.setItem('currentUser', JSON.stringify(merged));
+                const safe = sanitizeUserForStorage(merged);
+                safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safe));
                 return merged;
               });
             }}
@@ -4766,7 +4785,8 @@ function App() {
                   ...(newPhoto !== undefined ? { profilePhoto: newPhoto } : {}),
                   ...(newAvatar !== undefined ? { avatarPhoto: newAvatar } : {})
                 };
-                localStorage.setItem('currentUser', JSON.stringify(updated));
+                const safe = sanitizeUserForStorage(updated);
+                safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safe));
                 return updated;
               });
             }}

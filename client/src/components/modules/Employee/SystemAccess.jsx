@@ -4,6 +4,7 @@ import { UserIcon, SearchIcon, ChevronDownIcon, EyeIcon, ShieldIcon, CheckIcon, 
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { MODULES_LIST, getDefaultPermissionsForRole } from '../../../utils/permissionHelper';
+import { safeStorage, sanitizeUserForStorage } from '../../../utils/storageHelper';
 
 const SystemAccess = ({ currentUser, setCurrentUser }) => {
     const [employees, setEmployees] = useState([]);
@@ -11,7 +12,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
-    
+
     // Config form state
     const [role, setRole] = useState('General Staff');
     const [status, setStatus] = useState('Active');
@@ -102,7 +103,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
             setShowSuggestions(false);
         } else {
             const lower = query.toLowerCase();
-            const filtered = employees.filter(emp => 
+            const filtered = employees.filter(emp =>
                 (emp.name && emp.name.toLowerCase().includes(lower)) ||
                 (emp.employeeId && emp.employeeId.toLowerCase().includes(lower)) ||
                 (emp.designation && emp.designation.toLowerCase().includes(lower))
@@ -116,7 +117,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
         setSelectedEmployee(emp);
         setRole(emp.role || 'General Staff');
         setStatus(emp.status || 'Active');
-        
+
         // Merge role defaults with stored custom permissions.
         // This ensures newly-added modules get their role-default values
         // even if the stored permissions object pre-dates those modules.
@@ -131,7 +132,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
             });
         }
         setPermissions(merged);
-        
+
         setSearchQuery(`${emp.name} (${emp.employeeId})`);
         setShowSuggestions(false);
         setAlertMsg(null);
@@ -151,7 +152,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
     const handleRoleSelect = (selectedRole) => {
         setRole(selectedRole);
         setRoleDropdownOpen(false);
-        
+
         // Custom confirmation modal instead of window.confirm
         setConfirmModal({
             title: 'Reset Permissions?',
@@ -190,7 +191,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
             const modulePerms = prev[moduleKey] || { view: false, add: false, edit: false, delete: false, special: false };
             const anyChecked = Object.values(modulePerms).some(v => v);
             const newValue = !anyChecked;
-            
+
             const updatedPerms = {
                 view: newValue,
                 add: newValue,
@@ -240,7 +241,8 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                     const sessionResp = await axios.get(`${API_BASE_URL}/api/auth/check`);
                     if (sessionResp.data?.authenticated && sessionResp.data?.user) {
                         const freshUser = sessionResp.data.user;
-                        localStorage.setItem('currentUser', JSON.stringify(freshUser));
+                        const safe = sanitizeUserForStorage(freshUser);
+                        safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safe));
                         if (setCurrentUser) setCurrentUser(freshUser);
                     }
                 } catch (e) {
@@ -250,9 +252,9 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
             }
         } catch (error) {
             console.error('Error saving access configuration:', error);
-            setAlertMsg({ 
-                type: 'error', 
-                text: error.response?.data?.message || 'Failed to save configuration. Please try again.' 
+            setAlertMsg({
+                type: 'error',
+                text: error.response?.data?.message || 'Failed to save configuration. Please try again.'
             });
         } finally {
             setIsSaving(false);
@@ -273,17 +275,17 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                 try {
                     const response = await axios.post(`${API_BASE_URL}/api/employees/${selectedEmployee._id}/reset-password`);
                     if (response.data && response.data.newPassword) {
-                        setPasswordAlert({ 
-                            type: 'success', 
+                        setPasswordAlert({
+                            type: 'success',
                             text: 'Password reset successful! Copy the new generated password below:',
                             newPass: response.data.newPassword
                         });
                     }
                 } catch (error) {
                     console.error('Error resetting password:', error);
-                    setPasswordAlert({ 
-                        type: 'error', 
-                        text: error.response?.data?.message || 'Failed to reset password.' 
+                    setPasswordAlert({
+                        type: 'error',
+                        text: error.response?.data?.message || 'Failed to reset password.'
                     });
                 } finally {
                     setIsChangingPassword(false);
@@ -313,9 +315,9 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
             }
         } catch (error) {
             console.error('Error changing custom password:', error);
-            setPasswordAlert({ 
-                type: 'error', 
-                text: error.response?.data?.message || 'Failed to update password.' 
+            setPasswordAlert({
+                type: 'error',
+                text: error.response?.data?.message || 'Failed to update password.'
             });
         } finally {
             setIsChangingPassword(false);
@@ -357,7 +359,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
 
             {/* Main Layout Flow */}
             <div className="space-y-6">
-                
+
                 {/* Row 1: Select Employee & Employee Name Card (Same line) */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
                     {/* Select Employee Card */}
@@ -367,7 +369,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                 <span className="w-1.5 h-4 bg-blue-500 rounded-full mr-2"></span>
                                 Select Employee
                             </h2>
-                            
+
                             <div className="relative" ref={suggestionsRef}>
                                 <div className="relative">
                                     <SearchIcon className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
@@ -380,7 +382,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                         className="w-full pl-10 pr-10 py-2.5 bg-gray-55 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-sans"
                                     />
                                     {searchQuery && (
-                                        <button 
+                                        <button
                                             onClick={clearSelection}
                                             className="absolute right-3.5 top-3 text-gray-400 hover:text-gray-600 cursor-pointer"
                                         >
@@ -657,34 +659,32 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                     )}
                                 </p>
                             </div>
-                            
+
                             <div className="flex items-center gap-2 self-start sm:self-auto">
                                 {/* View Toggle */}
                                 <div className="inline-flex bg-gray-100 p-1 rounded-xl border border-gray-200/60">
                                     <button
                                         type="button"
                                         onClick={() => setViewMode('cards')}
-                                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                                            viewMode === 'cards'
+                                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${viewMode === 'cards'
                                                 ? 'bg-white text-blue-700 shadow-sm border border-gray-200/50'
                                                 : 'text-gray-500 hover:text-gray-800'
-                                        }`}
+                                            }`}
                                         title="Card view (optimized for mobile)"
                                     >
-                                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
                                         <span>Cards</span>
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setViewMode('table')}
-                                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                                            viewMode === 'table'
+                                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${viewMode === 'table'
                                                 ? 'bg-white text-blue-700 shadow-sm border border-gray-200/50'
                                                 : 'text-gray-500 hover:text-gray-800'
-                                        }`}
+                                            }`}
                                         title="Table view (full matrix)"
                                     >
-                                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" /></svg>
                                         <span>Table</span>
                                     </button>
                                 </div>
@@ -725,8 +725,8 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                         const mPerms = activePerms[mod.key] || { view: false, add: false, edit: false, delete: false, special: false };
                                         const anyActive = Object.values(mPerms).some(Boolean);
                                         return (
-                                            <div 
-                                                key={mod.key} 
+                                            <div
+                                                key={mod.key}
                                                 className="bg-white rounded-xl border border-gray-200/90 p-3.5 shadow-xs space-y-3 hover:border-blue-200 transition-all"
                                             >
                                                 {/* Card Header: Module Name & Toggle All */}
@@ -739,11 +739,10 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                                         type="button"
                                                         disabled={!selectedEmployee}
                                                         onClick={() => handleToggleAllModulePermissions(mod.key)}
-                                                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors flex-shrink-0 font-sans ${
-                                                            !selectedEmployee
+                                                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors flex-shrink-0 font-sans ${!selectedEmployee
                                                                 ? 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
                                                                 : 'text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border-blue-200 cursor-pointer'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         Toggle All
                                                     </button>
@@ -761,13 +760,12 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                                         return (
                                                             <label
                                                                 key={act.key}
-                                                                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all select-none ${
-                                                                    !selectedEmployee 
-                                                                        ? 'cursor-not-allowed opacity-60 bg-gray-50 border-gray-200 text-gray-400' 
+                                                                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all select-none ${!selectedEmployee
+                                                                        ? 'cursor-not-allowed opacity-60 bg-gray-50 border-gray-200 text-gray-400'
                                                                         : isChecked
                                                                             ? 'cursor-pointer bg-blue-50 border-blue-300 text-blue-700 shadow-xs'
                                                                             : 'cursor-pointer bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <input
                                                                     type="checkbox"
@@ -798,13 +796,12 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                                                     return (
                                                                         <label
                                                                             key={sItem.key}
-                                                                            className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-all select-none ${
-                                                                                !selectedEmployee
+                                                                            className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-all select-none ${!selectedEmployee
                                                                                     ? 'cursor-not-allowed opacity-60 bg-gray-50 border-gray-200 text-gray-400'
                                                                                     : isChecked
                                                                                         ? 'cursor-pointer bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold shadow-xs'
                                                                                         : 'cursor-pointer bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                                                            }`}
+                                                                                }`}
                                                                         >
                                                                             <input
                                                                                 type="checkbox"
@@ -821,13 +818,12 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                                                 })
                                                             ) : mod.specialLabel ? (
                                                                 <label
-                                                                    className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-all select-none ${
-                                                                        !selectedEmployee
+                                                                    className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-all select-none ${!selectedEmployee
                                                                             ? 'cursor-not-allowed opacity-60 bg-gray-50 border-gray-200 text-gray-400'
                                                                             : !!mPerms.special
                                                                                 ? 'cursor-pointer bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold shadow-xs'
                                                                                 : 'cursor-pointer bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                                                    }`}
+                                                                        }`}
                                                                 >
                                                                     <input
                                                                         type="checkbox"
@@ -883,7 +879,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                                         <td className="px-4 py-3.5 font-medium text-gray-800 font-sans align-top whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_4px_rgba(0,0,0,0.03)]">
                                                             {mod.label}
                                                         </td>
-                                                        
+
                                                         {/* View checkbox */}
                                                         <td className="px-3 py-3.5 text-center align-top">
                                                             <input
@@ -894,7 +890,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                                                 className={`w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 ${!selectedEmployee ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                                                             />
                                                         </td>
-                                                        
+
                                                         {/* Add checkbox */}
                                                         <td className="px-3 py-3.5 text-center align-top">
                                                             <input
@@ -933,15 +929,14 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                                             {mod.specialLabels && Array.isArray(mod.specialLabels) ? (
                                                                 <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-lg mx-auto">
                                                                     {mod.specialLabels.map(sItem => (
-                                                                        <label 
-                                                                            key={sItem.key} 
-                                                                            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-medium transition-colors select-none ${
-                                                                                !selectedEmployee
+                                                                        <label
+                                                                            key={sItem.key}
+                                                                            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-medium transition-colors select-none ${!selectedEmployee
                                                                                     ? 'cursor-not-allowed opacity-50 bg-gray-50 border-gray-200 text-gray-400'
                                                                                     : mPerms[sItem.key]
                                                                                         ? 'cursor-pointer bg-emerald-50 border-emerald-200 text-emerald-800'
                                                                                         : 'cursor-pointer bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                                                            }`}
+                                                                                }`}
                                                                         >
                                                                             <input
                                                                                 type="checkbox"
@@ -955,14 +950,13 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                                                     ))}
                                                                 </div>
                                                             ) : mod.specialLabel ? (
-                                                                <label 
-                                                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-medium transition-colors select-none ${
-                                                                        !selectedEmployee
+                                                                <label
+                                                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-medium transition-colors select-none ${!selectedEmployee
                                                                             ? 'cursor-not-allowed opacity-50 bg-gray-50 border-gray-200 text-gray-400'
                                                                             : mPerms.special
                                                                                 ? 'cursor-pointer bg-emerald-50 border-emerald-200 text-emerald-800'
                                                                                 : 'cursor-pointer bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                                                    }`}
+                                                                        }`}
                                                                 >
                                                                     <input
                                                                         type="checkbox"
@@ -984,11 +978,10 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                                                 type="button"
                                                                 disabled={!selectedEmployee}
                                                                 onClick={() => handleToggleAllModulePermissions(mod.key)}
-                                                                className={`text-xs font-sans whitespace-nowrap ${
-                                                                    !selectedEmployee 
-                                                                        ? 'text-gray-400 cursor-not-allowed' 
+                                                                className={`text-xs font-sans whitespace-nowrap ${!selectedEmployee
+                                                                        ? 'text-gray-400 cursor-not-allowed'
                                                                         : 'text-blue-600 hover:text-blue-800 hover:underline cursor-pointer'
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 Toggle All
                                                             </button>
@@ -1054,7 +1047,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
             {confirmModal && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 z-[9999] overflow-y-auto flex items-center justify-center p-4">
                     {/* Backdrop */}
-                    <div 
+                    <div
                         className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
                         onClick={() => setConfirmModal(null)}
                     ></div>
@@ -1062,11 +1055,10 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                     {/* Modal Content */}
                     <div className="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 transform transition-all animate-in zoom-in-95 duration-200">
                         <div className="flex items-start space-x-4">
-                            <div className={`p-3 rounded-xl flex-shrink-0 ${
-                                confirmModal.type === 'danger' ? 'bg-rose-50 text-rose-600' :
-                                confirmModal.type === 'warning' ? 'bg-amber-50 text-amber-600' :
-                                'bg-blue-50 text-blue-600'
-                            }`}>
+                            <div className={`p-3 rounded-xl flex-shrink-0 ${confirmModal.type === 'danger' ? 'bg-rose-50 text-rose-600' :
+                                    confirmModal.type === 'warning' ? 'bg-amber-50 text-amber-600' :
+                                        'bg-blue-50 text-blue-600'
+                                }`}>
                                 <ShieldIcon className="w-6 h-6" />
                             </div>
                             <div className="flex-1">
@@ -1089,11 +1081,10 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                     confirmModal.onConfirm();
                                     setConfirmModal(null);
                                 }}
-                                className={`px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors font-sans ${
-                                    confirmModal.type === 'danger' ? 'bg-rose-600 hover:bg-rose-700' :
-                                    confirmModal.type === 'warning' ? 'bg-amber-600 hover:bg-amber-700' :
-                                    'bg-blue-600 hover:bg-blue-700'
-                                }`}
+                                className={`px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors font-sans ${confirmModal.type === 'danger' ? 'bg-rose-600 hover:bg-rose-700' :
+                                        confirmModal.type === 'warning' ? 'bg-amber-600 hover:bg-amber-700' :
+                                            'bg-blue-600 hover:bg-blue-700'
+                                    }`}
                             >
                                 Confirm
                             </button>

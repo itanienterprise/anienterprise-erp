@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
+import { safeStorage } from '../../../utils/storageHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { queryClient } from '../../../utils/queryClient';
 import { getSocket } from '../../../utils/socket';
@@ -166,11 +167,10 @@ const SearchableFilterSelect = ({
   const selectedOption = normalizedOptions.find(opt => opt.value === value);
   const currentText = displayValue || selectedOption?.label || value || '';
 
-  const defaultInputClass = `w-full h-10 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm outline-none transition-all pr-8 ${
-    value && !isOpen
+  const defaultInputClass = `w-full h-10 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm outline-none transition-all pr-8 ${value && !isOpen
       ? 'font-semibold text-gray-900 bg-blue-50/40 border-blue-200'
       : 'text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'
-  }`;
+    }`;
 
   const defaultLabelClass = "text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5";
 
@@ -247,9 +247,8 @@ const SearchableFilterSelect = ({
                 setIsOpen(false);
                 setSearch('');
               }}
-              className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${
-                !value ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${!value ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-50'
+                }`}
             >
               <span>{placeholder}</span>
               {!value && <CheckIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
@@ -270,13 +269,12 @@ const SearchableFilterSelect = ({
                     setIsOpen(false);
                     setSearch('');
                   }}
-                  className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${
-                    isSelected
+                  className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${isSelected
                       ? 'bg-blue-50 text-blue-700 font-bold'
                       : isHighlighted
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                        ? 'bg-gray-100 text-gray-900'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
                 >
                   <div className="truncate pr-2">
                     <span className="truncate block font-medium">{opt.label}</span>
@@ -334,7 +332,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
     try {
       const q = queryClient.getQueryData(['banks']);
       if (Array.isArray(q) && q.length > 0) return q;
-    } catch {}
+    } catch { }
     return [];
   });
   const [employeesMap, setEmployeesMap] = useState({});
@@ -515,7 +513,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
         let d = emp;
         if (emp && emp.data) {
           if (typeof emp.data === 'string') {
-            try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) {}
+            try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) { }
           } else if (typeof emp.data === 'object') {
             d = { ...emp.data, _id: emp._id };
           }
@@ -954,7 +952,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
         ? deposits.map(d => d._id === editingId ? newRecord : d)
         : [newRecord, ...deposits];
       setDeposits(updated);
-      localStorage.setItem('erp_deposits_cache', JSON.stringify(updated));
+      safeStorage.setItem(localStorage, 'erp_deposits_cache', JSON.stringify(updated));
       setShowModal(false);
       resetForm();
       if (typeof window !== 'undefined') {
@@ -990,7 +988,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
       console.error('Error deleting deposit:', err);
       const filtered = deposits.filter(d => d._id !== id);
       setDeposits(filtered);
-      localStorage.setItem('erp_deposits_cache', JSON.stringify(filtered));
+      safeStorage.setItem(localStorage, 'erp_deposits_cache', JSON.stringify(filtered));
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('erp_data_updated', {
           detail: { module: 'deposits', action: 'delete' }
@@ -1140,87 +1138,184 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
       {/* Header and Action Controls - Hidden while Form Card is Open */}
       {!showModal && (
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="w-full md:w-1/4 text-center md:text-left">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Deposit Management</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Track, record, and reconcile incoming bank deposits</p>
-        </div>
-
-        {/* Search Input */}
-        <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+          <div className="w-full md:w-1/4 text-center md:text-left">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Deposit Management</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Track, record, and reconcile incoming bank deposits</p>
           </div>
-          <input
-            type="text"
-            placeholder="Search deposits by bank, account, slip #, depositor..."
-            autoComplete="off"
-            className="h-10 block w-full pl-10 pr-4 bg-white/70 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
 
-        {/* Action Controls: Filter Button + Add Button */}
-        <div className="flex items-center justify-center md:justify-end gap-2.5 w-full md:w-auto shrink-0">
-          {/* Filter Dropdown */}
-          <div className="relative">
-            <button
-              ref={filterButtonRef}
-              onClick={() => setShowFilterPanel(!showFilterPanel)}
-              className={`h-10 flex items-center justify-center gap-2 px-4 rounded-xl border transition-all active:scale-95 text-sm font-medium shadow-sm ${
-                showFilterPanel || isFilterActive
-                  ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <FunnelIcon className={`w-4 h-4 ${showFilterPanel || isFilterActive ? 'text-white' : 'text-gray-400'}`} />
-              <span className="text-sm font-medium">Filter</span>
-              {isFilterActive && (
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              )}
-            </button>
+          {/* Search Input */}
+          <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search deposits by bank, account, slip #, depositor..."
+              autoComplete="off"
+              className="h-10 block w-full pl-10 pr-4 bg-white/70 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
 
-            {/* Mobile Filter Modal Portaled to Body (Fixes viewport containment bug) */}
-            {showFilterPanel && isMobile && typeof document !== 'undefined' && document.body && createPortal(
-              <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                {/* Full Screen Backdrop */}
-                <div
-                  className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-                  onClick={() => {
-                    setShowFilterPanel(false);
-                    setFilterDropdownOpen(null);
-                  }}
-                />
-                {/* Centered Modal Card */}
-                <div
-                  ref={filterPanelRef}
-                  onClick={(e) => e.stopPropagation()}
-                  className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-100 z-10 p-5 flex flex-col max-h-[85vh] overflow-y-auto text-left animate-in fade-in zoom-in-95 duration-150"
-                >
-                  <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-gray-100 shrink-0">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
-                        <FunnelIcon className="w-4 h-4" />
+          {/* Action Controls: Filter Button + Add Button */}
+          <div className="flex items-center justify-center md:justify-end gap-2.5 w-full md:w-auto shrink-0">
+            {/* Filter Dropdown */}
+            <div className="relative">
+              <button
+                ref={filterButtonRef}
+                onClick={() => setShowFilterPanel(!showFilterPanel)}
+                className={`h-10 flex items-center justify-center gap-2 px-4 rounded-xl border transition-all active:scale-95 text-sm font-medium shadow-sm ${showFilterPanel || isFilterActive
+                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+              >
+                <FunnelIcon className={`w-4 h-4 ${showFilterPanel || isFilterActive ? 'text-white' : 'text-gray-400'}`} />
+                <span className="text-sm font-medium">Filter</span>
+                {isFilterActive && (
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                )}
+              </button>
+
+              {/* Mobile Filter Modal Portaled to Body (Fixes viewport containment bug) */}
+              {showFilterPanel && isMobile && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                  {/* Full Screen Backdrop */}
+                  <div
+                    className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+                    onClick={() => {
+                      setShowFilterPanel(false);
+                      setFilterDropdownOpen(null);
+                    }}
+                  />
+                  {/* Centered Modal Card */}
+                  <div
+                    ref={filterPanelRef}
+                    onClick={(e) => e.stopPropagation()}
+                    className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-100 z-10 p-5 flex flex-col max-h-[85vh] overflow-y-auto text-left animate-in fade-in zoom-in-95 duration-150"
+                  >
+                    <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-gray-100 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+                          <FunnelIcon className="w-4 h-4" />
+                        </div>
+                        <h4 className="font-bold text-gray-900 text-sm">Filter Deposits</h4>
                       </div>
-                      <h4 className="font-bold text-gray-900 text-sm">Filter Deposits</h4>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={resetFilters}
+                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider px-2 py-1 bg-blue-50 rounded-lg hover:bg-blue-100 transition cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowFilterPanel(false);
+                            setFilterDropdownOpen(null);
+                          }}
+                          className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                        >
+                          <XIcon className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={resetFilters}
-                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider px-2 py-1 bg-blue-50 rounded-lg hover:bg-blue-100 transition cursor-pointer"
-                      >
-                        Reset
-                      </button>
+
+                    <div className="space-y-3">
+                      <CustomDatePicker
+                        label="Start Date"
+                        value={filters.startDate}
+                        onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                        compact={true}
+                      />
+                      <CustomDatePicker
+                        label="End Date"
+                        value={filters.endDate}
+                        onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                        compact={true}
+                      />
+
+                      {/* Bank Filter */}
+                      <SearchableFilterSelect
+                        label="Bank Name"
+                        value={filters.bankName}
+                        onChange={(name) => handleBankFilterSelect(name)}
+                        options={uniqueBankNames}
+                        placeholder="All Banks"
+                      />
+
+                      {/* Branch Filter - Shown only after Bank is selected */}
+                      {filters.bankName && (
+                        <div className="animate-in fade-in slide-in-from-top-1 duration-150">
+                          <SearchableFilterSelect
+                            label="Branch"
+                            value={filters.branch}
+                            onChange={(br) => handleBranchFilterSelect(br)}
+                            options={filterBranches}
+                            placeholder="All Branches"
+                          />
+                        </div>
+                      )}
+
+                      {/* Account Filter - Shown only after Branch is selected */}
+                      {filters.bankName && filters.branch && (
+                        <div className="animate-in fade-in slide-in-from-top-1 duration-150">
+                          <SearchableFilterSelect
+                            label="Account No / Name"
+                            value={filters.accountNo}
+                            displayValue={
+                              filters.accountNo
+                                ? `${filters.accountNo}${filterAccounts.find(a => a.accountNo === filters.accountNo)?.accountName ? ` (${filterAccounts.find(a => a.accountNo === filters.accountNo)?.accountName})` : ''}`
+                                : ''
+                            }
+                            onChange={(accNo) => handleAccountFilterSelect(accNo)}
+                            options={filterAccounts.map(a => ({
+                              value: a.accountNo,
+                              label: a.accountNo,
+                              sublabel: a.accountName
+                            }))}
+                            placeholder="All Accounts"
+                          />
+                        </div>
+                      )}
+
+                      {/* Deposit Type Filter */}
+                      <SearchableFilterSelect
+                        label="Deposit Type"
+                        value={filters.depositType}
+                        onChange={(t) => handleTypeFilterSelect(t)}
+                        options={DEPOSIT_TYPES}
+                        placeholder="All Deposit Types"
+                      />
+
                       <button
                         onClick={() => {
                           setShowFilterPanel(false);
                           setFilterDropdownOpen(null);
                         }}
-                        className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                        className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all mt-2 active:scale-[0.98] cursor-pointer shadow-md shadow-blue-500/20"
                       >
-                        <XIcon className="w-5 h-5" />
+                        APPLY FILTERS
                       </button>
                     </div>
+                  </div>
+                </div>,
+                document.body
+              )}
+
+              {/* Desktop Filter Dropdown Panel */}
+              {showFilterPanel && !isMobile && (
+                <div
+                  ref={filterPanelRef}
+                  className="absolute top-full right-0 mt-2 w-88 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-y-auto max-h-[82vh] text-left"
+                >
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                    <h4 className="font-bold text-gray-900 text-sm">Filter Deposits</h4>
+                    <button
+                      onClick={resetFilters}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider cursor-pointer"
+                    >
+                      Reset
+                    </button>
                   </div>
 
                   <div className="space-y-3">
@@ -1295,126 +1390,28 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                         setShowFilterPanel(false);
                         setFilterDropdownOpen(null);
                       }}
-                      className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all mt-2 active:scale-[0.98] cursor-pointer shadow-md shadow-blue-500/20"
+                      className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-2 active:scale-[0.98] cursor-pointer"
                     >
                       APPLY FILTERS
                     </button>
                   </div>
                 </div>
-              </div>,
-              document.body
-            )}
+              )}
+            </div>
 
-            {/* Desktop Filter Dropdown Panel */}
-            {showFilterPanel && !isMobile && (
-              <div
-                ref={filterPanelRef}
-                className="absolute top-full right-0 mt-2 w-88 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-y-auto max-h-[82vh] text-left"
+            {/* Add Deposit Button */}
+            {!cannotAddEdit && (
+              <button
+                onClick={openAddModal}
+                data-action="Create New Deposit"
+                className="h-10 border border-transparent px-4.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center text-sm gap-2 whitespace-nowrap cursor-pointer"
               >
-                <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
-                  <h4 className="font-bold text-gray-900 text-sm">Filter Deposits</h4>
-                  <button
-                    onClick={resetFilters}
-                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider cursor-pointer"
-                  >
-                    Reset
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  <CustomDatePicker
-                    label="Start Date"
-                    value={filters.startDate}
-                    onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                    compact={true}
-                  />
-                  <CustomDatePicker
-                    label="End Date"
-                    value={filters.endDate}
-                    onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                    compact={true}
-                  />
-
-                  {/* Bank Filter */}
-                  <SearchableFilterSelect
-                    label="Bank Name"
-                    value={filters.bankName}
-                    onChange={(name) => handleBankFilterSelect(name)}
-                    options={uniqueBankNames}
-                    placeholder="All Banks"
-                  />
-
-                  {/* Branch Filter - Shown only after Bank is selected */}
-                  {filters.bankName && (
-                    <div className="animate-in fade-in slide-in-from-top-1 duration-150">
-                      <SearchableFilterSelect
-                        label="Branch"
-                        value={filters.branch}
-                        onChange={(br) => handleBranchFilterSelect(br)}
-                        options={filterBranches}
-                        placeholder="All Branches"
-                      />
-                    </div>
-                  )}
-
-                  {/* Account Filter - Shown only after Branch is selected */}
-                  {filters.bankName && filters.branch && (
-                    <div className="animate-in fade-in slide-in-from-top-1 duration-150">
-                      <SearchableFilterSelect
-                        label="Account No / Name"
-                        value={filters.accountNo}
-                        displayValue={
-                          filters.accountNo
-                            ? `${filters.accountNo}${filterAccounts.find(a => a.accountNo === filters.accountNo)?.accountName ? ` (${filterAccounts.find(a => a.accountNo === filters.accountNo)?.accountName})` : ''}`
-                            : ''
-                        }
-                        onChange={(accNo) => handleAccountFilterSelect(accNo)}
-                        options={filterAccounts.map(a => ({
-                          value: a.accountNo,
-                          label: a.accountNo,
-                          sublabel: a.accountName
-                        }))}
-                        placeholder="All Accounts"
-                      />
-                    </div>
-                  )}
-
-                  {/* Deposit Type Filter */}
-                  <SearchableFilterSelect
-                    label="Deposit Type"
-                    value={filters.depositType}
-                    onChange={(t) => handleTypeFilterSelect(t)}
-                    options={DEPOSIT_TYPES}
-                    placeholder="All Deposit Types"
-                  />
-
-                  <button
-                    onClick={() => {
-                      setShowFilterPanel(false);
-                      setFilterDropdownOpen(null);
-                    }}
-                    className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-2 active:scale-[0.98] cursor-pointer"
-                  >
-                    APPLY FILTERS
-                  </button>
-                </div>
-              </div>
+                <PlusIcon className="w-4 h-4" />
+                <span>Record Deposit</span>
+              </button>
             )}
           </div>
-
-          {/* Add Deposit Button */}
-          {!cannotAddEdit && (
-            <button
-              onClick={openAddModal}
-              data-action="Create New Deposit"
-              className="h-10 border border-transparent px-4.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center text-sm gap-2 whitespace-nowrap cursor-pointer"
-            >
-              <PlusIcon className="w-4 h-4" />
-              <span>Record Deposit</span>
-            </button>
-          )}
         </div>
-      </div>
       )}
 
       {/* Add / Edit Bank Deposit Card (Matches New Collection Card Style) */}
@@ -1626,482 +1623,481 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
         <div className="space-y-4 md:space-y-6">
           {/* KPI Overview Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-        {/* Total Deposits Card */}
-        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
-              <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Total Deposits</p>
-              <div className="p-1.5 sm:p-2 bg-blue-50 text-blue-600 rounded-lg sm:rounded-xl border border-blue-100 shadow-sm shrink-0">
-                <DollarSignIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+            {/* Total Deposits Card */}
+            <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                  <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Total Deposits</p>
+                  <div className="p-1.5 sm:p-2 bg-blue-50 text-blue-600 rounded-lg sm:rounded-xl border border-blue-100 shadow-sm shrink-0">
+                    <DollarSignIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                  </div>
+                </div>
+                <h3
+                  className="text-[13px] sm:text-base lg:text-xl font-black text-gray-900 tracking-tight leading-snug break-words"
+                  title={`৳${stats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                >
+                  ৳{stats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </h3>
               </div>
+              <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">Cumulative deposits</p>
             </div>
-            <h3
-              className="text-[13px] sm:text-base lg:text-xl font-black text-gray-900 tracking-tight leading-snug break-words"
-              title={`৳${stats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-            >
-              ৳{stats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </h3>
-          </div>
-          <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">Cumulative deposits</p>
-        </div>
 
-        {/* Transactions Card */}
-        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
-              <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Total Entries</p>
-              <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg sm:rounded-xl border border-indigo-100 shadow-sm shrink-0">
-                <FileTextIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+            {/* Transactions Card */}
+            <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                  <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Total Entries</p>
+                  <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg sm:rounded-xl border border-indigo-100 shadow-sm shrink-0">
+                    <FileTextIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                  </div>
+                </div>
+                <h3 className="text-[13px] sm:text-base lg:text-xl font-black text-gray-900 tracking-tight leading-snug">{stats.count}</h3>
               </div>
+              <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">All deposit entries</p>
             </div>
-            <h3 className="text-[13px] sm:text-base lg:text-xl font-black text-gray-900 tracking-tight leading-snug">{stats.count}</h3>
-          </div>
-          <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">All deposit entries</p>
-        </div>
 
-        {/* Today's Deposits Card */}
-        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
-              <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Today's Deposit</p>
-              <div className="p-1.5 sm:p-2 bg-emerald-50 text-emerald-600 rounded-lg sm:rounded-xl border border-emerald-100 shadow-sm shrink-0">
-                <ArrowDownLeftIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+            {/* Today's Deposits Card */}
+            <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                  <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Today's Deposit</p>
+                  <div className="p-1.5 sm:p-2 bg-emerald-50 text-emerald-600 rounded-lg sm:rounded-xl border border-emerald-100 shadow-sm shrink-0">
+                    <ArrowDownLeftIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                  </div>
+                </div>
+                <h3
+                  className="text-[13px] sm:text-base lg:text-xl font-black text-emerald-600 tracking-tight leading-snug break-words"
+                  title={`৳${stats.todayAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                >
+                  ৳{stats.todayAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </h3>
               </div>
+              <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">Deposited today</p>
             </div>
-            <h3
-              className="text-[13px] sm:text-base lg:text-xl font-black text-emerald-600 tracking-tight leading-snug break-words"
-              title={`৳${stats.todayAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-            >
-              ৳{stats.todayAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </h3>
-          </div>
-          <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">Deposited today</p>
-        </div>
 
-        {/* Receiving Banks */}
-        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
-              <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Receiving Banks</p>
-              <div className="p-1.5 sm:p-2 bg-sky-50 text-sky-600 rounded-lg sm:rounded-xl border border-sky-100 shadow-sm shrink-0">
-                <BuildingIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+            {/* Receiving Banks */}
+            <div className="bg-white/70 backdrop-blur-md rounded-2xl p-2.5 sm:p-4.5 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
+                  <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight">Receiving Banks</p>
+                  <div className="p-1.5 sm:p-2 bg-sky-50 text-sky-600 rounded-lg sm:rounded-xl border border-sky-100 shadow-sm shrink-0">
+                    <BuildingIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                  </div>
+                </div>
+                <h3 className="text-[13px] sm:text-base lg:text-xl font-black text-gray-900 tracking-tight leading-snug">{stats.activeBanks}</h3>
               </div>
+              <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">Active deposit banks</p>
             </div>
-            <h3 className="text-[13px] sm:text-base lg:text-xl font-black text-gray-900 tracking-tight leading-snug">{stats.activeBanks}</h3>
           </div>
-          <p className="text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 font-medium truncate">Active deposit banks</p>
-        </div>
-      </div>
 
-      {/* Active Filter Badges */}
-      {isFilterActive && (
-        <div className="flex items-center gap-2 flex-wrap text-xs px-1">
-          <span className="font-semibold text-gray-400 text-[11px] uppercase tracking-wider">Active Filters:</span>
-          {filters.bankName && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
-              Bank: {filters.bankName}
-              <button onClick={() => handleFilterChange('bankName', '')} className="hover:text-blue-900 cursor-pointer">
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {filters.branch && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
-              Branch: {filters.branch}
-              <button onClick={() => handleFilterChange('branch', '')} className="hover:text-blue-900 cursor-pointer">
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {filters.accountNo && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
-              A/C: {filters.accountNo}
-              <button onClick={() => handleFilterChange('accountNo', '')} className="hover:text-blue-900 cursor-pointer">
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {filters.depositType && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
-              Type: {filters.depositType}
-              <button onClick={() => handleFilterChange('depositType', '')} className="hover:text-blue-900 cursor-pointer">
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {(filters.startDate || filters.endDate) && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
-              Date: {filters.startDate || '...'} to {filters.endDate || '...'}
-              <button
-                onClick={() => {
-                  handleFilterChange('startDate', '');
-                  handleFilterChange('endDate', '');
-                }}
-                className="hover:text-blue-900 cursor-pointer"
-              >
-                <XIcon className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          <button
-            onClick={resetFilters}
-            className="text-[11px] font-bold text-gray-500 hover:text-gray-700 underline ml-1 cursor-pointer"
-          >
-            Clear all
-          </button>
-        </div>
-      )}
-
-      {/* Desktop Table Section */}
-      <div className="hidden md:block bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1150px]">
-            <thead>
-              <tr className="bg-gray-50/50">
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Date</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Bank</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Branch</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Account No</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Account Name</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Deposit Type</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Slip / Ref #</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Deposited By</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Remarks / Note</th>
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Amount (BDT)</th>
-                {canShowEntryBy && (
-                  <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Entry By</th>
-                )}
-                <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={canShowEntryBy ? 12 : 11} className="px-5 py-12 text-center text-gray-400">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
-                    <p className="text-sm">Loading deposit records...</p>
-                  </td>
-                </tr>
-              ) : filteredDeposits.length === 0 ? (
-                <tr>
-                  <td colSpan={canShowEntryBy ? 12 : 11} className="px-5 py-16 text-center text-gray-400">
-                    <div className="max-w-xs mx-auto space-y-3">
-                      <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl mx-auto flex items-center justify-center">
-                        <ArrowDownLeftIcon className="w-6 h-6" />
-                      </div>
-                      <p className="text-sm font-medium text-gray-600">No deposit records found</p>
-                      <p className="text-xs text-gray-400">
-                        {searchQuery || isFilterActive
-                          ? "Try modifying your search or filter criteria."
-                          : "Click 'Record Deposit' above to add your first deposit entry."}
-                      </p>
-                      {!cannotAddEdit && (
-                        <button
-                          onClick={openAddModal}
-                          className="mt-2 inline-flex items-center px-3.5 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                        >
-                          <PlusIcon className="w-3.5 h-3.5 mr-1" /> Record Deposit
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredDeposits.map((item, idx) => (
-                  <tr
-                    key={item._id || idx}
-                    className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100 last:border-b-0"
+          {/* Active Filter Badges */}
+          {isFilterActive && (
+            <div className="flex items-center gap-2 flex-wrap text-xs px-1">
+              <span className="font-semibold text-gray-400 text-[11px] uppercase tracking-wider">Active Filters:</span>
+              {filters.bankName && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                  Bank: {filters.bankName}
+                  <button onClick={() => handleFilterChange('bankName', '')} className="hover:text-blue-900 cursor-pointer">
+                    <XIcon className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {filters.branch && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                  Branch: {filters.branch}
+                  <button onClick={() => handleFilterChange('branch', '')} className="hover:text-blue-900 cursor-pointer">
+                    <XIcon className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {filters.accountNo && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                  A/C: {filters.accountNo}
+                  <button onClick={() => handleFilterChange('accountNo', '')} className="hover:text-blue-900 cursor-pointer">
+                    <XIcon className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {filters.depositType && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                  Type: {filters.depositType}
+                  <button onClick={() => handleFilterChange('depositType', '')} className="hover:text-blue-900 cursor-pointer">
+                    <XIcon className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {(filters.startDate || filters.endDate) && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                  Date: {filters.startDate || '...'} to {filters.endDate || '...'}
+                  <button
+                    onClick={() => {
+                      handleFilterChange('startDate', '');
+                      handleFilterChange('endDate', '');
+                    }}
+                    className="hover:text-blue-900 cursor-pointer"
                   >
-                    <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600">
-                      {formatDate(item.date)}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[13px] font-bold text-gray-700">
-                      {item.bankName || '—'}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600">
-                      {item.branch ? (item.branch.toLowerCase().includes('branch') ? item.branch : `${item.branch} Branch`) : '—'}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600 font-mono">
-                      {item.accountNo || '—'}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600">
-                      {item.accountName || '—'}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {item.depositType || 'Deposit'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600 font-mono">
-                      {item.referenceNo || '—'}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600">
-                      {item.depositedBy || '—'}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600 max-w-[200px] truncate" title={item.remarks || item.note || ''}>
-                      {item.remarks || item.note || '—'}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-right font-bold text-emerald-600 text-[13px]">
-                      ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
+                    <XIcon className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              <button
+                onClick={resetFilters}
+                className="text-[11px] font-bold text-gray-500 hover:text-gray-700 underline ml-1 cursor-pointer"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+
+          {/* Desktop Table Section */}
+          <div className="hidden md:block bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[1150px]">
+                <thead>
+                  <tr className="bg-gray-50/50">
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Date</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Bank</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Branch</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Account No</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Account Name</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Deposit Type</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Slip / Ref #</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Deposited By</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Remarks / Note</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Amount (BDT)</th>
                     {canShowEntryBy && (
-                      <td className="px-5 py-4 whitespace-nowrap text-center align-middle">
-                        <div className="flex flex-col items-center justify-center gap-0.5">
-                          <span className="text-xs font-semibold text-gray-700">
-                            {getEntryByName(item.entryBy, item.entryByName || item.createdBy || item.createdByName || item.userName || item.user)}
-                          </span>
-                          {(item.editedBy || item.editedByName || (item.updatedBy && item.updatedBy !== item.entryBy && item.updatedBy !== item.entryByName)) && (
-                            <span className="text-[10px] text-amber-600 font-medium">
-                              ✎ {getEditedByName(item.editedBy, item.editedByName || item.updatedBy)}
-                            </span>
-                          )}
-                          {(item.approvedByName || item.approvedBy) && (
-                            <span className="text-[10px] text-emerald-600 font-semibold" title="Approved">
-                              ✓ {getFirstNameFromIdentifier(item.approvedByName || item.approvedBy)}
-                            </span>
+                      <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Entry By</th>
+                    )}
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={canShowEntryBy ? 12 : 11} className="px-5 py-12 text-center text-gray-400">
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                        <p className="text-sm">Loading deposit records...</p>
+                      </td>
+                    </tr>
+                  ) : filteredDeposits.length === 0 ? (
+                    <tr>
+                      <td colSpan={canShowEntryBy ? 12 : 11} className="px-5 py-16 text-center text-gray-400">
+                        <div className="max-w-xs mx-auto space-y-3">
+                          <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl mx-auto flex items-center justify-center">
+                            <ArrowDownLeftIcon className="w-6 h-6" />
+                          </div>
+                          <p className="text-sm font-medium text-gray-600">No deposit records found</p>
+                          <p className="text-xs text-gray-400">
+                            {searchQuery || isFilterActive
+                              ? "Try modifying your search or filter criteria."
+                              : "Click 'Record Deposit' above to add your first deposit entry."}
+                          </p>
+                          {!cannotAddEdit && (
+                            <button
+                              onClick={openAddModal}
+                              className="mt-2 inline-flex items-center px-3.5 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                            >
+                              <PlusIcon className="w-3.5 h-3.5 mr-1" /> Record Deposit
+                            </button>
                           )}
                         </div>
                       </td>
-                    )}
-                    <td className="px-5 py-4 whitespace-nowrap text-center">
-                      <div className="flex items-center justify-center space-x-1.5">
-                        <button
-                          onClick={() => setViewingDeposit(item)}
-                          title="View Deposit Voucher"
-                          className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                        >
-                          <EyeIcon className="w-4 h-4" />
-                        </button>
-                        {canEdit && (
-                          <button
-                            onClick={() => openEditModal(item)}
-                            title="Edit Deposit"
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                          >
-                            <EditIcon className="w-4 h-4" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button
-                            onClick={() => handleDelete(item._id)}
-                            title="Delete Deposit"
-                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-
-          </table>
-        </div>
-        <TableScrollNav count={filteredDeposits.length} />
-      </div>
-
-      {/* Mobile Card Section */}
-      <div className="md:hidden space-y-3 pb-36">
-        {isLoading ? (
-          <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
-            <p className="text-xs text-gray-400 font-medium">Loading deposit records...</p>
-          </div>
-        ) : filteredDeposits.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
-            <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl mx-auto flex items-center justify-center mb-3">
-              <ArrowDownLeftIcon className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-bold text-gray-700">No deposit records found</p>
-            <p className="text-xs text-gray-400 mt-1">
-              {searchQuery || isFilterActive
-                ? "Try modifying your search or filter criteria."
-                : "Click 'Record Deposit' above to add your first deposit entry."}
-            </p>
-            {!cannotAddEdit && (
-              <button
-                onClick={openAddModal}
-                className="mt-3 inline-flex items-center px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition active:scale-95 shadow-md shadow-blue-500/20"
-              >
-                <PlusIcon className="w-3.5 h-3.5 mr-1.5" /> Record Deposit
-              </button>
-            )}
-          </div>
-        ) : (
-          filteredDeposits.map((item, idx) => {
-            const isExpanded = expandedDepositId === (item._id || idx);
-            const branchDisplay = item.branch
-              ? (item.branch.toLowerCase().includes('branch') ? item.branch : `${item.branch} Branch`)
-              : '—';
-            const entryName = getEntryByName(item.entryBy, item.entryByName || item.createdBy || item.createdByName || item.userName || item.user);
-            const editedName = (item.editedBy || item.editedByName || (item.updatedBy && item.updatedBy !== item.entryBy && item.updatedBy !== item.entryByName))
-              ? getEditedByName(item.editedBy, item.editedByName || item.updatedBy)
-              : null;
-            const approvedName = (item.approvedByName || item.approvedBy)
-              ? getFirstNameFromIdentifier(item.approvedByName || item.approvedBy)
-              : null;
-
-            return (
-              <div
-                key={item._id || idx}
-                className={`deposit-mobile-card bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${
-                  isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-100 shadow-sm hover:border-gray-200'
-                }`}
-              >
-                {/* Mobile Card Header - Clickable for Collapse / Expand */}
-                <div
-                  onClick={(e) => {
-                    const willExpand = !isExpanded;
-                    setExpandedDepositId(willExpand ? (item._id || idx) : null);
-                    if (willExpand) {
-                      const cardEl = e.currentTarget.closest('.deposit-mobile-card') || e.currentTarget;
-                      setTimeout(() => {
-                        cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                      }, 120);
-                    }
-                  }}
-                  className="p-4 cursor-pointer select-none active:bg-gray-50/50 transition-colors flex items-center justify-between gap-3"
-                >
-                  {/* Left Side: Date, Bank Name, Account */}
-                  <div className="space-y-1 text-left min-w-0 flex-1">
-                    <div className="text-xs font-semibold text-gray-400">
-                      {formatDate(item.date)}
-                    </div>
-                    <div className="font-bold text-gray-900 text-base sm:text-lg leading-tight truncate">
-                      {item.bankName || 'Unknown Bank'}
-                    </div>
-                    {item.accountNo && (
-                      <div className="font-mono text-xs font-semibold text-blue-600 truncate">
-                        {item.accountNo}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right Side: Amount */}
-                  <div className="text-right shrink-0">
-                    <div className="font-black text-emerald-600 text-lg sm:text-xl">
-                      ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expandable Details Body */}
-                {isExpanded && (
-                  <div className="px-4 pb-5 animate-in slide-in-from-top-2 duration-200">
-                    <div className="space-y-2.5 pt-3 border-t border-gray-100">
-                      <div className="flex items-start text-xs sm:text-sm">
-                        <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Date -</span>
-                        <span className="font-semibold text-gray-800 flex-1">{formatDate(item.date)}</span>
-                      </div>
-
-                      <div className="flex items-start text-xs sm:text-sm">
-                        <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Bank -</span>
-                        <span className="font-bold text-gray-900 uppercase flex-1">{item.bankName || '—'}</span>
-                      </div>
-
-                      <div className="flex items-start text-xs sm:text-sm">
-                        <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Branch -</span>
-                        <span className="font-semibold text-gray-800 leading-tight break-words flex-1">{branchDisplay}</span>
-                      </div>
-
-                      <div className="flex items-start text-xs sm:text-sm">
-                        <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Account Name -</span>
-                        <span className="font-semibold text-gray-800 leading-tight break-words flex-1">{item.accountName || '—'}</span>
-                      </div>
-
-                      <div className="flex items-start text-xs sm:text-sm">
-                        <span className="w-28 text-blue-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Account No -</span>
-                        <span className="font-black text-blue-600 font-mono select-all flex-1">{item.accountNo || '—'}</span>
-                      </div>
-
-                      <div className="flex items-start text-xs sm:text-sm">
-                        <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Deposit Type -</span>
-                        <span className="font-semibold text-gray-800 flex-1">
-                          {item.depositType || 'Deposit'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-start text-xs sm:text-sm">
-                        <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Slip / Ref # -</span>
-                        <span className="font-mono text-gray-700 font-semibold flex-1">{item.referenceNo || '—'}</span>
-                      </div>
-
-                      <div className="flex items-start text-xs sm:text-sm">
-                        <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Deposited By -</span>
-                        <span className="font-semibold text-gray-800 flex-1">{item.depositedBy || '—'}</span>
-                      </div>
-
-                      {(item.remarks || item.note) && (
-                        <div className="flex items-start text-xs sm:text-sm">
-                          <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Remarks -</span>
-                          <span className="text-gray-700 font-medium leading-relaxed break-words flex-1">{item.remarks || item.note}</span>
-                        </div>
-                      )}
-
-                      <div className="flex items-start text-xs sm:text-sm">
-                        <span className="w-28 text-emerald-500 font-bold uppercase tracking-wider text-[11px] shrink-0">Amount -</span>
-                        <span className="font-black text-emerald-600 text-sm sm:text-base flex-1">
+                    </tr>
+                  ) : (
+                    filteredDeposits.map((item, idx) => (
+                      <tr
+                        key={item._id || idx}
+                        className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100 last:border-b-0"
+                      >
+                        <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600">
+                          {formatDate(item.date)}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-[13px] font-bold text-gray-700">
+                          {item.bankName || '—'}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600">
+                          {item.branch ? (item.branch.toLowerCase().includes('branch') ? item.branch : `${item.branch} Branch`) : '—'}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600 font-mono">
+                          {item.accountNo || '—'}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600">
+                          {item.accountName || '—'}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {item.depositType || 'Deposit'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600 font-mono">
+                          {item.referenceNo || '—'}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600">
+                          {item.depositedBy || '—'}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-[13px] font-medium text-gray-600 max-w-[200px] truncate" title={item.remarks || item.note || ''}>
+                          {item.remarks || item.note || '—'}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-right font-bold text-emerald-600 text-[13px]">
                           ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                        </td>
+                        {canShowEntryBy && (
+                          <td className="px-5 py-4 whitespace-nowrap text-center align-middle">
+                            <div className="flex flex-col items-center justify-center gap-0.5">
+                              <span className="text-xs font-semibold text-gray-700">
+                                {getEntryByName(item.entryBy, item.entryByName || item.createdBy || item.createdByName || item.userName || item.user)}
+                              </span>
+                              {(item.editedBy || item.editedByName || (item.updatedBy && item.updatedBy !== item.entryBy && item.updatedBy !== item.entryByName)) && (
+                                <span className="text-[10px] text-amber-600 font-medium">
+                                  ✎ {getEditedByName(item.editedBy, item.editedByName || item.updatedBy)}
+                                </span>
+                              )}
+                              {(item.approvedByName || item.approvedBy) && (
+                                <span className="text-[10px] text-emerald-600 font-semibold" title="Approved">
+                                  ✓ {getFirstNameFromIdentifier(item.approvedByName || item.approvedBy)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        <td className="px-5 py-4 whitespace-nowrap text-center">
+                          <div className="flex items-center justify-center space-x-1.5">
+                            <button
+                              onClick={() => setViewingDeposit(item)}
+                              title="View Deposit Voucher"
+                              className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                            >
+                              <EyeIcon className="w-4 h-4" />
+                            </button>
+                            {canEdit && (
+                              <button
+                                onClick={() => openEditModal(item)}
+                                title="Edit Deposit"
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                              >
+                                <EditIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={() => handleDelete(item._id)}
+                                title="Delete Deposit"
+                                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+
+              </table>
+            </div>
+            <TableScrollNav count={filteredDeposits.length} />
+          </div>
+
+          {/* Mobile Card Section */}
+          <div className="md:hidden space-y-3 pb-36">
+            {isLoading ? (
+              <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                <p className="text-xs text-gray-400 font-medium">Loading deposit records...</p>
+              </div>
+            ) : filteredDeposits.length === 0 ? (
+              <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
+                <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl mx-auto flex items-center justify-center mb-3">
+                  <ArrowDownLeftIcon className="w-6 h-6" />
+                </div>
+                <p className="text-sm font-bold text-gray-700">No deposit records found</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {searchQuery || isFilterActive
+                    ? "Try modifying your search or filter criteria."
+                    : "Click 'Record Deposit' above to add your first deposit entry."}
+                </p>
+                {!cannotAddEdit && (
+                  <button
+                    onClick={openAddModal}
+                    className="mt-3 inline-flex items-center px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition active:scale-95 shadow-md shadow-blue-500/20"
+                  >
+                    <PlusIcon className="w-3.5 h-3.5 mr-1.5" /> Record Deposit
+                  </button>
+                )}
+              </div>
+            ) : (
+              filteredDeposits.map((item, idx) => {
+                const isExpanded = expandedDepositId === (item._id || idx);
+                const branchDisplay = item.branch
+                  ? (item.branch.toLowerCase().includes('branch') ? item.branch : `${item.branch} Branch`)
+                  : '—';
+                const entryName = getEntryByName(item.entryBy, item.entryByName || item.createdBy || item.createdByName || item.userName || item.user);
+                const editedName = (item.editedBy || item.editedByName || (item.updatedBy && item.updatedBy !== item.entryBy && item.updatedBy !== item.entryByName))
+                  ? getEditedByName(item.editedBy, item.editedByName || item.updatedBy)
+                  : null;
+                const approvedName = (item.approvedByName || item.approvedBy)
+                  ? getFirstNameFromIdentifier(item.approvedByName || item.approvedBy)
+                  : null;
+
+                return (
+                  <div
+                    key={item._id || idx}
+                    className={`deposit-mobile-card bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 ring-2 ring-blue-500/10 shadow-md' : 'border-gray-100 shadow-sm hover:border-gray-200'
+                      }`}
+                  >
+                    {/* Mobile Card Header - Clickable for Collapse / Expand */}
+                    <div
+                      onClick={(e) => {
+                        const willExpand = !isExpanded;
+                        setExpandedDepositId(willExpand ? (item._id || idx) : null);
+                        if (willExpand) {
+                          const cardEl = e.currentTarget.closest('.deposit-mobile-card') || e.currentTarget;
+                          setTimeout(() => {
+                            cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                          }, 120);
+                        }
+                      }}
+                      className="p-4 cursor-pointer select-none active:bg-gray-50/50 transition-colors flex items-center justify-between gap-3"
+                    >
+                      {/* Left Side: Date, Bank Name, Account */}
+                      <div className="space-y-1 text-left min-w-0 flex-1">
+                        <div className="text-xs font-semibold text-gray-400">
+                          {formatDate(item.date)}
+                        </div>
+                        <div className="font-bold text-gray-900 text-base sm:text-lg leading-tight truncate">
+                          {item.bankName || 'Unknown Bank'}
+                        </div>
+                        {item.accountNo && (
+                          <div className="font-mono text-xs font-semibold text-blue-600 truncate">
+                            {item.accountNo}
+                          </div>
+                        )}
                       </div>
 
-                      {canShowEntryBy && (
-                        <div className="flex items-start text-xs sm:text-sm">
-                          <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Entry By -</span>
-                          <div className="flex flex-col gap-0.5 flex-1">
-                            <span className="font-semibold text-gray-800">{entryName}</span>
-                            {editedName && (
-                              <span className="text-[10px] text-amber-600 font-medium">✎ {editedName}</span>
+                      {/* Right Side: Amount */}
+                      <div className="text-right shrink-0">
+                        <div className="font-black text-emerald-600 text-lg sm:text-xl">
+                          ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expandable Details Body */}
+                    {isExpanded && (
+                      <div className="px-4 pb-5 animate-in slide-in-from-top-2 duration-200">
+                        <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Date -</span>
+                            <span className="font-semibold text-gray-800 flex-1">{formatDate(item.date)}</span>
+                          </div>
+
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Bank -</span>
+                            <span className="font-bold text-gray-900 uppercase flex-1">{item.bankName || '—'}</span>
+                          </div>
+
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Branch -</span>
+                            <span className="font-semibold text-gray-800 leading-tight break-words flex-1">{branchDisplay}</span>
+                          </div>
+
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Account Name -</span>
+                            <span className="font-semibold text-gray-800 leading-tight break-words flex-1">{item.accountName || '—'}</span>
+                          </div>
+
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-blue-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Account No -</span>
+                            <span className="font-black text-blue-600 font-mono select-all flex-1">{item.accountNo || '—'}</span>
+                          </div>
+
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Deposit Type -</span>
+                            <span className="font-semibold text-gray-800 flex-1">
+                              {item.depositType || 'Deposit'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Slip / Ref # -</span>
+                            <span className="font-mono text-gray-700 font-semibold flex-1">{item.referenceNo || '—'}</span>
+                          </div>
+
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Deposited By -</span>
+                            <span className="font-semibold text-gray-800 flex-1">{item.depositedBy || '—'}</span>
+                          </div>
+
+                          {(item.remarks || item.note) && (
+                            <div className="flex items-start text-xs sm:text-sm">
+                              <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Remarks -</span>
+                              <span className="text-gray-700 font-medium leading-relaxed break-words flex-1">{item.remarks || item.note}</span>
+                            </div>
+                          )}
+
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-emerald-500 font-bold uppercase tracking-wider text-[11px] shrink-0">Amount -</span>
+                            <span className="font-black text-emerald-600 text-sm sm:text-base flex-1">
+                              ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+
+                          {canShowEntryBy && (
+                            <div className="flex items-start text-xs sm:text-sm">
+                              <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Entry By -</span>
+                              <div className="flex flex-col gap-0.5 flex-1">
+                                <span className="font-semibold text-gray-800">{entryName}</span>
+                                {editedName && (
+                                  <span className="text-[10px] text-amber-600 font-medium">✎ {editedName}</span>
+                                )}
+                                {approvedName && (
+                                  <span className="text-[10px] text-emerald-600 font-semibold">✓ {approvedName}</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Bottom Action Buttons */}
+                          <div className="pt-3 mt-2 border-t border-gray-100 flex items-center justify-end gap-2 flex-wrap">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setViewingDeposit(item); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition active:scale-95"
+                            >
+                              <EyeIcon className="w-3.5 h-3.5" />
+                              <span>View Voucher</span>
+                            </button>
+
+                            {canEdit && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openEditModal(item); }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition active:scale-95"
+                              >
+                                <EditIcon className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </button>
                             )}
-                            {approvedName && (
-                              <span className="text-[10px] text-emerald-600 font-semibold">✓ {approvedName}</span>
+
+                            {canDelete && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition active:scale-95"
+                              >
+                                <TrashIcon className="w-3.5 h-3.5" />
+                                <span>Delete</span>
+                              </button>
                             )}
                           </div>
                         </div>
-                      )}
-
-                      {/* Bottom Action Buttons */}
-                      <div className="pt-3 mt-2 border-t border-gray-100 flex items-center justify-end gap-2 flex-wrap">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setViewingDeposit(item); }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition active:scale-95"
-                        >
-                          <EyeIcon className="w-3.5 h-3.5" />
-                          <span>View Voucher</span>
-                        </button>
-
-                        {canEdit && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); openEditModal(item); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition active:scale-95"
-                          >
-                            <EditIcon className="w-3.5 h-3.5" />
-                            <span>Edit</span>
-                          </button>
-                        )}
-
-                        {canDelete && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition active:scale-95"
-                          >
-                            <TrashIcon className="w-3.5 h-3.5" />
-                            <span>Delete</span>
-                          </button>
-                        )}
                       </div>
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  )}
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
 
       {/* View Deposit Voucher Modal */}
       {viewingDeposit && typeof document !== 'undefined' && document.body && createPortal(

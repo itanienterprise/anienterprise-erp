@@ -4,6 +4,7 @@ import { ShieldIcon, CheckIcon, XIcon, PlusIcon, SearchIcon } from '../../Icons'
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { MODULES_LIST, getDefaultPermissionsForRole } from '../../../utils/permissionHelper';
+import { safeStorage, sanitizeUserForStorage } from '../../../utils/storageHelper';
 
 const RoleCreation = ({ setCurrentUser }) => {
     // Custom confirm modal state
@@ -14,7 +15,7 @@ const RoleCreation = ({ setCurrentUser }) => {
     const [customRoles, setCustomRoles] = useState([]);
     const [newRoleName, setNewRoleName] = useState('');
     const [isCreatingRole, setIsCreatingRole] = useState(false);
-    
+
     const [selectedCustomRole, setSelectedCustomRole] = useState(null);
     const [selectedStaticRole, setSelectedStaticRole] = useState(null);
     const [permissions, setPermissions] = useState({});
@@ -67,7 +68,7 @@ const RoleCreation = ({ setCurrentUser }) => {
     const selectStaticRoleForEditing = (rName) => {
         setSelectedStaticRole(rName);
         setSelectedCustomRole(null);
-        
+
         // Load custom override if exists, else static defaults
         const defaults = getDefaultPermissionsForRole(rName);
         const override = customRoles.find(cr => cr.name === rName);
@@ -96,8 +97,8 @@ const RoleCreation = ({ setCurrentUser }) => {
         try {
             // Determine default permissions for the new role: 
             // uses currently active matrix or standard General Staff defaults
-            const templatePermissions = permissions && Object.keys(permissions).length > 0 
-                ? permissions 
+            const templatePermissions = permissions && Object.keys(permissions).length > 0
+                ? permissions
                 : getDefaultPermissionsForRole('General Staff');
 
             const payload = {
@@ -114,9 +115,9 @@ const RoleCreation = ({ setCurrentUser }) => {
             }
         } catch (error) {
             console.error('Error creating custom role:', error);
-            setAlertMsg({ 
-                type: 'error', 
-                text: error.response?.data?.message || 'Failed to create custom role. Please try again.' 
+            setAlertMsg({
+                type: 'error',
+                text: error.response?.data?.message || 'Failed to create custom role. Please try again.'
             });
         } finally {
             setIsCreatingRole(false);
@@ -165,7 +166,7 @@ const RoleCreation = ({ setCurrentUser }) => {
             const modulePerms = prev[moduleKey] || { view: false, add: false, edit: false, delete: false, special: false };
             const anyChecked = Object.values(modulePerms).some(v => v);
             const newValue = !anyChecked;
-            
+
             const updatedPerms = {
                 view: newValue,
                 add: newValue,
@@ -210,7 +211,8 @@ const RoleCreation = ({ setCurrentUser }) => {
                         const sessionResp = await axios.get(`${API_BASE_URL}/api/auth/check`);
                         if (sessionResp.data?.authenticated && sessionResp.data?.user) {
                             const freshUser = sessionResp.data.user;
-                            localStorage.setItem('currentUser', JSON.stringify(freshUser));
+                            const safe = sanitizeUserForStorage(freshUser);
+                            safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safe));
                             if (setCurrentUser) setCurrentUser(freshUser);
                         }
                     } catch (e) { /* non-critical */ }
@@ -223,7 +225,7 @@ const RoleCreation = ({ setCurrentUser }) => {
                     name: selectedStaticRole,
                     permissions
                 };
-                
+
                 let response;
                 if (existingOverride) {
                     response = await axios.put(`${API_BASE_URL}/api/metadata/${existingOverride._id}`, payload);
@@ -245,7 +247,8 @@ const RoleCreation = ({ setCurrentUser }) => {
                         const sessionResp = await axios.get(`${API_BASE_URL}/api/auth/check`);
                         if (sessionResp.data?.authenticated && sessionResp.data?.user) {
                             const freshUser = sessionResp.data.user;
-                            localStorage.setItem('currentUser', JSON.stringify(freshUser));
+                            const safe = sanitizeUserForStorage(freshUser);
+                            safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safe));
                             if (setCurrentUser) setCurrentUser(freshUser);
                         }
                     } catch (e) { /* non-critical */ }
@@ -253,9 +256,9 @@ const RoleCreation = ({ setCurrentUser }) => {
             }
         } catch (error) {
             console.error('Error saving role permissions:', error);
-            setAlertMsg({ 
-                type: 'error', 
-                text: error.response?.data?.message || 'Failed to save configuration. Please try again.' 
+            setAlertMsg({
+                type: 'error',
+                text: error.response?.data?.message || 'Failed to save configuration. Please try again.'
             });
         } finally {
             setIsSaving(false);
@@ -289,7 +292,7 @@ const RoleCreation = ({ setCurrentUser }) => {
 
             {/* Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                
+
                 {/* Left Column: Role Creator & List */}
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-sm space-y-4">
@@ -297,7 +300,7 @@ const RoleCreation = ({ setCurrentUser }) => {
                             <span className="w-1.5 h-4 bg-indigo-500 rounded-full mr-2"></span>
                             Create New Role
                         </h2>
-                        
+
                         <form onSubmit={handleCreateRole} className="space-y-3">
                             <div className="flex gap-2">
                                 <input
@@ -328,20 +331,18 @@ const RoleCreation = ({ setCurrentUser }) => {
                                 {staticRolesList.map(rName => {
                                     const isSel = selectedStaticRole === rName;
                                     return (
-                                        <div 
-                                            key={rName} 
-                                            className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
-                                                isSel 
-                                                    ? 'bg-blue-55 border-blue-200 shadow-sm ring-1 ring-blue-100' 
+                                        <div
+                                            key={rName}
+                                            className={`flex items-center justify-between p-2 rounded-xl border transition-all ${isSel
+                                                    ? 'bg-blue-55 border-blue-200 shadow-sm ring-1 ring-blue-100'
                                                     : 'bg-gray-50 border-gray-100 hover:border-gray-200'
-                                            }`}
+                                                }`}
                                         >
                                             <button
                                                 type="button"
                                                 onClick={() => selectStaticRoleForEditing(rName)}
-                                                className={`text-xs font-semibold font-sans truncate text-left flex-1 hover:text-blue-700 transition-colors ${
-                                                    isSel ? 'text-blue-700' : 'text-gray-700'
-                                                }`}
+                                                className={`text-xs font-semibold font-sans truncate text-left flex-1 hover:text-blue-700 transition-colors ${isSel ? 'text-blue-700' : 'text-gray-700'
+                                                    }`}
                                             >
                                                 {rName} <span className="text-[10px] text-gray-400 font-normal ml-1">(System)</span>
                                             </button>
@@ -355,29 +356,26 @@ const RoleCreation = ({ setCurrentUser }) => {
                                     const isSel = selectedCustomRole?._id === cr._id;
                                     if (staticRolesList.includes(cr.name)) return null;
                                     return (
-                                        <div 
-                                            key={cr._id} 
-                                            className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
-                                                isSel 
-                                                    ? 'bg-blue-55 border-blue-200 shadow-sm ring-1 ring-blue-100' 
+                                        <div
+                                            key={cr._id}
+                                            className={`flex items-center justify-between p-2 rounded-xl border transition-all ${isSel
+                                                    ? 'bg-blue-55 border-blue-200 shadow-sm ring-1 ring-blue-100'
                                                     : 'bg-gray-55 border-gray-100 hover:border-gray-200'
-                                            }`}
+                                                }`}
                                         >
                                             <button
                                                 type="button"
                                                 onClick={() => selectCustomRoleForEditing(cr)}
-                                                className={`text-xs font-semibold font-sans truncate text-left flex-1 hover:text-blue-700 transition-colors ${
-                                                    isSel ? 'text-blue-700' : 'text-gray-700'
-                                                }`}
+                                                className={`text-xs font-semibold font-sans truncate text-left flex-1 hover:text-blue-700 transition-colors ${isSel ? 'text-blue-700' : 'text-gray-700'
+                                                    }`}
                                             >
                                                 {cr.name} <span className="text-[10px] text-indigo-500 font-normal ml-1">(Custom)</span>
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => handleDeleteRole(cr._id, cr.name)}
-                                                className={`transition-colors p-1 cursor-pointer ${
-                                                    isSel ? 'text-blue-400 hover:text-rose-600' : 'text-gray-400 hover:text-rose-600'
-                                                }`}
+                                                className={`transition-colors p-1 cursor-pointer ${isSel ? 'text-blue-400 hover:text-rose-600' : 'text-gray-400 hover:text-rose-600'
+                                                    }`}
                                                 title="Delete custom role"
                                             >
                                                 <XIcon className="w-3.5 h-3.5" />
@@ -407,34 +405,32 @@ const RoleCreation = ({ setCurrentUser }) => {
                                         Configure module access rights and special capabilities
                                     </p>
                                 </div>
-                                
+
                                 <div className="flex items-center gap-2 self-start sm:self-auto">
                                     {/* View Toggle */}
                                     <div className="inline-flex bg-gray-100 p-1 rounded-xl border border-gray-200/60">
                                         <button
                                             type="button"
                                             onClick={() => setViewMode('cards')}
-                                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                                                viewMode === 'cards'
+                                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${viewMode === 'cards'
                                                     ? 'bg-white text-blue-700 shadow-sm border border-gray-200/50'
                                                     : 'text-gray-500 hover:text-gray-800'
-                                            }`}
+                                                }`}
                                             title="Card view (optimized for mobile)"
                                         >
-                                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
                                             <span>Cards</span>
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setViewMode('table')}
-                                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                                                viewMode === 'table'
+                                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${viewMode === 'table'
                                                     ? 'bg-white text-blue-700 shadow-sm border border-gray-200/50'
                                                     : 'text-gray-500 hover:text-gray-800'
-                                            }`}
+                                                }`}
                                             title="Table view (full matrix)"
                                         >
-                                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" /></svg>
                                             <span>Table</span>
                                         </button>
                                     </div>
@@ -474,8 +470,8 @@ const RoleCreation = ({ setCurrentUser }) => {
                                             const mPerms = permissions[mod.key] || { view: false, add: false, edit: false, delete: false, special: false };
                                             const anyActive = Object.values(mPerms).some(Boolean);
                                             return (
-                                                <div 
-                                                    key={mod.key} 
+                                                <div
+                                                    key={mod.key}
                                                     className="bg-white rounded-xl border border-gray-200/90 p-3.5 shadow-xs space-y-3 hover:border-blue-200 transition-all"
                                                 >
                                                     {/* Card Header: Module Name & Toggle All */}
@@ -505,11 +501,10 @@ const RoleCreation = ({ setCurrentUser }) => {
                                                             return (
                                                                 <label
                                                                     key={act.key}
-                                                                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border cursor-pointer transition-all select-none ${
-                                                                        isChecked
+                                                                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border cursor-pointer transition-all select-none ${isChecked
                                                                             ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-xs'
                                                                             : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
-                                                                    }`}
+                                                                        }`}
                                                                 >
                                                                     <input
                                                                         type="checkbox"
@@ -539,11 +534,10 @@ const RoleCreation = ({ setCurrentUser }) => {
                                                                         return (
                                                                             <label
                                                                                 key={sItem.key}
-                                                                                className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer text-xs transition-all select-none ${
-                                                                                    isChecked
+                                                                                className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer text-xs transition-all select-none ${isChecked
                                                                                         ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold shadow-xs'
                                                                                         : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                                                                }`}
+                                                                                    }`}
                                                                             >
                                                                                 <input
                                                                                     type="checkbox"
@@ -559,11 +553,10 @@ const RoleCreation = ({ setCurrentUser }) => {
                                                                     })
                                                                 ) : mod.specialLabel ? (
                                                                     <label
-                                                                        className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer text-xs transition-all select-none ${
-                                                                            !!mPerms.special
+                                                                        className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer text-xs transition-all select-none ${!!mPerms.special
                                                                                 ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold shadow-xs'
                                                                                 : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                                                        }`}
+                                                                            }`}
                                                                     >
                                                                         <input
                                                                             type="checkbox"
@@ -617,7 +610,7 @@ const RoleCreation = ({ setCurrentUser }) => {
                                                             <td className="px-4 py-3.5 font-medium text-gray-800 font-sans align-top whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_4px_rgba(0,0,0,0.03)]">
                                                                 {mod.label}
                                                             </td>
-                                                            
+
                                                             {/* View checkbox */}
                                                             <td className="px-3 py-3.5 text-center align-top">
                                                                 <input
@@ -627,7 +620,7 @@ const RoleCreation = ({ setCurrentUser }) => {
                                                                     className="w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                                                                 />
                                                             </td>
-                                                            
+
                                                             {/* Add checkbox */}
                                                             <td className="px-3 py-3.5 text-center align-top">
                                                                 <input
@@ -751,16 +744,15 @@ const RoleCreation = ({ setCurrentUser }) => {
             {/* Custom Confirm Modal */}
             {confirmModal && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 z-[9999] overflow-y-auto flex items-center justify-center p-4">
-                    <div 
+                    <div
                         className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
                         onClick={() => setConfirmModal(null)}
                     ></div>
 
                     <div className="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 transform transition-all animate-in zoom-in-95 duration-200">
                         <div className="flex items-start space-x-4">
-                            <div className={`p-3 rounded-xl flex-shrink-0 ${
-                                confirmModal.type === 'danger' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'
-                            }`}>
+                            <div className={`p-3 rounded-xl flex-shrink-0 ${confirmModal.type === 'danger' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'
+                                }`}>
                                 <ShieldIcon className="w-6 h-6" />
                             </div>
                             <div className="flex-1">
@@ -783,9 +775,8 @@ const RoleCreation = ({ setCurrentUser }) => {
                                     confirmModal.onConfirm();
                                     setConfirmModal(null);
                                 }}
-                                className={`px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors font-sans ${
-                                    confirmModal.type === 'danger' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-blue-600 hover:bg-blue-700'
-                                }`}
+                                className={`px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors font-sans ${confirmModal.type === 'danger' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-blue-600 hover:bg-blue-700'
+                                    }`}
                             >
                                 Confirm
                             </button>

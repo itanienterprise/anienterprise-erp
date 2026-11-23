@@ -28,6 +28,7 @@ import {
   BuildingIcon
 } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
+import { safeStorage } from '../../../utils/storageHelper';
 import axios from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getSocket } from '../../../utils/socket';
@@ -273,7 +274,7 @@ const Dashboard = ({
         if (targetOffset === 0) {
           try {
             localStorage.setItem(userStatsCacheKey, JSON.stringify(res.data));
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     } catch (err) {
@@ -345,8 +346,8 @@ const Dashboard = ({
     const cached = queryClient.getQueryData(['pi']);
     if (cached && Array.isArray(cached) && cached.length > 0) {
       setPiRecords(cached);
-      const isFresh = queryClient.getQueryState(['pi'])?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(['pi']).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(['pi'])?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(['pi']).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return;
     }
     try {
@@ -365,8 +366,8 @@ const Dashboard = ({
     const cached = queryClient.getQueryData(['lc-management']);
     if (cached && Array.isArray(cached) && cached.length > 0) {
       setLcRecords(cached);
-      const isFresh = queryClient.getQueryState(['lc-management'])?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(['lc-management']).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(['lc-management'])?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(['lc-management']).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return;
     }
     try {
@@ -387,8 +388,9 @@ const Dashboard = ({
       if (res.data) {
         setUserProfile(res.data);
         try {
-          localStorage.setItem(userProfileCacheKey, JSON.stringify(res.data));
-        } catch (e) {}
+          const { profilePhoto, ...cacheable } = res.data;
+          safeStorage.setItem(localStorage, userProfileCacheKey, JSON.stringify(cacheable));
+        } catch (e) { }
       }
     } catch (e) {
       console.warn('Failed to load user profile in dashboard:', e);
@@ -400,8 +402,8 @@ const Dashboard = ({
     const cached = queryClient.getQueryData(['customers']);
     if (cached && Array.isArray(cached) && cached.length > 0) {
       setCustomerRecords(cached);
-      const isFresh = queryClient.getQueryState(['customers'])?.dataUpdatedAt && 
-                      (Date.now() - queryClient.getQueryState(['customers']).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryClient.getQueryState(['customers'])?.dataUpdatedAt &&
+        (Date.now() - queryClient.getQueryState(['customers']).dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) return;
     }
     try {
@@ -1680,7 +1682,7 @@ const Dashboard = ({
           {/* Card 1: Profile & Attendance (Left: Portrait Card, Right: Days List) */}
           {canAccess('profile', 'attendance') ? (
             <div className="dash-card xl:col-span-6 bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
-              
+
               {/* ─── DESKTOP VIEW (md: and above): EXACT ORIGINAL LAYOUT AND STYLING ─── */}
               <div className="hidden md:grid md:grid-cols-12 gap-5 h-full items-stretch">
                 {/* LEFT SIDE: Profile Card */}

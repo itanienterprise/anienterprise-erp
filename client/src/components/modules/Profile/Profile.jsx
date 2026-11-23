@@ -5,6 +5,7 @@ import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import { QUERY_KEYS } from '../../../hooks/useQueries';
 import { compressImage } from '../../../utils/imageCompressor';
+import { safeStorage, sanitizeUserForStorage } from '../../../utils/storageHelper';
 import './Profile.css';
 
 const Profile = ({ currentUser, onClose, onPhotoUpdate, onProfileUpdate }) => {
@@ -123,9 +124,10 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate, onProfileUpdate }) => {
                         phone: updatedPhone,
                         email: updatedEmail
                     };
-                    localStorage.setItem('currentUser', JSON.stringify(updatedStoredUser));
-                    onProfileUpdate?.(updatedStoredUser);
-                } catch (e) {}
+                    const safeUser = sanitizeUserForStorage(updatedStoredUser);
+                    safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safeUser));
+                    onProfileUpdate?.(safeUser);
+                } catch (e) { }
 
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.employees });
                 queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile });
@@ -226,7 +228,7 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate, onProfileUpdate }) => {
         }
     }, [isCropping, drawCropPreview]);
 
-    const buildCroppedBase64 = (offset, scale, outputPx = 480, quality = 0.92) => {
+    const buildCroppedBase64 = (offset, scale, outputPx = 200, quality = 0.82) => {
         const img = loadedImgRef.current;
         if (!img) throw new Error('Image not loaded');
 
@@ -309,14 +311,14 @@ const Profile = ({ currentUser, onClose, onPhotoUpdate, onProfileUpdate }) => {
         setPhotoStatus({ type: '', message: '' });
         try {
             const croppedBase64 = buildCroppedBase64(cropOffset, cropScale);
-            
+
             // The card retains the full original photo
             const fullPhoto = rawUploadedPhotoRef.current || photoPreview;
             if (fullPhoto) {
                 setPhotoPreview(fullPhoto);
             }
             setEmployeeData(prev => ({ ...(prev || {}), avatarPhoto: croppedBase64 }));
-            
+
             // Only update navbar avatar with the crop; leave card with full photo
             onPhotoUpdate?.(fullPhoto || undefined, croppedBase64);
 

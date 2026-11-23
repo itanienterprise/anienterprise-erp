@@ -2713,6 +2713,9 @@ const DeviceTab = ({
                 {copied ? '✓ Copied' : 'Copy URL'}
               </button>
             </div>
+            <div style={{ fontSize: '0.75rem', color: '#92400e', background: '#fef3c7', padding: '6px 10px', borderRadius: 6, marginTop: 8, border: '1px solid #fde68a' }}>
+              ⏰ <strong>Device Clock & Time Zone:</strong> On your ZKTeco device, go to <strong>Menu → System → Date/Time</strong> and verify the device time matches your local time. Ensure <strong>Time Zone</strong> is set to <strong>GMT +06:00</strong> and <strong>Daylight Saving Time (DST)</strong> is <strong>OFF</strong>.
+            </div>
             <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
               Enable ADMS / Push: Yes · Protocol: HTTP · Port: {serverPort}
             </div>

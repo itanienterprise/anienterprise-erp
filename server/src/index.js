@@ -1,3 +1,4 @@
+process.env.TZ = process.env.TZ || 'Asia/Dhaka';
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -7460,7 +7461,6 @@ apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
       role: displayRole,
       name: displayName,
       permissions: resolvedPerms,
-      profilePhoto: user.profilePhoto || null,
       avatarPhoto: user.avatarPhoto || null
     };
 
@@ -7517,8 +7517,10 @@ apiRouter.get('/api/auth/check', async (req, res) => {
     try {
       const userRecord = await User.findOne({ username: req.session.user.username });
       if (userRecord) {
-        req.session.user.profilePhoto = userRecord.profilePhoto || null;
         req.session.user.avatarPhoto = userRecord.avatarPhoto || null;
+        if ('profilePhoto' in req.session.user) {
+          delete req.session.user.profilePhoto;
+        }
       } else {
         // User explicitly deleted from database
         req.session.destroy();
@@ -7794,8 +7796,10 @@ apiRouter.post('/api/profile/photo', async (req, res) => {
     if (!updatedUser) return res.status(404).json({ message: 'User not found' });
 
     if (req.session?.user) {
-      if ('profilePhoto' in updateObj) req.session.user.profilePhoto = updatedUser.profilePhoto || null;
       if ('avatarPhoto' in updateObj) req.session.user.avatarPhoto = updatedUser.avatarPhoto || null;
+      if ('profilePhoto' in req.session.user) {
+        delete req.session.user.profilePhoto;
+      }
     }
 
     res.json({
@@ -9851,6 +9855,66 @@ async function triggerDashboardAutoProcess(todayDhaka, weekDateStrings = []) {
   return dashboardAttendanceProcessPromise;
 }
 
+// ─── Parse ZKTeco Timestamps with Explicit Asia/Dhaka (+06:00) Guarantee ──────
+function parsePunchTimestamp(stamp) {
+  if (!stamp) return new Date();
+  if (stamp instanceof Date) {
+    return isNaN(stamp.getTime()) ? new Date() : stamp;
+  }
+  const str = String(stamp).trim();
+  if (!str) return new Date();
+
+  // If timestamp already includes timezone (+06:00, -05:00, Z)
+  if (str.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // ZKTeco machine timestamps are in local Bangladesh time (e.g. "2026-11-23 10:15:20" or "2026-11-23T10:15:20")
+  const isoLike = str.replace(' ', 'T');
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(isoLike)) {
+    const d = new Date(`${isoLike}+06:00`);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  const fallback = new Date(str);
+  return isNaN(fallback.getTime()) ? new Date() : fallback;
+}
+
+// Auto-correct any punches that were saved with VPS UTC offset instead of Bangladesh (+06:00)
+const fixShiftedPunches = async () => {
+  try {
+    const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const punches = await AttendancePunch.find({ createdAt: { $gte: since } });
+    let fixedCount = 0;
+    for (const p of punches) {
+      if (p.rawPayload) {
+        try {
+          const raw = typeof p.rawPayload === 'string' ? JSON.parse(p.rawPayload) : p.rawPayload;
+          const stamp = raw.Stamp || raw.stamp || raw.DateTime || raw.datetime || raw.recordTime;
+          if (stamp && typeof stamp === 'string' && !stamp.includes('Z') && !stamp.includes('+')) {
+            const correctTime = parsePunchTimestamp(stamp);
+            if (Math.abs(correctTime.getTime() - new Date(p.punchTime).getTime()) >= 5 * 3600 * 1000) {
+              await AttendancePunch.updateOne({ _id: p._id }, { $set: { punchTime: correctTime } });
+              fixedCount++;
+            }
+          }
+        } catch (_) {}
+      } else if (new Date(p.punchTime).getTime() > Date.now()) {
+        const correctTime = new Date(p.punchTime.getTime() - (6 * 3600 * 1000));
+        await AttendancePunch.updateOne({ _id: p._id }, { $set: { punchTime: correctTime } });
+        fixedCount++;
+      }
+    }
+    if (fixedCount > 0) {
+      console.log(`[Attendance] Successfully corrected timezone for ${fixedCount} shifted punch record(s).`);
+    }
+  } catch (err) {
+    console.warn('[Attendance] Punch time correction notice:', err.message);
+  }
+};
+setTimeout(fixShiftedPunches, 3500);
+
 // ─── 1. ZKTech ADMS Device Push Receiver ─────────────────────────────────────
 // The F8 device sends a POST with query params: sn, table, Stamp, PIN, Checked, Status, Verify
 // GET is used for heartbeat / device registration check
@@ -9865,7 +9929,7 @@ app.post('/api/attendance/device/push', async (req, res) => {
     const raw = { ...req.query, ...req.body };
     const deviceId = raw.sn || raw.DeviceSN || 'F8-DEFAULT';
     const enrollId = parseInt(raw.PIN || raw.pin || raw.UserId || 0);
-    const stamp = raw.Stamp || raw.stamp || raw.DateTime || raw.datetime || new Date().toISOString();
+    const stamp = raw.Stamp || raw.stamp || raw.DateTime || raw.datetime;
     const checked = parseInt(raw.Checked || raw.checked || 0);
     const verify = raw.Verify || raw.verify || 'UNKNOWN';
 
@@ -9873,7 +9937,7 @@ app.post('/api/attendance/device/push', async (req, res) => {
     const punchTypeMap = { 0: 'IN', 1: 'OUT', 2: 'BREAK_OUT', 3: 'BREAK_IN' };
     const punchType = punchTypeMap[checked] || 'UNKNOWN';
 
-    const punchTime = new Date(stamp);
+    const punchTime = parsePunchTimestamp(stamp);
     if (isNaN(punchTime.getTime())) {
       return res.status(400).set('Content-Type', 'text/plain').send('ERR:Invalid timestamp');
     }
@@ -10142,7 +10206,7 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
   const validPunches = punches
     .map(p => ({
       enrollId: Number(p.enrollId),
-      punchTime: new Date(p.punchTime),
+      punchTime: parsePunchTimestamp(p.punchTime),
       punchType: p.punchType || 'UNKNOWN',
       verifyMode: p.verifyMode || 'FINGERPRINT/CARD',
       deviceId: p.deviceId || defaultDeviceId,
@@ -10603,7 +10667,7 @@ app.post('/api/attendance/device/push-bulk', async (req, res) => {
 
     const formatted = punches.map(p => ({
       enrollId: parseInt(p.enrollId || p.deviceUserId || p.userSn || p.PIN || 0),
-      punchTime: new Date(p.punchTime || p.recordTime || p.DateTime || p.Stamp),
+      punchTime: parsePunchTimestamp(p.punchTime || p.recordTime || p.DateTime || p.Stamp),
       punchType: p.punchType || 'UNKNOWN',
       verifyMode: p.verifyMode || 'FINGERPRINT',
       deviceId: deviceId,

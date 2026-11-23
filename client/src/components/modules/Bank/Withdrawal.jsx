@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
+import { safeStorage } from '../../../utils/storageHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { queryClient } from '../../../utils/queryClient';
 import { getSocket } from '../../../utils/socket';
@@ -159,11 +160,10 @@ const SearchableFilterSelect = ({
   const selectedOption = normalizedOptions.find(opt => opt.value === value);
   const currentText = displayValue || selectedOption?.label || value || '';
 
-  const defaultInputClass = `w-full h-10 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm outline-none transition-all pr-8 ${
-    value && !isOpen
+  const defaultInputClass = `w-full h-10 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm outline-none transition-all pr-8 ${value && !isOpen
       ? 'font-semibold text-gray-900 bg-rose-50/40 border-rose-200'
       : 'text-gray-700 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500'
-  }`;
+    }`;
 
   const defaultLabelClass = "text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5";
 
@@ -240,9 +240,8 @@ const SearchableFilterSelect = ({
                 setIsOpen(false);
                 setSearch('');
               }}
-              className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${
-                !value ? 'bg-rose-50 text-rose-700 font-bold' : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${!value ? 'bg-rose-50 text-rose-700 font-bold' : 'text-gray-600 hover:bg-gray-50'
+                }`}
             >
               <span>{placeholder}</span>
               {!value && <CheckIcon className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
@@ -263,13 +262,12 @@ const SearchableFilterSelect = ({
                     setIsOpen(false);
                     setSearch('');
                   }}
-                  className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${
-                    isSelected
+                  className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${isSelected
                       ? 'bg-rose-50 text-rose-700 font-bold'
                       : isHighlighted
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                        ? 'bg-gray-100 text-gray-900'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
                 >
                   <div className="truncate pr-2">
                     <span className="truncate block font-medium">{opt.label}</span>
@@ -327,7 +325,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
     try {
       const q = queryClient.getQueryData(['banks']);
       if (Array.isArray(q) && q.length > 0) return q;
-    } catch {}
+    } catch { }
     return [];
   });
   const [employeesMap, setEmployeesMap] = useState({});
@@ -500,7 +498,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
           const parsed = JSON.parse(local);
           if (Array.isArray(parsed)) setWithdrawals(parsed);
         }
-      } catch (e) {}
+      } catch (e) { }
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -519,7 +517,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
         let d = emp;
         if (emp && emp.data) {
           if (typeof emp.data === 'string') {
-            try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) {}
+            try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) { }
           } else if (typeof emp.data === 'object') {
             d = { ...emp.data, _id: emp._id };
           }
@@ -594,7 +592,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
         let d = e;
         if (e && e.data) {
           if (typeof e.data === 'string') {
-            try { d = { ...decryptData(e.data), _id: e._id }; } catch {}
+            try { d = { ...decryptData(e.data), _id: e._id }; } catch { }
           } else if (typeof e.data === 'object') {
             d = { ...e.data, _id: e._id };
           }
@@ -608,7 +606,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
         let d = adminEmp;
         if (adminEmp && adminEmp.data) {
           if (typeof adminEmp.data === 'string') {
-            try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch {}
+            try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { }
           } else if (typeof adminEmp.data === 'object') {
             d = { ...adminEmp.data, _id: adminEmp._id };
           }
@@ -990,7 +988,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
         ? withdrawals.map(w => w._id === editingId ? newRecord : w)
         : [newRecord, ...withdrawals];
       setWithdrawals(updated);
-      localStorage.setItem('erp_withdrawals_cache', JSON.stringify(updated));
+      safeStorage.setItem(localStorage, 'erp_withdrawals_cache', JSON.stringify(updated));
       setShowModal(false);
       resetForm();
       if (typeof window !== 'undefined') {
@@ -1026,7 +1024,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
       console.error('Error deleting withdrawal:', err);
       const filtered = withdrawals.filter(w => w._id !== id);
       setWithdrawals(filtered);
-      localStorage.setItem('erp_withdrawals_cache', JSON.stringify(filtered));
+      safeStorage.setItem(localStorage, 'erp_withdrawals_cache', JSON.stringify(filtered));
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('erp_data_updated', {
           detail: { module: 'withdrawals', action: 'delete' }
@@ -1198,11 +1196,10 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
               <button
                 ref={filterButtonRef}
                 onClick={() => setShowFilterPanel(!showFilterPanel)}
-                className={`h-10 flex items-center justify-center gap-2 px-4 rounded-xl border transition-all active:scale-95 text-sm font-medium shadow-sm cursor-pointer ${
-                  showFilterPanel || isFilterActive
+                className={`h-10 flex items-center justify-center gap-2 px-4 rounded-xl border transition-all active:scale-95 text-sm font-medium shadow-sm cursor-pointer ${showFilterPanel || isFilterActive
                     ? 'bg-rose-600 border-rose-600 text-white shadow-lg shadow-rose-500/30'
                     : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <FunnelIcon className={`w-4 h-4 ${showFilterPanel || isFilterActive ? 'text-white' : 'text-gray-400'}`} />
                 <span className="text-sm font-medium">Filter</span>
@@ -1211,47 +1208,145 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                 )}
               </button>
 
-            {/* Mobile Filter Modal Portaled to Body (Fixes viewport containment bug) */}
-            {showFilterPanel && isMobile && typeof document !== 'undefined' && document.body && createPortal(
-              <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                {/* Full Screen Backdrop */}
-                <div
-                  className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-                  onClick={() => {
-                    setShowFilterPanel(false);
-                    setFilterDropdownOpen(null);
-                  }}
-                />
-                {/* Centered Modal Card */}
-                <div
-                  ref={filterPanelRef}
-                  onClick={(e) => e.stopPropagation()}
-                  className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-100 z-10 p-5 flex flex-col max-h-[85vh] overflow-y-auto text-left animate-in fade-in zoom-in-95 duration-150"
-                >
-                  <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-gray-100 shrink-0">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-rose-50 text-rose-600">
-                        <FunnelIcon className="w-4 h-4" />
+              {/* Mobile Filter Modal Portaled to Body (Fixes viewport containment bug) */}
+              {showFilterPanel && isMobile && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                  {/* Full Screen Backdrop */}
+                  <div
+                    className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+                    onClick={() => {
+                      setShowFilterPanel(false);
+                      setFilterDropdownOpen(null);
+                    }}
+                  />
+                  {/* Centered Modal Card */}
+                  <div
+                    ref={filterPanelRef}
+                    onClick={(e) => e.stopPropagation()}
+                    className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-100 z-10 p-5 flex flex-col max-h-[85vh] overflow-y-auto text-left animate-in fade-in zoom-in-95 duration-150"
+                  >
+                    <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-gray-100 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-rose-50 text-rose-600">
+                          <FunnelIcon className="w-4 h-4" />
+                        </div>
+                        <h4 className="font-bold text-gray-900 text-sm">Filter Withdrawals</h4>
                       </div>
-                      <h4 className="font-bold text-gray-900 text-sm">Filter Withdrawals</h4>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={resetFilters}
+                          className="text-[11px] font-bold text-rose-600 hover:text-rose-700 uppercase tracking-wider px-2 py-1 bg-rose-50 rounded-lg hover:bg-rose-100 transition cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowFilterPanel(false);
+                            setFilterDropdownOpen(null);
+                          }}
+                          className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                        >
+                          <XIcon className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={resetFilters}
-                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 uppercase tracking-wider px-2 py-1 bg-rose-50 rounded-lg hover:bg-rose-100 transition cursor-pointer"
-                      >
-                        Reset
-                      </button>
+
+                    <div className="space-y-3">
+                      <CustomDatePicker
+                        label="Start Date"
+                        value={filters.startDate}
+                        onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                        compact={true}
+                      />
+                      <CustomDatePicker
+                        label="End Date"
+                        value={filters.endDate}
+                        onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                        compact={true}
+                      />
+
+                      {/* Bank Filter */}
+                      <SearchableFilterSelect
+                        label="Bank Name"
+                        value={filters.bankName}
+                        onChange={(name) => handleBankFilterSelect(name)}
+                        options={uniqueBankNames}
+                        placeholder="All Banks"
+                      />
+
+                      {/* Branch Filter - Shown only after Bank is selected */}
+                      {filters.bankName && (
+                        <div className="animate-in fade-in slide-in-from-top-1 duration-150">
+                          <SearchableFilterSelect
+                            label="Branch"
+                            value={filters.branch}
+                            onChange={(br) => handleBranchFilterSelect(br)}
+                            options={filterBranchesList}
+                            placeholder="All Branches"
+                          />
+                        </div>
+                      )}
+
+                      {/* Account Filter - Shown only after Branch is selected */}
+                      {filters.bankName && filters.branch && (
+                        <div className="animate-in fade-in slide-in-from-top-1 duration-150">
+                          <SearchableFilterSelect
+                            label="Account No / Name"
+                            value={filters.accountNo}
+                            displayValue={
+                              filters.accountNo
+                                ? `${filters.accountNo}${filterAccountsList.find(a => a.accountNo === filters.accountNo)?.accountName ? ` (${filterAccountsList.find(a => a.accountNo === filters.accountNo)?.accountName})` : ''}`
+                                : ''
+                            }
+                            onChange={(accNo) => handleAccountFilterSelect(accNo)}
+                            options={filterAccountsList.map(a => ({
+                              value: a.accountNo,
+                              label: a.accountNo,
+                              sublabel: a.accountName
+                            }))}
+                            placeholder="All Accounts"
+                          />
+                        </div>
+                      )}
+
+                      {/* Withdrawal Type Filter */}
+                      <SearchableFilterSelect
+                        label="Withdrawal Type"
+                        value={filters.withdrawalType}
+                        onChange={(t) => handleTypeFilterSelect(t)}
+                        options={WITHDRAWAL_TYPES}
+                        placeholder="All Withdrawal Types"
+                      />
+
                       <button
                         onClick={() => {
                           setShowFilterPanel(false);
                           setFilterDropdownOpen(null);
                         }}
-                        className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                        className="w-full py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700 transition-all mt-2 active:scale-[0.98] cursor-pointer shadow-md shadow-rose-500/20"
                       >
-                        <XIcon className="w-5 h-5" />
+                        APPLY FILTERS
                       </button>
                     </div>
+                  </div>
+                </div>,
+                document.body
+              )}
+
+              {/* Desktop Filter Dropdown Panel */}
+              {showFilterPanel && !isMobile && (
+                <div
+                  ref={filterPanelRef}
+                  className="absolute top-full right-0 mt-2 w-88 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-y-auto max-h-[82vh] text-left"
+                >
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                    <h4 className="font-bold text-gray-900 text-sm">Filter Withdrawals</h4>
+                    <button
+                      onClick={resetFilters}
+                      className="text-[10px] font-bold text-rose-600 hover:text-rose-700 uppercase tracking-wider cursor-pointer"
+                    >
+                      Reset
+                    </button>
                   </div>
 
                   <div className="space-y-3">
@@ -1326,111 +1421,13 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                         setShowFilterPanel(false);
                         setFilterDropdownOpen(null);
                       }}
-                      className="w-full py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700 transition-all mt-2 active:scale-[0.98] cursor-pointer shadow-md shadow-rose-500/20"
+                      className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-2 active:scale-[0.98] cursor-pointer"
                     >
                       APPLY FILTERS
                     </button>
                   </div>
                 </div>
-              </div>,
-              document.body
-            )}
-
-            {/* Desktop Filter Dropdown Panel */}
-            {showFilterPanel && !isMobile && (
-              <div
-                ref={filterPanelRef}
-                className="absolute top-full right-0 mt-2 w-88 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-y-auto max-h-[82vh] text-left"
-              >
-                <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
-                  <h4 className="font-bold text-gray-900 text-sm">Filter Withdrawals</h4>
-                  <button
-                    onClick={resetFilters}
-                    className="text-[10px] font-bold text-rose-600 hover:text-rose-700 uppercase tracking-wider cursor-pointer"
-                  >
-                    Reset
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  <CustomDatePicker
-                    label="Start Date"
-                    value={filters.startDate}
-                    onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                    compact={true}
-                  />
-                  <CustomDatePicker
-                    label="End Date"
-                    value={filters.endDate}
-                    onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                    compact={true}
-                  />
-
-                  {/* Bank Filter */}
-                  <SearchableFilterSelect
-                    label="Bank Name"
-                    value={filters.bankName}
-                    onChange={(name) => handleBankFilterSelect(name)}
-                    options={uniqueBankNames}
-                    placeholder="All Banks"
-                  />
-
-                  {/* Branch Filter - Shown only after Bank is selected */}
-                  {filters.bankName && (
-                    <div className="animate-in fade-in slide-in-from-top-1 duration-150">
-                      <SearchableFilterSelect
-                        label="Branch"
-                        value={filters.branch}
-                        onChange={(br) => handleBranchFilterSelect(br)}
-                        options={filterBranchesList}
-                        placeholder="All Branches"
-                      />
-                    </div>
-                  )}
-
-                  {/* Account Filter - Shown only after Branch is selected */}
-                  {filters.bankName && filters.branch && (
-                    <div className="animate-in fade-in slide-in-from-top-1 duration-150">
-                      <SearchableFilterSelect
-                        label="Account No / Name"
-                        value={filters.accountNo}
-                        displayValue={
-                          filters.accountNo
-                            ? `${filters.accountNo}${filterAccountsList.find(a => a.accountNo === filters.accountNo)?.accountName ? ` (${filterAccountsList.find(a => a.accountNo === filters.accountNo)?.accountName})` : ''}`
-                            : ''
-                        }
-                        onChange={(accNo) => handleAccountFilterSelect(accNo)}
-                        options={filterAccountsList.map(a => ({
-                          value: a.accountNo,
-                          label: a.accountNo,
-                          sublabel: a.accountName
-                        }))}
-                        placeholder="All Accounts"
-                      />
-                    </div>
-                  )}
-
-                  {/* Withdrawal Type Filter */}
-                  <SearchableFilterSelect
-                    label="Withdrawal Type"
-                    value={filters.withdrawalType}
-                    onChange={(t) => handleTypeFilterSelect(t)}
-                    options={WITHDRAWAL_TYPES}
-                    placeholder="All Withdrawal Types"
-                  />
-
-                  <button
-                    onClick={() => {
-                      setShowFilterPanel(false);
-                      setFilterDropdownOpen(null);
-                    }}
-                    className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-2 active:scale-[0.98] cursor-pointer"
-                  >
-                    APPLY FILTERS
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
             </div>
 
             {/* Record Withdrawal Button */}
@@ -1982,9 +1979,8 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                 return (
                   <div
                     key={item._id || idx}
-                    className={`withdrawal-mobile-card bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${
-                      isExpanded ? 'border-rose-200 ring-2 ring-rose-500/10 shadow-md' : 'border-gray-100 shadow-sm hover:border-gray-200'
-                    }`}
+                    className={`withdrawal-mobile-card bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-rose-200 ring-2 ring-rose-500/10 shadow-md' : 'border-gray-100 shadow-sm hover:border-gray-200'
+                      }`}
                   >
                     {/* Mobile Card Header - Clickable for Collapse / Expand */}
                     <div

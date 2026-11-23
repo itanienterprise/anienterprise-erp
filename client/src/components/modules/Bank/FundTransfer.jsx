@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
+import { safeStorage } from '../../../utils/storageHelper';
 import { decryptData } from '../../../utils/encryption';
 import { queryClient } from '../../../utils/queryClient';
 import { getSocket } from '../../../utils/socket';
@@ -171,11 +172,10 @@ const SearchableFilterSelect = ({
   const selectedOption = normalizedOptions.find(opt => opt.value === value);
   const currentText = displayValue || selectedOption?.label || value || '';
 
-  const defaultInputClass = `w-full h-10 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm outline-none transition-all pr-8 ${
-    value && !isOpen
-      ? 'font-semibold text-gray-900 bg-blue-50/40 border-blue-200'
-      : 'text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'
-  }`;
+  const defaultInputClass = `w-full h-10 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm outline-none transition-all pr-8 ${value && !isOpen
+    ? 'font-semibold text-gray-900 bg-blue-50/40 border-blue-200'
+    : 'text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'
+    }`;
 
   const defaultLabelClass = "text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5";
 
@@ -251,9 +251,8 @@ const SearchableFilterSelect = ({
                 setIsOpen(false);
                 setSearch('');
               }}
-              className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${
-                !value ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${!value ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-50'
+                }`}
             >
               <span>{placeholder}</span>
               {!value && <CheckIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
@@ -274,13 +273,12 @@ const SearchableFilterSelect = ({
                     setIsOpen(false);
                     setSearch('');
                   }}
-                  className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between cursor-pointer ${
-                    isSelected
-                      ? 'bg-blue-50/80 text-blue-700 font-semibold'
-                      : isHighlighted
-                        ? 'bg-gray-100/80 text-gray-900'
-                        : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                  className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between cursor-pointer ${isSelected
+                    ? 'bg-blue-50/80 text-blue-700 font-semibold'
+                    : isHighlighted
+                      ? 'bg-gray-100/80 text-gray-900'
+                      : 'text-gray-700 hover:bg-gray-50'
+                    }`}
                 >
                   <div className="flex flex-col min-w-0 pr-2">
                     <span className="truncate">{opt.label}</span>
@@ -338,7 +336,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
     try {
       const q = queryClient.getQueryData(['banks']);
       if (Array.isArray(q) && q.length > 0) return q;
-    } catch {}
+    } catch { }
     return [];
   });
 
@@ -428,7 +426,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
       const data = Array.isArray(res.data) ? res.data : [];
       setFundTransfers(data);
       queryClient.setQueryData(['fund-transfers'], data);
-      localStorage.setItem('erp_fund_transfers_cache', JSON.stringify(data));
+      safeStorage.setItem(localStorage, 'erp_fund_transfers_cache', JSON.stringify(data));
     } catch (err) {
       console.warn('API fetchFundTransfers failed, checking local storage cache:', err);
       try {
@@ -437,7 +435,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
           const parsed = JSON.parse(local);
           if (Array.isArray(parsed)) setFundTransfers(parsed);
         }
-      } catch (e) {}
+      } catch (e) { }
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -455,7 +453,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
         let d = emp;
         if (emp && emp.data) {
           if (typeof emp.data === 'string') {
-            try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) {}
+            try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) { }
           } else if (typeof emp.data === 'object') {
             d = { ...emp.data, _id: emp._id };
           }
@@ -792,7 +790,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
         ? fundTransfers.map(d => d._id === editingId ? newRecord : d)
         : [newRecord, ...fundTransfers];
       setFundTransfers(updated);
-      localStorage.setItem('erp_fund_transfers_cache', JSON.stringify(updated));
+      safeStorage.setItem(localStorage, 'erp_fund_transfers_cache', JSON.stringify(updated));
       setShowModal(false);
       resetForm();
       if (typeof window !== 'undefined') {
@@ -830,7 +828,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
         console.error('Error deleting fund transfer:', err);
         const updated = fundTransfers.filter(d => d._id !== id);
         setFundTransfers(updated);
-        localStorage.setItem('erp_fund_transfers_cache', JSON.stringify(updated));
+        safeStorage.setItem(localStorage, 'erp_fund_transfers_cache', JSON.stringify(updated));
       }
     }
   };
@@ -992,11 +990,10 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
               ref={filterButtonRef}
               type="button"
               onClick={() => setShowFilterPanel(prev => !prev)}
-              className={`w-full sm:w-auto h-9 sm:h-10 flex items-center justify-center gap-1.5 px-3 sm:px-3.5 rounded-xl border text-xs sm:text-sm font-semibold transition cursor-pointer active:scale-95 shadow-xs ${
-                isFilterActive || showFilterPanel
-                  ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-xs'
-                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-              }`}
+              className={`w-full sm:w-auto h-9 sm:h-10 flex items-center justify-center gap-1.5 px-3 sm:px-3.5 rounded-xl border text-xs sm:text-sm font-semibold transition cursor-pointer active:scale-95 shadow-xs ${isFilterActive || showFilterPanel
+                ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-xs'
+                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
             >
               <FunnelIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFilterActive || showFilterPanel ? 'text-blue-600' : 'text-gray-400'}`} />
               <span>Filter</span>
