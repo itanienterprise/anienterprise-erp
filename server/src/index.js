@@ -10834,8 +10834,18 @@ app.post('/api/attendance/device/push-bulk', async (req, res) => {
 
 // Download / View Local Sync Agent script
 apiRouter.get('/api/attendance/device/agent-script', verifyPermission('attendance', 'view'), (req, res) => {
-  const host = req.get('host') || 'localhost:5000';
+  let host = req.get('x-forwarded-host') || req.get('host') || 'localhost:5000';
   const proto = req.protocol || 'http';
+  // Ensure port is preserved if accessed on non-standard port like 3000
+  if (!host.includes(':')) {
+    const referer = req.get('referer');
+    if (referer) {
+      try {
+        const u = new URL(referer);
+        if (u.port) host = `${host}:${u.port}`;
+      } catch (_) {}
+    }
+  }
   const scriptContent = `/**
  * ZKTeco F8 Local Office Sync Agent
  * Runs on any computer connected to the same LAN / Wi-Fi as your ZKTeco device.
