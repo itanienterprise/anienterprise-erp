@@ -1130,10 +1130,17 @@ const requireAuth = (req, res, next) => {
     '/api/logs/client-action',
     '/api/logs/heartbeat',
     '/api/mdm/ping',
-    '/api/mdm/register'
+    '/api/mdm/register',
+    '/api/attendance/device/push-bulk',
+    '/api/attendance/device/push'
   ];
 
-  if (publicPaths.includes(rawPath)) {
+  if (
+    publicPaths.includes(rawPath) ||
+    rawPath.startsWith('/api/attendance/device/push') ||
+    rawPath.startsWith('/iclock') ||
+    rawPath.startsWith('/cdata')
+  ) {
     return next();
   }
 
@@ -10821,6 +10828,23 @@ app.post('/api/attendance/device/push-bulk', async (req, res) => {
     })).filter(p => p.enrollId > 0 && !isNaN(p.punchTime.getTime()));
 
     const result = await ingestPunchRecords(formatted, deviceId);
+    
+    // Update live connection tracker and notify UI
+    admsLiveTracker.touch(deviceId, req.headers['x-forwarded-for'] || req.socket.remoteAddress);
+    if (result.newInserted > 0) {
+      admsLiveTracker.recordPunch(result.newInserted);
+      io.emit('zk_live_punch', {
+        count: result.newInserted,
+        message: `${result.newInserted} new punch(es) captured via Office Sync Agent`
+      });
+      try {
+        broadcastUpdate('attendance', 'punch_created', { count: result.newInserted });
+      } catch (_) { }
+    }
+    try {
+      io.emit('zk_device_status', getCombinedDeviceStatus());
+    } catch (_) { }
+
     res.json({
       success: true,
       message: `Processed ${formatted.length} punches from agent (${result.newInserted} new inserted, ${result.skippedDuplicates} skipped).`,
@@ -10898,7 +10922,7 @@ async function syncOnce() {
       }))
     };
 
-    const erpRes = await axios.post(ERP_SERVER_URL + '/api/attendance/device/push-bulk', payload, { timeout: 10000 });
+    const erpRes = await axios.post(ERP_SERVER_URL + '/api/attendance/device/push-bulk', payload, { timeout: 120000 });
     console.log('     -> ERP Response: ' + erpRes.data.message);
   } catch (err) {
     try { await zk.disconnect(); } catch (_) {}
