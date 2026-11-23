@@ -119,6 +119,15 @@ public class MainActivity extends BridgeActivity implements View.OnApplyWindowIn
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     settings.setOffscreenPreRaster(true);
                 }
+
+                // Handle standard HTTP/HTTPS file download URLs
+                webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+                    try {
+                        Intent i = new Intent(Intent.ACTION_VIEW);
+                        i.setData(Uri.parse(url));
+                        startActivity(i);
+                    } catch (Exception ignored) {}
+                });
             }
         } catch (Exception ignored) {}
     }

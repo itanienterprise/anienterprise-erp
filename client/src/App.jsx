@@ -12,6 +12,7 @@ import { API_BASE_URL, formatDate, parseDate, SortIcon } from './utils/helpers';
 import CustomDatePicker from './components/shared/CustomDatePicker';
 import { queryClient, hydrateQueryCache, clearPersistentQueryCache } from './utils/queryClient';
 import { safeStorage, cleanStorageQuota, sanitizeUserForStorage } from './utils/storageHelper';
+import { getSecureItem, setSecureItem, removeSecureItem } from './utils/secureStorage';
 import { QUERY_KEYS } from './hooks/useQueries';
 import { getSocket } from './utils/socket';
 import { calculateStockData } from './utils/stockHelpers';
@@ -996,6 +997,17 @@ function App() {
     }
   }, [isAuthenticated, currentUser]);
 
+  // Restore cached profile photo from secureStorage (IndexedDB) immediately on mount
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.username && !currentUser.profilePhoto) {
+      getSecureItem(`user_photo_${currentUser.username}`).then(cachedPhoto => {
+        if (cachedPhoto) {
+          setCurrentUser(prev => prev ? { ...prev, profilePhoto: prev.profilePhoto || cachedPhoto } : prev);
+        }
+      }).catch(() => { });
+    }
+  }, [isAuthenticated, currentUser?.username]);
+
   // Sync profile details (including profilePhoto and avatarPhoto) on load
   useEffect(() => {
     if (isAuthenticated && currentUser && (currentUser.profilePhoto === undefined || currentUser.avatarPhoto === undefined)) {
@@ -1007,12 +1019,17 @@ function App() {
                 ...prev,
                 profilePhoto: res.data.profilePhoto || null,
                 avatarPhoto: res.data.avatarPhoto || null,
-                name: prev?.name || res.data.name
+                name: prev?.name || res.data.name,
+                designation: prev?.designation || res.data.designation,
+                department: prev?.department || res.data.department
               };
               const safe = sanitizeUserForStorage(updated);
               safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safe));
               return updated;
             });
+            if (res.data.profilePhoto) {
+              setSecureItem(`user_photo_${currentUser.username}`, res.data.profilePhoto).catch(() => { });
+            }
           }
         })
         .catch(() => { });
@@ -4789,6 +4806,17 @@ function App() {
                 safeStorage.setItem(localStorage, 'currentUser', JSON.stringify(safe));
                 return updated;
               });
+              if (currentUser?.username) {
+                if (newPhoto) {
+                  setSecureItem(`user_photo_${currentUser.username}`, newPhoto).catch(() => { });
+                  const dashKey = currentUser._id || currentUser.id || currentUser.username;
+                  setSecureItem(`dashboard_profile_photo_${dashKey}`, newPhoto).catch(() => { });
+                } else if (newPhoto === null) {
+                  removeSecureItem(`user_photo_${currentUser.username}`).catch(() => { });
+                  const dashKey = currentUser._id || currentUser.id || currentUser.username;
+                  removeSecureItem(`dashboard_profile_photo_${dashKey}`).catch(() => { });
+                }
+              }
             }}
           />
         )}

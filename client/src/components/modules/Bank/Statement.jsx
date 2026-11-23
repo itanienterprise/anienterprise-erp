@@ -374,8 +374,44 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       return;
     }
     if (!accountOrBank) return;
-    const bName = accountOrBank.bankName;
-    const targetBank = banks.find(b => (b.bankName || '').trim().toLowerCase() === (bName || '').trim().toLowerCase());
+
+    const norm = (v) => (v || '').trim().toLowerCase();
+    const reqBankId = accountOrBank.bankId || accountOrBank._id;
+    const reqAccNo = (accountOrBank.accountNo || '').trim();
+    const reqBranch = (accountOrBank.branch || '').trim();
+    const reqBankName = (accountOrBank.bankName || '').trim();
+
+    // 1. Find the target bank in `banks` by exact ID, or matching accountNo, branch, bankName
+    let targetBank = null;
+    if (reqBankId) {
+      targetBank = banks.find(b => String(b._id) === String(reqBankId));
+    }
+    if (!targetBank && reqAccNo && reqAccNo !== 'N/A') {
+      targetBank = banks.find(b => {
+        const nameMatches = !reqBankName || norm(b.bankName) === norm(reqBankName);
+        if (!nameMatches) return false;
+        if (norm(b.accountNo) === norm(reqAccNo)) return true;
+        if (Array.isArray(b.branches)) {
+          return b.branches.some(br => norm(br.accountNo) === norm(reqAccNo));
+        }
+        return false;
+      });
+    }
+    if (!targetBank && reqBranch && reqBranch !== 'Main Branch') {
+      targetBank = banks.find(b => {
+        const nameMatches = !reqBankName || norm(b.bankName) === norm(reqBankName);
+        if (!nameMatches) return false;
+        if (norm(b.branch) === norm(reqBranch)) return true;
+        if (Array.isArray(b.branches)) {
+          return b.branches.some(br => norm(br.branch) === norm(reqBranch));
+        }
+        return false;
+      });
+    }
+    if (!targetBank && reqBankName) {
+      targetBank = banks.find(b => norm(b.bankName) === norm(reqBankName));
+    }
+
     if (!targetBank) return;
 
     const rawBranches = Array.isArray(targetBank.branches) && targetBank.branches.length > 0
@@ -386,16 +422,19 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
           accountNo: targetBank.accountNo || ''
         }];
 
+    // 2. Resolve the exact branch inside targetBank
     let targetIdx = -1;
-    if (accountOrBank.accountNo && accountOrBank.accountNo !== 'N/A') {
-      targetIdx = rawBranches.findIndex(br => 
-        (br.accountNo || '').trim().toLowerCase() === accountOrBank.accountNo.trim().toLowerCase()
-      );
+    if (typeof accountOrBank.branchIndex === 'number' && accountOrBank.branchIndex >= 0 && rawBranches[accountOrBank.branchIndex]) {
+      targetIdx = accountOrBank.branchIndex;
     }
-    if (targetIdx === -1 && accountOrBank.branch && accountOrBank.branch !== 'Main Branch') {
-      targetIdx = rawBranches.findIndex(br => 
-        (br.branch || '').trim().toLowerCase() === accountOrBank.branch.trim().toLowerCase()
-      );
+    if (targetIdx === -1 && reqAccNo && reqAccNo !== 'N/A') {
+      targetIdx = rawBranches.findIndex(br => norm(br.accountNo) === norm(reqAccNo));
+    }
+    if (targetIdx === -1 && reqBranch && reqBranch !== 'Main Branch') {
+      targetIdx = rawBranches.findIndex(br => norm(br.branch) === norm(reqBranch));
+    }
+    if (targetIdx === -1 && accountOrBank.accountName) {
+      targetIdx = rawBranches.findIndex(br => norm(br.accountName) === norm(accountOrBank.accountName));
     }
     if (targetIdx === -1) targetIdx = 0;
 
@@ -1793,7 +1832,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       if (!bName) return;
 
       if (Array.isArray(b.branches) && b.branches.length > 0) {
-        b.branches.forEach(br => {
+        b.branches.forEach((br, bIdx) => {
           const brName = (br.branch || '').trim();
           const accNo = (br.accountNo || '').trim();
           const accName = (br.accountName || b.accountName || '').trim();
@@ -1823,6 +1862,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
           accounts.push({
             _id: b._id,
             bankId: b._id,
+            branchIndex: bIdx,
             bankName: bName,
             branch: brName || 'Main Branch',
             accountNo: accNo || 'N/A',
@@ -1865,6 +1905,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
         accounts.push({
           _id: b._id,
           bankId: b._id,
+          branchIndex: 0,
           bankName: bName,
           branch: brName || 'Main Branch',
           accountNo: accNo || 'N/A',

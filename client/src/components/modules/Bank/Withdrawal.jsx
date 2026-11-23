@@ -867,30 +867,32 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
   };
 
   const handleAccountNoChange = (accNoVal, optionObj) => {
-    if (!accNoVal) {
+    const accNo = typeof accNoVal === 'string' ? accNoVal : (accNoVal?.target?.value || '');
+    if (!accNo) {
       setFormData(prev => ({ ...prev, accountNo: '' }));
       return;
     }
 
-    if (optionObj && optionObj.accountName) {
+    if (optionObj && (optionObj.branch || optionObj.accountName)) {
       setFormData(prev => ({
         ...prev,
-        accountNo: accNoVal,
-        accountName: optionObj.accountName
+        accountNo: accNo,
+        branch: optionObj.branch || prev.branch,
+        accountName: optionObj.accountName || prev.accountName
       }));
       return;
     }
 
-    const match = availableBranches.find(b => b.accountNo === accNoVal.trim());
+    const match = availableBranches.find(b => (b.accountNo || '').trim().toLowerCase() === accNo.trim().toLowerCase());
     if (match) {
       setFormData(prev => ({
         ...prev,
-        accountNo: accNoVal,
-        accountName: match.accountName || prev.accountName,
-        branch: prev.branch || match.branch
+        accountNo: accNo,
+        branch: match.branch || prev.branch,
+        accountName: match.accountName || prev.accountName
       }));
     } else {
-      setFormData(prev => ({ ...prev, accountNo: accNoVal }));
+      setFormData(prev => ({ ...prev, accountNo: accNo }));
     }
   };
 
@@ -1505,11 +1507,31 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
 
             <div className="space-y-2">
               <SearchableFilterSelect
+                label="Account Number"
+                labelClassName="text-sm font-medium text-gray-700 ml-1"
+                value={formData.accountNo}
+                onChange={handleAccountNoChange}
+                options={availableBranches.filter(b => b.accountNo).map(b => ({
+                  value: b.accountNo,
+                  label: b.accountNo,
+                  sublabel: `${b.branch || 'Main Branch'}${b.accountName ? ` - ${b.accountName}` : ''}`,
+                  branch: b.branch,
+                  accountName: b.accountName
+                }))}
+                placeholder={formData.bankName ? '-- Choose or type A/C --' : 'Select Bank first'}
+                allowCustomValue={true}
+                showAllOption={false}
+                inputClassName="h-10 payment-form-input pr-8"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <SearchableFilterSelect
                 label="Branch"
                 labelClassName="text-sm font-medium text-gray-700 ml-1"
                 value={formData.branch}
                 onChange={handleBranchChange}
-                options={availableBranches.map(br => ({
+                options={availableBranches.filter(br => br.branch).map(br => ({
                   value: br.branch,
                   label: br.branch,
                   sublabel: br.accountNo ? `A/C: ${br.accountNo}${br.accountName ? ` (${br.accountName})` : ''}` : '',
@@ -1523,39 +1545,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
               />
             </div>
 
-            <div className="space-y-2">
-              <SearchableFilterSelect
-                label="Withdrawal Type"
-                labelClassName="text-sm font-medium text-gray-700 ml-1"
-                value={formData.withdrawalType}
-                onChange={(val) => setFormData(prev => ({ ...prev, withdrawalType: val || 'Cash Withdrawal' }))}
-                options={WITHDRAWAL_TYPES}
-                placeholder="Select Withdrawal Type"
-                showAllOption={false}
-                inputClassName="h-10 payment-form-input pr-8"
-              />
-            </div>
-
-            {/* Row 2: Account Number, Account Name, Amount, Cheque/Ref # */}
-            <div className="space-y-2">
-              <SearchableFilterSelect
-                label="Account Number"
-                labelClassName="text-sm font-medium text-gray-700 ml-1"
-                value={formData.accountNo}
-                onChange={handleAccountNoChange}
-                options={availableBranches.map(b => ({
-                  value: b.accountNo,
-                  label: b.accountNo,
-                  sublabel: `${b.branch}${b.accountName ? ` - ${b.accountName}` : ''}`,
-                  accountName: b.accountName
-                }))}
-                placeholder={formData.bankName ? '-- Choose or type A/C --' : 'Select Bank first'}
-                allowCustomValue={true}
-                showAllOption={false}
-                inputClassName="h-10 payment-form-input pr-8"
-              />
-            </div>
-
+            {/* Row 2: Account Name, Withdrawal Type, Amount, Cheque/Ref # */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 ml-1">
                 Account Name
@@ -1566,6 +1556,19 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                 value={formData.accountName}
                 onChange={(e) => setFormData(prev => ({ ...prev, accountName: e.target.value }))}
                 className="h-10 payment-form-input"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <SearchableFilterSelect
+                label="Withdrawal Type"
+                labelClassName="text-sm font-medium text-gray-700 ml-1"
+                value={formData.withdrawalType}
+                onChange={(val) => setFormData(prev => ({ ...prev, withdrawalType: val || 'Cash Withdrawal' }))}
+                options={WITHDRAWAL_TYPES}
+                placeholder="Select Withdrawal Type"
+                showAllOption={false}
+                inputClassName="h-10 payment-form-input pr-8"
               />
             </div>
 

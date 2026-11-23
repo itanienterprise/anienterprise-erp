@@ -750,17 +750,17 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
     matchingDocs.forEach(b => {
       if (Array.isArray(b.branches) && b.branches.length > 0) {
         b.branches.forEach(br => {
-          if (br && br.branch) {
+          if (br && (br.branch || br.accountNo)) {
             list.push({
-              branch: br.branch.trim(),
+              branch: (br.branch || '').trim(),
               accountName: (br.accountName || b.accountName || '').trim(),
               accountNo: (br.accountNo || b.accountNo || '').trim()
             });
           }
         });
-      } else if (b.branch) {
+      } else if (b.branch || b.accountNo) {
         list.push({
-          branch: b.branch.trim(),
+          branch: (b.branch || '').trim(),
           accountName: (b.accountName || '').trim(),
           accountNo: (b.accountNo || '').trim()
         });
@@ -769,10 +769,10 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
 
     // Also include branches recorded in historical deposits for this bank if any
     deposits
-      .filter(d => (d.bankName || '').trim().toLowerCase() === targetName && d.branch)
+      .filter(d => (d.bankName || '').trim().toLowerCase() === targetName && (d.branch || d.accountNo))
       .forEach(d => {
         list.push({
-          branch: d.branch.trim(),
+          branch: (d.branch || '').trim(),
           accountName: (d.accountName || '').trim(),
           accountNo: (d.accountNo || '').trim()
         });
@@ -780,12 +780,32 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
 
     const seen = new Set();
     return list.filter(item => {
-      const key = `${(item.branch || '').toLowerCase()}|${(item.accountNo || '').toLowerCase()}`;
+      const key = `${(item.branch || '').toLowerCase()}|${(item.accountNo || '').toLowerCase()}|${(item.accountName || '').toLowerCase()}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
   }, [banks, deposits, formData.bankName]);
+
+  const availableAccounts = useMemo(() => {
+    if (!formData.bankName) return [];
+    const seen = new Set();
+    const list = [];
+    availableBranches.forEach(b => {
+      const acc = (b.accountNo || '').trim();
+      if (!acc) return;
+      if (seen.has(acc.toLowerCase())) return;
+      seen.add(acc.toLowerCase());
+      list.push({
+        value: acc,
+        label: acc,
+        sublabel: `${b.branch || 'Main Branch'}${b.accountName ? ` - ${b.accountName}` : ''}`,
+        branch: b.branch,
+        accountName: b.accountName
+      });
+    });
+    return list;
+  }, [availableBranches, formData.bankName]);
 
   const handleBankChange = (valOrEvent) => {
     const bName = typeof valOrEvent === 'string' ? valOrEvent : (valOrEvent?.target?.value || '');
@@ -801,44 +821,94 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
     }
     const targetName = bName.trim().toLowerCase();
     const matchingDocs = banks.filter(b => (b.bankName || '').trim().toLowerCase() === targetName);
-    const branches = [];
+    const candidateBranches = [];
     matchingDocs.forEach(b => {
       if (Array.isArray(b.branches) && b.branches.length > 0) {
         b.branches.forEach(br => {
-          if (br && br.branch) {
-            branches.push({
-              branch: br.branch.trim(),
+          if (br && (br.branch || br.accountNo)) {
+            candidateBranches.push({
+              branch: (br.branch || '').trim(),
               accountName: (br.accountName || b.accountName || '').trim(),
               accountNo: (br.accountNo || b.accountNo || '').trim()
             });
           }
         });
-      } else if (b.branch) {
-        branches.push({
-          branch: b.branch.trim(),
+      } else if (b.branch || b.accountNo) {
+        candidateBranches.push({
+          branch: (b.branch || '').trim(),
           accountName: (b.accountName || '').trim(),
           accountNo: (b.accountNo || '').trim()
         });
       }
     });
-    const firstBranch = branches[0];
 
-    setFormData(prev => ({
-      ...prev,
-      bankName: bName,
-      branch: firstBranch?.branch || '',
-      accountName: firstBranch?.accountName || '',
-      accountNo: firstBranch?.accountNo || ''
-    }));
+    if (candidateBranches.length === 1) {
+      const only = candidateBranches[0];
+      setFormData(prev => ({
+        ...prev,
+        bankName: bName,
+        branch: only.branch || '',
+        accountName: only.accountName || '',
+        accountNo: only.accountNo || ''
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        bankName: bName,
+        branch: '',
+        accountName: '',
+        accountNo: ''
+      }));
+    }
+  };
+
+  const handleAccountNoChange = (accNoVal, optionObj) => {
+    const accNo = typeof accNoVal === 'string' ? accNoVal : (accNoVal?.target?.value || '');
+    if (!accNo) {
+      setFormData(prev => ({
+        ...prev,
+        accountNo: ''
+      }));
+      return;
+    }
+
+    if (optionObj && (optionObj.branch || optionObj.accountName)) {
+      setFormData(prev => ({
+        ...prev,
+        accountNo: accNo,
+        branch: optionObj.branch || prev.branch,
+        accountName: optionObj.accountName || prev.accountName
+      }));
+      return;
+    }
+
+    const match = availableBranches.find(b => (b.accountNo || '').trim().toLowerCase() === accNo.trim().toLowerCase());
+    if (match) {
+      setFormData(prev => ({
+        ...prev,
+        accountNo: accNo,
+        branch: match.branch || prev.branch,
+        accountName: match.accountName || prev.accountName
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        accountNo: accNo
+      }));
+    }
   };
 
   const handleBranchChange = (valOrEvent, extraOpt) => {
     const branchName = typeof valOrEvent === 'string' ? valOrEvent : (valOrEvent?.target?.value || '');
+    if (!branchName) {
+      setFormData(prev => ({ ...prev, branch: '' }));
+      return;
+    }
     let branchObj;
     if (extraOpt?.accountNo) {
       branchObj = availableBranches.find(b =>
         (b.branch || '').trim().toLowerCase() === branchName.trim().toLowerCase() &&
-        (b.accountNo || '').trim() === (extraOpt.accountNo || '').trim()
+        (b.accountNo || '').trim().toLowerCase() === (extraOpt.accountNo || '').trim().toLowerCase()
       );
     }
     if (!branchObj) {
@@ -847,8 +917,8 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
     setFormData(prev => ({
       ...prev,
       branch: branchName,
-      accountName: branchObj ? branchObj.accountName : (branchName ? prev.accountName : ''),
-      accountNo: branchObj ? branchObj.accountNo : (branchName ? prev.accountNo : '')
+      accountName: branchObj ? branchObj.accountName : prev.accountName,
+      accountNo: branchObj ? branchObj.accountNo : prev.accountNo
     }));
   };
 
@@ -1474,11 +1544,25 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
 
             <div className="space-y-2">
               <SearchableFilterSelect
+                label="Account Number"
+                labelClassName="text-sm font-medium text-gray-700 ml-1"
+                value={formData.accountNo}
+                onChange={handleAccountNoChange}
+                options={availableAccounts}
+                placeholder={availableAccounts.length > 0 ? '-- Select Account --' : 'e.g. 1234567890'}
+                allowCustomValue={true}
+                showAllOption={false}
+                inputClassName="h-10 payment-form-input pr-8"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <SearchableFilterSelect
                 label="Branch"
                 labelClassName="text-sm font-medium text-gray-700 ml-1"
                 value={formData.branch}
                 onChange={handleBranchChange}
-                options={availableBranches.map(br => ({
+                options={availableBranches.filter(br => br.branch).map(br => ({
                   value: br.branch,
                   label: br.branch,
                   sublabel: br.accountNo ? `A/C: ${br.accountNo}${br.accountName ? ` (${br.accountName})` : ''}` : '',
@@ -1492,33 +1576,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
               />
             </div>
 
-            <div className="space-y-2">
-              <SearchableFilterSelect
-                label="Deposit Type"
-                labelClassName="text-sm font-medium text-gray-700 ml-1"
-                value={formData.depositType}
-                onChange={(val) => setFormData(prev => ({ ...prev, depositType: val || 'Cash Deposit' }))}
-                options={DEPOSIT_TYPES}
-                placeholder="Select Deposit Type"
-                showAllOption={false}
-                inputClassName="h-10 payment-form-input pr-8"
-              />
-            </div>
-
-            {/* Row 2: Account Number, Account Name, Amount, Slip/Ref # */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 ml-1">
-                Account Number
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 1234567890"
-                value={formData.accountNo}
-                onChange={(e) => setFormData({ ...formData, accountNo: e.target.value })}
-                className="h-10 payment-form-input"
-              />
-            </div>
-
+            {/* Row 2: Account Name, Deposit Type, Amount, Slip/Ref # */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 ml-1">
                 Account Name
@@ -1529,6 +1587,19 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                 value={formData.accountName}
                 onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
                 className="h-10 payment-form-input"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <SearchableFilterSelect
+                label="Deposit Type"
+                labelClassName="text-sm font-medium text-gray-700 ml-1"
+                value={formData.depositType}
+                onChange={(val) => setFormData(prev => ({ ...prev, depositType: val || 'Cash Deposit' }))}
+                options={DEPOSIT_TYPES}
+                placeholder="Select Deposit Type"
+                showAllOption={false}
+                inputClassName="h-10 payment-form-input pr-8"
               />
             </div>
 

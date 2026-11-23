@@ -7432,7 +7432,15 @@ apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
     // Find employee name if exists
     let displayName = username === 'admin' ? 'Administrator' : username;
     let permissions = null;
-    if (username !== 'admin') {
+    let userDesignation = '';
+    let userDepartment = '';
+    let userEmployeeId = username === 'admin' ? 'ADMIN-001' : username;
+
+    if (username === 'admin') {
+      userDesignation = user.designation || 'System Administrator';
+      userDepartment = user.department || 'Management';
+      if (user.name) displayName = user.name;
+    } else {
       const employees = await Employee.find();
       let isInactive = false;
       for (const emp of employees) {
@@ -7445,6 +7453,9 @@ apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
           if (decrypted.employeeId === username) {
             displayName = decrypted.name;
             permissions = decrypted.permissions || null;
+            userDesignation = decrypted.designation || '';
+            userDepartment = decrypted.department || '';
+            userEmployeeId = decrypted.employeeId || username;
             if (decrypted.status === 'Inactive') {
               isInactive = true;
             }
@@ -7465,8 +7476,11 @@ apiRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
     const userData = {
       id: user._id,
       username: user.username,
+      employeeId: userEmployeeId,
       role: displayRole,
       name: displayName,
+      designation: userDesignation,
+      department: userDepartment,
       permissions: resolvedPerms,
       avatarPhoto: user.avatarPhoto || null
     };
@@ -7546,11 +7560,16 @@ apiRouter.get('/api/auth/check', async (req, res) => {
 
       if (isAdmin) {
         req.session.user.role = 'Admin';
+        req.session.user.name = userRecord?.name || req.session.user.name || 'Administrator';
+        req.session.user.designation = userRecord?.designation || req.session.user.designation || 'System Administrator';
+        req.session.user.department = userRecord?.department || req.session.user.department || 'Management';
+        req.session.user.employeeId = 'ADMIN-001';
         return res.json({
           authenticated: true,
           user: req.session.user,
           rememberMe: !!req.session.rememberMe,
-          sessionToken: req.session.sessionToken
+          sessionToken: req.session.sessionToken,
+          sessionId: req.sessionID
         });
       }
 
@@ -7584,6 +7603,10 @@ apiRouter.get('/api/auth/check', async (req, res) => {
       if (matchedEmployee && decryptedEmp) {
         const displayRole = await resolveRoleToDisplay(decryptedEmp.role);
         req.session.user.role = displayRole;
+        req.session.user.name = decryptedEmp.name || req.session.user.name;
+        req.session.user.designation = decryptedEmp.designation || '';
+        req.session.user.department = decryptedEmp.department || '';
+        req.session.user.employeeId = decryptedEmp.employeeId || req.session.user.username;
         req.session.user.permissions = await resolveUserPermissions(decryptedEmp.role, decryptedEmp.permissions);
       }
 
