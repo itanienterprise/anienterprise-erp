@@ -55,7 +55,7 @@ function formatZkError(err) {
     try {
       const msg = err.toast();
       if (msg) return msg;
-    } catch (_) {}
+    } catch (_) { }
   }
   if (err.err && typeof err.err === 'string') return err.err;
   if (err.code) return `Connection error (${err.code})`;
@@ -92,26 +92,9 @@ const { Server } = require('socket.io');
 const app = express();
 app.set('trust proxy', 1);
 
-// Restricted CORS Whitelisting
+// Restricted CORS Whitelisting (allows all origins for cloud VPS, domains, local LAN, and mobile app)
 const isAllowedOrigin = (origin) => {
-  if (!origin || origin === 'null' || origin.startsWith('capacitor://') || origin.startsWith('ionic://')) return true; // allow non-browser / mobile WebView requests
-  try {
-    const url = new URL(origin);
-    const hostname = url.hostname;
-    if (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname.startsWith('192.168.') ||
-      hostname.startsWith('10.') ||
-      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
-    ) {
-      return true;
-    }
-    if (process.env.CLIENT_URL && (origin === process.env.CLIENT_URL || origin.startsWith(process.env.CLIENT_URL))) {
-      return true;
-    }
-  } catch (e) { }
-  return false;
+  return true;
 };
 
 const httpServer = http.createServer(app);
@@ -525,7 +508,7 @@ const MarginReturn = require('./models/MarginReturn');
 const PI = require('./models/PI');
 const PackingList = require('./models/PackingList');
 // Ensure packingListNumber uniqueness index is dropped to allow intentional duplicates
-PackingList.collection.dropIndex('packingListNumber_1').catch(() => {});
+PackingList.collection.dropIndex('packingListNumber_1').catch(() => { });
 const TRSetup = require('./models/TRSetup');
 const MetaData = require('./models/MetaData');
 const CnFPayment = require('./models/CnFPayment');
@@ -1066,7 +1049,7 @@ app.post('/v', (req, res, next) => {
       try {
         const u = new URL(cleanP);
         cleanP = u.pathname + u.search;
-      } catch (_) {}
+      } catch (_) { }
     }
     req.targetApiPath = cleanP;
     req.url = cleanP;
@@ -1132,7 +1115,7 @@ const requireAuth = (req, res, next) => {
   if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
     try {
       rawPath = new URL(rawPath).pathname.replace(/\/+$/, '') || '/';
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // Whitelisted public routes that do not require an active session
@@ -1593,9 +1576,9 @@ apiRouter.get('/api/dashboard/stats', async (req, res) => {
         module: { $ne: 'Notification' },
         action: { $nin: ['CLICK', 'UI_CLICK'] }
       })
-      .sort({ timestamp: -1 })
-      .limit(15)
-      .lean();
+        .sort({ timestamp: -1 })
+        .limit(15)
+        .lean();
     } catch (e) {
       console.warn('Dashboard recent logs error:', e.message);
     }
@@ -1607,8 +1590,8 @@ apiRouter.get('/api/dashboard/stats', async (req, res) => {
         "lastLocation.lat": { $ne: null },
         status: { $ne: 'revoked' }
       })
-      .select('employeeName employeeEmpId deviceModel status isOnline lastLocation lastSeen batteryLevel trackingMode')
-      .lean();
+        .select('employeeName employeeEmpId deviceModel status isOnline lastLocation lastSeen batteryLevel trackingMode')
+        .lean();
     } catch (e) {
       console.warn('Dashboard devices error:', e.message);
     }
@@ -1689,12 +1672,12 @@ apiRouter.get('/api/todos', async (req, res) => {
     const filter = isAdmin
       ? {}
       : {
-          $or: [
-            { assignedTo: 'All' },
-            { assignedTo: username },
-            { createdBy: username }
-          ]
-        };
+        $or: [
+          { assignedTo: 'All' },
+          { assignedTo: username },
+          { createdBy: username }
+        ]
+      };
 
     const todos = await Todo.find(filter).sort({ completed: 1, createdAt: -1 }).lean();
     res.json({ success: true, todos });
@@ -2348,7 +2331,7 @@ apiRouter.post('/api/ip-records', async (req, res) => {
     const newRecord = new IpRecord({ data: encryptedData });
     const savedRecord = await newRecord.save();
     const result = { ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt };
-    
+
     const lightResult = { ...result };
     if (lightResult.ipAttachment) {
       lightResult.hasAttachment = true;
@@ -2375,7 +2358,7 @@ apiRouter.delete('/api/ip-records/:id', async (req, res) => {
   try {
     const deletedRecord = await IpRecord.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Record not found' });
-    
+
     if (memoryCache.ipRecordsLightweight) {
       memoryCache.ipRecordsLightweight = memoryCache.ipRecordsLightweight.filter(r => r._id.toString() !== req.params.id);
     }
@@ -2398,7 +2381,7 @@ apiRouter.put('/api/ip-records/:id', async (req, res) => {
 
     let oldData = null;
     if (existingDoc.data) {
-      try { oldData = decryptData(existingDoc.data); } catch(e){}
+      try { oldData = decryptData(existingDoc.data); } catch (e) { }
     }
 
     // Check for duplicate IP Number
@@ -5694,8 +5677,8 @@ apiRouter.post('/api/bank-dollar-rates/update', async (req, res) => {
       }
     }
 
-    const prevRateValue = previousRate != null 
-      ? parseFloat(previousRate) 
+    const prevRateValue = previousRate != null
+      ? parseFloat(previousRate)
       : (existingPastDoc?.todayRate != null ? parseFloat(existingPastDoc.todayRate) : parseFloat((parseFloat(todayRate) - 0.10).toFixed(2)));
 
     const payload = {
@@ -5809,12 +5792,12 @@ apiRouter.post('/api/bank-dollar-rates/sync', async (req, res) => {
         const previousRate = mostRecentPast?.todayRate != null
           ? parseFloat(mostRecentPast.todayRate)
           : (existing?.dec?.previousRate != null
-              ? parseFloat(existing.dec.previousRate)
-              : (BANK_REGISTRY[scrapedKey]?.previousRate != null 
-                  ? parseFloat(BANK_REGISTRY[scrapedKey].previousRate)
-                  : (BANK_REGISTRY[cKey]?.previousRate != null 
-                      ? parseFloat(BANK_REGISTRY[cKey].previousRate) 
-                      : parseFloat(scraped.todayRate))));
+            ? parseFloat(existing.dec.previousRate)
+            : (BANK_REGISTRY[scrapedKey]?.previousRate != null
+              ? parseFloat(BANK_REGISTRY[scrapedKey].previousRate)
+              : (BANK_REGISTRY[cKey]?.previousRate != null
+                ? parseFloat(BANK_REGISTRY[cKey].previousRate)
+                : parseFloat(scraped.todayRate))));
 
         const payload = {
           bankName: scraped.bankName,
@@ -6103,7 +6086,7 @@ apiRouter.post('/api/patty-cash', async (req, res) => {
               if (!isNaN(parsed) && parsed > maxSeq) maxSeq = parsed;
             }
           }
-        } catch (_) {}
+        } catch (_) { }
       });
       recordData.voucherNo = `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
     }
@@ -9552,7 +9535,7 @@ async function processEmployeeDay(employeeId, date) {
     }
 
     const dayStart = new Date(`${dStr}T00:00:00.000+06:00`);
-    const dayEnd   = new Date(`${dStr}T23:59:59.999+06:00`);
+    const dayEnd = new Date(`${dStr}T23:59:59.999+06:00`);
 
     const punches = await AttendancePunch.find({
       employeeId,
@@ -9688,7 +9671,7 @@ async function processAttendanceForDate(date, shouldBroadcast = true) {
   }
 
   const dayStart = new Date(`${targetDate}T00:00:00.000+06:00`);
-  const dayEnd   = new Date(`${targetDate}T23:59:59.999+06:00`);
+  const dayEnd = new Date(`${targetDate}T23:59:59.999+06:00`);
 
   // First, resolve any unmatched punches on this date via DeviceMapping
   try {
@@ -9796,7 +9779,7 @@ async function processAttendanceForDate(date, shouldBroadcast = true) {
           if (devMap && devMap.shiftId) empShift = await ShiftConfig.findById(devMap.shiftId);
           if (!empShift) empShift = await ShiftConfig.findOne({ $or: [{ applicableTo: empObjId }, { applicableTo: String(empObjId) }] });
           if (!empShift) empShift = await ShiftConfig.findOne({ isDefault: true }) || await ShiftConfig.findOne();
-        } catch (_) {}
+        } catch (_) { }
 
         const dObj = new Date(`${targetDate}T12:00:00.000+06:00`);
         const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'Asia/Dhaka' }).format(dObj);
@@ -9819,7 +9802,7 @@ async function processAttendanceForDate(date, shouldBroadcast = true) {
   if (shouldBroadcast && processed > 0) {
     try {
       broadcastUpdate('attendance', 'logs_updated', { date: targetDate, processed });
-    } catch (_) {}
+    } catch (_) { }
   }
 
   return { targetDate, processed, totalEmployees: allEmployees.length };
@@ -9844,7 +9827,7 @@ async function triggerDashboardAutoProcess(todayDhaka, weekDateStrings = []) {
       const pastDaysInWeek = weekDateStrings.filter(dStr => dStr < todayDhaka);
       for (const dStr of pastDaysInWeek) {
         const dayStart = new Date(`${dStr}T00:00:00.000+06:00`);
-        const dayEnd   = new Date(`${dStr}T23:59:59.999+06:00`);
+        const dayEnd = new Date(`${dStr}T23:59:59.999+06:00`);
         const hasUnprocessed = await AttendancePunch.exists({
           punchTime: { $gte: dayStart, $lte: dayEnd },
           employeeId: { $ne: null },
@@ -9942,7 +9925,7 @@ async function fetchZkAttendances(ip, port = 4370, timeout = 30000, options = {}
       try {
         const userData = await zk.getUsers();
         users = Array.isArray(userData?.data) ? userData.data : (Array.isArray(userData) ? userData : []);
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // Request attendance logs size
@@ -10073,7 +10056,7 @@ async function fetchZkAttendances(ip, port = 4370, timeout = 30000, options = {}
   } finally {
     try {
       await zk.disconnect();
-    } catch (_) {}
+    } catch (_) { }
   }
 
   const logBuffer = shouldFetchLatestOnly ? allPayload : allPayload.subarray(4);
@@ -10210,7 +10193,7 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
               $or: [{ punchType: 'UNKNOWN' }, { verifyMode: 'FINGERPRINT/CARD' }]
             },
             { $set: { punchType: p.punchType, verifyMode: p.verifyMode } }
-          ).catch(() => {});
+          ).catch(() => { });
         }
         continue;
       }
@@ -10225,7 +10208,7 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
         await AttendancePunch.updateOne(
           { _id: shiftedDoc._id },
           { $set: { punchTime: p.punchTime, punchType: p.punchType, verifyMode: p.verifyMode } }
-        ).catch(() => {});
+        ).catch(() => { });
         shiftedDoc.punchTime = p.punchTime;
         skippedDuplicates++;
         continue;
@@ -10261,7 +10244,7 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
       newInserted += toInsert.length;
       try {
         broadcastUpdate('attendance', 'punch_created', { count: toInsert.length });
-      } catch (_) {}
+      } catch (_) { }
     }
   }
 
@@ -10316,7 +10299,7 @@ class ZkLiveConnectionManager {
   broadcastStatus() {
     try {
       io.emit('zk_device_status', this.getStatus());
-    } catch (_) {}
+    } catch (_) { }
   }
 
   async connect(ip, port = 4370) {
@@ -10414,7 +10397,7 @@ class ZkLiveConnectionManager {
         });
         try {
           broadcastUpdate('attendance', 'punch_created', { count: result.newInserted });
-        } catch (_) {}
+        } catch (_) { }
       }
       this.broadcastStatus();
       return { success: true, ...result };
@@ -10444,7 +10427,7 @@ class ZkLiveConnectionManager {
       if ((this.status === 'connected' || this.shouldStayConnected) && !this.isSyncing) {
         try {
           await this.syncNow();
-        } catch (_) {}
+        } catch (_) { }
       }
     }, intervalMs);
   }
@@ -10810,7 +10793,7 @@ apiRouter.post('/api/attendance/mappings', verifyPermission('attendance', 'addMa
           try {
             dec = decryptData(emp.data);
             if (dec && dec.data && typeof dec.data === 'string' && !dec.employeeId) {
-              try { dec = decryptData(dec.data); } catch (_) {}
+              try { dec = decryptData(dec.data); } catch (_) { }
             }
           } catch (_) { continue; }
           if (dec) {
@@ -11035,7 +11018,7 @@ apiRouter.get('/api/attendance/punches', verifyPermission('attendance', 'view'),
     }
 
     const punches = await AttendancePunch.find(query).sort({ punchTime: -1 }).limit(Number(limit)).lean();
-    
+
     // Enrich with employeeEmpId and employeeName from mappings
     const mappings = await DeviceMapping.find({}).lean();
     const mapByEnroll = new Map();

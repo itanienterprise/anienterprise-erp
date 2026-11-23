@@ -17,6 +17,7 @@
     "compression": "^1.8.2",
     "connect-mongo": "^6.0.0",
     "cookie-parser": "^1.4.7",
+    "cookie-signature": "^1.2.2",
     "cors": "^2.8.6",
     "crypto-js": "^4.2.0",
     "dotenv": "^17.2.3",
