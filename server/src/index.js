@@ -9922,6 +9922,193 @@ const fixShiftedPunches = async () => {
 };
 setTimeout(fixShiftedPunches, 3500);
 
+// ─── Intelligent Biometric Punch Type Resolution (IN vs OUT) ─────────────────
+/**
+ * Resolves punchType ('IN' vs 'OUT') for an array of punches for a single user on a single day.
+ * ZKTeco hardware devices default to state 0 ('IN') for all scans unless an employee explicitly
+ * presses the check-out button. This resolves:
+ * - First punch of the day: ALWAYS 'IN'
+ * - Last punch of the day (if multiple): ALWAYS 'OUT'
+ * - Repeat taps near arrival (< 20 mins): 'IN'
+ * - Departure taps near end of day / evening (< 45 mins of last punch, or >= 17:00): 'OUT'
+ * - Intermediate midday punches (e.g. lunch): alternating OUT / IN
+ */
+const resolvePunchesForUserDay = (punches) => {
+  if (!Array.isArray(punches) || punches.length === 0) return [];
+  const sorted = [...punches].sort((a, b) => new Date(a.punchTime).getTime() - new Date(b.punchTime).getTime());
+  const count = sorted.length;
+
+  if (count === 1) {
+    const p = sorted[0];
+    const explicit = (p.punchType && !['UNKNOWN', 'IN'].includes(p.punchType)) ? p.punchType : null;
+    return [{ ...p, punchType: explicit || 'IN' }];
+  }
+
+  const firstTime = new Date(sorted[0].punchTime).getTime();
+  const lastTime = new Date(sorted[count - 1].punchTime).getTime();
+
+  return sorted.map((p, idx) => {
+    const explicit = (p.punchType && !['UNKNOWN', 'IN'].includes(p.punchType)) ? p.punchType : null;
+    if (explicit) return { ...p, punchType: explicit };
+
+    const t = new Date(p.punchTime).getTime();
+
+    // 1. Earliest punch of the day is Check-In
+    if (idx === 0) {
+      return { ...p, punchType: 'IN' };
+    }
+    // 2. Latest punch of the day is Check-Out
+    if (idx === count - 1) {
+      return { ...p, punchType: 'OUT' };
+    }
+    // 3. Repeat taps close to arrival (< 20 mins from first punch)
+    if (t - firstTime <= 20 * 60 * 1000) {
+      return { ...p, punchType: 'IN' };
+    }
+    // 4. Repeat departure taps (< 45 mins from final punch)
+    if (lastTime - t <= 45 * 60 * 1000) {
+      return { ...p, punchType: 'OUT' };
+    }
+    // 5. Evening punches after 16:30 (4:30 PM) Dhaka time
+    const hourStr = new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Dhaka' }).format(new Date(p.punchTime));
+    const hourNum = parseInt(hourStr, 10);
+    if (hourNum >= 17) {
+      return { ...p, punchType: 'OUT' };
+    }
+    // 6. Midday / lunch break intermediate punches: alternate OUT / IN
+    return { ...p, punchType: (idx % 2 === 1) ? 'OUT' : 'IN' };
+  });
+};
+
+const enrichPunchesWithDynamicType = async (punches) => {
+  if (!Array.isArray(punches) || punches.length === 0) return [];
+
+  const neededKeys = new Set();
+  const dayRanges = new Map();
+
+  for (const p of punches) {
+    if (!p.punchTime) continue;
+    const dayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date(p.punchTime));
+    const enrollId = Number(p.enrollId);
+    neededKeys.add(`${enrollId}_${dayStr}`);
+    if (!dayRanges.has(dayStr)) {
+      dayRanges.set(dayStr, {
+        start: new Date(`${dayStr}T00:00:00.000+06:00`),
+        end: new Date(`${dayStr}T23:59:59.999+06:00`)
+      });
+    }
+  }
+
+  const orConditions = [];
+  dayRanges.forEach((range) => {
+    orConditions.push({ punchTime: { $gte: range.start, $lte: range.end } });
+  });
+
+  let allDayPunches = [];
+  if (orConditions.length > 0) {
+    try {
+      allDayPunches = await AttendancePunch.find(
+        orConditions.length === 1 ? orConditions[0] : { $or: orConditions },
+        '_id enrollId punchTime punchType'
+      ).lean();
+    } catch (_) { }
+  }
+
+  const combinedMap = new Map();
+  for (const p of allDayPunches) {
+    combinedMap.set(String(p._id), p);
+  }
+  for (const p of punches) {
+    if (p._id) combinedMap.set(String(p._id), p);
+  }
+
+  const userDayMap = new Map();
+  for (const p of combinedMap.values()) {
+    const dayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date(p.punchTime));
+    const enrollId = Number(p.enrollId);
+    const key = `${enrollId}_${dayStr}`;
+    if (neededKeys.has(key)) {
+      if (!userDayMap.has(key)) userDayMap.set(key, []);
+      userDayMap.get(key).push(p);
+    }
+  }
+
+  const resolvedTypeById = new Map();
+  for (const [, userPunches] of userDayMap.entries()) {
+    const sorted = resolvePunchesForUserDay(userPunches);
+    for (const sp of sorted) {
+      if (sp._id) resolvedTypeById.set(String(sp._id), sp.punchType);
+    }
+  }
+
+  return punches.map(p => {
+    const resolved = p._id ? resolvedTypeById.get(String(p._id)) : null;
+    return {
+      ...p,
+      punchType: resolved || p.punchType || 'IN'
+    };
+  });
+};
+
+const autoHealPunchTypesForDate = async (dateStr) => {
+  try {
+    if (!dateStr) return;
+    const dayStart = new Date(`${dateStr}T00:00:00.000+06:00`);
+    const dayEnd = new Date(`${dateStr}T23:59:59.999+06:00`);
+
+    const dayPunches = await AttendancePunch.find({
+      punchTime: { $gte: dayStart, $lte: dayEnd }
+    }).lean();
+
+    if (!dayPunches.length) return;
+
+    const groups = new Map();
+    for (const p of dayPunches) {
+      const eid = Number(p.enrollId);
+      if (!groups.has(eid)) groups.set(eid, []);
+      groups.get(eid).push(p);
+    }
+
+    const bulkOps = [];
+    for (const [, userPunches] of groups.entries()) {
+      if (userPunches.length <= 1) continue;
+      const resolved = resolvePunchesForUserDay(userPunches);
+      for (const r of resolved) {
+        const original = userPunches.find(x => String(x._id) === String(r._id));
+        if (original && r.punchType && r.punchType !== original.punchType) {
+          bulkOps.push({
+            updateOne: {
+              filter: { _id: r._id },
+              update: { $set: { punchType: r.punchType } }
+            }
+          });
+        }
+      }
+    }
+
+    if (bulkOps.length > 0) {
+      await AttendancePunch.bulkWrite(bulkOps, { ordered: false });
+      console.log(`[Attendance] Auto-corrected punchType (IN/OUT) for ${bulkOps.length} record(s) on ${dateStr}.`);
+    }
+  } catch (err) {
+    console.warn(`[Attendance] Auto-heal punch types error for ${dateStr}:`, err.message);
+  }
+};
+
+const autoHealRecentPunchTypes = async (days = 14) => {
+  try {
+    const today = new Date();
+    for (let i = 0; i < days; i++) {
+      const d = new Date(today.getTime() - i * 24 * 3600 * 1000);
+      const dayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(d);
+      await autoHealPunchTypesForDate(dayStr);
+    }
+  } catch (err) {
+    console.warn('[Attendance] Auto-heal recent punch types notice:', err.message);
+  }
+};
+setTimeout(() => autoHealRecentPunchTypes(14), 4500);
+
 // Middleware for /iclock and /cdata to accept raw text payloads from ZKTeco devices
 app.use(['/iclock', '/cdata'], express.text({ type: ['text/*', 'application/octet-stream', '*/*'], limit: '10mb' }));
 
@@ -10516,6 +10703,11 @@ async function ingestPunchRecords(punches, defaultDeviceId = 'F8-DEFAULT') {
   try {
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
     newlyInsertedDates.add(todayStr);
+
+    // Auto-heal punch types for newly affected dates so IN/OUT are immediately correct in DB
+    for (const d of newlyInsertedDates) {
+      await autoHealPunchTypesForDate(d);
+    }
 
     // Compute today immediately so real-time dashboard is instant
     await processAttendanceForDate(todayStr, false);
@@ -11316,7 +11508,8 @@ apiRouter.get('/api/attendance/punches', verifyPermission('attendance', 'view'),
       }
     }
 
-    const punches = await AttendancePunch.find(query).sort({ punchTime: -1 }).limit(Number(limit)).lean();
+    const rawPunches = await AttendancePunch.find(query).sort({ punchTime: -1 }).limit(Number(limit)).lean();
+    const punches = await enrichPunchesWithDynamicType(rawPunches);
 
     // Enrich with employeeEmpId and employeeName from mappings
     const mappings = await DeviceMapping.find({}).lean();
@@ -11770,7 +11963,8 @@ apiRouter.get('/api/attendance/live', verifyPermission('attendance', 'view'), as
     if (!canViewAll) {
       filter.$or = await buildOwnEmployeeFilter(req.session.user);
     }
-    const punches = await AttendancePunch.find(filter).sort({ punchTime: -1 }).limit(35).lean();
+    const rawPunches = await AttendancePunch.find(filter).sort({ punchTime: -1 }).limit(35).lean();
+    const punches = await enrichPunchesWithDynamicType(rawPunches);
 
     const allMappings = await DeviceMapping.find().lean();
     const mapByEnroll = new Map();

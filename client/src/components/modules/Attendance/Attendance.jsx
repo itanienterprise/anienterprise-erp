@@ -973,6 +973,52 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
     return map;
   }, [mappings]);
 
+  const displayPunches = useMemo(() => {
+    if (!Array.isArray(livePunches) || livePunches.length === 0) return [];
+    // Group by enrollId + calendar date to determine IN vs OUT sequence
+    const groups = new Map();
+    livePunches.forEach(p => {
+      const d = p.punchTime ? new Date(p.punchTime) : new Date();
+      const k = `${p.enrollId}_${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(p);
+    });
+
+    const resolvedTypes = new Map();
+    groups.forEach((userPunches) => {
+      if (userPunches.length <= 1) return;
+      const sorted = [...userPunches].sort((a, b) => new Date(a.punchTime).getTime() - new Date(b.punchTime).getTime());
+      const firstTime = new Date(sorted[0].punchTime).getTime();
+      const lastTime = new Date(sorted[sorted.length - 1].punchTime).getTime();
+
+      sorted.forEach((p, idx) => {
+        if (p.punchType && !['IN', 'UNKNOWN'].includes(p.punchType)) return;
+        const t = new Date(p.punchTime).getTime();
+        const pId = String(p._id || `${p.enrollId}_${t}`);
+        if (idx === 0) {
+          resolvedTypes.set(pId, 'IN');
+        } else if (idx === sorted.length - 1) {
+          resolvedTypes.set(pId, 'OUT');
+        } else if (lastTime - t <= 45 * 60 * 1000) {
+          resolvedTypes.set(pId, 'OUT');
+        } else {
+          const hour = new Date(p.punchTime).getHours();
+          if (hour >= 17) {
+            resolvedTypes.set(pId, 'OUT');
+          } else {
+            resolvedTypes.set(pId, (idx % 2 === 1) ? 'OUT' : 'IN');
+          }
+        }
+      });
+    });
+
+    return livePunches.map(p => {
+      const pId = String(p._id || `${p.enrollId}_${new Date(p.punchTime).getTime()}`);
+      const resolved = resolvedTypes.get(pId);
+      return resolved ? { ...p, punchType: resolved } : p;
+    });
+  }, [livePunches]);
+
   return (
   <>
     {/* Warning: unmatched punches */}
@@ -1076,13 +1122,13 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
         </div>
       </div>
       <div className="att-panel-body att-table-wrap">
-        {loadingLive && livePunches.length === 0 ? (
+        {loadingLive && displayPunches.length === 0 ? (
           <div style={{ padding: 24 }}>
             {[...Array(5)].map((_, i) => (
               <div key={i} className="att-skeleton" style={{ height: 36, marginBottom: 8, borderRadius: 8 }} />
             ))}
           </div>
-        ) : livePunches.length === 0 ? (
+        ) : displayPunches.length === 0 ? (
           <div className="att-empty">
             <IcoFingerprint />
             <div className="att-empty-title">No punches yet today</div>
@@ -1092,7 +1138,7 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
           <>
             {/* Mobile View Toggle Bar (Only visible on mobile screens) */}
             <div className="att-mobile-feed-bar">
-              <span className="att-mobile-feed-count">{livePunches.length} punch{livePunches.length !== 1 ? 'es' : ''} today</span>
+              <span className="att-mobile-feed-count">{displayPunches.length} punch{displayPunches.length !== 1 ? 'es' : ''} today</span>
               <div className="att-mobile-toggle-group">
                 <button
                   type="button"
@@ -1114,7 +1160,7 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
             {/* Mobile Cards View (Rendered for mobile, controlled via mobileView and CSS) */}
             {mobileView === 'cards' && (
               <div className="att-mobile-cards">
-                {livePunches.map(p => {
+                {displayPunches.map(p => {
                   const today = isTodayDate(p.punchTime);
                   const mapping = mappingMap.get(Number(p.enrollId));
                   const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
@@ -1180,7 +1226,7 @@ const DashboardTab = ({ summary, livePunches, mappings = [], loadingLive, onRefr
                   </tr>
                 </thead>
                 <tbody>
-                  {livePunches.map(p => {
+                  {displayPunches.map(p => {
                     const today = isTodayDate(p.punchTime);
                     const mapping = mappingMap.get(Number(p.enrollId));
                     const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
@@ -2079,6 +2125,51 @@ const PunchesTab = ({
     return map;
   }, [mappings]);
 
+  const displayPunches = useMemo(() => {
+    if (!Array.isArray(punches) || punches.length === 0) return [];
+    const groups = new Map();
+    punches.forEach(p => {
+      const d = p.punchTime ? new Date(p.punchTime) : new Date();
+      const k = `${p.enrollId}_${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(p);
+    });
+
+    const resolvedTypes = new Map();
+    groups.forEach((userPunches) => {
+      if (userPunches.length <= 1) return;
+      const sorted = [...userPunches].sort((a, b) => new Date(a.punchTime).getTime() - new Date(b.punchTime).getTime());
+      const firstTime = new Date(sorted[0].punchTime).getTime();
+      const lastTime = new Date(sorted[sorted.length - 1].punchTime).getTime();
+
+      sorted.forEach((p, idx) => {
+        if (p.punchType && !['IN', 'UNKNOWN'].includes(p.punchType)) return;
+        const t = new Date(p.punchTime).getTime();
+        const pId = String(p._id || `${p.enrollId}_${t}`);
+        if (idx === 0) {
+          resolvedTypes.set(pId, 'IN');
+        } else if (idx === sorted.length - 1) {
+          resolvedTypes.set(pId, 'OUT');
+        } else if (lastTime - t <= 45 * 60 * 1000) {
+          resolvedTypes.set(pId, 'OUT');
+        } else {
+          const hour = new Date(p.punchTime).getHours();
+          if (hour >= 17) {
+            resolvedTypes.set(pId, 'OUT');
+          } else {
+            resolvedTypes.set(pId, (idx % 2 === 1) ? 'OUT' : 'IN');
+          }
+        }
+      });
+    });
+
+    return punches.map(p => {
+      const pId = String(p._id || `${p.enrollId}_${new Date(p.punchTime).getTime()}`);
+      const resolved = resolvedTypes.get(pId);
+      return resolved ? { ...p, punchType: resolved } : p;
+    });
+  }, [punches]);
+
   return (
     <div className="att-panel">
       <div className="att-panel-header att-punches-header">
@@ -2176,7 +2267,7 @@ const PunchesTab = ({
             {/* Mobile Cards View */}
             {mobileView === 'cards' && (
               <div className="att-mobile-cards">
-                {punches.map(p => {
+                {displayPunches.map(p => {
                   const mapping = mappingMap.get(Number(p.enrollId));
                   const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
                   const empName = p.employeeName || mapping?.employeeName || '';
@@ -2270,7 +2361,7 @@ const PunchesTab = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {punches.map(p => {
+                  {displayPunches.map(p => {
                     const mapping = mappingMap.get(Number(p.enrollId));
                     const erpId = p.employeeEmpId || mapping?.employeeEmpId || '';
                     const empName = p.employeeName || mapping?.employeeName || '';
