@@ -60,6 +60,20 @@ const EmployeeManagement = ({
         }
     }, [queryEmployees]);
 
+    // Whenever an employee is viewed, fetch the single employee record to ensure full portrait photo is displayed
+    useEffect(() => {
+        if (!viewData?._id) return;
+        let isCurrent = true;
+        axios.get(`${API_BASE_URL}/api/employees/${viewData._id}`)
+            .then(res => {
+                if (isCurrent && res.data && res.data.profilePhoto && res.data.profilePhoto !== viewData.profilePhoto) {
+                    setViewData(prev => prev && prev._id === res.data._id ? { ...prev, profilePhoto: res.data.profilePhoto } : prev);
+                }
+            })
+            .catch(() => {});
+        return () => { isCurrent = false; };
+    }, [viewData?._id]);
+
     const getNameFontSize = (name = '') => {
         if (!name) return '1.75rem';
         if (name.length > 25) return '1.32rem';

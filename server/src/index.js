@@ -7318,11 +7318,8 @@ apiRouter.get('/api/employees', async (req, res) => {
       const rawFullPhoto = (d && d.employeeId && userPhotoMap[d.employeeId]) || d?.profilePhoto || null;
       const avatarPhoto = (d && d.employeeId && userAvatarMap[d.employeeId]) || d?.avatarPhoto || null;
 
-      // Bandwidth optimization: only send heavy 700KB profilePhoto when explicitly requested
-      // For general list/table views, avatarPhoto (or small photo) is used for thumbnail display
-      const profilePhoto = includeFullPhoto
-        ? rawFullPhoto
-        : (avatarPhoto || (rawFullPhoto && rawFullPhoto.length < 50000 ? rawFullPhoto : null));
+      // profilePhoto holds the full-resolution uncropped portrait; avatarPhoto holds the circular avatar
+      const profilePhoto = rawFullPhoto;
 
       if (!hasFullEmployeePerm) {
         return {
@@ -7359,6 +7356,9 @@ apiRouter.get('/api/employees/:id', async (req, res) => {
     let d = decryptData(employee.data);
     if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
       try { d = decryptData(d.data); } catch (e) { }
+    }
+    if (d && d.role) {
+      d.role = await resolveRoleToDisplay(d.role);
     }
     const userDoc = d?.employeeId ? await User.findOne({ username: d.employeeId }, 'profilePhoto avatarPhoto') : null;
     const profilePhoto = userDoc?.profilePhoto || d?.profilePhoto || null;

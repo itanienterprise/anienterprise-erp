@@ -29,7 +29,7 @@ export const useEmployees = () => {
     return useQuery({
         queryKey: QUERY_KEYS.employees,
         queryFn: async () => {
-            const res = await axios.get(`${API_BASE_URL}/api/employees`);
+            const res = await axios.get(`${API_BASE_URL}/api/employees?fullPhoto=true`);
             return Array.isArray(res.data) ? res.data : [];
         },
     });
