@@ -9915,55 +9915,94 @@ const fixShiftedPunches = async () => {
 };
 setTimeout(fixShiftedPunches, 3500);
 
+// Middleware for /iclock and /cdata to accept raw text payloads from ZKTeco devices
+app.use(['/iclock', '/cdata'], express.text({ type: ['text/*', 'application/octet-stream', '*/*'], limit: '10mb' }));
+
 // ─── 1. ZKTech ADMS Device Push Receiver ─────────────────────────────────────
-// The F8 device sends a POST with query params: sn, table, Stamp, PIN, Checked, Status, Verify
-// GET is used for heartbeat / device registration check
-app.get('/api/attendance/device/push', (req, res) => {
+// ZKTeco standard ADMS handshake: GET /iclock/cdata?SN=...&options=all
+app.get(['/iclock/cdata', '/cdata', '/api/attendance/device/push'], (req, res) => {
+  const sn = req.query.SN || req.query.sn || req.query.DeviceSN || 'F8-DEFAULT';
+  console.log(`[ZKTeco ADMS] Handshake request from device SN: ${sn}`);
   res.set('Content-Type', 'text/plain');
-  res.send('OK');
+  res.send(`GET OPTION FROM: ${sn}\nStamp=9999\nOpStamp=0\nPhotoStamp=0\nErrorDelay=60\nDelay=30\nTransTimes=00:00;14:05\nTransInterval=1\nTransFlag=1111000000\nTimeZone=6\nRealtime=1\nEncrypt=0\nServerVersion=3.1.1\n`);
 });
 
-app.post('/api/attendance/device/push', async (req, res) => {
+// ZKTeco heartbeat / command polling: GET /iclock/getrequest?SN=...
+app.get(['/iclock/getrequest', '/getrequest'], (req, res) => {
+  res.set('Content-Type', 'text/plain');
+  res.send('OK\n');
+});
+
+// ZKTeco command response: POST /iclock/devicecmd
+app.post(['/iclock/devicecmd', '/devicecmd'], (req, res) => {
+  res.set('Content-Type', 'text/plain');
+  res.send('OK\n');
+});
+
+// ZKTeco standard ADMS attendance push: POST /iclock/cdata
+app.post(['/iclock/cdata', '/cdata', '/api/attendance/device/push'], async (req, res) => {
   try {
-    // ADMS format: body may be urlencoded or JSON; query params also common
-    const raw = { ...req.query, ...req.body };
-    const deviceId = raw.sn || raw.DeviceSN || 'F8-DEFAULT';
-    const enrollId = parseInt(raw.PIN || raw.pin || raw.UserId || 0);
-    const stamp = raw.Stamp || raw.stamp || raw.DateTime || raw.datetime;
-    const checked = parseInt(raw.Checked || raw.checked || 0);
-    const verify = raw.Verify || raw.verify || 'UNKNOWN';
+    const sn = req.query.SN || req.query.sn || req.query.DeviceSN || 'F8-DEFAULT';
+    const table = req.query.table || req.query.Table || '';
+    const rawBody = typeof req.body === 'string' ? req.body : (Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body || {}));
 
-    // Checked codes: 0=IN, 1=OUT, 2=BREAK_OUT, 3=BREAK_IN (ZK standard)
-    const punchTypeMap = { 0: 'IN', 1: 'OUT', 2: 'BREAK_OUT', 3: 'BREAK_IN' };
-    const punchType = punchTypeMap[checked] || 'UNKNOWN';
+    console.log(`[ZKTeco ADMS] Data push from device SN: ${sn}, table: ${table}, bodyLength: ${rawBody.length}`);
 
-    const punchTime = parsePunchTimestamp(stamp);
-    if (isNaN(punchTime.getTime())) {
-      return res.status(400).set('Content-Type', 'text/plain').send('ERR:Invalid timestamp');
+    const punches = [];
+
+    // Format A: Tab-separated multi-line ATTLOG records (standard ZKTeco ADMS)
+    if (rawBody && typeof rawBody === 'string' && rawBody.includes('\t')) {
+      const lines = rawBody.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const punchTypeMap = { 0: 'IN', 1: 'OUT', 2: 'BREAK_OUT', 3: 'BREAK_IN' };
+      for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length >= 2) {
+          const enrollId = parseInt(parts[0], 10);
+          const punchTime = parsePunchTimestamp(parts[1]);
+          if (!isNaN(enrollId) && enrollId > 0 && !isNaN(punchTime.getTime())) {
+            const status = parseInt(parts[2], 10) || 0;
+            punches.push({
+              enrollId,
+              punchTime,
+              punchType: punchTypeMap[status] || 'UNKNOWN',
+              verifyMode: parts[3] ? `MODE_${parts[3]}` : 'FINGERPRINT',
+              deviceId: `F8-${sn}`,
+              rawPayload: line
+            });
+          }
+        }
+      }
+    } else {
+      // Format B: Query params or JSON body (single punch fallback)
+      const raw = { ...req.query, ...(typeof req.body === 'object' ? req.body : {}) };
+      const enrollId = parseInt(raw.PIN || raw.pin || raw.UserId || 0, 10);
+      const stamp = raw.Stamp || raw.stamp || raw.DateTime || raw.datetime;
+      if (enrollId > 0 && stamp) {
+        const punchTime = parsePunchTimestamp(stamp);
+        const checked = parseInt(raw.Checked || raw.checked || 0, 10);
+        const punchTypeMap = { 0: 'IN', 1: 'OUT', 2: 'BREAK_OUT', 3: 'BREAK_IN' };
+        punches.push({
+          enrollId,
+          punchTime,
+          punchType: punchTypeMap[checked] || 'UNKNOWN',
+          verifyMode: raw.Verify || raw.verify || 'UNKNOWN',
+          deviceId: `F8-${sn}`,
+          rawPayload: JSON.stringify(raw)
+        });
+      }
     }
 
-    // Lookup employee mapping
-    const mapping = await DeviceMapping.findOne({ enrollId });
-    const employeeId = mapping?.employeeId || null;
+    if (punches.length > 0) {
+      const result = await ingestPunchRecords(punches, `F8-${sn}`);
+      console.log(`[ZKTeco ADMS] Ingested ${punches.length} punch(es) (${result.newInserted} new, ${result.skippedDuplicates} duplicates) from ${sn}`);
+    }
 
-    const punch = new AttendancePunch({
-      deviceId,
-      enrollId,
-      employeeId,
-      punchTime,
-      punchType,
-      verifyMode: verify,
-      rawPayload: JSON.stringify(raw),
-      processed: false,
-      unmatched: !mapping
-    });
-    await punch.save();
-
-    // ZKTech expects plain text "OK" on success
-    res.set('Content-Type', 'text/plain').send('OK');
+    res.set('Content-Type', 'text/plain');
+    res.send(`OK: ${punches.length || 1}\n`);
   } catch (err) {
-    console.error('[Attendance] Device push error:', err.message);
-    res.set('Content-Type', 'text/plain').send('ERR:' + err.message);
+    console.error('[ZKTeco ADMS] Push processing error:', err.message);
+    res.set('Content-Type', 'text/plain');
+    res.send('OK\n');
   }
 });
 
