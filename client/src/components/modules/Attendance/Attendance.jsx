@@ -461,7 +461,13 @@ const Attendance = ({ currentUser }) => {
 
     const autoConn = localStorage.getItem('zk_auto_connect');
     const savedIp = localStorage.getItem('zk_device_ip') || '192.168.0.74';
-    if (autoConn === 'true' && savedIp && canEdit) {
+    const isCloudHost = typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1' &&
+      !window.location.hostname.startsWith('192.168.') &&
+      !window.location.hostname.startsWith('10.');
+
+    if (autoConn === 'true' && savedIp && canEdit && !isCloudHost) {
       handleConnectLive(savedIp, 4370).catch(() => {});
     }
 
@@ -699,10 +705,16 @@ const Attendance = ({ currentUser }) => {
                   cursor: 'pointer',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                 }}
-                title="Device is live connected. Auto-receiving punches in real time. Click to manage."
+                title={deviceLiveStatus.mode === 'ADMS'
+                  ? `Device is connected via Cloud ADMS (SN: ${deviceLiveStatus.sn || 'Active'}). Auto-receiving punches.`
+                  : "Device is live connected. Auto-receiving punches in real time. Click to manage."}
               >
                 <span className="att-live-dot" style={{ width: 8, height: 8 }} />
-                <span>F8 Live: Connected ({deviceLiveStatus.ip})</span>
+                <span>
+                  {deviceLiveStatus.mode === 'ADMS'
+                    ? `F8 Cloud ADMS: Connected (${deviceLiveStatus.sn || 'Active'})`
+                    : `F8 Live: Connected (${deviceLiveStatus.ip})`}
+                </span>
               </div>
             ) : (
               <div
@@ -2317,7 +2329,13 @@ const DeviceTab = ({
   onEdit,
   onDelete
 }) => {
-  const [activeMethod, setActiveMethod] = useState('lan'); // 'lan' | 'usb' | 'agent' | 'cloud'
+  const isCloudHost = typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1' &&
+    !window.location.hostname.startsWith('192.168.') &&
+    !window.location.hostname.startsWith('10.');
+
+  const [activeMethod, setActiveMethod] = useState(isCloudHost ? 'cloud' : 'lan'); // 'lan' | 'usb' | 'agent' | 'cloud'
   const [mappingMobileView, setMappingMobileView] = useState('cards'); // 'cards' | 'table'
   
   // LAN IP Sync state
@@ -2335,7 +2353,7 @@ const DeviceTab = ({
 
   // Cloud URL
   const serverHost = window.location.hostname;
-  const serverPort = window.location.port ? window.location.port : '5000';
+  const serverPort = window.location.port ? window.location.port : (window.location.protocol === 'https:' ? '443' : '80');
   const pushUrl = `${window.location.protocol}//${serverHost}:${serverPort}/api/attendance/device/push`;
   const [copied, setCopied] = useState(false);
 
@@ -2452,6 +2470,26 @@ const DeviceTab = ({
               </div>
               <span className="att-badge present att-sync-pane-badge">Offline & Local Friendly</span>
             </div>
+
+            {isCloudHost && (
+              <div style={{
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: 8,
+                padding: '10px 14px',
+                marginBottom: 14,
+                fontSize: '0.78rem',
+                color: '#1e40af',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <span style={{ fontSize: '1.1rem' }}>ℹ️</span>
+                <div>
+                  <strong>Notice for Cloud VPS ({window.location.hostname}):</strong> Direct Network Sync connects over local office LAN/Wi-Fi. A cloud VPS cannot reach private office IPs like <code>{deviceIp}</code> over the public internet. Please use <strong>☁️ Cloud ADMS Push</strong> (your device pushes outwards to this VPS) or <strong>🖥️ Office Sync Agent</strong>.
+                </div>
+              </div>
+            )}
 
             <div className="att-lan-form-wrap">
               <div className="att-lan-inputs-row">
@@ -2684,40 +2722,112 @@ const DeviceTab = ({
           <div className="att-sync-pane">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div>
-                <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>Cloud ADMS / HTTP Push URL</strong>
+                <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>Cloud Server / ADMS Push Setup</strong>
                 <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
-                  For ZKTeco devices that have the "Cloud Server / ADMS" menu option.
+                  Ideal for VPS / Cloud ERP. The ZKTeco device automatically pushes punches outwards over HTTP port {serverPort}.
                 </p>
               </div>
-              <span className="att-badge approved">Direct Device Push</span>
+              <span className="att-badge approved">Direct Cloud Push</span>
             </div>
 
-            <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: 6 }}>
-              On your F8: <strong>Menu → Communication → Cloud Server</strong>. Enter this Server Address:
+            {deviceLiveStatus?.connected && deviceLiveStatus?.mode === 'ADMS' ? (
+              <div style={{
+                marginBottom: 16,
+                padding: '12px 16px',
+                background: '#f0fdf4',
+                border: '1px solid #86efac',
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12
+              }}>
+                <span className="att-live-dot" style={{ width: 10, height: 10, background: '#16a34a', boxShadow: '0 0 0 3px rgba(22, 163, 74, 0.25)' }} />
+                <div>
+                  <div style={{ fontWeight: 700, color: '#14532d', fontSize: '0.88rem' }}>
+                    Cloud ADMS Connected: {deviceLiveStatus.sn || 'F8 Device'} ({deviceLiveStatus.ip})
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: '#166534', marginTop: 2 }}>
+                    Heartbeat active · Auto-receiving real-time biometric punches · Session punches captured: <strong>{deviceLiveStatus.totalPunchesSession || 0}</strong>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                marginBottom: 16,
+                padding: '12px 16px',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12
+              }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#94a3b8' }} />
+                <div>
+                  <div style={{ fontWeight: 600, color: '#334155', fontSize: '0.84rem' }}>
+                    Cloud ADMS: Waiting for device connection...
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>
+                    Configure the parameters below on your physical device. Once configured and connected to the internet, it connects automatically.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 600, marginBottom: 8 }}>
+              On your ZKTeco Device: Menu → Comm. → Cloud Server Setting:
             </div>
-            <div className="att-code" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{pushUrl}</span>
-              <button
-                type="button"
-                onClick={copyPushUrl}
-                style={{
-                  background: 'rgba(255,255,255,0.15)',
-                  border: 'none',
-                  color: '#fff',
-                  borderRadius: 6,
-                  padding: '4px 10px',
-                  fontSize: '0.72rem',
-                  cursor: 'pointer'
-                }}
-              >
-                {copied ? '✓ Copied' : 'Copy URL'}
-              </button>
+
+            <div style={{
+              background: '#0f172a',
+              borderRadius: 10,
+              padding: '14px 18px',
+              color: '#f8fafc',
+              fontFamily: 'monospace',
+              fontSize: '0.84rem',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 12,
+              marginBottom: 14
+            }}>
+              <div>
+                <span style={{ color: '#94a3b8' }}>Server Mode:</span>{' '}
+                <strong style={{ color: '#38bdf8' }}>ADMS</strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8' }}>Enable Domain Name:</span>{' '}
+                <strong style={{ color: '#cbd5e1' }}>{window.location.hostname.match(/^[0-9.]+$/) ? 'OFF' : 'ON'}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8' }}>Server Address:</span>{' '}
+                <strong style={{ color: '#4ade80' }}>{serverHost}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8' }}>Server Port:</span>{' '}
+                <strong style={{ color: '#facc15' }}>{serverPort}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8' }}>Enable Proxy Server:</span>{' '}
+                <strong style={{ color: '#cbd5e1' }}>OFF</strong>
+              </div>
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#92400e', background: '#fef3c7', padding: '6px 10px', borderRadius: 6, marginTop: 8, border: '1px solid #fde68a' }}>
-              ⏰ <strong>Device Clock & Time Zone:</strong> On your ZKTeco device, go to <strong>Menu → System → Date/Time</strong> and verify the device time matches your local time. Ensure <strong>Time Zone</strong> is set to <strong>GMT +06:00</strong> and <strong>Daylight Saving Time (DST)</strong> is <strong>OFF</strong>.
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-              Enable ADMS / Push: Yes · Protocol: HTTP · Port: {serverPort}
+
+            <div style={{
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderRadius: 8,
+              padding: '10px 14px',
+              fontSize: '0.78rem',
+              color: '#92400e',
+              lineHeight: 1.5,
+              marginBottom: 10
+            }}>
+              ⚠️ <strong>Critical Checklist for Office Devices:</strong>
+              <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
+                <li>On device: <strong>Menu → Comm. → Ethernet (or Wi-Fi)</strong>: Verify <strong>Gateway</strong> is set to your office router IP (e.g. <code>192.168.0.1</code>) and <strong>DNS</strong> is set (e.g. <code>8.8.8.8</code>). Without a Gateway, the device cannot reach the public internet/VPS!</li>
+                <li>On device: <strong>Menu → System → Date/Time</strong>: Ensure <strong>Time Zone</strong> is set to <strong>GMT +06:00</strong> and <strong>Daylight Saving (DST)</strong> is <strong>OFF</strong>.</li>
+                <li>Check the top status bar of the device screen: the cloud/globe icon should appear connected without an "X".</li>
+              </ul>
             </div>
           </div>
         )}

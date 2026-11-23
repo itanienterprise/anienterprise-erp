@@ -9918,17 +9918,86 @@ setTimeout(fixShiftedPunches, 3500);
 // Middleware for /iclock and /cdata to accept raw text payloads from ZKTeco devices
 app.use(['/iclock', '/cdata'], express.text({ type: ['text/*', 'application/octet-stream', '*/*'], limit: '10mb' }));
 
+// ─── ZKTeco Cloud ADMS Live Connection Tracker ──────────────────────────────
+const admsLiveTracker = {
+  lastSeen: null,
+  sn: null,
+  ip: null,
+  totalPunches: 0,
+  lastPunchAt: null,
+  touch(sn, ip) {
+    this.sn = sn || this.sn || 'F8-DEVICE';
+    this.ip = ip || this.ip;
+    this.lastSeen = new Date();
+  },
+  recordPunch(count = 1) {
+    this.totalPunches += count;
+    this.lastPunchAt = new Date();
+    this.lastSeen = new Date();
+  },
+  isConnected() {
+    if (!this.lastSeen) return false;
+    // Considered connected if device pinged/pushed within the last 120 seconds (ADMS default heartbeat is 30-60s)
+    return (Date.now() - new Date(this.lastSeen).getTime()) < 120000;
+  },
+  getStatus() {
+    const isConn = this.isConnected();
+    return {
+      connected: isConn,
+      status: isConn ? 'connected' : 'disconnected',
+      mode: 'ADMS',
+      sn: this.sn,
+      ip: this.ip,
+      connectedAt: this.lastSeen,
+      lastSyncAt: this.lastSeen,
+      lastPunchAt: this.lastPunchAt,
+      totalPunchesSession: this.totalPunches,
+      lastError: null
+    };
+  }
+};
+
+function getCombinedDeviceStatus() {
+  if (typeof zkLiveManager !== 'undefined' && zkLiveManager && zkLiveManager.status === 'connected') {
+    return { ...zkLiveManager.getStatus(), mode: 'LAN_TCP' };
+  }
+  if (admsLiveTracker.isConnected()) {
+    return admsLiveTracker.getStatus();
+  }
+  if (admsLiveTracker.lastSeen) {
+    return admsLiveTracker.getStatus();
+  }
+  return typeof zkLiveManager !== 'undefined' && zkLiveManager
+    ? { ...zkLiveManager.getStatus(), mode: 'LAN_TCP' }
+    : { connected: false, status: 'disconnected', mode: 'NONE' };
+}
+
 // ─── 1. ZKTech ADMS Device Push Receiver ─────────────────────────────────────
 // ZKTeco standard ADMS handshake: GET /iclock/cdata?SN=...&options=all
 app.get(['/iclock/cdata', '/cdata', '/api/attendance/device/push'], (req, res) => {
   const sn = req.query.SN || req.query.sn || req.query.DeviceSN || 'F8-DEFAULT';
-  console.log(`[ZKTeco ADMS] Handshake request from device SN: ${sn}`);
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  console.log(`[ZKTeco ADMS] Handshake request from device SN: ${sn} (IP: ${clientIp})`);
+
+  admsLiveTracker.touch(sn, clientIp);
+  try {
+    io.emit('zk_device_status', getCombinedDeviceStatus());
+  } catch (_) { }
+
   res.set('Content-Type', 'text/plain');
-  res.send(`GET OPTION FROM: ${sn}\nStamp=9999\nOpStamp=0\nPhotoStamp=0\nErrorDelay=60\nDelay=30\nTransTimes=00:00;14:05\nTransInterval=1\nTransFlag=1111000000\nTimeZone=6\nRealtime=1\nEncrypt=0\nServerVersion=3.1.1\n`);
+  // Stamp=0 instructs device to upload all attendance punch records if not already synced
+  res.send(`GET OPTION FROM: ${sn}\nStamp=0\nOpStamp=0\nPhotoStamp=0\nErrorDelay=60\nDelay=30\nTransTimes=00:00;14:05\nTransInterval=1\nTransFlag=1111000000\nTimeZone=6\nRealtime=1\nEncrypt=0\nServerVersion=3.1.1\n`);
 });
 
 // ZKTeco heartbeat / command polling: GET /iclock/getrequest?SN=...
 app.get(['/iclock/getrequest', '/getrequest'], (req, res) => {
+  const sn = req.query.SN || req.query.sn || req.query.DeviceSN || 'F8-DEFAULT';
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  admsLiveTracker.touch(sn, clientIp);
+  try {
+    io.emit('zk_device_status', getCombinedDeviceStatus());
+  } catch (_) { }
+
   res.set('Content-Type', 'text/plain');
   res.send('OK\n');
 });
@@ -9939,14 +10008,33 @@ app.post(['/iclock/devicecmd', '/devicecmd'], (req, res) => {
   res.send('OK\n');
 });
 
+// Fallback for registry and biometric template requests
+app.all(['/iclock/registry', '/registry'], (req, res) => {
+  const sn = req.query.SN || req.query.sn || req.query.DeviceSN || 'F8-DEFAULT';
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  admsLiveTracker.touch(sn, clientIp);
+  res.set('Content-Type', 'text/plain');
+  res.send('OK\n');
+});
+
+app.all(['/iclock/fdata', '/fdata'], (req, res) => {
+  const sn = req.query.SN || req.query.sn || req.query.DeviceSN || 'F8-DEFAULT';
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  admsLiveTracker.touch(sn, clientIp);
+  res.set('Content-Type', 'text/plain');
+  res.send('OK\n');
+});
+
 // ZKTeco standard ADMS attendance push: POST /iclock/cdata
 app.post(['/iclock/cdata', '/cdata', '/api/attendance/device/push'], async (req, res) => {
   try {
     const sn = req.query.SN || req.query.sn || req.query.DeviceSN || 'F8-DEFAULT';
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const table = req.query.table || req.query.Table || '';
     const rawBody = typeof req.body === 'string' ? req.body : (Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body || {}));
 
     console.log(`[ZKTeco ADMS] Data push from device SN: ${sn}, table: ${table}, bodyLength: ${rawBody.length}`);
+    admsLiveTracker.touch(sn, clientIp);
 
     const punches = [];
 
@@ -9994,8 +10082,20 @@ app.post(['/iclock/cdata', '/cdata', '/api/attendance/device/push'], async (req,
 
     if (punches.length > 0) {
       const result = await ingestPunchRecords(punches, `F8-${sn}`);
+      admsLiveTracker.recordPunch(result.newInserted || punches.length);
       console.log(`[ZKTeco ADMS] Ingested ${punches.length} punch(es) (${result.newInserted} new, ${result.skippedDuplicates} duplicates) from ${sn}`);
+      io.emit('zk_live_punch', {
+        count: result.newInserted || punches.length,
+        message: `${result.newInserted || punches.length} new punch(es) captured via Cloud ADMS`
+      });
+      try {
+        broadcastUpdate('attendance', 'punch_created', { count: result.newInserted || punches.length });
+      } catch (_) { }
     }
+
+    try {
+      io.emit('zk_device_status', getCombinedDeviceStatus());
+    } catch (_) { }
 
     res.set('Content-Type', 'text/plain');
     res.send(`OK: ${punches.length || 1}\n`);
@@ -10583,23 +10683,25 @@ class ZkLiveConnectionManager {
 
 const zkLiveManager = new ZkLiveConnectionManager();
 
-// Automatically establish persistent auto-sync on server boot
-const defaultZkIp = process.env.ZK_DEVICE_IP || '192.168.0.74';
+// Automatically establish persistent auto-sync on server boot if explicitly configured
+const defaultZkIp = process.env.ZK_DEVICE_IP;
 const defaultZkPort = Number(process.env.ZK_DEVICE_PORT) || 4370;
 
-setTimeout(() => {
-  zkLiveManager.connect(defaultZkIp, defaultZkPort)
-    .then(st => {
-      console.log(`[ZKLive] Auto-connected to ZKTeco device at ${defaultZkIp}:${defaultZkPort}. Continuous auto-sync is LIVE.`);
-    })
-    .catch(err => {
-      console.warn(`[ZKLive] Initial auto-connect notice for ${defaultZkIp}:${defaultZkPort} (${formatZkError(err)}). Background retries active.`);
-    });
-}, 2500);
+if (defaultZkIp) {
+  setTimeout(() => {
+    zkLiveManager.connect(defaultZkIp, defaultZkPort)
+      .then(st => {
+        console.log(`[ZKLive] Auto-connected to ZKTeco device at ${defaultZkIp}:${defaultZkPort}. Continuous auto-sync is LIVE.`);
+      })
+      .catch(err => {
+        console.warn(`[ZKLive] Initial auto-connect notice for ${defaultZkIp}:${defaultZkPort} (${formatZkError(err)}). Background retries active.`);
+      });
+  }, 2500);
+}
 
 // ─── Live Device Connection Routes ───────────────────────────────────────────
 apiRouter.get('/api/attendance/device/live-status', verifyPermission('attendance', 'deviceMapping'), (req, res) => {
-  res.json(zkLiveManager.getStatus());
+  res.json(getCombinedDeviceStatus());
 });
 
 apiRouter.post('/api/attendance/device/connect', verifyPermission('attendance', 'edit'), async (req, res) => {

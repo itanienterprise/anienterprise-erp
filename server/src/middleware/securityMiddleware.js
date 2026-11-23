@@ -8,6 +8,7 @@ const securityMiddleware = (req, res, next) => {
         req.path === '/api/health' ||
         req.path === '/api/auth/login' ||
         req.path === '/api/auth/check' ||
+        req.path.startsWith('/api/attendance/device') ||
         req.path.startsWith('/api/mdm') ||
         req.path === '/api/system/run-migrations' ||
         req.path.startsWith('/api/backup') ||
