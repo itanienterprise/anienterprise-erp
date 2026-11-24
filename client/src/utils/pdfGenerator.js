@@ -968,7 +968,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                         return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                     }
                     if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
-                        return (b.saleableQuantity || 0) > 0.001;
+                        return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001;
                     }
                     return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
                 });

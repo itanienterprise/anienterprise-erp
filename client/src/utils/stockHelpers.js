@@ -323,11 +323,11 @@ export const reconcilePriceReportBrandList = (brandList, options = {}) => {
             const { whole, remainder } = calculatePktRemainder(remainingQty, pktSize);
             const inHousePacket = whole + (remainder / pktSize);
 
-            // Pre-sold applies no effect on saleable: Math.max(0, remainingQty) - (entry.orderQuantity || 0)
+            // Pre-sold entries: reflect physical/pre-sold balance minus active orders
             const orderQ = entry.orderQuantity || 0;
-            const saleableQty = -orderQ;
+            const saleableQty = remainingQty - orderQ;
             const { whole: sWhole, remainder: sRem } = calculatePktRemainder(saleableQty, pktSize);
-            const saleablePacket = orderQ > 0 ? (sWhole + (sRem / pktSize)) : 0;
+            const saleablePacket = sWhole + (sRem / pktSize);
 
             result.push({
                 ...entry,
@@ -351,10 +351,10 @@ export const reconcilePriceReportBrandList = (brandList, options = {}) => {
                 const { whole, remainder } = calculatePktRemainder(closing, pktSize);
                 const inHousePacket = whole + (remainder / pktSize);
 
-                // Pre-sold applies no effect on saleable: Math.max(0, closing) - totalBrandOrderQty
-                const saleableQty = -totalBrandOrderQty;
+                // Pre-sold entries: reflect physical/pre-sold balance minus active orders
+                const saleableQty = closing - totalBrandOrderQty;
                 const { whole: sWhole, remainder: sRem } = calculatePktRemainder(saleableQty, pktSize);
-                const saleablePacket = totalBrandOrderQty > 0 ? (sWhole + (sRem / pktSize)) : 0;
+                const saleablePacket = sWhole + (sRem / pktSize);
 
                 result.push({
                     ...negEntry,
@@ -490,11 +490,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     : getGroupedBrandList(recBrands);
 
                 if (isPriceReport) {
-                    if (stockFilters?.reportType === 'price' || stockFilters?.reportType === 'lc_price' || stockFilters?.reportType === 'group') {
-                        groupedBrands = groupedBrands.filter(b => (b.saleableQuantity || 0) > 0.001);
-                    } else {
-                        groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
-                    }
+                    groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
                 } else if (stockFilters?.reportType === 'short') {
                     groupedBrands = groupedBrands.filter(b =>
                         Math.abs(b.inHouseQuantity || 0) > 0.001 ||
@@ -1796,9 +1792,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const sale = Math.abs(b.saleQuantity || 0);
 
             if (isPriceReport && !stockFilters?._isSubCall) {
-                if (stockFilters?.reportType === 'price' || stockFilters?.reportType === 'lc_price' || stockFilters?.reportType === 'group') {
-                    return (b.saleableQuantity || 0) > 0.001;
-                }
                 return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001;
             }
 
@@ -1891,11 +1884,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         }
 
         if (isPriceReport && !stockFilters?._isSubCall) {
-            if (stockFilters?.reportType === 'price' || stockFilters?.reportType === 'lc_price' || stockFilters?.reportType === 'group') {
-                filteredBrands = filteredBrands.filter(b => (b.saleableQuantity || 0) > 0.001);
-            } else {
-                filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
-            }
+            filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
         } else if (stockFilters?.reportType === 'short') {
             // In Short Report mode, keep items with non-zero closing stock, active pending orders, opening or sales
             filteredBrands = filteredBrands.filter(b =>

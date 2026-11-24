@@ -2202,7 +2202,7 @@ export const generateStockReportExcel = (
                         return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                     }
                     if (normalizedReportType === 'price' || normalizedReportType === 'lc_price' || normalizedReportType === 'group') {
-                        return (b.saleableQuantity || 0) > 0.001;
+                        return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001;
                     }
                     return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
                 });

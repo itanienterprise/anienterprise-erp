@@ -179,7 +179,7 @@ const StockReport = ({
 
         if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
             records = records.map(item => {
-                const validBrands = (item.brandList || []).filter(b => (b.saleableQuantity || 0) > 0.001);
+                const validBrands = (item.brandList || []).filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
                 if (validBrands.length === 0) return null;
                 const inHouseQuantity = validBrands.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
                 const totalInHouseQuantity = validBrands.reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0);
@@ -419,7 +419,7 @@ const StockReport = ({
                         (b.saleQuantity || 0) > 0.001;
                 }
                 if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
-                    return (b.saleableQuantity || 0) > 0.001;
+                    return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001;
                 }
                 return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
             });
