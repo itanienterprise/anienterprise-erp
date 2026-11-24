@@ -360,7 +360,7 @@ class MdmService {
       try {
         const serverUrl = (typeof getBaseServerUrl === 'function' ? getBaseServerUrl() : null) ||
           (typeof localStorage !== 'undefined' ? localStorage.getItem('erp_server_url') : null) ||
-          'http://192.168.0.243:3000';
+          'http://189.31.39.166:3000';
         window.AndroidBridge.updateConfig(
           serverUrl,
           this.deviceId,

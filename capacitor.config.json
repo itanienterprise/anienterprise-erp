@@ -1,6 +1,6 @@
 {
-  "appId": "com.anienterprise.erp.dev",
-  "appName": "ANI ERP Dev",
+  "appId": "com.anienterprise.erp",
+  "appName": "ANI ERP",
   "webDir": "client/dist",
   "bundledWebRuntime": false,
   "server": {

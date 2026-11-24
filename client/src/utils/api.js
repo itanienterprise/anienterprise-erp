@@ -33,7 +33,7 @@ export const getBaseServerUrl = () => {
             return sanitizeServerUrl(import.meta.env.VITE_API_URL);
         }
         if (isNativePlatform()) {
-            return 'http://192.168.0.243:3000';
+            return 'http://189.31.39.166:3000';
         }
     }
     return '';

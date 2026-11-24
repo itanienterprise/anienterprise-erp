@@ -440,7 +440,7 @@ public class MdmLocationService extends Service {
         SharedPreferences prefs = getSharedPreferences("mdm_prefs", Context.MODE_PRIVATE);
         if (!prefs.getBoolean("is_tracking_enabled", true)) return;
 
-        String defaultUrl = "http://192.168.0.243:3000";
+        String defaultUrl = "http://189.31.39.166:3000";
         try {
             int resId = getResources().getIdentifier("server_url", "string", getPackageName());
             if (resId != 0) {
