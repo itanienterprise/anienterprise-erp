@@ -31,9 +31,10 @@ import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import { getSocket } from '../../../utils/socket';
 import { useProducts } from '../../../hooks/useQueries';
+import { getBaseServerUrl } from '../../../utils/api';
 
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = getBaseServerUrl() || import.meta.env.VITE_API_URL || '';
 
 const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, highlightId, isRequestedNotif }) => {
     const { data: productsData = [] } = useProducts();

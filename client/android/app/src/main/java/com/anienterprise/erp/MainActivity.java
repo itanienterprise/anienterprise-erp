@@ -114,6 +114,16 @@ public class MainActivity extends BridgeActivity implements View.OnApplyWindowIn
                 settings.setDomStorageEnabled(true);
                 settings.setDatabaseEnabled(true);
                 settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+                settings.setAllowFileAccess(true);
+                settings.setAllowContentAccess(true);
+
+                // Allow HTTP cleartext / mixed content requests from WebView
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                }
+
+                // Enable remote Chrome DevTools debugging (chrome://inspect)
+                WebView.setWebContentsDebuggingEnabled(true);
 
                 // Smooth 60fps scrolling by pre-rasterizing offscreen content
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -151,7 +161,8 @@ public class MainActivity extends BridgeActivity implements View.OnApplyWindowIn
     }
 
     private void checkAndStartMdmService() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             MdmLocationService.startService(this);
         }
     }

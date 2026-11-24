@@ -7,6 +7,9 @@
     "dev": "(docker-compose stop server client 2>/dev/null || true) && (docker-compose up -d mongo 2>/dev/null || true) && concurrently \"npm run dev --prefix client\" \"npm run dev --prefix server\"",
     "dev:local": "concurrently \"npm run dev --prefix client\" \"npm run dev --prefix server\"",
     "run:full": "docker-compose up --build",
+    "build:apk:dev": "node build-apks.js dev",
+    "build:apk:main": "node build-apks.js main",
+    "build:apk:all": "node build-apks.js all",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

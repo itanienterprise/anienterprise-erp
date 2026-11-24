@@ -26,9 +26,14 @@ export const isNativePlatform = () => {
 export const getBaseServerUrl = () => {
     if (typeof window !== 'undefined') {
         const customUrl = localStorage.getItem('erp_server_url');
-        if (customUrl) return sanitizeServerUrl(customUrl);
+        if (customUrl && !customUrl.includes('192.168.0.27')) {
+            return sanitizeServerUrl(customUrl);
+        }
+        if (import.meta.env.VITE_API_URL) {
+            return sanitizeServerUrl(import.meta.env.VITE_API_URL);
+        }
         if (isNativePlatform()) {
-            return 'http://192.168.0.27:5000';
+            return 'http://192.168.0.243:3000';
         }
     }
     return '';
@@ -47,7 +52,7 @@ if (API_BASE_URL) {
  */
 axios.interceptors.request.use((config) => {
     const currentBase = getBaseServerUrl();
-    if (currentBase && !config.baseURL) {
+    if (currentBase) {
         config.baseURL = currentBase;
     }
 

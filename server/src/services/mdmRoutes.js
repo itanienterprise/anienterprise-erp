@@ -78,8 +78,31 @@ async function evaluateDeviceShift(device, targetDate = new Date()) {
   const startMin = (isNaN(sH) ? 9 : sH) * 60 + (isNaN(sM) ? 0 : sM);
   const endMin = (isNaN(eH) ? 18 : eH) * 60 + (isNaN(eM) ? 0 : eM);
 
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const currentDay = dayNames[targetDate.getDay()];
+  // Timezone-safe date & time evaluation for Asia/Dhaka (or configured TZ)
+  let currentDay;
+  let currentHours;
+  let currentMinutes;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: process.env.TZ || 'Asia/Dhaka',
+      weekday: 'long',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    }).formatToParts(targetDate);
+    for (const p of parts) {
+      if (p.type === 'weekday') currentDay = p.value;
+      if (p.type === 'hour') currentHours = parseInt(p.value, 10);
+      if (p.type === 'minute') currentMinutes = parseInt(p.value, 10);
+    }
+  } catch (_) {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    currentDay = dayNames[targetDate.getDay()];
+    currentHours = targetDate.getHours();
+    currentMinutes = targetDate.getMinutes();
+  }
+  if (currentHours === 24) currentHours = 0;
+  const currentMin = (currentHours || 0) * 60 + (currentMinutes || 0);
 
   let isHoliday = false;
   if (workDays && Array.isArray(workDays)) {
@@ -87,8 +110,6 @@ async function evaluateDeviceShift(device, targetDate = new Date()) {
   } else if (holidays && Array.isArray(holidays)) {
     isHoliday = holidays.includes(currentDay);
   }
-
-  const currentMin = targetDate.getHours() * 60 + targetDate.getMinutes();
 
   // Shift window check with grace buffer
   let isTimeWithin = false;
@@ -108,6 +129,8 @@ async function evaluateDeviceShift(device, targetDate = new Date()) {
 
   const isWithinShift = isTimeWithin && !isHoliday;
 
+  const resolvedWorkDays = workDays || (holidays ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].filter(d => !holidays.includes(d)) : null);
+
   return {
     trackingMode: 'shift',
     isWithinShift,
@@ -117,6 +140,7 @@ async function evaluateDeviceShift(device, targetDate = new Date()) {
     endTime,
     graceMinutes,
     isHoliday,
+    workDays: resolvedWorkDays,
     status: isWithinShift ? 'on_shift' : 'off_shift',
     statusText: isHoliday
       ? `Off-Duty (Holiday: ${currentDay})`

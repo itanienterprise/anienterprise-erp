@@ -59,15 +59,26 @@ Open `client/android/app/src/main/AndroidManifest.xml` and ensure the following 
 <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 ```
 
-### Step 5: Build Debug or Release APK
+### Step 5: Build Debug APKs (Dev, Main, or Both)
 
-#### Option A: Command Line (Fastest)
+#### One-Click Commands (Recommended):
+From the project root directory, run:
 ```bash
-cd client/android
-./gradlew assembleDebug
+# Build Dev APK (points to http://192.168.0.243:3000)
+npm run build:apk:dev
+
+# Build Main APK (points to http://189.31.39.166:3000)
+npm run build:apk:main
+
+# Build both Dev and Main APKs sequentially
+npm run build:apk:all
 ```
-The output APK will be generated at:
-`client/android/app/build/outputs/apk/debug/app-debug.apk`
+
+The output APKs are saved in the project root:
+- `ANI-ERP-Dev.apk` (App ID: `com.anienterprise.erp.dev`, App Name: `ANI ERP Dev`)
+- `ANI-ERP-Main.apk` (App ID: `com.anienterprise.erp`, App Name: `ANI ERP`)
+- `ANI-ERP.apk` (alias for Main)
+- `ANI-Enterprise-ERP-MDM.apk` (alias for Main)
 
 #### Option B: Android Studio GUI
 Open the android folder in Android Studio:

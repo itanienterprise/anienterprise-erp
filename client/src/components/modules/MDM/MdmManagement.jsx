@@ -396,23 +396,29 @@ const MdmManagement = ({ currentUser }) => {
       });
 
       // Update devices list
-      setDevices(prev =>
-        prev.map(d => {
+      setDevices(prev => {
+        const found = prev.some(d => d.deviceId === data.deviceId);
+        if (!found) {
+          fetchDevices();
+          return prev;
+        }
+        return prev.map(d => {
           if (d.deviceId === data.deviceId) {
             return {
               ...d,
-              batteryLevel: data.batteryLevel,
-              isCharging: data.isCharging,
-              networkType: data.networkType,
+              batteryLevel: data.batteryLevel !== undefined ? data.batteryLevel : d.batteryLevel,
+              isCharging: data.isCharging !== undefined ? data.isCharging : d.isCharging,
+              networkType: data.networkType || d.networkType,
+              isGpsEnabled: data.isGpsEnabled !== undefined ? data.isGpsEnabled : d.isGpsEnabled,
               isOnline: true,
-              lastSeen: data.lastSeen,
+              lastSeen: data.lastSeen || new Date().toISOString(),
               lastLocation: data.location || d.lastLocation,
               shift: data.shift || d.shift
             };
           }
           return d;
-        })
-      );
+        });
+      });
     };
 
     const handleDeviceRegistered = () => {
@@ -1469,8 +1475,14 @@ const MdmManagement = ({ currentUser }) => {
                           <td>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-xs capitalize text-gray-700">{device.networkType || 'Cellular'}</span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${device.isGpsEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                                {device.isGpsEnabled ? 'GPS ON' : 'GPS OFF'}
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                                device.isGpsEnabled
+                                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                                  : device.lastLocation?.lat
+                                    ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                                    : 'bg-amber-50 text-amber-600 border border-amber-200'
+                              }`}>
+                                {device.isGpsEnabled ? 'GPS ON' : device.lastLocation?.lat ? 'GPS LOCK' : 'GPS STANDBY'}
                                 {device.lastLocation?.accuracy ? ` ±${Math.round(device.lastLocation.accuracy)}m` : ''}
                               </span>
                             </div>
@@ -1696,8 +1708,14 @@ const MdmManagement = ({ currentUser }) => {
                           </div>
                           <div>
                             <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">GPS</span>
-                            <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${device.isGpsEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                              {device.isGpsEnabled ? 'GPS ON' : 'GPS OFF'}
+                            <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                              device.isGpsEnabled
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : device.lastLocation?.lat
+                                  ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                                  : 'bg-amber-50 text-amber-600 border border-amber-200'
+                            }`}>
+                              {device.isGpsEnabled ? 'GPS ON' : device.lastLocation?.lat ? 'GPS LOCK' : 'GPS STANDBY'}
                             </span>
                           </div>
                           <div>

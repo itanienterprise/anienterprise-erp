@@ -1,10 +1,10 @@
 {
-  "appId": "com.anienterprise.erp",
-  "appName": "ANI ERP",
+  "appId": "com.anienterprise.erp.dev",
+  "appName": "ANI ERP Dev",
   "webDir": "client/dist",
   "bundledWebRuntime": false,
   "server": {
-    "androidScheme": "https",
+    "androidScheme": "http",
     "cleartext": true
   },
   "android": {
@@ -20,4 +20,3 @@
     }
   }
 }
-

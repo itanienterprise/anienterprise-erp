@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { API_BASE_URL } from '../../utils/helpers';
-import { getBaseServerUrl } from '../../utils/api';
+import { getBaseServerUrl, sanitizeServerUrl } from '../../utils/api';
 import { safeStorage } from '../../utils/storageHelper';
 import './LoginPage.css';
 
@@ -15,6 +15,53 @@ const LoginPage = ({ onLogin }) => {
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // Dynamic Server Connection Settings for Mobile APK testing
+    const [showServerConfig, setShowServerConfig] = useState(false);
+    const [serverUrlInput, setServerUrlInput] = useState(() => {
+        return localStorage.getItem('erp_server_url') || getBaseServerUrl() || 'http://192.168.0.243:3000';
+    });
+    const [testStatus, setTestStatus] = useState(null);
+    const [isTesting, setIsTesting] = useState(false);
+
+    const handleTestServer = async (testUrl) => {
+        const raw = testUrl || serverUrlInput;
+        const target = sanitizeServerUrl(raw);
+        if (!target) return;
+        setIsTesting(true);
+        setTestStatus({ type: 'info', text: `Testing connection to ${target}...` });
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 4000);
+            const res = await fetch(`${target}/api/health`, { method: 'GET', signal: controller.signal });
+            clearTimeout(timer);
+            if (res && (res.ok || res.status === 200 || res.status === 401)) {
+                setTestStatus({ type: 'success', text: `Connected successfully to ${target}!` });
+            } else {
+                setTestStatus({ type: 'error', text: `Server returned HTTP status ${res ? res.status : 'offline'}.` });
+            }
+        } catch (err) {
+            setTestStatus({ type: 'error', text: `Cannot reach ${target}. Ensure phone is on the same Wi-Fi and server is active.` });
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
+    const handleApplyServer = (urlToSave) => {
+        const raw = urlToSave || serverUrlInput;
+        const clean = sanitizeServerUrl(raw);
+        if (clean) {
+            localStorage.setItem('erp_server_url', clean);
+        } else {
+            localStorage.removeItem('erp_server_url');
+        }
+        window.location.reload();
+    };
+
+    const handleResetServer = () => {
+        localStorage.removeItem('erp_server_url');
+        window.location.reload();
+    };
 
     // Prompt for required permissions on mobile APK launch
     React.useEffect(() => {
@@ -34,16 +81,37 @@ const LoginPage = ({ onLogin }) => {
         setLoading(true);
         setError('');
 
-        const activeBase = getBaseServerUrl() || API_BASE_URL || '';
+        let activeBase = getBaseServerUrl() || (typeof window !== 'undefined' ? localStorage.getItem('erp_server_url') : '') || API_BASE_URL || '';
         try {
-            const response = await fetch(`${activeBase}/api/auth/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({ username, password, rememberMe })
-            });
+            let response;
+            try {
+                response = await fetch(`${activeBase}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password, rememberMe })
+                });
+            } catch (initialErr) {
+                // If LAN dev on port 3000 failed to connect, automatically attempt fallback to direct port 5000
+                if (activeBase.includes(':3000') && (activeBase.includes('192.168.') || activeBase.includes('127.0.0.1') || activeBase.includes('localhost'))) {
+                    const fallbackBase = activeBase.replace(':3000', ':5000');
+                    console.warn(`[Login] ${activeBase} unreachable, automatically falling back to ${fallbackBase}...`);
+                    activeBase = fallbackBase;
+                    response = await fetch(`${fallbackBase}/api/auth/login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ username, password, rememberMe })
+                    });
+                    localStorage.setItem('erp_server_url', fallbackBase);
+                } else {
+                    throw initialErr;
+                }
+            }
 
             const data = await response.json();
 
@@ -84,7 +152,8 @@ const LoginPage = ({ onLogin }) => {
         } catch (err) {
             console.error('Login error:', err);
             const targetHost = activeBase || window.location.origin;
-            setError(`Cannot reach backend server (${targetHost}). Please check your connection or server status.`);
+            const detail = err && err.message ? `: ${err.message}` : '';
+            setError(`Cannot reach backend server (${targetHost})${detail}. Please check your connection or server status.`);
         } finally {
             setLoading(false);
         }
@@ -198,7 +267,96 @@ const LoginPage = ({ onLogin }) => {
                                     <line x1="12" y1="8" x2="12" y2="12" />
                                     <line x1="12" y1="16" x2="12.01" y2="16" />
                                 </svg>
-                                <span>{error}</span>
+                                <div style={{ flex: 1 }}>
+                                    <div>{error}</div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowServerConfig(!showServerConfig)}
+                                        style={{ marginTop: '6px', fontSize: '11px', color: '#dc2626', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 600, display: 'block' }}
+                                    >
+                                        {showServerConfig ? '▲ Hide Server Settings' : '⚙ Change / Test Server URL'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {showServerConfig && (
+                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', marginBottom: '16px', fontSize: '12px', textAlign: 'left' }}>
+                                <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '6px' }}>Backend Server Connection</div>
+                                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                                    <input
+                                        type="text"
+                                        value={serverUrlInput}
+                                        onChange={(e) => { setServerUrlInput(e.target.value); setTestStatus(null); }}
+                                        placeholder="http://192.168.0.243:3000"
+                                        style={{ flex: 1, padding: '7px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12px', background: 'white' }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setServerUrlInput('http://192.168.0.243:3000'); handleTestServer('http://192.168.0.243:3000'); }}
+                                        style={{ fontSize: '10px', padding: '4px 8px', borderRadius: '6px', background: '#e2e8f0', border: 'none', cursor: 'pointer' }}
+                                    >
+                                        Dev (:3000)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setServerUrlInput('http://192.168.0.243:5000'); handleTestServer('http://192.168.0.243:5000'); }}
+                                        style={{ fontSize: '10px', padding: '4px 8px', borderRadius: '6px', background: '#e2e8f0', border: 'none', cursor: 'pointer' }}
+                                    >
+                                        Dev Direct (:5000)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setServerUrlInput('http://189.31.39.166:3000'); handleTestServer('http://189.31.39.166:3000'); }}
+                                        style={{ fontSize: '10px', padding: '4px 8px', borderRadius: '6px', background: '#e2e8f0', border: 'none', cursor: 'pointer' }}
+                                    >
+                                        Main Cloud
+                                    </button>
+                                </div>
+
+                                {testStatus && (
+                                    <div style={{
+                                        padding: '6px 10px',
+                                        borderRadius: '6px',
+                                        fontSize: '11px',
+                                        marginBottom: '10px',
+                                        fontWeight: 500,
+                                        color: testStatus.type === 'success' ? '#15803d' : testStatus.type === 'error' ? '#b91c1c' : '#1d4ed8',
+                                        background: testStatus.type === 'success' ? '#f0fdf4' : testStatus.type === 'error' ? '#fef2f2' : '#eff6ff'
+                                    }}>
+                                        {testStatus.text}
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleTestServer()}
+                                        disabled={isTesting}
+                                        style={{ flex: 1, padding: '6px 10px', borderRadius: '8px', background: '#f1f5f9', border: '1px solid #cbd5e1', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}
+                                    >
+                                        {isTesting ? 'Testing...' : 'Test Connection'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleApplyServer()}
+                                        style={{ flex: 1, padding: '6px 10px', borderRadius: '8px', background: '#2563eb', color: 'white', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}
+                                    >
+                                        Save & Apply
+                                    </button>
+                                    {localStorage.getItem('erp_server_url') && (
+                                        <button
+                                            type="button"
+                                            onClick={handleResetServer}
+                                            style={{ padding: '6px 10px', borderRadius: '8px', background: '#fee2e2', color: '#991b1b', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}
+                                        >
+                                            Reset
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -207,6 +365,16 @@ const LoginPage = ({ onLogin }) => {
                                 <span className="lp-spinner" />
                             ) : 'Login'}
                         </button>
+
+                        <div style={{ textAlign: 'center', marginTop: '14px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowServerConfig(!showServerConfig)}
+                                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '11px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                                <span>⚙</span> Server: {(localStorage.getItem('erp_server_url') || getBaseServerUrl() || serverUrlInput).replace(/^https?:\/\//i, '')}
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>

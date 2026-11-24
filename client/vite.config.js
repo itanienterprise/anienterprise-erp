@@ -78,7 +78,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 3000,
     strictPort: true,
-    host: true,
+    host: '0.0.0.0',
+    cors: {
+      origin: (origin, cb) => cb(null, true),
+      credentials: true,
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Timestamp', 'X-Signature', 'X-Session-Token', 'X-Session-Id']
+    },
+    allowedHosts: true,
     proxy: {
       '/socket.io': {
         target: 'http://127.0.0.1:5000',

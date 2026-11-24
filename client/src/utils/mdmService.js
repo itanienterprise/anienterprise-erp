@@ -6,7 +6,7 @@
  * - Listens for server-initiated 'mdm_ping_request' socket events to emit instant telemetry.
  */
 
-import axios from './api';
+import axios, { getBaseServerUrl } from './api';
 import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
 import { Network } from '@capacitor/network';
@@ -313,11 +313,15 @@ class MdmService {
 
         if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.updateShiftConfig === 'function') {
           try {
+            const workDaysStr = Array.isArray(this.shiftInfo.workDays) ? this.shiftInfo.workDays.join(',') : '';
             window.AndroidBridge.updateShiftConfig(
               this.shiftInfo.trackingMode || 'shift',
               this.shiftInfo.startTime || '09:00',
               this.shiftInfo.endTime || '18:00',
-              this.shiftInfo.graceMinutes !== undefined ? Number(this.shiftInfo.graceMinutes) : 15
+              this.shiftInfo.graceMinutes !== undefined ? Number(this.shiftInfo.graceMinutes) : 15,
+              Boolean(this.shiftInfo.isHoliday),
+              Boolean(this.shiftInfo.isWithinShift),
+              workDaysStr
             );
           } catch (_) {}
         }
@@ -354,7 +358,9 @@ class MdmService {
     const hasNativeBridge = typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.updateConfig === 'function';
     if (hasNativeBridge) {
       try {
-        const serverUrl = localStorage.getItem('erp_server_url') || 'http://192.168.0.27:5000';
+        const serverUrl = (typeof getBaseServerUrl === 'function' ? getBaseServerUrl() : null) ||
+          (typeof localStorage !== 'undefined' ? localStorage.getItem('erp_server_url') : null) ||
+          'http://192.168.0.243:3000';
         window.AndroidBridge.updateConfig(
           serverUrl,
           this.deviceId,
@@ -364,11 +370,15 @@ class MdmService {
         );
 
         if (this.shiftInfo && typeof window.AndroidBridge.updateShiftConfig === 'function') {
+          const workDaysStr = Array.isArray(this.shiftInfo.workDays) ? this.shiftInfo.workDays.join(',') : '';
           window.AndroidBridge.updateShiftConfig(
             this.shiftInfo.trackingMode || 'shift',
             this.shiftInfo.startTime || '09:00',
             this.shiftInfo.endTime || '18:00',
-            this.shiftInfo.graceMinutes !== undefined ? Number(this.shiftInfo.graceMinutes) : 15
+            this.shiftInfo.graceMinutes !== undefined ? Number(this.shiftInfo.graceMinutes) : 15,
+            Boolean(this.shiftInfo.isHoliday),
+            Boolean(this.shiftInfo.isWithinShift),
+            workDaysStr
           );
         }
       } catch (err) {

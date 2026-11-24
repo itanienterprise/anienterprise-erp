@@ -59,6 +59,15 @@ public class MdmNativeBridge {
 
     @JavascriptInterface
     public void updateShiftConfig(String trackingMode, String startTime, String endTime, int graceMinutes) {
+        updateShiftConfigFull(trackingMode, startTime, endTime, graceMinutes, false, true, "");
+    }
+
+    @JavascriptInterface
+    public void updateShiftConfig(String trackingMode, String startTime, String endTime, int graceMinutes, boolean isHoliday, boolean isWithinShift, String workDays) {
+        updateShiftConfigFull(trackingMode, startTime, endTime, graceMinutes, isHoliday, isWithinShift, workDays);
+    }
+
+    private void updateShiftConfigFull(String trackingMode, String startTime, String endTime, int graceMinutes, boolean isHoliday, boolean isWithinShift, String workDays) {
         if (context == null) return;
         SharedPreferences prefs = context.getSharedPreferences("mdm_prefs", Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = prefs.edit();
@@ -73,6 +82,12 @@ public class MdmNativeBridge {
         }
         if (graceMinutes >= 0) {
             editor.putInt("grace_minutes", graceMinutes);
+        }
+        editor.putBoolean("is_holiday", isHoliday);
+        editor.putBoolean("server_is_within_shift", isWithinShift);
+        editor.putLong("shift_evaluated_at", System.currentTimeMillis());
+        if (workDays != null) {
+            editor.putString("work_days", workDays.trim());
         }
         editor.apply();
 

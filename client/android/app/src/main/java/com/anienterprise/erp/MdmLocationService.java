@@ -1,5 +1,6 @@
 package com.anienterprise.erp;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -23,6 +24,7 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
@@ -41,12 +43,14 @@ import java.util.UUID;
  * Native Android Foreground Service for 24/7 background location and telemetry tracking.
  * - Runs continuously even when app is closed, minimized, screen is off, or phone is sleeping.
  * - Holds a partial WakeLock to ensure location updates and HTTP pings are never paused.
- * - Re-establishes on device reboot via BootReceiver.
+ * - Re-establishes on device reboot via BootReceiver and when cleared from recents via onTaskRemoved.
+ * - Uses AlarmManager exact wake alarms to guarantee continuous heartbeats in deep Doze sleep.
  */
 public class MdmLocationService extends Service {
-    private static final String CHANNEL_ID = "mdm_tracking_channel";
+    private static final String CHANNEL_ID = "mdm_silent_service";
     private static final int NOTIFICATION_ID = 9001;
     private static final long PING_INTERVAL_MS = 30000L; // Every 30 seconds
+    private static final String ACTION_HEARTBEAT = "com.anienterprise.erp.MDM_HEARTBEAT";
 
     private PowerManager.WakeLock wakeLock;
     private LocationManager locationManager;
@@ -90,6 +94,7 @@ public class MdmLocationService extends Service {
         initBackgroundThread();
         setupLocationTracking();
         startTelemetryLoop();
+        scheduleNextAlarmPing();
     }
 
     private void initBackgroundThread() {
@@ -104,10 +109,48 @@ public class MdmLocationService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForegroundNotification();
         acquireWakeLock();
+
+        if (intent != null && ACTION_HEARTBEAT.equals(intent.getAction())) {
+            // Heartbeat woke the CPU: trigger telemetry ping immediately in background
+            if (backgroundHandler != null) {
+                backgroundHandler.post(this::sendTelemetryPing);
+            } else {
+                new Thread(this::sendTelemetryPing).start();
+            }
+            scheduleNextAlarmPing();
+            return START_STICKY;
+        }
+
         if (!isRunning) {
             startTelemetryLoop();
         }
+        scheduleNextAlarmPing();
         return START_STICKY;
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+        // User swiped the app away from Recent Apps list: immediately schedule service revival
+        try {
+            Intent restartIntent = new Intent(getApplicationContext(), MdmLocationService.class);
+            restartIntent.setPackage(getPackageName());
+            PendingIntent pendingIntent = PendingIntent.getService(
+                getApplicationContext(),
+                101,
+                restartIntent,
+                PendingIntent.FLAG_ONE_SHOT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+            );
+            AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            if (alarmManager != null) {
+                long triggerAt = SystemClock.elapsedRealtime() + 1000L;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);
+                } else {
+                    alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     @Nullable
@@ -118,15 +161,23 @@ public class MdmLocationService extends Service {
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID,
-                "MDM Fleet & Location Tracking",
-                NotificationManager.IMPORTANCE_LOW
-            );
-            channel.setDescription("Background telemetry and GPS tracking for ANI Enterprise ERP");
-            channel.setShowBadge(false);
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) {
+                // Delete old channel that showed visible notifications
+                try {
+                    nm.deleteNotificationChannel("mdm_tracking_channel");
+                } catch (Exception ignored) {}
+
+                NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Silent MDM Service",
+                    NotificationManager.IMPORTANCE_MIN
+                );
+                channel.setDescription("Silent background MDM telemetry sync");
+                channel.setShowBadge(false);
+                channel.setSound(null, null);
+                channel.enableVibration(false);
+                channel.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
                 nm.createNotificationChannel(channel);
             }
         }
@@ -144,11 +195,14 @@ public class MdmLocationService extends Service {
 
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ANI Enterprise ERP")
-            .setContentText("Field Tracking Active • Location & Telemetry Service")
+            .setContentText("Background service active")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setShowWhen(false)
+            .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build();
 
@@ -160,37 +214,36 @@ public class MdmLocationService extends Service {
     }
 
     private void updateNotification(String text) {
-        try {
-            Intent launchIntent = new Intent(this, MainActivity.class);
-            launchIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            PendingIntent pendingIntent = PendingIntent.getActivity(
-                this,
-                0,
-                launchIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
-            );
-
-            Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("ANI Enterprise ERP")
-                .setContentText(text)
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentIntent(pendingIntent)
-                .setOngoing(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                .build();
-
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null) {
-                nm.notify(NOTIFICATION_ID, notification);
-            }
-        } catch (Exception ignored) {}
+        // Silent service: do not re-post or refresh notifications to prevent popups or lockscreen alerts
     }
 
     private boolean isWithinShift(SharedPreferences prefs) {
         String mode = prefs.getString("tracking_mode", "shift");
         if ("always".equalsIgnoreCase(mode)) {
             return true;
+        }
+
+        // If server evaluated shift recently (< 15 minutes), prefer server judgment
+        long evaluatedAt = prefs.getLong("shift_evaluated_at", 0);
+        long nowMs = System.currentTimeMillis();
+        if (prefs.contains("server_is_within_shift") && (nowMs - evaluatedAt < 15 * 60 * 1000L)) {
+            return prefs.getBoolean("server_is_within_shift", true);
+        }
+
+        // Check if marked holiday
+        if (prefs.getBoolean("is_holiday", false)) {
+            return false;
+        }
+
+        // Check work days if defined
+        String workDays = prefs.getString("work_days", "");
+        if (workDays != null && !workDays.trim().isEmpty()) {
+            String[] days = new String[]{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            String today = days[cal.get(java.util.Calendar.DAY_OF_WEEK) - 1];
+            if (!workDays.contains(today)) {
+                return false;
+            }
         }
 
         String startTime = prefs.getString("shift_start", "09:00");
@@ -258,11 +311,12 @@ public class MdmLocationService extends Service {
         };
 
         try {
+            // High-precision GPS with 0.0f minDistance to ensure stationary updates aren't suppressed
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    15000L,
-                    5.0f,
+                    10000L,
+                    0.0f,
                     locationListener,
                     bgLooper
                 );
@@ -270,65 +324,93 @@ public class MdmLocationService extends Service {
                 if (isBetterLocation(loc, lastLocation)) lastLocation = loc;
             }
 
+            // Network / Cell / WiFi provider fallback
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                     LocationManager.NETWORK_PROVIDER,
-                    25000L,
-                    15.0f,
+                    20000L,
+                    0.0f,
                     locationListener,
                     bgLooper
                 );
                 Location loc = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
                 if (isBetterLocation(loc, lastLocation)) lastLocation = loc;
             }
+
+            // Passive provider to capture fixes generated by other apps (e.g. Google Maps)
+            if (locationManager.getAllProviders().contains(LocationManager.PASSIVE_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.PASSIVE_PROVIDER,
+                    10000L,
+                    0.0f,
+                    locationListener,
+                    bgLooper
+                );
+            }
         } catch (SecurityException ignored) {
         } catch (Exception ignored) {}
     }
 
-    private static final int TWO_MINUTES = 1000 * 60 * 2;
+    /**
+     * Determines whether a new Location fix is better than the existing best reading.
+     * Crucial: Prevents coarse Network/Cell tower fixes (> 70m) from overwriting pinpoint GPS fixes (< 35m).
+     */
+    private boolean isBetterLocation(Location newLoc, Location currentBest) {
+        if (newLoc == null) return false;
+        if (currentBest == null) return true;
 
-    /** Determines whether one Location reading is better than the current Location fix */
-    private boolean isBetterLocation(Location location, Location currentBestLocation) {
-        if (location == null) {
-            return false;
-        }
-        if (currentBestLocation == null) {
-            return true;
-        }
-
-        long timeDelta = location.getTime() - currentBestLocation.getTime();
-        boolean isSignificantlyNewer = timeDelta > TWO_MINUTES;
-        boolean isSignificantlyOlder = timeDelta < -TWO_MINUTES;
+        long timeDelta = newLoc.getTime() - currentBest.getTime();
         boolean isNewer = timeDelta > 0;
+        boolean isSignificantlyOlder = timeDelta < -120000L; // 2 minutes older
+        if (isSignificantlyOlder) return false;
 
-        if (isSignificantlyNewer) {
-            return true;
-        } else if (isSignificantlyOlder) {
+        float newAcc = newLoc.hasAccuracy() ? newLoc.getAccuracy() : 9999.0f;
+        float bestAcc = currentBest.hasAccuracy() ? currentBest.getAccuracy() : 9999.0f;
+
+        // Protection: If current best fix is pinpoint accurate (<= 35m), never allow a coarse reading (> 70m)
+        // to replace it unless current fix is older than 10 minutes.
+        if (bestAcc <= 35.0f && newAcc > 70.0f && timeDelta < 10 * 60 * 1000L) {
             return false;
         }
 
-        int accuracyDelta = (int) (location.getAccuracy() - currentBestLocation.getAccuracy());
-        boolean isLessAccurate = accuracyDelta > 0;
-        boolean isMoreAccurate = accuracyDelta < 0;
-        boolean isSignificantlyLessAccurate = accuracyDelta > 100;
-
-        boolean isFromSameProvider = isSameProvider(location.getProvider(), currentBestLocation.getProvider());
-
-        if (isMoreAccurate) {
-            return true;
-        } else if (isNewer && !isLessAccurate) {
-            return true;
-        } else if (isNewer && !isSignificantlyLessAccurate && isFromSameProvider) {
+        // Always accept if new location has significantly better accuracy
+        if (newAcc < bestAcc) {
             return true;
         }
+
+        // If newer with high accuracy (<= 40m), accept
+        if (isNewer && newAcc <= 40.0f) {
+            return true;
+        }
+
+        // If significantly newer (> 5 minutes) and acceptable accuracy (<= 150m)
+        if (timeDelta > 5 * 60 * 1000L && newAcc <= 150.0f) {
+            return true;
+        }
+
         return false;
     }
 
-    private boolean isSameProvider(String provider1, String provider2) {
-        if (provider1 == null) {
-            return provider2 == null;
-        }
-        return provider1.equals(provider2);
+    private void scheduleNextAlarmPing() {
+        try {
+            Intent pingIntent = new Intent(this, MdmLocationService.class);
+            pingIntent.setAction(ACTION_HEARTBEAT);
+            PendingIntent pi = PendingIntent.getService(
+                this,
+                102,
+                pingIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+            );
+            AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            if (am != null) {
+                long nextTrigger = SystemClock.elapsedRealtime() + PING_INTERVAL_MS;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, nextTrigger, pi);
+                } else {
+                    am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, nextTrigger, pi);
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     private void startTelemetryLoop() {
@@ -347,6 +429,7 @@ public class MdmLocationService extends Service {
                 if (isRunning && backgroundHandler != null) {
                     backgroundHandler.postDelayed(this, PING_INTERVAL_MS);
                 }
+                scheduleNextAlarmPing();
             }
         };
 
@@ -357,9 +440,16 @@ public class MdmLocationService extends Service {
         SharedPreferences prefs = getSharedPreferences("mdm_prefs", Context.MODE_PRIVATE);
         if (!prefs.getBoolean("is_tracking_enabled", true)) return;
 
-        String serverUrl = prefs.getString("server_url", "http://192.168.0.27:5000");
-        if (serverUrl == null || serverUrl.trim().isEmpty()) {
-            serverUrl = "http://192.168.0.27:5000";
+        String defaultUrl = "http://192.168.0.243:3000";
+        try {
+            int resId = getResources().getIdentifier("server_url", "string", getPackageName());
+            if (resId != 0) {
+                defaultUrl = getString(resId);
+            }
+        } catch (Exception ignored) {}
+        String serverUrl = prefs.getString("server_url", defaultUrl);
+        if (serverUrl == null || serverUrl.trim().isEmpty() || serverUrl.contains("localhost") || serverUrl.contains("192.168.0.27")) {
+            serverUrl = defaultUrl;
         }
         serverUrl = serverUrl.replaceAll("/+$", "");
 
@@ -413,6 +503,14 @@ public class MdmLocationService extends Service {
             }
         } catch (Exception ignored) {}
 
+        // Check GPS hardware state
+        boolean isGpsHardwareEnabled = false;
+        if (locationManager != null) {
+            try {
+                isGpsHardwareEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+            } catch (Exception ignored) {}
+        }
+
         // Shift Timing Verification & Status Update
         boolean withinShift = isWithinShift(prefs);
         String shiftStart = prefs.getString("shift_start", "09:00");
@@ -427,32 +525,30 @@ public class MdmLocationService extends Service {
             updateNotification("Field Tracking Paused • Off-Shift (" + shiftStart + " - " + shiftEnd + ")");
         }
 
-        // Active on-demand GPS reading on Android 11+ (API 30+) ONLY during shift hours or 24/7
+        // Query fresh GPS reading during shift or 24/7
         Location loc = null;
         if (withinShift) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && locationManager != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && locationManager != null && isGpsHardwareEnabled) {
                 try {
-                    if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                        java.util.concurrent.Executor bgExecutor = backgroundHandler != null ? backgroundHandler::post : getMainExecutor();
-                        locationManager.getCurrentLocation(
-                            LocationManager.GPS_PROVIDER,
-                            null,
-                            bgExecutor,
-                            new java.util.function.Consumer<Location>() {
-                                @Override
-                                public void accept(Location location) {
-                                    if (location != null && isBetterLocation(location, lastLocation)) {
-                                        lastLocation = location;
-                                    }
+                    java.util.concurrent.Executor bgExecutor = backgroundHandler != null ? backgroundHandler::post : getMainExecutor();
+                    locationManager.getCurrentLocation(
+                        LocationManager.GPS_PROVIDER,
+                        null,
+                        bgExecutor,
+                        new java.util.function.Consumer<Location>() {
+                            @Override
+                            public void accept(Location location) {
+                                if (location != null && isBetterLocation(location, lastLocation)) {
+                                    lastLocation = location;
                                 }
                             }
-                        );
-                    }
+                        }
+                    );
                 } catch (SecurityException ignored) {
                 } catch (Exception ignored) {}
             }
 
-            // Best location evaluation
+            // Best location evaluation: prefer GPS
             loc = lastLocation;
             if (locationManager != null) {
                 try {
@@ -461,10 +557,13 @@ public class MdmLocationService extends Service {
                         loc = lastGps;
                         lastLocation = lastGps;
                     }
-                    Location lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                    if (isBetterLocation(lastNet, loc)) {
-                        loc = lastNet;
-                        lastLocation = lastNet;
+                    // Only fallback to network if no GPS reading or GPS reading is very coarse (> 100m)
+                    if (loc == null || (loc.hasAccuracy() && loc.getAccuracy() > 100.0f)) {
+                        Location lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                        if (isBetterLocation(lastNet, loc)) {
+                            loc = lastNet;
+                            lastLocation = lastNet;
+                        }
                     }
                 } catch (SecurityException ignored) {}
             }
@@ -500,6 +599,9 @@ public class MdmLocationService extends Service {
                             if (sObj.has("startTime") && !sObj.isNull("startTime")) ed.putString("shift_start", sObj.getString("startTime"));
                             if (sObj.has("endTime") && !sObj.isNull("endTime")) ed.putString("shift_end", sObj.getString("endTime"));
                             if (sObj.has("graceMinutes")) ed.putInt("grace_minutes", sObj.getInt("graceMinutes"));
+                            if (sObj.has("isHoliday")) ed.putBoolean("is_holiday", sObj.getBoolean("isHoliday"));
+                            if (sObj.has("isWithinShift")) ed.putBoolean("server_is_within_shift", sObj.getBoolean("isWithinShift"));
+                            ed.putLong("shift_evaluated_at", System.currentTimeMillis());
                             ed.apply();
                         }
                     } catch (Exception ignored) {}
@@ -515,7 +617,8 @@ public class MdmLocationService extends Service {
             if (batteryLevel >= 0) ping.put("batteryLevel", batteryLevel);
             ping.put("isCharging", isCharging);
             ping.put("networkType", networkType);
-            ping.put("isGpsEnabled", withinShift && loc != null);
+            // Reflect true GPS hardware enablement on device
+            ping.put("isGpsEnabled", isGpsHardwareEnabled);
             ping.put("trackingPermission", "granted");
 
             if (withinShift && loc != null) {
@@ -540,6 +643,9 @@ public class MdmLocationService extends Service {
                         if (sObj.has("startTime") && !sObj.isNull("startTime")) ed.putString("shift_start", sObj.getString("startTime"));
                         if (sObj.has("endTime") && !sObj.isNull("endTime")) ed.putString("shift_end", sObj.getString("endTime"));
                         if (sObj.has("graceMinutes")) ed.putInt("grace_minutes", sObj.getInt("graceMinutes"));
+                        if (sObj.has("isHoliday")) ed.putBoolean("is_holiday", sObj.getBoolean("isHoliday"));
+                        if (sObj.has("isWithinShift")) ed.putBoolean("server_is_within_shift", sObj.getBoolean("isWithinShift"));
+                        ed.putLong("shift_evaluated_at", System.currentTimeMillis());
                         ed.apply();
                     }
                 } catch (Exception ignored) {}
@@ -607,4 +713,3 @@ public class MdmLocationService extends Service {
         super.onDestroy();
     }
 }
-
