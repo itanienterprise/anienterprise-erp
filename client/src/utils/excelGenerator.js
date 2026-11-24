@@ -6052,6 +6052,123 @@ export const generateFundTransferExcel = (transfers = [], meta = {}) => {
     }
 };
 
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for the All Bank Accounts Balance Summary.
+ * Includes company header, metadata, financial summary, and the table with all accounts:
+ * Bank Name, Branch, Account Name, Account No, Opening Balance, Total Deposits, Total Withdrawals, Closing Balance, Remarks.
+ * 
+ * @param {Array} accountsData - List of account objects
+ * @param {Object} meta - Report metadata
+ */
+export const generateAllBankAccountsSummaryExcel = (accountsData = [], meta = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['ALL BANK ACCOUNTS BALANCE REPORT']);
+        rows.push([]);
+
+        // 2. Metadata / Filters
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const startStr = meta?.startDate ? formatDate(meta.startDate) : 'Start';
+        const endStr = meta?.endDate ? formatDate(meta.endDate) : 'Present';
+        const periodStr = meta?.startDate || meta?.endDate ? `${startStr} to ${endStr}` : 'All Records (Consolidated)';
+
+        rows.push(['Statement Period:', periodStr, '', 'Generated Date:', dateStr]);
+        rows.push(['Total Accounts:', `${accountsData.length} Accounts`, '', 'Currency:', 'BDT (Taka)']);
+        rows.push(['Scope:', 'All Bank Accounts / Multi-Branch', '', 'Report Format:', 'Account-wise Balance Summary']);
+        rows.push([]);
+
+        // 3. Financial Summary Block
+        const totalOpening = Number(meta.totalOpeningBalance) || 0;
+        const totalDeposits = Number(meta.totalDeposits) || 0;
+        const totalWithdrawals = Number(meta.totalWithdrawals) || 0;
+        const netMovement = Number(meta.netMovement) || 0;
+        const totalClosing = Number(meta.totalClosingBalance) || 0;
+
+        rows.push(['FINANCIAL SUMMARY']);
+        rows.push(['Total Opening Balance (TK):', totalOpening]);
+        rows.push(['Total Deposits / Inflows (+) (TK):', totalDeposits]);
+        rows.push(['Total Withdrawals / Outflows (-) (TK):', totalWithdrawals]);
+        rows.push(['Total Closing / Net Position (TK):', totalClosing]);
+        rows.push([]);
+
+        // 4. Headers
+        const headers = [
+            'SL',
+            'Bank Name',
+            'Branch',
+            'Account Title',
+            'Account Number',
+            'Opening Balance (TK)',
+            'Total Deposit (+) (TK)',
+            'Total Withdraw (-) (TK)',
+            'Closing Balance (TK)',
+            'Remarks'
+        ];
+        rows.push(headers);
+
+        // 5. Data rows
+        accountsData.forEach((acc, idx) => {
+            const cleanBankName = String(acc.bankName || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanBranch = String(acc.branch || 'Main Branch').replace(/[\r\n]+/g, ' ').trim();
+            const cleanAccountName = String(acc.accountName || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanAccountNo = String(acc.accountNo || 'N/A').replace(/[\r\n]+/g, ' ').trim();
+            rows.push([
+                idx + 1,
+                cleanBankName,
+                cleanBranch,
+                cleanAccountName,
+                cleanAccountNo,
+                Number(acc.openingBalance) || 0,
+                Number(acc.totalDeposits) || 0,
+                Number(acc.totalWithdrawals) || 0,
+                Number(acc.netBalance) || 0,
+                ''
+            ]);
+        });
+
+        // 6. Total Row
+        rows.push([]);
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            totalOpening,
+            totalDeposits,
+            totalWithdrawals,
+            totalClosing,
+            ''
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 26 }, // Bank Name
+            { wch: 16 }, // Branch (reduced)
+            { wch: 26 }, // Account Title
+            { wch: 22 }, // Account No
+            { wch: 20 }, // Opening Balance
+            { wch: 22 }, // Total Deposit (+)
+            { wch: 22 }, // Total Withdraw (-)
+            { wch: 22 }, // Closing Balance
+            { wch: 30 }  // Remarks (increased)
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'All Bank Accounts');
+        const fileName = `All_Bank_Accounts_Balance_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    } catch (err) {
+        console.error('Error generating All Bank Accounts Summary Excel:', err);
+        alert(`Failed to generate Excel report: ${err.message}`);
+    }
+};
+
 
 
 

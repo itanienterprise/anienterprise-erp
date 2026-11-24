@@ -15,8 +15,8 @@ import {
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import TableScrollNav from '../../shared/TableScrollNav';
-import { generateBankStatementPDF } from '../../../utils/pdfGenerator';
-import { generateBankStatementExcel } from '../../../utils/excelGenerator';
+import { generateBankStatementPDF, generateAllBankAccountsSummaryPDF } from '../../../utils/pdfGenerator';
+import { generateBankStatementExcel, generateAllBankAccountsSummaryExcel } from '../../../utils/excelGenerator';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import BankLogo, { BankWatermark } from './BankLogo';
 import '../PaymentCollection/PaymentCollection.css';
@@ -446,6 +446,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     const currAmt = targetBranch.openingBalance !== undefined 
       ? targetBranch.openingBalance 
       : (targetBank.openingBalance !== undefined ? targetBank.openingBalance : '');
+    const currRemarks = targetBranch.remarks || targetBranch.notes || targetBank.remarks || targetBank.notes || '';
 
     setOpeningBalanceModal({
       isOpen: true,
@@ -461,6 +462,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       isActive: isAct,
       date: currDate ? toDateStr(currDate) : new Date().toISOString().split('T')[0],
       amount: currAmt !== '' ? currAmt : '',
+      remarks: currRemarks,
       isSaving: false
     });
   };
@@ -539,7 +541,8 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
         ...rawBranches[targetIdx],
         isOpeningBalanceActive: willBeActive,
         openingBalance: willBeActive ? (Number(openingBalanceModal.amount) || 0) : (Number(rawBranches[targetIdx].openingBalance) || 0),
-        openingBalanceDate: willBeActive ? openingBalanceModal.date : (rawBranches[targetIdx].openingBalanceDate || '')
+        openingBalanceDate: willBeActive ? openingBalanceModal.date : (rawBranches[targetIdx].openingBalanceDate || ''),
+        remarks: openingBalanceModal.remarks !== undefined ? openingBalanceModal.remarks : (rawBranches[targetIdx].remarks || '')
       };
 
       const updatedBranches = [...rawBranches];
@@ -550,7 +553,8 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
         branches: updatedBranches,
         isOpeningBalanceActive: willBeActive,
         openingBalance: willBeActive ? (Number(openingBalanceModal.amount) || 0) : (Number(targetBank.openingBalance) || 0),
-        openingBalanceDate: willBeActive ? openingBalanceModal.date : (targetBank.openingBalanceDate || '')
+        openingBalanceDate: willBeActive ? openingBalanceModal.date : (targetBank.openingBalanceDate || ''),
+        remarks: openingBalanceModal.remarks !== undefined ? openingBalanceModal.remarks : (targetBank.remarks || '')
       };
 
       queryClient.setQueryData(['banks'], (old = []) => {
@@ -1514,6 +1518,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
           bankName: b.bankName,
           branch: br.branch,
           accountNo: br.accountNo,
+          remarks: br.remarks || br.notes || b.remarks || b.notes || '',
           bankId: b._id
         };
 
@@ -1826,71 +1831,26 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     const accounts = [];
     const norm = (v) => (v || '').trim().toLowerCase();
     const bdBanks = banks.filter(b => !b.isIndian);
+    const startFilter = filters.startDate ? filters.startDate.trim() : null;
+    const endFilter = filters.endDate ? filters.endDate.trim() : null;
 
     bdBanks.forEach(b => {
       const bName = (b.bankName || '').trim();
       if (!bName) return;
 
-      if (Array.isArray(b.branches) && b.branches.length > 0) {
-        b.branches.forEach((br, bIdx) => {
-          const brName = (br.branch || '').trim();
-          const accNo = (br.accountNo || '').trim();
-          const accName = (br.accountName || b.accountName || '').trim();
-          const baseline = (
-            accountBaselineMap.get(norm(bName) + "__" + norm(brName) + "__" + norm(accNo)) ||
-            accountBaselineMap.get(norm(bName) + "__" + norm(accNo)) ||
-            accountBaselineMap.get(norm(accNo)) ||
-            accountBaselineMap.get(norm(bName) + "__" + norm(brName)) ||
-            accountBaselineMap.get(norm(bName))
-          );
-          const isAct = baseline?.isActive;
-          const openBal = isAct ? baseline.openingBalance : (Number(br.openingBalance) || 0);
-          const baselineDate = isAct ? baseline.date : null;
-
-          // Compute matching transactions across ALL modules
-          const matchingTx = unifiedTransactions.filter(tx => {
-            const matchBank = tx.bankName.toLowerCase() === bName.toLowerCase();
-            const matchAcc = !accNo || !tx.accountNo || tx.accountNo.toLowerCase() === accNo.toLowerCase();
-            if (!matchBank || !matchAcc) return false;
-            if (baselineDate && tx.date < baselineDate) return false;
-            return true;
-          });
-
-          const totalDep = matchingTx.filter(t => t.type === 'deposit').reduce((sum, t) => sum + t.amount, 0);
-          const totalWith = matchingTx.filter(t => t.type === 'withdrawal').reduce((sum, t) => sum + t.amount, 0);
-
-          accounts.push({
-            _id: b._id,
-            bankId: b._id,
-            branchIndex: bIdx,
-            bankName: bName,
-            branch: brName || 'Main Branch',
-            accountNo: accNo || 'N/A',
-            accountName: accName || bName,
-            openingBalance: openBal,
-            isOpeningBalanceActive: isAct,
-            openingBalanceDate: baselineDate,
-            totalDeposits: totalDep,
-            totalWithdrawals: totalWith,
-            netBalance: openBal + totalDep - totalWith,
-            depositCount: matchingTx.filter(t => t.type === 'deposit').length,
-            withdrawalCount: matchingTx.filter(t => t.type === 'withdrawal').length
-          });
-        });
-      } else {
-        const brName = (b.branch || '').trim();
-        const accNo = (b.accountNo || '').trim();
-        const accName = (b.accountName || '').trim();
+      const processBranch = (brName, accNo, accName, bIdx, brObj) => {
         const baseline = (
           accountBaselineMap.get(norm(bName) + "__" + norm(brName) + "__" + norm(accNo)) ||
           accountBaselineMap.get(norm(bName) + "__" + norm(accNo)) ||
           accountBaselineMap.get(norm(accNo)) ||
+          accountBaselineMap.get(norm(bName) + "__" + norm(brName)) ||
           accountBaselineMap.get(norm(bName))
         );
         const isAct = baseline?.isActive;
-        const openBal = isAct ? baseline.openingBalance : (Number(b.openingBalance) || 0);
+        const baseOpenBal = isAct ? baseline.openingBalance : (Number(brObj?.openingBalance || b.openingBalance) || 0);
         const baselineDate = isAct ? baseline.date : null;
 
+        // Compute matching transactions across ALL modules
         const matchingTx = unifiedTransactions.filter(tx => {
           const matchBank = tx.bankName.toLowerCase() === bName.toLowerCase();
           const matchAcc = !accNo || !tx.accountNo || tx.accountNo.toLowerCase() === accNo.toLowerCase();
@@ -1899,26 +1859,65 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
           return true;
         });
 
-        const totalDep = matchingTx.filter(t => t.type === 'deposit').reduce((sum, t) => sum + t.amount, 0);
-        const totalWith = matchingTx.filter(t => t.type === 'withdrawal').reduce((sum, t) => sum + t.amount, 0);
+        let effOpenBal = baseOpenBal;
+        let totalDep = 0;
+        let totalWith = 0;
+        let depCount = 0;
+        let withCount = 0;
+
+        matchingTx.forEach(tx => {
+          const txDate = tx.date;
+          if (startFilter && txDate < startFilter) {
+            if (tx.type === 'deposit') {
+              effOpenBal += tx.amount;
+            } else {
+              effOpenBal -= tx.amount;
+            }
+          } else if (endFilter && txDate > endFilter) {
+            // After period
+          } else {
+            if (tx.type === 'deposit') {
+              totalDep += tx.amount;
+              depCount++;
+            } else {
+              totalWith += tx.amount;
+              withCount++;
+            }
+          }
+        });
 
         accounts.push({
           _id: b._id,
           bankId: b._id,
-          branchIndex: 0,
+          branchIndex: bIdx,
           bankName: bName,
           branch: brName || 'Main Branch',
           accountNo: accNo || 'N/A',
           accountName: accName || bName,
-          openingBalance: openBal,
+          openingBalance: effOpenBal,
           isOpeningBalanceActive: isAct,
           openingBalanceDate: baselineDate,
           totalDeposits: totalDep,
           totalWithdrawals: totalWith,
-          netBalance: openBal + totalDep - totalWith,
-          depositCount: matchingTx.filter(t => t.type === 'deposit').length,
-          withdrawalCount: matchingTx.filter(t => t.type === 'withdrawal').length
+          netBalance: effOpenBal + totalDep - totalWith,
+          depositCount: depCount,
+          withdrawalCount: withCount,
+          remarks: brObj?.remarks || brObj?.notes || baseline?.remarks || b.remarks || b.notes || ''
         });
+      };
+
+      if (Array.isArray(b.branches) && b.branches.length > 0) {
+        b.branches.forEach((br, bIdx) => {
+          const brName = (br.branch || '').trim();
+          const accNo = (br.accountNo || '').trim();
+          const accName = (br.accountName || b.accountName || '').trim();
+          processBranch(brName, accNo, accName, bIdx, br);
+        });
+      } else {
+        const brName = (b.branch || '').trim();
+        const accNo = (b.accountNo || '').trim();
+        const accName = (b.accountName || b.accountName || '').trim();
+        processBranch(brName, accNo, accName, 0, null);
       }
     });
 
@@ -1942,7 +1941,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     }
 
     return accounts;
-  }, [banks, unifiedTransactions, searchQuery, accountBaselineMap]);
+  }, [banks, unifiedTransactions, searchQuery, accountBaselineMap, filters.startDate, filters.endDate]);
 
   const handleSelectAccountForStatement = (acc) => {
     setFilters({
@@ -1958,39 +1957,70 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
     setActiveTab('ledger');
   };
 
+  // Helper to determine if "All Banks" report should be generated
+  const isAllBanksSelected = activeTab === 'accounts' || !filters.bankName || filters.bankName === 'all';
+
   // Export handlers
   const handleExportPdf = async () => {
-    const meta = {
-      bankName: filters.bankName,
-      branch: filters.branch,
-      accountNo: filters.accountNo,
-      accountName: filterAccountsList.find(a => a.accountNo === filters.accountNo)?.accountName || '',
-      startDate: effectiveOpeningDate || filters.startDate,
-      openingBalanceDate: effectiveOpeningDate,
-      endDate: filters.endDate,
-      openingBalance: periodOpeningBalance,
-      closingBalance: periodTotals.closingBalance,
-      totalDeposits: periodTotals.totalDeposits,
-      totalWithdrawals: periodTotals.totalWithdrawals
-    };
-    await generateBankStatementPDF(displayLedger, meta);
+    if (isAllBanksSelected) {
+      const summaryMeta = {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        totalAccounts: bankAccountsOverview.length,
+        totalOpeningBalance: bankAccountsOverview.reduce((sum, a) => sum + (Number(a.openingBalance) || 0), 0),
+        totalDeposits: bankAccountsOverview.reduce((sum, a) => sum + (Number(a.totalDeposits) || 0), 0),
+        totalWithdrawals: bankAccountsOverview.reduce((sum, a) => sum + (Number(a.totalWithdrawals) || 0), 0),
+        netMovement: bankAccountsOverview.reduce((sum, a) => sum + ((Number(a.totalDeposits) || 0) - (Number(a.totalWithdrawals) || 0)), 0),
+        totalClosingBalance: bankAccountsOverview.reduce((sum, a) => sum + (Number(a.netBalance) || 0), 0)
+      };
+      await generateAllBankAccountsSummaryPDF(bankAccountsOverview, summaryMeta);
+    } else {
+      const meta = {
+        bankName: filters.bankName,
+        branch: filters.branch,
+        accountNo: filters.accountNo,
+        accountName: filterAccountsList.find(a => a.accountNo === filters.accountNo)?.accountName || '',
+        startDate: effectiveOpeningDate || filters.startDate,
+        openingBalanceDate: effectiveOpeningDate,
+        endDate: filters.endDate,
+        openingBalance: periodOpeningBalance,
+        closingBalance: periodTotals.closingBalance,
+        totalDeposits: periodTotals.totalDeposits,
+        totalWithdrawals: periodTotals.totalWithdrawals
+      };
+      await generateBankStatementPDF(displayLedger, meta);
+    }
   };
 
   const handleExportExcel = () => {
-    const meta = {
-      bankName: filters.bankName,
-      branch: filters.branch,
-      accountNo: filters.accountNo,
-      accountName: filterAccountsList.find(a => a.accountNo === filters.accountNo)?.accountName || '',
-      startDate: effectiveOpeningDate || filters.startDate,
-      openingBalanceDate: effectiveOpeningDate,
-      endDate: filters.endDate,
-      openingBalance: periodOpeningBalance,
-      closingBalance: periodTotals.closingBalance,
-      totalDeposits: periodTotals.totalDeposits,
-      totalWithdrawals: periodTotals.totalWithdrawals
-    };
-    generateBankStatementExcel(displayLedger, meta);
+    if (isAllBanksSelected) {
+      const summaryMeta = {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        totalAccounts: bankAccountsOverview.length,
+        totalOpeningBalance: bankAccountsOverview.reduce((sum, a) => sum + (Number(a.openingBalance) || 0), 0),
+        totalDeposits: bankAccountsOverview.reduce((sum, a) => sum + (Number(a.totalDeposits) || 0), 0),
+        totalWithdrawals: bankAccountsOverview.reduce((sum, a) => sum + (Number(a.totalWithdrawals) || 0), 0),
+        netMovement: bankAccountsOverview.reduce((sum, a) => sum + ((Number(a.totalDeposits) || 0) - (Number(a.totalWithdrawals) || 0)), 0),
+        totalClosingBalance: bankAccountsOverview.reduce((sum, a) => sum + (Number(a.netBalance) || 0), 0)
+      };
+      generateAllBankAccountsSummaryExcel(bankAccountsOverview, summaryMeta);
+    } else {
+      const meta = {
+        bankName: filters.bankName,
+        branch: filters.branch,
+        accountNo: filters.accountNo,
+        accountName: filterAccountsList.find(a => a.accountNo === filters.accountNo)?.accountName || '',
+        startDate: effectiveOpeningDate || filters.startDate,
+        openingBalanceDate: effectiveOpeningDate,
+        endDate: filters.endDate,
+        openingBalance: periodOpeningBalance,
+        closingBalance: periodTotals.closingBalance,
+        totalDeposits: periodTotals.totalDeposits,
+        totalWithdrawals: periodTotals.totalWithdrawals
+      };
+      generateBankStatementExcel(displayLedger, meta);
+    }
   };
 
   return (
@@ -2572,7 +2602,7 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       )}
 
       {/* Financial KPI Overview Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
         {/* 1. Opening Balance */}
         <div className="bg-white/80 backdrop-blur-md rounded-2xl p-2.5 sm:p-4 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
           <div>
@@ -2636,27 +2666,8 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
           </p>
         </div>
 
-        {/* 4. Net Movement */}
+        {/* 4. Closing / Current Balance */}
         <div className="bg-white/80 backdrop-blur-md rounded-2xl p-2.5 sm:p-4 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
-              <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider leading-tight">Net Movement</p>
-              <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg sm:rounded-xl border border-indigo-100 shrink-0">
-                <DollarSignIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </div>
-            </div>
-            <h3
-              className={`text-[13px] sm:text-base lg:text-lg font-bold tracking-tight leading-snug break-words ${periodTotals.netMovement >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}
-              title={`${(periodTotals.netMovement || 0) < 0 ? '-' : (periodTotals.netMovement || 0) > 0 ? '+' : ''}৳${Math.abs(periodTotals.netMovement || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-            >
-              {(periodTotals.netMovement || 0) < 0 ? '-' : (periodTotals.netMovement || 0) > 0 ? '+' : ''}৳{Math.abs(periodTotals.netMovement || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </h3>
-          </div>
-          <p className="text-[9px] sm:text-[10px] text-gray-400 mt-1 sm:mt-1.5 font-medium truncate">Period net delta</p>
-        </div>
-
-        {/* 5. Closing / Current Balance */}
-        <div className="col-span-2 lg:col-span-1 bg-white/80 backdrop-blur-md rounded-2xl p-2.5 sm:p-4 border border-white/60 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between gap-1 mb-1 sm:mb-1.5">
               <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider leading-tight">Closing Balance</p>
@@ -3098,6 +3109,12 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                       -৳{acc.totalWithdrawals.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
+                  {acc.remarks && (
+                    <div className="flex justify-between text-gray-600">
+                      <span>Remarks:</span>
+                      <span className="font-medium text-gray-700 truncate max-w-[180px]">{acc.remarks}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3381,6 +3398,20 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
                     </div>
                     <p className="text-[11px] text-gray-400 ml-1">The starting balance on the effective date forward.</p>
                   </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider ml-1">
+                      Remarks / Notes (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={openingBalanceModal.remarks || ''}
+                      onChange={(e) => setOpeningBalanceModal(prev => ({ ...prev, remarks: e.target.value }))}
+                      placeholder="e.g. Primary Operations Account"
+                      className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-semibold text-gray-800 outline-none transition-all shadow-xs"
+                    />
+                    <p className="text-[11px] text-gray-400 ml-1">Notes will appear in the Bank Accounts Balance Report.</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -3439,8 +3470,12 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
       <ReportFormatModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
-        title="Bank Statement Report"
-        subtitle="Select format to generate bank statement ledger report (PDF / Excel)"
+        title={isAllBanksSelected ? "All Bank Accounts Balance Report" : "Bank Statement Report"}
+        subtitle={
+          isAllBanksSelected
+            ? "Select format to generate report of all bank accounts with Opening, Deposits, Withdrawals, Closing Balance, and Remarks (PDF / Excel)"
+            : `Select format to generate bank statement ledger report for ${filters.bankName || 'Selected Bank'} (PDF / Excel)`
+        }
         onExportPdf={handleExportPdf}
         onExportExcel={handleExportExcel}
       />
