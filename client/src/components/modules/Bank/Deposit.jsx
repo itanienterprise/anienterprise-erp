@@ -11,10 +11,13 @@ import {
   SearchIcon, PlusIcon, EditIcon, TrashIcon, XIcon,
   ChevronDownIcon, ChevronUpIcon, DollarSignIcon, BuildingIcon, CalendarIcon,
   ArrowDownLeftIcon, FileTextIcon, UserIcon, CheckCircle2Icon,
-  FunnelIcon, CheckIcon
+  FunnelIcon, CheckIcon, BarChartIcon
 } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import TableScrollNav from '../../shared/TableScrollNav';
+import { generateBankDepositReportPDF } from '../../../utils/pdfGenerator';
+import { generateBankDepositReportExcel } from '../../../utils/excelGenerator';
 import { formatFirstName } from '../IPManagement/IPManagement';
 import '../PaymentCollection/PaymentCollection.css';
 
@@ -1203,6 +1206,41 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
     return { totalAmount, count, todayAmount, activeBanks };
   }, [deposits]);
 
+  // Report Modal & Export handlers
+  const [showReportFormatModal, setShowReportFormatModal] = useState(false);
+
+  const getExportMeta = () => {
+    const totalAmount = filteredDeposits.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+    const count = filteredDeposits.length;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayAmount = filteredDeposits
+      .filter(d => toDateStr(d.date) === todayStr)
+      .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+    const activeBanks = new Set(filteredDeposits.map(d => d.bankName).filter(Boolean)).size;
+
+    return {
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+      bankName: filters.bankName,
+      branch: filters.branch,
+      accountNo: filters.accountNo,
+      depositType: filters.depositType,
+      searchQuery,
+      totalAmount,
+      count,
+      todayAmount,
+      activeBanks
+    };
+  };
+
+  const handleExportPdf = async () => {
+    await generateBankDepositReportPDF(filteredDeposits, getExportMeta());
+  };
+
+  const handleExportExcel = () => {
+    generateBankDepositReportExcel(filteredDeposits, getExportMeta());
+  };
+
   return (
     <div className="space-y-4 md:space-y-6 pb-28 md:pb-8">
       {/* Header and Action Controls - Hidden while Form Card is Open */}
@@ -1468,6 +1506,16 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                 </div>
               )}
             </div>
+
+            {/* Report Button */}
+            <button
+              type="button"
+              onClick={() => setShowReportFormatModal(true)}
+              className="h-10 flex items-center justify-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 text-xs sm:text-sm transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+            >
+              <BarChartIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>Report</span>
+            </button>
 
             {/* Add Deposit Button */}
             {!cannotAddEdit && (
@@ -2277,6 +2325,16 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
         </div>,
         document.body
       )}
+
+      {/* Export Format Selection Modal */}
+      <ReportFormatModal
+        isOpen={showReportFormatModal}
+        onClose={() => setShowReportFormatModal(false)}
+        title="Deposit Management Report"
+        subtitle={`Select format to export or preview ${filteredDeposits.length} deposit records (PDF / Excel)`}
+        onExportPdf={handleExportPdf}
+        onExportExcel={handleExportExcel}
+      />
     </div>
   );
 };

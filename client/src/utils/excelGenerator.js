@@ -6169,6 +6169,276 @@ export const generateAllBankAccountsSummaryExcel = (accountsData = [], meta = {}
     }
 };
 
+/**
+ * Generates an Excel report for Bank Deposits.
+ * Includes Company header, metadata, summary block, full transaction register, and grand totals.
+ * 
+ * @param {Array} deposits - List of deposit objects
+ * @param {Object} meta - Active filters and metadata
+ */
+export const generateBankDepositReportExcel = (deposits = [], meta = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['BANK DEPOSIT REPORT']);
+        rows.push([]);
+
+        // 2. Metadata / Filters
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const startStr = meta?.startDate ? formatDate(meta.startDate) : 'Start';
+        const endStr = meta?.endDate ? formatDate(meta.endDate) : 'Present';
+        const periodStr = meta?.startDate || meta?.endDate ? `${startStr} to ${endStr}` : 'All Records (Consolidated)';
+
+        let scopeStr = 'All Receiving Banks';
+        if (meta?.bankName) {
+            scopeStr = meta.bankName;
+            if (meta.branch) scopeStr += ` (${meta.branch})`;
+            if (meta.accountNo) scopeStr += ` - ${meta.accountNo}`;
+        }
+
+        rows.push(['Statement Period:', periodStr, '', 'Generated Date:', dateStr]);
+        rows.push(['Total Entries:', `${deposits.length} Records`, '', 'Currency:', 'BDT (Taka)']);
+        rows.push(['Scope / Bank:', scopeStr, '', 'Deposit Type:', meta?.depositType || 'All Types']);
+        rows.push([]);
+
+        // 3. Financial Summary Block
+        const totalAmount = deposits.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayAmount = meta?.todayAmount !== undefined
+            ? Number(meta.todayAmount) || 0
+            : deposits.filter(d => (d.date ? String(d.date).split('T')[0] : '') === todayStr).reduce((s, d) => s + (Number(d.amount) || 0), 0);
+        const activeBanksCount = meta?.activeBanks !== undefined
+            ? meta.activeBanks
+            : new Set(deposits.map(d => d.bankName).filter(Boolean)).size;
+
+        rows.push(['FINANCIAL SUMMARY']);
+        rows.push(['Total Deposits (TK):', totalAmount]);
+        rows.push(['Total Deposit Entries:', deposits.length]);
+        rows.push(["Today's Deposit (TK):", todayAmount]);
+        rows.push(['Active Receiving Banks:', activeBanksCount]);
+        rows.push([]);
+
+        // 4. Headers
+        const headers = [
+            'SL',
+            'Date',
+            'Bank Name',
+            'Branch',
+            'Account No',
+            'Account Name',
+            'Deposit Type',
+            'Slip / Ref #',
+            'Deposited By',
+            'Amount (TK)',
+            'Remarks'
+        ];
+        rows.push(headers);
+
+        // 5. Data rows
+        deposits.forEach((item, idx) => {
+            const cleanBank = String(item.bankName || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanBranch = String(item.branch ? (item.branch.toLowerCase().includes('branch') ? item.branch : `${item.branch} Branch`) : '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanAccountNo = String(item.accountNo || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanAccountName = String(item.accountName || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanType = String(item.depositType || 'Deposit').replace(/[\r\n]+/g, ' ').trim();
+            const cleanRef = String(item.referenceNo || '—').replace(/[\r\n]+/g, ' ').trim();
+            const cleanDepositor = String(item.depositedBy || '—').replace(/[\r\n]+/g, ' ').trim();
+            const cleanRemarks = item.remarks || item.note ? String(item.remarks || item.note).replace(/[\r\n]+/g, ' ').trim() : '';
+
+            rows.push([
+                idx + 1,
+                formatDate(item.date),
+                cleanBank,
+                cleanBranch,
+                cleanAccountNo,
+                cleanAccountName,
+                cleanType,
+                cleanRef,
+                cleanDepositor,
+                Number(item.amount) || 0,
+                cleanRemarks
+            ]);
+        });
+
+        // 6. Total Row
+        rows.push([]);
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            totalAmount,
+            ''
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 14 }, // Date
+            { wch: 28 }, // Bank Name
+            { wch: 22 }, // Branch
+            { wch: 22 }, // Account No
+            { wch: 28 }, // Account Name
+            { wch: 18 }, // Deposit Type
+            { wch: 18 }, // Slip / Ref #
+            { wch: 22 }, // Deposited By
+            { wch: 20 }, // Amount (TK)
+            { wch: 30 }  // Remarks
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Deposits');
+        const fileName = `Bank_Deposit_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    } catch (err) {
+        console.error('Error generating Bank Deposit Report Excel:', err);
+        alert(`Failed to generate Excel report: ${err.message}`);
+    }
+};
+
+/**
+ * Generates an Excel report for Bank Withdrawals.
+ * Includes Company header, metadata, summary block, full transaction register, and grand totals.
+ * 
+ * @param {Array} withdrawals - List of withdrawal objects
+ * @param {Object} meta - Active filters and metadata
+ */
+export const generateBankWithdrawalReportExcel = (withdrawals = [], meta = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['BANK WITHDRAWAL REPORT']);
+        rows.push([]);
+
+        // 2. Metadata / Filters
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const startStr = meta?.startDate ? formatDate(meta.startDate) : 'Start';
+        const endStr = meta?.endDate ? formatDate(meta.endDate) : 'Present';
+        const periodStr = meta?.startDate || meta?.endDate ? `${startStr} to ${endStr}` : 'All Records (Consolidated)';
+
+        let scopeStr = 'All Active Banks';
+        if (meta?.bankName) {
+            scopeStr = meta.bankName;
+            if (meta.branch) scopeStr += ` (${meta.branch})`;
+            if (meta.accountNo) scopeStr += ` - ${meta.accountNo}`;
+        }
+
+        rows.push(['Statement Period:', periodStr, '', 'Generated Date:', dateStr]);
+        rows.push(['Total Entries:', `${withdrawals.length} Records`, '', 'Currency:', 'BDT (Taka)']);
+        rows.push(['Scope / Bank:', scopeStr, '', 'Withdrawal Type:', meta?.withdrawalType || 'All Types']);
+        rows.push([]);
+
+        // 3. Financial Summary Block
+        const totalAmount = withdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayAmount = meta?.todayAmount !== undefined
+            ? Number(meta.todayAmount) || 0
+            : withdrawals.filter(w => (w.date ? String(w.date).split('T')[0] : '') === todayStr).reduce((s, w) => s + (Number(w.amount) || 0), 0);
+        const activeBanksCount = meta?.activeBanks !== undefined
+            ? meta.activeBanks
+            : new Set(withdrawals.map(w => w.bankName).filter(Boolean)).size;
+
+        rows.push(['FINANCIAL SUMMARY']);
+        rows.push(['Total Withdrawals (TK):', totalAmount]);
+        rows.push(['Total Withdrawal Entries:', withdrawals.length]);
+        rows.push(["Today's Withdrawal (TK):", todayAmount]);
+        rows.push(['Active Banks with Withdrawals:', activeBanksCount]);
+        rows.push([]);
+
+        // 4. Headers
+        const headers = [
+            'SL',
+            'Date',
+            'Bank Name',
+            'Branch',
+            'Account No',
+            'Account Name',
+            'Type',
+            'Cheque / Ref #',
+            'Withdrawn By',
+            'Amount (TK)',
+            'Remarks'
+        ];
+        rows.push(headers);
+
+        // 5. Data rows
+        withdrawals.forEach((item, idx) => {
+            const cleanBank = String(item.bankName || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanBranch = String(item.branch ? (item.branch.toLowerCase().includes('branch') ? item.branch : `${item.branch} Branch`) : '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanAccountNo = String(item.accountNo || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanAccountName = String(item.accountName || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanType = String(item.withdrawalType || 'Withdrawal').replace(/[\r\n]+/g, ' ').trim();
+            const cleanRef = String(item.referenceNo || '—').replace(/[\r\n]+/g, ' ').trim();
+            const cleanRecipient = String(item.withdrawnBy || '—').replace(/[\r\n]+/g, ' ').trim();
+            const cleanRemarks = item.remarks || item.note ? String(item.remarks || item.note).replace(/[\r\n]+/g, ' ').trim() : '';
+
+            rows.push([
+                idx + 1,
+                formatDate(item.date),
+                cleanBank,
+                cleanBranch,
+                cleanAccountNo,
+                cleanAccountName,
+                cleanType,
+                cleanRef,
+                cleanRecipient,
+                Number(item.amount) || 0,
+                cleanRemarks
+            ]);
+        });
+
+        // 6. Total Row
+        rows.push([]);
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            totalAmount,
+            ''
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 14 }, // Date
+            { wch: 28 }, // Bank Name
+            { wch: 22 }, // Branch
+            { wch: 22 }, // Account No
+            { wch: 28 }, // Account Name
+            { wch: 18 }, // Type
+            { wch: 18 }, // Cheque / Ref #
+            { wch: 22 }, // Withdrawn By
+            { wch: 20 }, // Amount (TK)
+            { wch: 30 }  // Remarks
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Withdrawals');
+        const fileName = `Bank_Withdrawal_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    } catch (err) {
+        console.error('Error generating Bank Withdrawal Report Excel:', err);
+        alert(`Failed to generate Excel report: ${err.message}`);
+    }
+};
+
 
 
 

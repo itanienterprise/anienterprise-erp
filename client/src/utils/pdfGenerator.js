@@ -15577,6 +15577,735 @@ export const generateAllBankAccountsSummaryPDF = async (accountsData = [], meta 
     }
 };
 
+/**
+ * Generates an executive PDF report for Bank Deposits.
+ * Features: Landscape A4, corporate header, metadata box, 4 KPI cards, full transaction register, grand totals, and signatures.
+ * 
+ * @param {Array} deposits - List of deposit objects
+ * @param {Object} meta - Active filters and metadata (startDate, endDate, bankName, branch, totalAmount, count, todayAmount, activeBanks, etc.)
+ */
+export const generateBankDepositReportPDF = async (deposits = [], meta = {}) => {
+    try {
+        const doc = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const pageWidth = doc.internal.pageSize.width;   // 297mm
+        const pageHeight = doc.internal.pageSize.height; // 210mm
+        const margin = 10;
+
+        // Load company logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // Drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // Main text: orange
+        doc.setTextColor(249, 115, 22);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
+
+        // Title badge
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        const titleText = "BANK DEPOSIT REPORT";
+        const titleW = Math.max(90, doc.getTextWidth(titleText) + 20);
+        doc.roundedRect((pageWidth / 2) - (titleW / 2), y, titleW, 7, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text(titleText, pageWidth / 2, y + 5, { align: 'center' });
+
+        // Metadata Box
+        let infoY = y + 8.5;
+        const infoBoxWidth = pageWidth - (margin * 2);
+        const infoBoxHeight = 15;
+
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, infoY, infoBoxWidth, infoBoxHeight, 2, 2, 'FD');
+
+        const col1LabelX = margin + 4;
+        const col1ValX = margin + 30;
+        const col2LabelX = margin + (infoBoxWidth / 3) + 4;
+        const col2ValX = margin + (infoBoxWidth / 3) + 32;
+        const col3LabelX = margin + ((infoBoxWidth * 2) / 3) + 4;
+        const col3ValX = margin + ((infoBoxWidth * 2) / 3) + 30;
+
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const startStr = meta?.startDate ? formatDate(meta.startDate) : 'Start';
+        const endStr = meta?.endDate ? formatDate(meta.endDate) : 'Present';
+        const periodStr = meta?.startDate || meta?.endDate ? `${startStr} to ${endStr}` : 'All Records (Consolidated)';
+
+        let scopeStr = 'All Receiving Banks';
+        if (meta?.bankName) {
+            scopeStr = meta.bankName;
+            if (meta.branch) scopeStr += ` (${meta.branch})`;
+            if (meta.accountNo) scopeStr += ` - ${meta.accountNo}`;
+        }
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(71, 85, 105);
+
+        // Row 1
+        doc.setFont('helvetica', 'bold');
+        doc.text("Statement Period:", col1LabelX, infoY + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(periodStr, col1ValX, infoY + 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Scope / Bank:", col2LabelX, infoY + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(scopeStr, col2ValX, infoY + 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Generated Date:", col3LabelX, infoY + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(dateStr, col3ValX, infoY + 5);
+
+        // Row 2
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Total Entries:", col1LabelX, infoY + 11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text(`${deposits.length} Records`, col1ValX, infoY + 11);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Deposit Type:", col2LabelX, infoY + 11);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(meta?.depositType || 'All Types', col2ValX, infoY + 11);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Currency:", col3LabelX, infoY + 11);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text("BDT (Taka)", col3ValX, infoY + 11);
+
+        // 4 Summary KPI Cards
+        const cardY = infoY + infoBoxHeight + 3;
+        const totalCards = 4;
+        const cardGap = 2.5;
+        const cardWidth = (infoBoxWidth - (cardGap * (totalCards - 1))) / totalCards;
+        const cardHeight = 13.5;
+
+        const totalAmount = deposits.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayAmount = meta?.todayAmount !== undefined
+            ? Number(meta.todayAmount) || 0
+            : deposits.filter(d => (d.date ? String(d.date).split('T')[0] : '') === todayStr).reduce((s, d) => s + (Number(d.amount) || 0), 0);
+        const activeBanksCount = meta?.activeBanks !== undefined
+            ? meta.activeBanks
+            : new Set(deposits.map(d => d.bankName).filter(Boolean)).size;
+
+        const summaryCards = [
+            {
+                label: 'TOTAL DEPOSITS',
+                value: `TK ${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                bg: [239, 246, 255],
+                border: [191, 219, 254],
+                text: [30, 64, 175]
+            },
+            {
+                label: 'TOTAL ENTRIES',
+                value: `${deposits.length} Records`,
+                bg: [238, 242, 255],
+                border: [199, 210, 254],
+                text: [67, 56, 202]
+            },
+            {
+                label: "TODAY'S DEPOSIT",
+                value: `TK ${todayAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                bg: [240, 253, 244],
+                border: [187, 247, 208],
+                text: [22, 101, 52]
+            },
+            {
+                label: 'RECEIVING BANKS',
+                value: `${activeBanksCount} Active Banks`,
+                bg: [240, 249, 255],
+                border: [186, 230, 253],
+                text: [3, 105, 161]
+            }
+        ];
+
+        summaryCards.forEach((card, idx) => {
+            const cx = margin + idx * (cardWidth + cardGap);
+            doc.setFillColor(...card.bg);
+            doc.setDrawColor(...card.border);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(cx, cardY, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+            doc.setFontSize(6.5);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(100, 116, 139);
+            doc.text(card.label, cx + (cardWidth / 2), cardY + 4.2, { align: 'center' });
+
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...card.text);
+            doc.text(card.value, cx + (cardWidth / 2), cardY + 10, { align: 'center' });
+        });
+
+        // Table Rows
+        const tableRows = [];
+        deposits.forEach((item, idx) => {
+            const amt = Number(item.amount) || 0;
+            const amtStr = amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const cleanBank = String(item.bankName || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanBranch = String(item.branch ? (item.branch.toLowerCase().includes('branch') ? item.branch : `${item.branch} Branch`) : '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanAccountNo = String(item.accountNo || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanAccountName = String(item.accountName || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanType = String(item.depositType || 'Deposit').replace(/[\r\n]+/g, ' ').trim();
+            const cleanRef = String(item.referenceNo || '—').replace(/[\r\n]+/g, ' ').trim();
+            const cleanDepositor = String(item.depositedBy || '—').replace(/[\r\n]+/g, ' ').trim();
+            const cleanRemarks = item.remarks || item.note ? String(item.remarks || item.note).replace(/[\r\n]+/g, ' ').trim() : '';
+
+            tableRows.push([
+                { content: String(idx + 1), styles: { halign: 'center' } },
+                { content: formatDate(item.date), styles: { halign: 'center' } },
+                { content: cleanBank, styles: { halign: 'left', fontStyle: 'bold', overflow: 'hidden' } },
+                { content: cleanBranch, styles: { halign: 'left', overflow: 'hidden' } },
+                { content: cleanAccountNo, styles: { halign: 'center', fontStyle: 'bold' } },
+                { content: cleanAccountName, styles: { halign: 'left', overflow: 'hidden' } },
+                { content: cleanType, styles: { halign: 'center' } },
+                { content: cleanRef, styles: { halign: 'center' } },
+                { content: cleanDepositor, styles: { halign: 'left', overflow: 'hidden' } },
+                { content: amtStr, styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 101, 52] } },
+                { content: cleanRemarks, styles: { halign: 'left', overflow: 'hidden' } }
+            ]);
+        });
+
+        // Grand Total Row
+        tableRows.push([
+            { content: 'GRAND TOTAL', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } },
+            {
+                content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [22, 101, 52] }
+            },
+            { content: '', styles: { fillColor: [245, 245, 245] } }
+        ]);
+
+        autoTable(doc, {
+            startY: cardY + cardHeight + 4.5,
+            head: [['SL', 'Date', 'Bank Name', 'Branch', 'Account No', 'Account Name', 'Deposit Type', 'Slip / Ref #', 'Deposited By', 'Amount (TK)', 'Remarks']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 7.5,
+                cellPadding: 1.5,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0]
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                fontSize: 7.5,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 8, halign: 'center' },                           // SL
+                1: { cellWidth: 18, halign: 'center' },                          // Date
+                2: { cellWidth: 35, halign: 'left', overflow: 'hidden' },        // Bank Name
+                3: { cellWidth: 26, halign: 'left', overflow: 'hidden' },        // Branch
+                4: { cellWidth: 26, halign: 'center' },                          // Account No
+                5: { cellWidth: 36, halign: 'left', overflow: 'hidden' },        // Account Name
+                6: { cellWidth: 22, halign: 'center' },                          // Deposit Type
+                7: { cellWidth: 22, halign: 'center' },                          // Slip / Ref #
+                8: { cellWidth: 26, halign: 'left', overflow: 'hidden' },        // Deposited By
+                9: { cellWidth: 26, halign: 'right' },                          // Amount (TK)
+                10: { cellWidth: 32, halign: 'left', overflow: 'hidden' }        // Remarks
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // Signatures
+        let sigY = doc.lastAutoTable.finalY + 22;
+        if (sigY + 15 > pageHeight) {
+            doc.addPage();
+            sigY = 28;
+        }
+
+        const sigWidth = 50;
+        doc.setDrawColor(156, 163, 175);
+        doc.setLineWidth(0.4);
+        doc.setLineDashPattern([1, 1], 0);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.line(pageWidth / 2 - sigWidth / 2, sigY, pageWidth / 2 + sigWidth / 2, sigY);
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(55, 65, 81);
+        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 4, { align: 'center' });
+        doc.text("VERIFIED BY", pageWidth / 2, sigY + 4, { align: 'center' });
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 4, { align: 'center' });
+
+        // Page Numbering Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - BANK DEPOSIT REPORT', margin, pageHeight - 5);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        const newTab = window.open(blobURL, '_blank');
+        if (!newTab) {
+            const fileName = `Bank_Deposit_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(fileName);
+        }
+    } catch (err) {
+        console.error("Error generating Bank Deposit Report PDF:", err);
+        alert(`Failed to generate PDF report: ${err.message}`);
+    }
+};
+
+/**
+ * Generates an executive PDF report for Bank Withdrawals.
+ * Features: Landscape A4, corporate header, metadata box, 4 KPI cards, full transaction register, grand totals, and signatures.
+ * 
+ * @param {Array} withdrawals - List of withdrawal objects
+ * @param {Object} meta - Active filters and metadata (startDate, endDate, bankName, branch, totalAmount, count, todayAmount, activeBanks, etc.)
+ */
+export const generateBankWithdrawalReportPDF = async (withdrawals = [], meta = {}) => {
+    try {
+        const doc = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const pageWidth = doc.internal.pageSize.width;   // 297mm
+        const pageHeight = doc.internal.pageSize.height; // 210mm
+        const margin = 10;
+
+        // Load company logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // Drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // Main text: orange
+        doc.setTextColor(249, 115, 22);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
+
+        // Title badge
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        const titleText = "BANK WITHDRAWAL REPORT";
+        const titleW = Math.max(90, doc.getTextWidth(titleText) + 20);
+        doc.roundedRect((pageWidth / 2) - (titleW / 2), y, titleW, 7, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text(titleText, pageWidth / 2, y + 5, { align: 'center' });
+
+        // Metadata Box
+        let infoY = y + 8.5;
+        const infoBoxWidth = pageWidth - (margin * 2);
+        const infoBoxHeight = 15;
+
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, infoY, infoBoxWidth, infoBoxHeight, 2, 2, 'FD');
+
+        const col1LabelX = margin + 4;
+        const col1ValX = margin + 30;
+        const col2LabelX = margin + (infoBoxWidth / 3) + 4;
+        const col2ValX = margin + (infoBoxWidth / 3) + 32;
+        const col3LabelX = margin + ((infoBoxWidth * 2) / 3) + 4;
+        const col3ValX = margin + ((infoBoxWidth * 2) / 3) + 30;
+
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const startStr = meta?.startDate ? formatDate(meta.startDate) : 'Start';
+        const endStr = meta?.endDate ? formatDate(meta.endDate) : 'Present';
+        const periodStr = meta?.startDate || meta?.endDate ? `${startStr} to ${endStr}` : 'All Records (Consolidated)';
+
+        let scopeStr = 'All Active Banks';
+        if (meta?.bankName) {
+            scopeStr = meta.bankName;
+            if (meta.branch) scopeStr += ` (${meta.branch})`;
+            if (meta.accountNo) scopeStr += ` - ${meta.accountNo}`;
+        }
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(71, 85, 105);
+
+        // Row 1
+        doc.setFont('helvetica', 'bold');
+        doc.text("Statement Period:", col1LabelX, infoY + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(periodStr, col1ValX, infoY + 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Scope / Bank:", col2LabelX, infoY + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(scopeStr, col2ValX, infoY + 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Generated Date:", col3LabelX, infoY + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(dateStr, col3ValX, infoY + 5);
+
+        // Row 2
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Total Entries:", col1LabelX, infoY + 11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(225, 29, 72);
+        doc.text(`${withdrawals.length} Records`, col1ValX, infoY + 11);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Withdrawal Type:", col2LabelX, infoY + 11);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(meta?.withdrawalType || 'All Types', col2ValX, infoY + 11);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        doc.text("Currency:", col3LabelX, infoY + 11);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text("BDT (Taka)", col3ValX, infoY + 11);
+
+        // 4 Summary KPI Cards
+        const cardY = infoY + infoBoxHeight + 3;
+        const totalCards = 4;
+        const cardGap = 2.5;
+        const cardWidth = (infoBoxWidth - (cardGap * (totalCards - 1))) / totalCards;
+        const cardHeight = 13.5;
+
+        const totalAmount = withdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayAmount = meta?.todayAmount !== undefined
+            ? Number(meta.todayAmount) || 0
+            : withdrawals.filter(w => (w.date ? String(w.date).split('T')[0] : '') === todayStr).reduce((s, w) => s + (Number(w.amount) || 0), 0);
+        const activeBanksCount = meta?.activeBanks !== undefined
+            ? meta.activeBanks
+            : new Set(withdrawals.map(w => w.bankName).filter(Boolean)).size;
+
+        const summaryCards = [
+            {
+                label: 'TOTAL WITHDRAWALS',
+                value: `TK ${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                bg: [255, 241, 242],
+                border: [254, 205, 211],
+                text: [159, 18, 57]
+            },
+            {
+                label: 'TOTAL ENTRIES',
+                value: `${withdrawals.length} Records`,
+                bg: [238, 242, 255],
+                border: [199, 210, 254],
+                text: [67, 56, 202]
+            },
+            {
+                label: "TODAY'S WITHDRAWAL",
+                value: `TK ${todayAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                bg: [255, 241, 242],
+                border: [254, 205, 211],
+                text: [190, 18, 60]
+            },
+            {
+                label: 'ACTIVE BANKS',
+                value: `${activeBanksCount} Active Banks`,
+                bg: [240, 249, 255],
+                border: [186, 230, 253],
+                text: [3, 105, 161]
+            }
+        ];
+
+        summaryCards.forEach((card, idx) => {
+            const cx = margin + idx * (cardWidth + cardGap);
+            doc.setFillColor(...card.bg);
+            doc.setDrawColor(...card.border);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(cx, cardY, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+            doc.setFontSize(6.5);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(100, 116, 139);
+            doc.text(card.label, cx + (cardWidth / 2), cardY + 4.2, { align: 'center' });
+
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...card.text);
+            doc.text(card.value, cx + (cardWidth / 2), cardY + 10, { align: 'center' });
+        });
+
+        // Table Rows
+        const tableRows = [];
+        withdrawals.forEach((item, idx) => {
+            const amt = Number(item.amount) || 0;
+            const amtStr = amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const cleanBank = String(item.bankName || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanBranch = String(item.branch ? (item.branch.toLowerCase().includes('branch') ? item.branch : `${item.branch} Branch`) : '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanAccountNo = String(item.accountNo || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanAccountName = String(item.accountName || '-').replace(/[\r\n]+/g, ' ').trim();
+            const cleanType = String(item.withdrawalType || 'Withdrawal').replace(/[\r\n]+/g, ' ').trim();
+            const cleanRef = String(item.referenceNo || '—').replace(/[\r\n]+/g, ' ').trim();
+            const cleanRecipient = String(item.withdrawnBy || '—').replace(/[\r\n]+/g, ' ').trim();
+            const cleanRemarks = item.remarks || item.note ? String(item.remarks || item.note).replace(/[\r\n]+/g, ' ').trim() : '';
+
+            tableRows.push([
+                { content: String(idx + 1), styles: { halign: 'center' } },
+                { content: formatDate(item.date), styles: { halign: 'center' } },
+                { content: cleanBank, styles: { halign: 'left', fontStyle: 'bold', overflow: 'hidden' } },
+                { content: cleanBranch, styles: { halign: 'left', overflow: 'hidden' } },
+                { content: cleanAccountNo, styles: { halign: 'center', fontStyle: 'bold' } },
+                { content: cleanAccountName, styles: { halign: 'left', overflow: 'hidden' } },
+                { content: cleanType, styles: { halign: 'center' } },
+                { content: cleanRef, styles: { halign: 'center' } },
+                { content: cleanRecipient, styles: { halign: 'left', overflow: 'hidden' } },
+                { content: amtStr, styles: { halign: 'right', fontStyle: 'bold', textColor: [159, 18, 57] } },
+                { content: cleanRemarks, styles: { halign: 'left', overflow: 'hidden' } }
+            ]);
+        });
+
+        // Grand Total Row
+        tableRows.push([
+            { content: 'GRAND TOTAL', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [0, 0, 0] } },
+            {
+                content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [159, 18, 57] }
+            },
+            { content: '', styles: { fillColor: [245, 245, 245] } }
+        ]);
+
+        autoTable(doc, {
+            startY: cardY + cardHeight + 4.5,
+            head: [['SL', 'Date', 'Bank Name', 'Branch', 'Account No', 'Account Name', 'Type', 'Cheque / Ref #', 'Withdrawn By', 'Amount (TK)', 'Remarks']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 7.5,
+                cellPadding: 1.5,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0]
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                fontSize: 7.5,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 8, halign: 'center' },                           // SL
+                1: { cellWidth: 18, halign: 'center' },                          // Date
+                2: { cellWidth: 35, halign: 'left', overflow: 'hidden' },        // Bank Name
+                3: { cellWidth: 26, halign: 'left', overflow: 'hidden' },        // Branch
+                4: { cellWidth: 26, halign: 'center' },                          // Account No
+                5: { cellWidth: 36, halign: 'left', overflow: 'hidden' },        // Account Name
+                6: { cellWidth: 22, halign: 'center' },                          // Type
+                7: { cellWidth: 22, halign: 'center' },                          // Cheque / Ref #
+                8: { cellWidth: 26, halign: 'left', overflow: 'hidden' },        // Withdrawn By
+                9: { cellWidth: 26, halign: 'right' },                          // Amount (TK)
+                10: { cellWidth: 32, halign: 'left', overflow: 'hidden' }        // Remarks
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // Signatures
+        let sigY = doc.lastAutoTable.finalY + 22;
+        if (sigY + 15 > pageHeight) {
+            doc.addPage();
+            sigY = 28;
+        }
+
+        const sigWidth = 50;
+        doc.setDrawColor(156, 163, 175);
+        doc.setLineWidth(0.4);
+        doc.setLineDashPattern([1, 1], 0);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.line(pageWidth / 2 - sigWidth / 2, sigY, pageWidth / 2 + sigWidth / 2, sigY);
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(55, 65, 81);
+        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 4, { align: 'center' });
+        doc.text("VERIFIED BY", pageWidth / 2, sigY + 4, { align: 'center' });
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 4, { align: 'center' });
+
+        // Page Numbering Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - BANK WITHDRAWAL REPORT', margin, pageHeight - 5);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        const newTab = window.open(blobURL, '_blank');
+        if (!newTab) {
+            const fileName = `Bank_Withdrawal_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(fileName);
+        }
+    } catch (err) {
+        console.error("Error generating Bank Withdrawal Report PDF:", err);
+        alert(`Failed to generate PDF report: ${err.message}`);
+    }
+};
+
+
 
 
 
