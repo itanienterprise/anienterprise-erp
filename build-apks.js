@@ -104,14 +104,16 @@ function buildApkForConfig(config) {
   const startTime = Date.now();
   updateAndroidConfigs(config);
 
-  // Step A: Build Vite distribution with VITE_API_URL
-  console.log(`\n📦 Step 1/3: Building Vite web assets (VITE_API_URL=${config.serverUrl})...`);
+  // Step A: Build Vite distribution with VITE_API_URL and VITE_DEV_MODE
+  console.log(`\n📦 Step 1/3: Building Vite web assets (VITE_API_URL=${config.serverUrl}, target=${config.target})...`);
   execSync('npm run build', {
     cwd: CLIENT_DIR,
     stdio: 'inherit',
     env: {
       ...process.env,
-      VITE_API_URL: config.serverUrl
+      VITE_API_URL: config.serverUrl,
+      VITE_DEV_MODE: config.target === 'dev' ? 'true' : 'false',
+      VITE_APP_ENV: config.target
     }
   });
 

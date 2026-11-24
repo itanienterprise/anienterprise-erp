@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { API_BASE_URL } from '../../utils/helpers';
-import { getBaseServerUrl, sanitizeServerUrl } from '../../utils/api';
+import { getBaseServerUrl, sanitizeServerUrl, isNativePlatform, isDevMode } from '../../utils/api';
 import { safeStorage } from '../../utils/storageHelper';
 import './LoginPage.css';
 
@@ -16,10 +16,12 @@ const LoginPage = ({ onLogin }) => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // Dynamic Server Connection Settings for Mobile APK testing
+    // Dynamic Server Connection Settings - ONLY visible in Dev Mode on mobile APK
+    const showDevServerConfig = isNativePlatform() && isDevMode();
     const [showServerConfig, setShowServerConfig] = useState(false);
     const [serverUrlInput, setServerUrlInput] = useState(() => {
-        return localStorage.getItem('erp_server_url') || getBaseServerUrl() || 'http://192.168.0.243:3000';
+        if (!isNativePlatform()) return '';
+        return localStorage.getItem('erp_server_url') || getBaseServerUrl() || '';
     });
     const [testStatus, setTestStatus] = useState(null);
     const [isTesting, setIsTesting] = useState(false);
@@ -81,7 +83,10 @@ const LoginPage = ({ onLogin }) => {
         setLoading(true);
         setError('');
 
-        let activeBase = getBaseServerUrl() || (typeof window !== 'undefined' ? localStorage.getItem('erp_server_url') : '') || API_BASE_URL || '';
+        let activeBase = '';
+        if (isNativePlatform()) {
+            activeBase = getBaseServerUrl() || (typeof window !== 'undefined' ? localStorage.getItem('erp_server_url') : '') || '';
+        }
         try {
             let response;
             try {
@@ -94,8 +99,8 @@ const LoginPage = ({ onLogin }) => {
                     body: JSON.stringify({ username, password, rememberMe })
                 });
             } catch (initialErr) {
-                // If LAN dev on port 3000 failed to connect, automatically attempt fallback to direct port 5000
-                if (activeBase.includes(':3000') && (activeBase.includes('192.168.') || activeBase.includes('127.0.0.1') || activeBase.includes('localhost'))) {
+                // If LAN dev on port 3000 failed to connect in dev mode, automatically attempt fallback to direct port 5000
+                if (showDevServerConfig && activeBase.includes(':3000') && (activeBase.includes('192.168.') || activeBase.includes('127.0.0.1') || activeBase.includes('localhost'))) {
                     const fallbackBase = activeBase.replace(':3000', ':5000');
                     console.warn(`[Login] ${activeBase} unreachable, automatically falling back to ${fallbackBase}...`);
                     activeBase = fallbackBase;
@@ -269,18 +274,20 @@ const LoginPage = ({ onLogin }) => {
                                 </svg>
                                 <div style={{ flex: 1 }}>
                                     <div>{error}</div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowServerConfig(!showServerConfig)}
-                                        style={{ marginTop: '6px', fontSize: '11px', color: '#dc2626', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 600, display: 'block' }}
-                                    >
-                                        {showServerConfig ? '▲ Hide Server Settings' : '⚙ Change / Test Server URL'}
-                                    </button>
+                                    {showDevServerConfig && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowServerConfig(!showServerConfig)}
+                                            style={{ marginTop: '6px', fontSize: '11px', color: '#dc2626', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 600, display: 'block' }}
+                                        >
+                                            {showServerConfig ? '▲ Hide Server Settings' : '⚙ Change / Test Server URL'}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )}
 
-                        {showServerConfig && (
+                        {showDevServerConfig && showServerConfig && (
                             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', marginBottom: '16px', fontSize: '12px', textAlign: 'left' }}>
                                 <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '6px' }}>Backend Server Connection</div>
                                 <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
@@ -366,15 +373,17 @@ const LoginPage = ({ onLogin }) => {
                             ) : 'Login'}
                         </button>
 
-                        <div style={{ textAlign: 'center', marginTop: '14px' }}>
-                            <button
-                                type="button"
-                                onClick={() => setShowServerConfig(!showServerConfig)}
-                                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '11px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                            >
-                                <span>⚙</span> Server: {(localStorage.getItem('erp_server_url') || getBaseServerUrl() || serverUrlInput).replace(/^https?:\/\//i, '')}
-                            </button>
-                        </div>
+                        {showDevServerConfig && (
+                            <div style={{ textAlign: 'center', marginTop: '14px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowServerConfig(!showServerConfig)}
+                                    style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '11px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                >
+                                    <span>⚙</span> Server: {(localStorage.getItem('erp_server_url') || getBaseServerUrl() || serverUrlInput).replace(/^https?:\/\//i, '')}
+                                </button>
+                            </div>
+                        )}
                     </form>
                 </div>
             </div>

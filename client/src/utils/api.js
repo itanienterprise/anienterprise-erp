@@ -23,8 +23,38 @@ export const isNativePlatform = () => {
     return false;
 };
 
+export const isDevMode = () => {
+    if (typeof window === 'undefined') return false;
+    // Check if Android native bridge reports dev build
+    if (window.AndroidBridge && typeof window.AndroidBridge.isDevBuild === 'function') {
+        try {
+            if (window.AndroidBridge.isDevBuild()) return true;
+        } catch (_) {}
+    }
+    // Environment variables from build time
+    if (import.meta.env?.VITE_DEV_MODE === 'true') return true;
+    if (import.meta.env?.DEV) return true;
+    // URL param override for developer testing (?dev=1)
+    if (typeof window.location !== 'undefined' && window.location.search && window.location.search.includes('dev=1')) {
+        return true;
+    }
+    return false;
+};
+
 export const getBaseServerUrl = () => {
     if (typeof window !== 'undefined') {
+        // Standard Web Browser: Always use empty string (relative /api to current origin)
+        if (!isNativePlatform()) {
+            // Clean up any stale dev server URL from web browser localStorage
+            try {
+                if (localStorage.getItem('erp_server_url')) {
+                    localStorage.removeItem('erp_server_url');
+                }
+            } catch (_) {}
+            return '';
+        }
+
+        // Native Mobile APK:
         const customUrl = localStorage.getItem('erp_server_url');
         if (customUrl && !customUrl.includes('192.168.0.27')) {
             return sanitizeServerUrl(customUrl);
@@ -32,9 +62,7 @@ export const getBaseServerUrl = () => {
         if (import.meta.env.VITE_API_URL) {
             return sanitizeServerUrl(import.meta.env.VITE_API_URL);
         }
-        if (isNativePlatform()) {
-            return 'http://189.31.39.166:3000';
-        }
+        return 'http://189.31.39.166:3000';
     }
     return '';
 };

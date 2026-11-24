@@ -113,6 +113,17 @@ public class MdmNativeBridge {
     }
 
     @JavascriptInterface
+    public boolean isDevBuild() {
+        if (context == null) return false;
+        try {
+            String pkg = context.getPackageName();
+            return pkg != null && pkg.endsWith(".dev");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @JavascriptInterface
     public void startService() {
         if (context != null) {
             SharedPreferences prefs = context.getSharedPreferences("mdm_prefs", Context.MODE_PRIVATE);
