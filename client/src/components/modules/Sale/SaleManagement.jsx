@@ -6683,10 +6683,10 @@ const SaleManagement = ({
 
                                                     return (
                                                         <React.Fragment key={entryIndex}>
-                                                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative">
+                                                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 items-center px-3 md:px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-2 md:py-1.5 border border-transparent hover:border-gray-100/50 relative">
 
                                                         {/* Brand Selection */}
-                                                        <div className="col-span-2 space-y-1 relative brand-dropdown-container">
+                                                        <div className="col-span-1 md:col-span-2 space-y-1 relative brand-dropdown-container">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block">Brand</label>
                                                             <div className="relative">
                                                                 <input
@@ -6759,7 +6759,7 @@ const SaleManagement = ({
                                                         </div>
 
                                                         {/* Warehouse Selection */}
-                                                        <div className="">
+                                                        <div className="col-span-1 md:col-span-1">
                                                             <div className="space-y-1 relative warehouse-dropdown-container">
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block">Warehouse</label>
                                                                 <div className="relative">
@@ -6834,7 +6834,7 @@ const SaleManagement = ({
                                                         </div>
 
                                                         {/* LC No Selection */}
-                                                        <div className="col-span-2 space-y-1 relative lc-dropdown-container">
+                                                        <div className="col-span-1 md:col-span-2 space-y-1 relative lc-dropdown-container">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block">LC No <span className="text-red-500">*</span></label>
                                                             <div className="relative">
                                                                 <input
@@ -6925,7 +6925,7 @@ const SaleManagement = ({
                                                         </div>
 
                                                         {/* Inhouse Qty */}
-                                                        <div>
+                                                        <div className="col-span-1 md:col-span-1">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Inhouse</label>
                                                             <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-bold text-gray-900">
                                                                 {entry.inhouseQty || '0'}
@@ -6933,7 +6933,7 @@ const SaleManagement = ({
                                                         </div>
 
                                                         {/* Wh Stock */}
-                                                        <div>
+                                                        <div className="col-span-1 md:col-span-1">
                                                             <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block text-center leading-tight">Saleable Wh Stock ({item.uom === 'BAG' ? 'BAG' : 'KG'})</label>
                                                             {(() => {
                                                                 const currentBrand = (entry.brand || entry.brandName || '').trim().toLowerCase();
@@ -7014,7 +7014,7 @@ const SaleManagement = ({
                                                         </div>
 
                                                         {/* Bag */}
-                                                        <div>
+                                                        <div className="col-span-1 md:col-span-1">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Bag</label>
                                                             <input autoComplete="off"
                                                                 type="number"
@@ -7028,7 +7028,7 @@ const SaleManagement = ({
                                                         </div>
 
                                                         {/* Quantity */}
-                                                        <div>
+                                                        <div className="col-span-1 md:col-span-1">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
                                                             <input autoComplete="off"
                                                                 type="number"
@@ -7043,7 +7043,7 @@ const SaleManagement = ({
                                                         </div>
 
                                                         {/* Unit Price */}
-                                                        <div>
+                                                        <div className="col-span-1 md:col-span-1">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Price</label>
                                                             <input autoComplete="off"
                                                                 type="number"
@@ -7057,14 +7057,14 @@ const SaleManagement = ({
                                                         </div>
 
                                                         {/* Total + Add/Remove */}
-                                                        <div className="col-span-2 flex items-center gap-1.5">
-                                                            <div className="flex-1">
+                                                        <div className="col-span-1 md:col-span-2 flex items-center gap-1.5">
+                                                            <div className="flex-1 min-w-0">
                                                                 <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Total</label>
-                                                                <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
+                                                                <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600 truncate px-1">
                                                                     {parseFloat(entry.totalAmount || 0).toLocaleString('en-IN')}
                                                                 </div>
                                                             </div>
-                                                            <div className="flex flex-row items-center gap-0.5 shrink-0">
+                                                            <div className="flex flex-row items-center gap-0.5 shrink-0 self-end mb-1 md:self-auto md:mb-0">
                                                                 {(entryIndex === item.brandEntries.length - 1 && (isFullAdmin || canEdit || !editingId)) && (
                                                                     <button
                                                                         type="button"
@@ -7241,7 +7241,8 @@ const SaleManagement = ({
 
                                             return (
                                                 <div key={pIdx} className="bg-white border border-gray-200/80 rounded-2xl shadow-sm overflow-hidden">
-                                                    <div className="overflow-x-auto">
+                                                    {/* Desktop Table View - Unchanged */}
+                                                    <div className="hidden md:block overflow-x-auto">
                                                         <table className="w-full text-left border-collapse">
                                                             <thead>
                                                                 <tr className="bg-gray-50/80 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -7411,6 +7412,163 @@ const SaleManagement = ({
                                                                 </tr>
                                                             </tbody>
                                                         </table>
+                                                    </div>
+
+                                                    {/* Mobile Card View */}
+                                                    <div className="md:hidden divide-y divide-gray-100">
+                                                        <div className="px-4 py-3 bg-gray-50/80 flex items-center justify-between">
+                                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Product:</span>
+                                                                <span className="text-xs font-black text-gray-900 uppercase truncate">{group.productName}</span>
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider shrink-0">Available Stock</span>
+                                                        </div>
+                                                        {effectiveBrandList.map((brand, bIdx) => {
+                                                            let startIdx = bIdx;
+                                                            while (startIdx > 0 && brandSpans[startIdx]?.span === 0) {
+                                                                startIdx--;
+                                                            }
+                                                            const spanInfo = brandSpans[startIdx] || { span: 1 };
+                                                            const isLastOfBrandGroup = bIdx === startIdx + spanInfo.span - 1;
+                                                            const hasMultipleLcs = spanInfo.span > 1;
+                                                            const salQty = brand.saleableQuantity !== undefined
+                                                                ? (parseFloat(brand.saleableQuantity) || 0)
+                                                                : ((parseFloat(brand.inHouseQuantity) || 0) - (parseFloat(brand.orderQuantity) || 0));
+                                                            const isPreSold = Math.round(brand.inHouseQuantity || 0) < 0 && (brand.orderQuantity || 0) <= 0;
+                                                            const isPreOrder = Math.round(salQty) < 0;
+                                                            const isInStock = Math.round(brand.inHouseQuantity || 0) > 0;
+                                                            const { whole, remainder } = calculatePktRemainder(salQty, brand.packetSize || 30);
+
+                                                            return (
+                                                                <React.Fragment key={bIdx}>
+                                                                    <div className="p-3.5 space-y-2.5 bg-white">
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <span className="font-bold text-gray-900 text-xs truncate">{(brand.brand || '-').trim()}</span>
+                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                                                                                isPreSold ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                                                                                isPreOrder ? 'bg-purple-50 text-purple-700 border border-purple-100' :
+                                                                                isInStock ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                                'bg-red-50 text-red-600 border border-red-100'
+                                                                            }`}>
+                                                                                {isPreSold ? 'Pre-Sold' : isPreOrder ? 'Pre-Order' : isInStock ? 'In Stock' : 'Out of Stock'}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
+                                                                            <span
+                                                                                onClick={() => {
+                                                                                    if (!brand.lcNo || brand.lcNo === '—') return;
+                                                                                    const norm = str => (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                                                                                    const targetBrand = norm(brand.brand);
+                                                                                    const entryIndex = (item.brandEntries || []).findIndex(e => {
+                                                                                        const bName = norm(e.brandName || e.brand);
+                                                                                        const whName = (e.warehouseName || '').trim().toLowerCase();
+                                                                                        const bWh = (brand.warehouse || '').trim().toLowerCase();
+                                                                                        return bName === targetBrand && !(e.lcNo && e.lcNo.trim()) && (!bWh || !whName || whName === bWh);
+                                                                                    });
+                                                                                    if (entryIndex >= 0) {
+                                                                                        setActiveItemIndex(productIndex);
+                                                                                        setActiveEntryIndex(entryIndex);
+                                                                                        handleLcSelect(brand.lcNo);
+                                                                                    }
+                                                                                }}
+                                                                                className="text-xs text-purple-800 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-xl font-bold cursor-pointer transition-all active:scale-95 inline-flex items-center gap-1.5"
+                                                                                title="Click to select this LC"
+                                                                            >
+                                                                                <span>{brand.lcNo || '—'}</span>
+                                                                                {brand.lcNo && brand.lcNo !== '—' && (
+                                                                                    <span className="text-[9px] text-purple-600 font-semibold">(tap to select)</span>
+                                                                                )}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-2 gap-2 pt-0.5 text-center">
+                                                                            <div className="bg-teal-50/60 border border-teal-200/60 rounded-xl p-2">
+                                                                                <span className="text-[9px] font-bold text-teal-800 uppercase tracking-widest block mb-0.5">Saleable Bag</span>
+                                                                                <span className="text-xs font-bold text-teal-900">
+                                                                                    {whole.toLocaleString('en-US')} - {Math.abs(Math.round(remainder)).toLocaleString('en-US')} kg
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="bg-teal-50/60 border border-teal-200/60 rounded-xl p-2">
+                                                                                <span className="text-[9px] font-bold text-teal-800 uppercase tracking-widest block mb-0.5">Saleable QTY</span>
+                                                                                <span className="text-xs font-black text-teal-900">
+                                                                                    {Math.round(salQty).toLocaleString('en-US')} kg
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {hasMultipleLcs && isLastOfBrandGroup && (
+                                                                        <div className="bg-purple-50/30 border-t border-dashed border-purple-200 px-3.5 py-2.5 flex items-center justify-between text-xs">
+                                                                            <span className="text-[11px] text-purple-950 font-black uppercase tracking-wider">
+                                                                                {(brand.brand || '-').trim()} TOTAL
+                                                                            </span>
+                                                                            <div className="flex items-center gap-2">
+                                                                                {(() => {
+                                                                                    const brandGroup = effectiveBrandList.slice(startIdx, startIdx + spanInfo.span);
+                                                                                    const totalQty = brandGroup.reduce((sum, b) => {
+                                                                                        const sQ = b.saleableQuantity !== undefined ? (parseFloat(b.saleableQuantity) || 0) : ((parseFloat(b.inHouseQuantity) || 0) - (parseFloat(b.orderQuantity) || 0));
+                                                                                        return sum + Math.max(0, sQ);
+                                                                                    }, 0);
+                                                                                    const pktSize = brand.packetSize || 30;
+                                                                                    const { whole: tW, remainder: tR = 0 } = calculatePktRemainder(totalQty, pktSize);
+                                                                                    return (
+                                                                                        <React.Fragment>
+                                                                                            <span className="text-xs text-purple-900 font-extrabold bg-purple-100/70 px-2 py-0.5 rounded-lg">
+                                                                                                {tW.toLocaleString('en-US')} - {Math.abs(Math.round(tR)).toLocaleString('en-US')} kg
+                                                                                            </span>
+                                                                                            <span className="text-xs text-purple-900 font-black bg-purple-100/70 px-2 py-0.5 rounded-lg">
+                                                                                                {Math.round(totalQty).toLocaleString('en-US')} kg
+                                                                                            </span>
+                                                                                        </React.Fragment>
+                                                                                    );
+                                                                                })()}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </React.Fragment>
+                                                            );
+                                                        })}
+
+                                                        {/* Product Grand Total Row on Mobile */}
+                                                        <div className="bg-blue-50/40 border-t border-blue-200 px-3.5 py-2.5 flex items-center justify-between text-xs">
+                                                            <span className="text-xs font-black text-blue-950 uppercase tracking-wider">
+                                                                TOTAL:
+                                                            </span>
+                                                            <div className="flex items-center gap-2">
+                                                                {(() => {
+                                                                    let totalWhole = effectiveBrandList.reduce((sum, ent) => {
+                                                                        const sQ = ent.saleableQuantity !== undefined ? (parseFloat(ent.saleableQuantity) || 0) : ((parseFloat(ent.inHouseQuantity) || 0) - (parseFloat(ent.orderQuantity) || 0));
+                                                                        return sum + calculatePktRemainder(Math.max(0, sQ), ent.packetSize || 30).whole;
+                                                                    }, 0);
+                                                                    let totalRem = effectiveBrandList.reduce((sum, ent) => {
+                                                                        const sQ = ent.saleableQuantity !== undefined ? (parseFloat(ent.saleableQuantity) || 0) : ((parseFloat(ent.inHouseQuantity) || 0) - (parseFloat(ent.orderQuantity) || 0));
+                                                                        return sum + calculatePktRemainder(Math.max(0, sQ), ent.packetSize || 30).remainder;
+                                                                    }, 0);
+                                                                    const pktSize = group.packetSize || effectiveBrandList.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                                    if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
+                                                                        const extra = Math.floor(Math.abs(totalRem) / pktSize);
+                                                                        totalWhole += totalRem >= 0 ? extra : -extra;
+                                                                        totalRem = totalRem % pktSize;
+                                                                    }
+                                                                    const totalQty = effectiveBrandList.reduce((sum, ent) => {
+                                                                        const sQ = ent.saleableQuantity !== undefined ? (parseFloat(ent.saleableQuantity) || 0) : ((parseFloat(ent.inHouseQuantity) || 0) - (parseFloat(ent.orderQuantity) || 0));
+                                                                        return sum + Math.max(0, sQ);
+                                                                    }, 0);
+                                                                    return (
+                                                                        <React.Fragment>
+                                                                            <span className="text-xs text-blue-900 font-extrabold bg-blue-100/70 px-2 py-0.5 rounded-lg">
+                                                                                {totalWhole.toLocaleString('en-US')}{totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem)).toLocaleString('en-US')} kg` : ''}
+                                                                            </span>
+                                                                            <span className="text-xs text-blue-900 font-black bg-blue-100/70 px-2 py-0.5 rounded-lg">
+                                                                                {Math.round(totalQty).toLocaleString('en-US')} kg
+                                                                            </span>
+                                                                        </React.Fragment>
+                                                                    );
+                                                                })()}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );
