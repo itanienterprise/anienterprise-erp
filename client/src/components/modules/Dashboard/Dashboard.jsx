@@ -29,6 +29,7 @@ import {
 } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
 import { safeStorage } from '../../../utils/storageHelper';
+import { getSecureItem, setSecureItem } from '../../../utils/secureStorage';
 import axios from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getSocket } from '../../../utils/socket';
@@ -183,8 +184,43 @@ const Dashboard = ({
       return null;
     }
   });
+  const [userPhoto, setUserPhoto] = useState(() => currentUser?.profilePhoto || currentUser?.photo || null);
+  const [photoLoadError, setPhotoLoadError] = useState(false);
   const [isSyncingAttendance, setIsSyncingAttendance] = useState(false);
   const [attendanceWeekOffset, setAttendanceWeekOffset] = useState(0);
+
+  // ─── Instant Profile Photo & Profile Cache Synchronization ─────
+  useEffect(() => {
+    let isCurrent = true;
+    const username = currentUser?.username;
+    const id = currentUser?._id || currentUser?.id || username;
+
+    if (id) {
+      try {
+        const cached = localStorage.getItem(`dashboard_user_profile_${id}`);
+        if (cached) {
+          setUserProfile(JSON.parse(cached));
+        }
+      } catch (e) { }
+    }
+
+    if (currentUser?.profilePhoto) {
+      setUserPhoto(currentUser.profilePhoto);
+      setPhotoLoadError(false);
+      return;
+    }
+
+    if (username) {
+      getSecureItem(`user_photo_${username}`).then(cachedPhoto => {
+        if (isCurrent && cachedPhoto) {
+          setUserPhoto(cachedPhoto);
+          setPhotoLoadError(false);
+        }
+      }).catch(() => { });
+    }
+
+    return () => { isCurrent = false; };
+  }, [currentUser?.username, currentUser?._id, currentUser?.profilePhoto]);
 
   // ─── Card 2: Line Graph (Weekly / Daily LC & PI) State ─────────
   const [lcGraphTimeframe, setLcGraphTimeframe] = useState('weekly'); // 'weekly' | 'daily' | 'all'
@@ -387,6 +423,14 @@ const Dashboard = ({
       const res = await axios.get(`${API_BASE_URL}/api/profile`);
       if (res.data) {
         setUserProfile(res.data);
+        if (res.data.profilePhoto) {
+          setUserPhoto(res.data.profilePhoto);
+          setPhotoLoadError(false);
+          const username = currentUser?.username || res.data.employeeId;
+          if (username) {
+            setSecureItem(`user_photo_${username}`, res.data.profilePhoto).catch(() => { });
+          }
+        }
         try {
           const { profilePhoto, ...cacheable } = res.data;
           safeStorage.setItem(localStorage, userProfileCacheKey, JSON.stringify(cacheable));
@@ -395,7 +439,7 @@ const Dashboard = ({
     } catch (e) {
       console.warn('Failed to load user profile in dashboard:', e);
     }
-  }, [userProfileCacheKey]);
+  }, [userProfileCacheKey, currentUser?.username]);
 
   // ─── Fetch Customer Records (for Payment Collections) ──────────
   const fetchCustomerRecords = useCallback(async () => {
@@ -493,14 +537,15 @@ const Dashboard = ({
   }, [todos, todoFilter]);
 
   // ─── CARD 1: User Profile & Portrait Card Data ─────────────────
-  const profileName = userProfile?.name || currentUser?.displayName || currentUser?.name || 'Administrator';
-  const profileEmployeeId = userProfile?.employeeId || currentUser?.employeeId || 'ADMIN-001';
-  const profileRole = (userProfile?.role || currentUser?.role || 'Admin').toUpperCase();
-  const profileDesignation = userProfile?.designation || currentUser?.designation || 'System Administrator';
-  const profileDepartment = userProfile?.department || currentUser?.department || 'Management';
-  const profilePhone = userProfile?.phone || currentUser?.phone || 'N/A';
-  const profileEmail = userProfile?.email || currentUser?.email || 'admin@ani-enterprise.com';
-  const profilePhoto = userProfile?.profilePhoto || currentUser?.photo || currentUser?.profilePhoto || '/default-portrait.jpg';
+  const isAdminUser = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+  const profileName = userProfile?.name || currentUser?.displayName || currentUser?.name || (isAdminUser ? 'Administrator' : (currentUser?.username || 'User'));
+  const profileEmployeeId = userProfile?.employeeId || currentUser?.employeeId || (isAdminUser ? 'ADMIN-001' : (currentUser?.username || ''));
+  const profileRole = (userProfile?.role || currentUser?.role || (isAdminUser ? 'Admin' : 'Staff')).toUpperCase();
+  const profileDesignation = userProfile?.designation || currentUser?.designation || (isAdminUser ? 'System Administrator' : '');
+  const profileDepartment = userProfile?.department || currentUser?.department || (isAdminUser ? 'Management' : '');
+  const profilePhone = userProfile?.phone || currentUser?.phone || '';
+  const profileEmail = userProfile?.email || currentUser?.email || (isAdminUser ? 'admin@ani-enterprise.com' : '');
+  const profilePhoto = userPhoto || userProfile?.profilePhoto || currentUser?.profilePhoto || currentUser?.photo || null;
 
   const formatDateDMY = useCallback((dateStr) => {
     if (!dateStr) return '';
@@ -1687,10 +1732,11 @@ const Dashboard = ({
               <div className="hidden md:grid md:grid-cols-12 gap-5 h-full items-stretch">
                 {/* LEFT SIDE: Profile Card */}
                 <div className="md:col-span-5 relative rounded-2xl select-none md:bg-slate-900 p-4 sm:p-5 min-h-[380px] flex flex-col justify-end overflow-hidden border-none shadow-none">
-                  {profilePhoto ? (
+                  {(profilePhoto && !photoLoadError) ? (
                     <img
                       src={profilePhoto}
                       alt={profileName}
+                      onError={() => setPhotoLoadError(true)}
                       className="absolute inset-0 w-full h-full object-cover object-top"
                     />
                   ) : (
@@ -1731,10 +1777,11 @@ const Dashboard = ({
               <div className="md:hidden flex flex-col">
                 {/* Profile Card (Matching Image 2 Reference - Increased Height) */}
                 <div className="relative rounded-2xl select-none bg-slate-900 h-[460px] sm:h-[500px] flex flex-col justify-end overflow-hidden shadow-lg border border-slate-800/80">
-                  {profilePhoto ? (
+                  {(profilePhoto && !photoLoadError) ? (
                     <img
                       src={profilePhoto}
                       alt={profileName}
+                      onError={() => setPhotoLoadError(true)}
                       className="absolute inset-0 w-full h-full object-cover object-top"
                     />
                   ) : (
