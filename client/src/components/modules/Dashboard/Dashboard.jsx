@@ -1718,20 +1718,70 @@ const Dashboard = ({
     </>
   );
 
+  // ─── Dynamic Responsive Grid Calculations ─────────────────────
+  const hasCard1 = canAccess('profile', 'attendance');
+  const hasCard2 = canAccess('bankDollarRates', 'bank');
+  const hasCard3 = canAccess('pieChart', 'product');
+
+  const row1ColSpans = useMemo(() => {
+    const visibleCount = (hasCard1 ? 1 : 0) + (hasCard2 ? 1 : 0) + (hasCard3 ? 1 : 0);
+
+    if (visibleCount === 3) {
+      return { card1: 'xl:col-span-6', card2: 'xl:col-span-3', card3: 'xl:col-span-3' };
+    }
+    if (visibleCount === 2) {
+      if (hasCard1 && hasCard2) {
+        return { card1: 'xl:col-span-7', card2: 'xl:col-span-5', card3: '' };
+      }
+      if (hasCard1 && hasCard3) {
+        return { card1: 'xl:col-span-7', card2: '', card3: 'xl:col-span-5' };
+      }
+      if (hasCard2 && hasCard3) {
+        return { card1: '', card2: 'xl:col-span-6', card3: 'xl:col-span-6' };
+      }
+    }
+    if (visibleCount === 1) {
+      return { card1: 'xl:col-span-12', card2: 'xl:col-span-12', card3: 'xl:col-span-12' };
+    }
+    return { card1: 'xl:col-span-6', card2: 'xl:col-span-3', card3: 'xl:col-span-3' };
+  }, [hasCard1, hasCard2, hasCard3]);
+
+  const hasCard4 = canAccess('orderSales', 'sales');
+  const hasCard5 = canAccess('collectionSales', 'paymentCollection');
+  const hasCard6 = canAccess('todoList');
+
+  const row2GridClass = useMemo(() => {
+    const count = (hasCard4 ? 1 : 0) + (hasCard5 ? 1 : 0) + (hasCard6 ? 1 : 0);
+    if (count === 3) return 'grid-cols-1 lg:grid-cols-3';
+    if (count === 2) return 'grid-cols-1 lg:grid-cols-2';
+    return 'grid-cols-1';
+  }, [hasCard4, hasCard5, hasCard6]);
+
+  const hasCard7 = canAccess('locationMap', 'mdm');
+  const hasCard8 = canAccess('lcGraph', 'lcManagement');
+  const hasCard9 = canAccess('recentActivity', 'log');
+
+  const row3GridClass = useMemo(() => {
+    const count = (hasCard7 ? 1 : 0) + (hasCard8 ? 1 : 0) + (hasCard9 ? 1 : 0);
+    if (count === 3) return 'grid-cols-1 lg:grid-cols-3';
+    if (count === 2) return 'grid-cols-1 lg:grid-cols-2';
+    return 'grid-cols-1';
+  }, [hasCard7, hasCard8, hasCard9]);
+
   return (
     <div className="dashboard-container space-y-6 pb-12 font-sans">
       {/* ─── ROW 1: Profile & Attendance (Left) | Bank Dollar Rates | Pie Chart ── */}
-      {(canAccess('profile', 'attendance') || canAccess('bankDollarRates', 'bank') || canAccess('lcGraph', 'lcManagement') || canAccess('pieChart', 'product')) && (
+      {(hasCard1 || hasCard2 || hasCard3) && (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
           {/* Card 1: Profile & Attendance (Left: Portrait Card, Right: Days List) */}
-          {canAccess('profile', 'attendance') ? (
-            <div className="dash-card xl:col-span-6 bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
+          {hasCard1 ? (
+            <div className={`dash-card ${row1ColSpans.card1} bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between`}>
 
               {/* ─── DESKTOP VIEW (md: and above): EXACT ORIGINAL LAYOUT AND STYLING ─── */}
               <div className="hidden md:grid md:grid-cols-12 gap-5 h-full items-stretch">
                 {/* LEFT SIDE: Profile Card */}
-                <div className="md:col-span-5 relative rounded-2xl select-none md:bg-slate-900 p-4 sm:p-5 min-h-[380px] flex flex-col justify-end overflow-hidden border-none shadow-none">
+                <div className={`${hasCard2 || hasCard3 ? 'md:col-span-5' : 'md:col-span-4 xl:col-span-3'} relative rounded-2xl select-none md:bg-slate-900 p-4 sm:p-5 min-h-[380px] flex flex-col justify-end overflow-hidden border-none shadow-none`}>
                   {(profilePhoto && !photoLoadError) ? (
                     <img
                       src={profilePhoto}
@@ -1768,7 +1818,7 @@ const Dashboard = ({
                 </div>
 
                 {/* RIGHT SIDE: Saturday - Friday Attendance & Working Time Track */}
-                <div className="md:col-span-7 flex flex-col justify-between">
+                <div className={`${hasCard2 || hasCard3 ? 'md:col-span-7' : 'md:col-span-8 xl:col-span-9'} flex flex-col justify-between`}>
                   {renderAttendanceSection()}
                 </div>
               </div>
@@ -1822,13 +1872,13 @@ const Dashboard = ({
           ) : null}
 
           {/* Card 2: Bank Dollar Rates (placed in Row 1) */}
-          {canAccess('bankDollarRates', 'bank') ? (
-            <BankDollarRatesWidget currentUser={currentUser} onNavigate={onNavigate} className="xl:col-span-3" />
+          {hasCard2 ? (
+            <BankDollarRatesWidget currentUser={currentUser} onNavigate={onNavigate} className={row1ColSpans.card2} />
           ) : null}
 
           {/* Card 3: LC / IP / Pie Chart (Product & Profit) */}
-          {canAccess('pieChart', 'product') ? (
-            <div className="dash-card xl:col-span-3 bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
+          {hasCard3 ? (
+            <div className={`dash-card ${row1ColSpans.card3} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between`}>
               <div>
                 {/* Header with Product / IP / LC Switch */}
                 <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
@@ -2037,11 +2087,11 @@ const Dashboard = ({
       )}
 
       {/* ─── ROW 2: 3 Columns (Order and Sales | Collection & Sales | Todolist) ── */}
-      {(canAccess('orderSales', 'sales') || canAccess('collectionSales', 'paymentCollection') || canAccess('todoList')) && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {(hasCard4 || hasCard5 || hasCard6) && (
+        <div className={`grid ${row2GridClass} gap-6`}>
 
           {/* Card 4: Order and Sales Donut */}
-          {canAccess('orderSales', 'sales') ? (
+          {hasCard4 ? (
             <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
               <div>
                 {/* Header */}
@@ -2227,7 +2277,7 @@ const Dashboard = ({
           ) : null}
 
           {/* Card 5: Collection | Sales (Column / Bar Chart) */}
-          {canAccess('collectionSales', 'paymentCollection') ? (
+          {hasCard5 ? (
             <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
               <div>
                 {/* Header */}
@@ -2372,7 +2422,7 @@ const Dashboard = ({
           ) : null}
 
           {/* Card 6: Todolist (Interactive & Synchronized) */}
-          {canAccess('todoList') ? (
+          {hasCard6 ? (
             <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
               <div>
                 {/* Header */}
@@ -2482,12 +2532,12 @@ const Dashboard = ({
         </div>
       )}
 
-      {/* ─── ROW 3: 3 Columns (Location Map [1 Col] | LC & PI Trends [1 Col] | Recent Activity [1 Col]) ── */}
-      {(canAccess('locationMap', 'mdm') || canAccess('lcGraph', 'lcManagement') || canAccess('recentActivity', 'log')) && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ─── ROW 3: 3 Columns (Location Map | LC & PI Trends | Recent Activity) ── */}
+      {(hasCard7 || hasCard8 || hasCard9) && (
+        <div className={`grid ${row3GridClass} gap-6`}>
 
           {/* Card 7: Location (Leaflet Map) */}
-          {canAccess('locationMap', 'mdm') ? (
+          {hasCard7 ? (
             <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
               <div>
                 {/* Header */}
@@ -2542,7 +2592,7 @@ const Dashboard = ({
           ) : null}
 
           {/* Card 8: LC & PI Trends */}
-          {canAccess('lcGraph', 'lcManagement') ? (
+          {hasCard8 ? (
             <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
               <div>
                 {/* Header with Switch */}
@@ -2734,8 +2784,8 @@ const Dashboard = ({
           ) : null}
 
           {/* Card 9: Recent Activity */}
-          {canAccess('recentActivity', 'log') ? (
-            <div className={`dash-card ${!canAccess('lcGraph', 'lcManagement') ? 'lg:col-span-2' : ''} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between`}>
+          {hasCard9 ? (
+            <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
               <div>
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 min-h-[46px]">
