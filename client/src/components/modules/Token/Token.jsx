@@ -185,13 +185,19 @@ const generateTokenNo = (existingTokens = []) => {
     return `${prefix}-${padded}`;
 };
 
-const Token = ({ currentUser, addNotification }) => {
+const Token = ({ currentUser, addNotification, isRequestedNotif }) => {
     const [tokens, setTokens] = useState([]);
     const [employees, setEmployees] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedStatusTab, setSelectedStatusTab] = useState('All');
+    const [selectedStatusTab, setSelectedStatusTab] = useState(() => isRequestedNotif ? 'Pending' : 'All');
     const [selectedModuleFilter, setSelectedModuleFilter] = useState('All');
+
+    useEffect(() => {
+        if (isRequestedNotif) {
+            setSelectedStatusTab('Pending');
+        }
+    }, [isRequestedNotif]);
     
     // Inline card view states (same pattern as other ERP modules)
     const [showForm, setShowForm] = useState(false);

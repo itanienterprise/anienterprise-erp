@@ -34,6 +34,7 @@ import axios from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getSocket } from '../../../utils/socket';
 import BankDollarRatesWidget from './BankDollarRatesWidget';
+import PendingRequestsWidget from './PendingRequestsWidget';
 import './Dashboard.css';
 import { queryClient } from '../../../utils/queryClient';
 
@@ -1630,7 +1631,7 @@ const Dashboard = ({
                 <div className="h-3.5 bg-gray-200 rounded w-44"></div>
               </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs w-full sm:w-auto">
+              <div className="flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-start gap-2.5 sm:gap-3 text-xs w-full sm:w-auto">
                 <span>Present: <strong className="text-emerald-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'PRESENT' || d.attendanceStatus === 'LATE' || d.attendanceStatus === 'HALF_DAY').length}</strong></span>
                 <span>Late: <strong className="text-amber-600">{weeklyDaysList.filter(d => d.attendanceStatus === 'LATE').length}</strong></span>
                 <span>Absent: <strong className="text-rose-500">{weeklyDaysList.filter(d => (d.attendanceStatus === 'ABSENT' || !d.attendanceStatus) && d.dayName !== 'Friday' && (attendanceWeekOffset !== 0 || !d.isToday)).length}</strong></span>
@@ -1721,30 +1722,31 @@ const Dashboard = ({
   // ─── Dynamic Responsive Grid Calculations ─────────────────────
   const hasCard1 = canAccess('profile', 'attendance');
   const hasCard2 = canAccess('bankDollarRates', 'bank');
+  const hasPendingRequests = canAccess('pendingRequests');
   const hasCard3 = canAccess('pieChart', 'product');
 
   const row1ColSpans = useMemo(() => {
-    const visibleCount = (hasCard1 ? 1 : 0) + (hasCard2 ? 1 : 0) + (hasCard3 ? 1 : 0);
+    const visibleCount = (hasCard1 ? 1 : 0) + (hasCard2 ? 1 : 0) + (hasPendingRequests ? 1 : 0);
 
     if (visibleCount === 3) {
-      return { card1: 'xl:col-span-6', card2: 'xl:col-span-3', card3: 'xl:col-span-3' };
+      return { card1: 'xl:col-span-6', card2: 'xl:col-span-3', pending: 'xl:col-span-3' };
     }
     if (visibleCount === 2) {
       if (hasCard1 && hasCard2) {
-        return { card1: 'xl:col-span-7', card2: 'xl:col-span-5', card3: '' };
+        return { card1: 'xl:col-span-7', card2: 'xl:col-span-5', pending: '' };
       }
-      if (hasCard1 && hasCard3) {
-        return { card1: 'xl:col-span-7', card2: '', card3: 'xl:col-span-5' };
+      if (hasCard1 && hasPendingRequests) {
+        return { card1: 'xl:col-span-7', card2: '', pending: 'xl:col-span-5' };
       }
-      if (hasCard2 && hasCard3) {
-        return { card1: '', card2: 'xl:col-span-6', card3: 'xl:col-span-6' };
+      if (hasCard2 && hasPendingRequests) {
+        return { card1: '', card2: 'xl:col-span-6', pending: 'xl:col-span-6' };
       }
     }
     if (visibleCount === 1) {
-      return { card1: 'xl:col-span-12', card2: 'xl:col-span-12', card3: 'xl:col-span-12' };
+      return { card1: 'xl:col-span-12', card2: 'xl:col-span-12', pending: 'xl:col-span-12' };
     }
-    return { card1: 'xl:col-span-6', card2: 'xl:col-span-3', card3: 'xl:col-span-3' };
-  }, [hasCard1, hasCard2, hasCard3]);
+    return { card1: 'xl:col-span-6', card2: 'xl:col-span-3', pending: 'xl:col-span-3' };
+  }, [hasCard1, hasCard2, hasPendingRequests]);
 
   const hasCard4 = canAccess('orderSales', 'sales');
   const hasCard5 = canAccess('collectionSales', 'paymentCollection');
@@ -1770,14 +1772,13 @@ const Dashboard = ({
 
   return (
     <div className="dashboard-container space-y-6 pb-12 font-sans">
-      {/* ─── ROW 1: Profile & Attendance (Left) | Bank Dollar Rates | Pie Chart ── */}
-      {(hasCard1 || hasCard2 || hasCard3) && (
+      {/* ─── ROW 1: Profile & Attendance (Left) | Bank Dollar Rates | Pending Requests ── */}
+      {(hasCard1 || hasCard2 || hasPendingRequests) && (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
           {/* Card 1: Profile & Attendance (Left: Portrait Card, Right: Days List) */}
           {hasCard1 ? (
-            <div className={`dash-card ${row1ColSpans.card1} bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between`}>
-
+            <div className={`dash-card ${row1ColSpans.card1} bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between h-full`}>
               {/* ─── DESKTOP VIEW (md: and above): EXACT ORIGINAL LAYOUT AND STYLING ─── */}
               <div className="hidden md:grid md:grid-cols-12 gap-5 h-full items-stretch">
                 {/* LEFT SIDE: Profile Card */}
@@ -1876,213 +1877,10 @@ const Dashboard = ({
             <BankDollarRatesWidget currentUser={currentUser} onNavigate={onNavigate} className={row1ColSpans.card2} />
           ) : null}
 
-          {/* Card 3: LC / IP / Pie Chart (Product & Profit) */}
-          {hasCard3 ? (
-            <div className={`dash-card ${row1ColSpans.card3} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between`}>
-              <div>
-                {/* Header with Product / IP / LC Switch */}
-                <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
-                      <BoxIcon className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-bold text-gray-900">Distribution Pie</h2>
-                      <p className="text-[11px] text-gray-400">Inventory & Volumes</p>
-                    </div>
-                  </div>
-
-                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
-                    {['product', 'ip', 'lc'].map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => { setPieTab(tab); setPieHoveredSlice(null); }}
-                        className={`px-2 py-1 rounded-md text-[11px] uppercase font-semibold transition-all cursor-pointer ${pieTab === tab
-                          ? 'bg-white text-amber-600 shadow-xs'
-                          : 'text-gray-500 hover:text-gray-800'
-                          }`}
-                      >
-                        {tab}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Metric Filter */}
-                <div className="flex items-center justify-between my-3 px-1 text-xs text-gray-500">
-                  <span>Metric Mode:</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { setPieMetric('quantity'); setPieHoveredSlice(null); }}
-                      className={`text-[11px] font-semibold cursor-pointer ${pieMetric === 'quantity' ? 'text-amber-600 underline' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                      Volume / Qty
-                    </button>
-                    <span className="text-gray-300">|</span>
-                    <button
-                      onClick={() => { setPieMetric('profit'); setPieHoveredSlice(null); }}
-                      className={`text-[11px] font-semibold cursor-pointer ${pieMetric === 'profit' ? 'text-amber-600 underline' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                      Total Value
-                    </button>
-                  </div>
-                </div>
-
-                {/* Interactive SVG Pie / Donut Chart */}
-                <div className="relative flex items-center justify-center h-44 sm:h-48 my-1">
-                  <svg viewBox="0 0 180 180" className="w-44 h-44 sm:w-48 sm:h-48 transform -rotate-90">
-                    {pieChartData.slices.map((slice, idx) => {
-                      const r = 82;
-                      const cx = 90;
-                      const cy = 90;
-                      const startAngleRad = (slice.startAngle * Math.PI) / 180;
-                      const endAngleRad = (slice.endAngle * Math.PI) / 180;
-
-                      const x1 = cx + r * Math.cos(startAngleRad);
-                      const y1 = cy + r * Math.sin(startAngleRad);
-                      const x2 = cx + r * Math.cos(endAngleRad);
-                      const y2 = cy + r * Math.sin(endAngleRad);
-
-                      const largeArc = slice.endAngle - slice.startAngle > 180 ? 1 : 0;
-                      const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
-
-                      const isHovered = pieHoveredSlice?.name === slice.name;
-
-                      return (
-                        <path
-                          key={idx}
-                          d={d}
-                          fill={slice.color}
-                          stroke="#ffffff"
-                          strokeWidth={isHovered ? "3.5" : "2"}
-                          className="chart-slice transition-all duration-150 cursor-pointer"
-                          style={{
-                            transformOrigin: '90px 90px',
-                            transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-                            filter: isHovered ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))' : 'none'
-                          }}
-                          onMouseEnter={() => setPieHoveredSlice(slice)}
-                          onMouseLeave={() => setPieHoveredSlice(null)}
-                        />
-                      );
-                    })}
-                    {/* Donut Hole */}
-                    <circle cx="90" cy="90" r="50" fill="#ffffff" />
-                  </svg>
-
-                  {/* Donut Center Label */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-1">
-                    {pieHoveredSlice ? (
-                      <>
-                        <span className="text-[11px] uppercase font-bold text-amber-600 max-w-[95px] truncate">
-                          {pieHoveredSlice.name}
-                        </span>
-                        <span className="text-xl font-black text-gray-900 leading-tight">
-                          {pieHoveredSlice.percentage}%
-                        </span>
-                        <span className="text-xs font-semibold text-gray-500">
-                          {pieHoveredSlice.formattedValue}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                          {pieMetric === 'profit' ? 'Total Value' : 'Total Qty'}
-                        </span>
-                        <span className="text-base font-black text-gray-900 leading-tight">
-                          {pieChartData.formattedTotal}
-                        </span>
-                        <span className="text-[10px] font-medium text-gray-400">
-                          Top 5 {pieTab === 'product' ? (pieProductType === 'all' ? 'Products' : `${pieProductType} Products`) : pieTab === 'ip' ? 'Importers' : 'Ports'} ({pieTimeframe === 'monthly' ? 'Monthly' : pieTimeframe === 'yearly' ? 'Yearly' : 'All Time'})
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Breakdown Legend Table */}
-                <div className="space-y-1 mt-1 max-h-32 overflow-y-auto dash-scrollbar pr-0.5">
-                  {pieChartData.slices.map((slice, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex items-center justify-between text-xs py-1 px-1.5 rounded-lg cursor-pointer transition-all ${pieHoveredSlice?.name === slice.name
-                        ? 'bg-amber-50/80 shadow-xs ring-1 ring-amber-300'
-                        : 'hover:bg-gray-50'
-                        }`}
-                      onMouseEnter={() => setPieHoveredSlice(slice)}
-                      onMouseLeave={() => setPieHoveredSlice(null)}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-transform"
-                          style={{
-                            backgroundColor: slice.color,
-                            transform: pieHoveredSlice?.name === slice.name ? 'scale(1.25)' : 'scale(1)'
-                          }}
-                        ></span>
-                        <span className="font-semibold text-gray-700 truncate text-[11px] sm:text-xs">{slice.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                        <span className="text-[11px] text-gray-400 font-medium hidden sm:inline">{slice.formattedValue}</span>
-                        <span className="font-bold text-gray-900 text-[11px] sm:text-xs">{slice.percentage}%</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-                {/* Left Side: General & Border Product Switch */}
-                {pieTab === 'product' ? (
-                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
-                    {[
-                      { id: 'all', label: 'All' },
-                      { id: 'General', label: 'General' },
-                      { id: 'Border', label: 'Border' }
-                    ].map(({ id, label }) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => { setPieProductType(id); setPieHoveredSlice(null); }}
-                        className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${pieProductType === id
-                          ? 'bg-white text-amber-600 shadow-xs'
-                          : 'text-gray-500 hover:text-gray-800'
-                          }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                    {pieTab} Distribution
-                  </span>
-                )}
-
-                {/* Right Side: Timeframe Switch (Monthly / Yearly / All Time) */}
-                <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
-                  {[
-                    { id: 'monthly', label: 'Monthly' },
-                    { id: 'yearly', label: 'Yearly' },
-                    { id: 'all', label: 'All Time' }
-                  ].map(({ id, label }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => { setPieTimeframe(id); setPieHoveredSlice(null); }}
-                      className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${pieTimeframe === id
-                        ? 'bg-white text-amber-600 shadow-xs'
-                        : 'text-gray-500 hover:text-gray-800'
-                        }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+          {/* Card 3: Pending Requests (placed after Bank Dollar Rates) */}
+          {hasPendingRequests ? (
+            <PendingRequestsWidget onNavigate={onNavigate} className={row1ColSpans.pending} />
           ) : null}
-
         </div>
       )}
 
@@ -2637,7 +2435,7 @@ const Dashboard = ({
 
                 {/* Interactive SVG Line Graph */}
                 <div className="relative h-48 w-full mt-2">
-                  <svg viewBox="0 0 320 160" className="w-full h-full overflow-visible">
+                  <svg viewBox="0 0 500 160" preserveAspectRatio="none" className="w-full h-full overflow-visible">
                     <defs>
                       <linearGradient id="lcGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#6366f1" stopOpacity="0.3" />
@@ -2651,18 +2449,18 @@ const Dashboard = ({
 
                     {/* Horizontal Guide Lines */}
                     {[30, 65, 100, 135].map((y) => (
-                      <line key={y} x1="15" y1={y} x2="310" y2={y} stroke="#f1f5f9" strokeDasharray="3 3" />
+                      <line key={y} x1="8" y1={y} x2="492" y2={y} stroke="#f1f5f9" strokeDasharray="3 3" />
                     ))}
 
                     {/* ─── LC Curve & Area (Indigo) ─── */}
                     {(() => {
                       const pts = lineGraphData.points;
                       if (pts.length < 2) return null;
-                      const step = 280 / (pts.length - 1);
+                      const step = 472 / (pts.length - 1);
                       const max = Math.max(6, Math.ceil(lineGraphData.maxVal * 1.25));
 
                       const coordinates = pts.map((p, idx) => {
-                        const x = 20 + idx * step;
+                        const x = 14 + idx * step;
                         const y = 135 - ((p.lcCount || 0) / max) * 105;
                         return { x, y, p };
                       });
@@ -2699,11 +2497,11 @@ const Dashboard = ({
                     {(() => {
                       const pts = lineGraphData.points;
                       if (pts.length < 2) return null;
-                      const step = 280 / (pts.length - 1);
+                      const step = 472 / (pts.length - 1);
                       const max = Math.max(6, Math.ceil(lineGraphData.maxVal * 1.25));
 
                       const coordinates = pts.map((p, idx) => {
-                        const x = 20 + idx * step;
+                        const x = 14 + idx * step;
                         const y = 135 - ((p.piCount || 0) / max) * 105;
                         return { x, y, p };
                       });
@@ -2738,8 +2536,8 @@ const Dashboard = ({
 
                     {/* X Axis Labels */}
                     {lineGraphData.points.map((p, idx) => {
-                      const step = 280 / (lineGraphData.points.length - 1);
-                      const x = 20 + idx * step;
+                      const step = 472 / (lineGraphData.points.length - 1);
+                      const x = 14 + idx * step;
                       return (
                         <text key={idx} x={x} y="152" textAnchor="middle" fontSize="9.5" fill="#94a3b8" fontWeight="600">
                           {p.label}
@@ -2752,7 +2550,7 @@ const Dashboard = ({
                   {lineHoveredPoint && (
                     <div
                       className="absolute z-20 bg-gray-900/95 backdrop-blur-xs text-white text-[11px] p-2.5 rounded-xl shadow-xl pointer-events-none transform -translate-x-1/2 -translate-y-full border border-gray-700/50 min-w-[130px]"
-                      style={{ left: `${(lineHoveredPoint.x / 320) * 100}%`, top: `${(lineHoveredPoint.y / 160) * 100 - 8}%` }}
+                      style={{ left: `${(lineHoveredPoint.x / 500) * 100}%`, top: `${(lineHoveredPoint.y / 160) * 100 - 8}%` }}
                     >
                       <div className="font-bold text-gray-200 border-b border-gray-800 pb-1 mb-1.5 flex items-center justify-between">
                         <span>{lineHoveredPoint.label}</span>
@@ -2885,6 +2683,218 @@ const Dashboard = ({
 
         </div>
       )}
+
+      {/* ─── ROW 4: Distribution Pie (At Last, Size Unchanged) ─── */}
+      {hasCard3 ? (
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          {/* Card 3: LC / IP / Pie Chart (Product & Profit) */}
+          {hasCard3 ? (
+            <div className={`dash-card xl:col-span-3 bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between`}>
+              <div>
+                {/* Header with Product / IP / LC Switch */}
+                <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                      <BoxIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-gray-900">Distribution Pie</h2>
+                      <p className="text-[11px] text-gray-400">Inventory & Volumes</p>
+                    </div>
+                  </div>
+
+                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
+                    {['product', 'ip', 'lc'].map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => { setPieTab(tab); setPieHoveredSlice(null); }}
+                        className={`px-2 py-1 rounded-md text-[11px] uppercase font-semibold transition-all cursor-pointer ${pieTab === tab
+                          ? 'bg-white text-amber-600 shadow-xs'
+                          : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                      >
+                        {tab}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Metric Filter */}
+                <div className="flex items-center justify-between my-3 px-1 text-xs text-gray-500">
+                  <span>Metric Mode:</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setPieMetric('quantity'); setPieHoveredSlice(null); }}
+                      className={`text-[11px] font-semibold cursor-pointer ${pieMetric === 'quantity' ? 'text-amber-600 underline' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                      Volume / Qty
+                    </button>
+                    <span className="text-gray-300">|</span>
+                    <button
+                      onClick={() => { setPieMetric('profit'); setPieHoveredSlice(null); }}
+                      className={`text-[11px] font-semibold cursor-pointer ${pieMetric === 'profit' ? 'text-amber-600 underline' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                      Total Value
+                    </button>
+                  </div>
+                </div>
+
+                {/* Interactive SVG Pie / Donut Chart */}
+                <div className="relative flex items-center justify-center h-44 sm:h-48 my-1">
+                  <svg viewBox="0 0 180 180" className="w-44 h-44 sm:w-48 sm:h-48 transform -rotate-90">
+                    {pieChartData.slices.map((slice, idx) => {
+                      const r = 82;
+                      const cx = 90;
+                      const cy = 90;
+                      const startAngleRad = (slice.startAngle * Math.PI) / 180;
+                      const endAngleRad = (slice.endAngle * Math.PI) / 180;
+
+                      const x1 = cx + r * Math.cos(startAngleRad);
+                      const y1 = cy + r * Math.sin(startAngleRad);
+                      const x2 = cx + r * Math.cos(endAngleRad);
+                      const y2 = cy + r * Math.sin(endAngleRad);
+
+                      const largeArc = slice.endAngle - slice.startAngle > 180 ? 1 : 0;
+                      const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+
+                      const isHovered = pieHoveredSlice?.name === slice.name;
+
+                      return (
+                        <path
+                          key={idx}
+                          d={d}
+                          fill={slice.color}
+                          stroke="#ffffff"
+                          strokeWidth={isHovered ? "3.5" : "2"}
+                          className="chart-slice transition-all duration-150 cursor-pointer"
+                          style={{
+                            transformOrigin: '90px 90px',
+                            transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                            filter: isHovered ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))' : 'none'
+                          }}
+                          onMouseEnter={() => setPieHoveredSlice(slice)}
+                          onMouseLeave={() => setPieHoveredSlice(null)}
+                        />
+                      );
+                    })}
+                    {/* Donut Hole */}
+                    <circle cx="90" cy="90" r="50" fill="#ffffff" />
+                  </svg>
+
+                  {/* Donut Center Label */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-1">
+                    {pieHoveredSlice ? (
+                      <>
+                        <span className="text-[11px] uppercase font-bold text-amber-600 max-w-[95px] truncate">
+                          {pieHoveredSlice.name}
+                        </span>
+                        <span className="text-xl font-black text-gray-900 leading-tight">
+                          {pieHoveredSlice.percentage}%
+                        </span>
+                        <span className="text-xs font-semibold text-gray-500">
+                          {pieHoveredSlice.formattedValue}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                          {pieMetric === 'profit' ? 'Total Value' : 'Total Qty'}
+                        </span>
+                        <span className="text-base font-black text-gray-900 leading-tight">
+                          {pieChartData.formattedTotal}
+                        </span>
+                        <span className="text-[10px] font-medium text-gray-400">
+                          Top 5 {pieTab === 'product' ? (pieProductType === 'all' ? 'Products' : `${pieProductType} Products`) : pieTab === 'ip' ? 'Importers' : 'Ports'} ({pieTimeframe === 'monthly' ? 'Monthly' : pieTimeframe === 'yearly' ? 'Yearly' : 'All Time'})
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Breakdown Legend Table */}
+                <div className="space-y-1 mt-1 max-h-32 overflow-y-auto dash-scrollbar pr-0.5">
+                  {pieChartData.slices.map((slice, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex items-center justify-between text-xs py-1 px-1.5 rounded-lg cursor-pointer transition-all ${pieHoveredSlice?.name === slice.name
+                        ? 'bg-amber-50/80 shadow-xs ring-1 ring-amber-300'
+                        : 'hover:bg-gray-50'
+                        }`}
+                      onMouseEnter={() => setPieHoveredSlice(slice)}
+                      onMouseLeave={() => setPieHoveredSlice(null)}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-transform"
+                          style={{
+                            backgroundColor: slice.color,
+                            transform: pieHoveredSlice?.name === slice.name ? 'scale(1.25)' : 'scale(1)'
+                          }}
+                        ></span>
+                        <span className="font-semibold text-gray-700 truncate text-[11px] sm:text-xs">{slice.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                        <span className="text-[11px] text-gray-400 font-medium hidden sm:inline">{slice.formattedValue}</span>
+                        <span className="font-bold text-gray-900 text-[11px] sm:text-xs">{slice.percentage}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                {/* Left Side: General & Border Product Switch */}
+                {pieTab === 'product' ? (
+                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
+                    {[
+                      { id: 'all', label: 'All' },
+                      { id: 'General', label: 'General' },
+                      { id: 'Border', label: 'Border' }
+                    ].map(({ id, label }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => { setPieProductType(id); setPieHoveredSlice(null); }}
+                        className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${pieProductType === id
+                          ? 'bg-white text-amber-600 shadow-xs'
+                          : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                    {pieTab} Distribution
+                  </span>
+                )}
+
+                {/* Right Side: Timeframe Switch (Monthly / Yearly / All Time) */}
+                <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
+                  {[
+                    { id: 'monthly', label: 'Monthly' },
+                    { id: 'yearly', label: 'Yearly' },
+                    { id: 'all', label: 'All Time' }
+                  ].map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => { setPieTimeframe(id); setPieHoveredSlice(null); }}
+                      className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${pieTimeframe === id
+                        ? 'bg-white text-amber-600 shadow-xs'
+                        : 'text-gray-500 hover:text-gray-800'
+                        }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 };

@@ -99,7 +99,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         return !(Array.isArray(cached) && cached.length > 0);
     });
     const [searchQuery, setSearchQuery] = useState('');
-    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [isRequestedOnly, setIsRequestedOnly] = useState(() => !!isRequestedNotif);
     const [purchaseReceivesList, setPurchaseReceivesList] = useState([]);
     useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
 

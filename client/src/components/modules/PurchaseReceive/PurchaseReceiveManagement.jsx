@@ -84,7 +84,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         return !(Array.isArray(cached) && cached.length > 0);
     });
     const [searchQuery, setSearchQuery] = useState('');
-    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [isRequestedOnly, setIsRequestedOnly] = useState(() => !!isRequestedNotif);
     useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
 
     // Mobile Card Expansion (one at a time)

@@ -169,7 +169,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
     };
 
     // Requested Filter State
-    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [isRequestedOnly, setIsRequestedOnly] = useState(() => !!isRequestedNotif);
     useEffect(() => {
         if (!highlightId && isRequestedNotif) {
             setIsRequestedOnly(true);

@@ -82,10 +82,18 @@ export const generatePI2PDF = (record) => {
             totalFreight: record.totalFreight || ''
         }];
 
+    // --- Revised Check ---
+    const rawPiNumber = String(record.piNumber || '');
+    const isRevised = rawPiNumber.toUpperCase().includes('(REVISED)') ||
+        Boolean(record.isRevised) ||
+        Boolean(record._isRevisedRequested) ||
+        (record.revisionNo && record.revisionNo !== 'Original PI') ||
+        Boolean(record.isRevisedOption);
+
     // --- Header ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
-    doc.text("PROFORMA INVOICE", pageWidth / 2, margin + 7, { align: 'center' });
+    doc.text(isRevised ? "REVISED PROFORMA INVOICE" : "PROFORMA INVOICE", pageWidth / 2, margin + 7, { align: 'center' });
 
     // --- Grid Layout ---
     const leftColWidth = contentWidth * 0.55;

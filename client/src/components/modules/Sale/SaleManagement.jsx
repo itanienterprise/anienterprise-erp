@@ -429,10 +429,9 @@ const SaleManagement = ({
     const [indCnfSearch, setIndCnfSearch] = useState('');
     const [bdCnfSearch, setBdCnfSearch] = useState('');
     const [exporterSearch, setExporterSearch] = useState('');
-    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
-    const isRequestedOnlyRef = useRef(false);
+    const [isRequestedOnly, setIsRequestedOnly] = useState(() => !!isRequestedNotif);
+    const isRequestedOnlyRef = useRef(!!isRequestedNotif);
     useEffect(() => { isRequestedOnlyRef.current = isRequestedOnly; }, [isRequestedOnly]);
-    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); isRequestedOnlyRef.current = true; } }, [isRequestedNotif]);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
     const isEditRequestedOnlyRef = useRef(false);
     useEffect(() => { isEditRequestedOnlyRef.current = isEditRequestedOnly; }, [isEditRequestedOnly]);
@@ -4656,6 +4655,23 @@ const SaleManagement = ({
     const editRequestedCount = useMemo(() => {
         return sales.filter(s => s.isEdited === true && (s.status || '').toLowerCase() !== 'requested').length;
     }, [sales]);
+
+    useEffect(() => {
+        if (isRequestedNotif) {
+            setSearchQuery('');
+            if (requestedCount === 0 && editRequestedCount > 0) {
+                setIsEditRequestedOnly(true);
+                isEditRequestedOnlyRef.current = true;
+                setIsRequestedOnly(false);
+                isRequestedOnlyRef.current = false;
+            } else {
+                setIsRequestedOnly(true);
+                isRequestedOnlyRef.current = true;
+                setIsEditRequestedOnly(false);
+                isEditRequestedOnlyRef.current = false;
+            }
+        }
+    }, [isRequestedNotif, requestedCount, editRequestedCount]);
 
     // Apply search + advanced filters (Memoized for high performance)
     const displayedSales = useMemo(() => sales.filter(sale => {

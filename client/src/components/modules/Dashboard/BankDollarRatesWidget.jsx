@@ -417,7 +417,7 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
   }, [ratesData]);
 
   return (
-    <div className={`dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between ${className}`}>
+    <div className={`dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between h-full ${className}`}>
       <div>
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 min-h-[46px] gap-2.5">
@@ -626,7 +626,7 @@ const BankDollarRatesWidget = ({ currentUser: propUser, onNavigate, className = 
       </div>
 
       {/* Footer */}
-      <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-500 flex-shrink-0 gap-2">
+      <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-500 flex-shrink-0 gap-2 min-h-[34px]">
         <div className="flex items-center justify-center sm:justify-start gap-2 w-full sm:w-auto">
           <span className="text-[11px] flex items-center gap-1 text-gray-500">
             <span>Source:</span>

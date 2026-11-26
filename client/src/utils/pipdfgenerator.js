@@ -151,10 +151,18 @@ export const generatePIPDF = (record) => {
 
     const isMultiProduct = productsList.length > 1;
 
+    // --- Revised Check ---
+    const rawPiNumber = String(record.piNumber || '');
+    const isRevised = rawPiNumber.toUpperCase().includes('(REVISED)') ||
+        Boolean(record.isRevised) ||
+        Boolean(record._isRevisedRequested) ||
+        (record.revisionNo && record.revisionNo !== 'Original PI') ||
+        Boolean(record.isRevisedOption);
+
     // --- Header ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text("PROFORMA INVOICE", pageWidth / 2, margin + 7, { align: 'center' });
+    doc.text(isRevised ? "REVISED PROFORMA INVOICE" : "PROFORMA INVOICE", pageWidth / 2, margin + 7, { align: 'center' });
     doc.line(margin, margin + 10, pageWidth - margin, margin + 10);
 
     // --- Grid Layout ---
@@ -222,9 +230,7 @@ export const generatePIPDF = (record) => {
     });
 
     // PI Info Content
-    const rawPiNumber = record.piNumber || '';
-    const isRevised = rawPiNumber.includes('(REVISED)');
-    const cleanPiNumber = rawPiNumber.replace('(REVISED)', '').trim();
+    const cleanPiNumber = rawPiNumber.replace(/\(REVISED\)/gi, '').trim();
     const piList = (record.piNumbers && Array.isArray(record.piNumbers) && record.piNumbers.length > 0)
         ? record.piNumbers.map(s => String(s).replace('(REVISED)', '').trim()).filter(Boolean)
         : cleanPiNumber.split(',').map(s => s.trim()).filter(Boolean);

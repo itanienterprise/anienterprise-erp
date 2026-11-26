@@ -230,8 +230,8 @@ const OrderManagement = ({
     };
 
     // Requested & Edit Request Toggle Filters
-    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
-    const isRequestedOnlyRef = useRef(false);
+    const [isRequestedOnly, setIsRequestedOnly] = useState(() => !!isRequestedNotif);
+    const isRequestedOnlyRef = useRef(!!isRequestedNotif);
     useEffect(() => { isRequestedOnlyRef.current = isRequestedOnly; }, [isRequestedOnly]);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
     const isEditRequestedOnlyRef = useRef(false);

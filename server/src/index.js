@@ -1203,7 +1203,7 @@ apiRouter.get('/api/health', (req, res) => {
 apiRouter.get('/api/pending-indicators', async (req, res) => {
   try {
     const now = Date.now();
-    if (memoryCache.pendingIndicators && (now - memoryCache.pendingTimestamp < 45000)) {
+    if (!req.query.force && memoryCache.pendingIndicators && (now - memoryCache.pendingTimestamp < 45000)) {
       return res.json(memoryCache.pendingIndicators);
     }
 
@@ -1232,95 +1232,159 @@ apiRouter.get('/api/pending-indicators', async (req, res) => {
       getCachedOrFetch('fund-transfers', FundTransfer)
     ]);
 
-    const hasRequestedLC = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !!item.lcNo);
-    const hasRequestedStockMgmt = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !item.lcNo);
-    const hasRequestedTransfer = whData.some(item => {
-      let dec = item.data ? decryptData(item.data) : item;
-      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
-      return (dec?.status || '').toLowerCase() === 'requested';
-    });
-
-    const hasRequestedPurchase = purchasesData.some(item => {
-      const status = (item.status || '').toLowerCase();
-      const isReq = status === 'requested' || status === 'pending';
-      const isEditReq = item.isEdited === true && !isReq;
-      return isReq || isEditReq;
-    });
-
-    const hasRequestedPurchaseReceive = purchaseReceivesData.some(item => {
-      const status = (item.status || '').toLowerCase();
-      const isReq = status === 'requested' || status === 'pending';
-      const isEditReq = item.isEdited === true && !isReq;
-      return isReq || isEditReq;
-    });
-
-    const hasRequestedOrder = salesData.some(item => {
-      const status = (item.status || '').toLowerCase();
-      const type = (item.saleType || '').toLowerCase();
-      const isOrder = type === 'order' || (item.invoiceNo || item.orderNo || '').startsWith('ORD');
-      const isReq = status === 'requested';
-      const isEditReq = item.isEdited === true && !isReq;
-      return isOrder && (isReq || isEditReq);
-    });
-
-    const hasRequestedGeneralSale = salesData.some(item => {
-      const status = (item.status || '').toLowerCase();
-      const type = (item.saleType || '').toLowerCase();
-      const isGeneral = type === 'general' || (item.invoiceNo || '').startsWith('GS');
-      const isReq = status === 'requested';
-      const isEditReq = item.isEdited === true && !isReq;
-      return isGeneral && (isReq || isEditReq);
-    });
-
-    const hasRequestedBorderSale = salesData.some(item => {
-      const status = (item.status || '').toLowerCase();
-      const type = (item.saleType || '').toLowerCase();
-      const isBorder = type === 'border' || (item.invoiceNo || '').startsWith('BS');
-      const isReq = status === 'requested';
-      const isEditReq = item.isEdited === true && !isReq;
-      return isBorder && (isReq || isEditReq);
-    });
-
-    const hasRequestedPaymentCollection = customersData.some(item => {
+    // Calculate detailed pending approval counts (only true 'requested' or 'edit_requested' entries)
+    let countPaymentCollection = 0;
+    let countPayToCustomer = 0;
+    customersData.forEach(item => {
       const history = Array.isArray(item.paymentHistory) ? item.paymentHistory : [];
-      return history.some(p => {
+      history.forEach(p => {
         const status = (p.status || '').toLowerCase();
-        const isReq = status === 'requested';
+        const isReq = status.includes('requested');
         const isEditReq = (p.isEdited === true || p.isEdited === 'true') && !isReq;
-        return isReq || isEditReq;
+        if (isReq || isEditReq) countPaymentCollection++;
+      });
+      const p2cHistory = Array.isArray(item.payToCustomerHistory) ? item.payToCustomerHistory : [];
+      p2cHistory.forEach(p => {
+        const status = (p.status || '').toLowerCase();
+        const isReq = status.includes('requested');
+        const isEditReq = (p.isEdited === true || p.isEdited === 'true') && !isReq;
+        if (isReq || isEditReq) countPayToCustomer++;
       });
     });
 
-    const hasRequestedPayToCustomer = customersData.some(item => {
-      const history = Array.isArray(item.payToCustomerHistory) ? item.payToCustomerHistory : [];
-      return history.some(p => {
-        const status = (p.status || '').toLowerCase();
-        const isReq = status === 'requested';
-        const isEditReq = (p.isEdited === true || p.isEdited === 'true') && !isReq;
-        return isReq || isEditReq;
+    let countOrder = 0;
+    let countGeneralSale = 0;
+    let countBorderSale = 0;
+    salesData.forEach(item => {
+      const status = (item.status || '').toLowerCase();
+      const type = (item.saleType || '').toLowerCase();
+      const isReq = status.includes('requested');
+      const isEditReq = item.isEdited === true && !isReq;
+      if (isReq || isEditReq) {
+        if (type === 'order' || (item.invoiceNo || item.orderNo || '').startsWith('ORD')) {
+          countOrder++;
+        } else if (type === 'border' || (item.invoiceNo || '').startsWith('BS')) {
+          countBorderSale++;
+        } else {
+          countGeneralSale++;
+        }
+      }
+    });
+
+    let countPurchase = 0;
+    purchasesData.forEach(item => {
+      const status = (item.status || '').toLowerCase();
+      const isReq = status.includes('requested');
+      const isEditReq = item.isEdited === true && !isReq;
+      if (isReq || isEditReq) countPurchase++;
+    });
+
+    let countPurchaseReceive = 0;
+    purchaseReceivesData.forEach(item => {
+      const status = (item.status || '').toLowerCase();
+      const isReq = status.includes('requested');
+      const isEditReq = item.isEdited === true && !isReq;
+      if (isReq || isEditReq) countPurchaseReceive++;
+    });
+
+    let countInsurancePayment = 0;
+    insPaymentsData.forEach(p => {
+      const s = (p.status || '').toLowerCase();
+      if (s.includes('requested')) countInsurancePayment++;
+    });
+
+    let countCnfPayment = 0;
+    cnfPaymentsData.forEach(p => {
+      const s = (p.status || '').toLowerCase();
+      if (s.includes('requested')) countCnfPayment++;
+    });
+
+    let countDeposit = 0;
+    depositsData.forEach(item => {
+      let dec = item.data ? decryptData(item.data) : item;
+      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
+      const s = (dec?.status || '').toLowerCase();
+      if (s.includes('requested')) countDeposit++;
+    });
+
+    let countWithdrawal = 0;
+    withdrawalsData.forEach(item => {
+      let dec = item.data ? decryptData(item.data) : item;
+      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
+      const s = (dec?.status || '').toLowerCase();
+      if (s.includes('requested')) countWithdrawal++;
+    });
+
+    let countFundTransfer = 0;
+    fundTransfersData.forEach(item => {
+      let dec = item.data ? decryptData(item.data) : item;
+      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
+      const s = (dec?.status || '').toLowerCase();
+      if (s.includes('requested')) countFundTransfer++;
+    });
+
+    let countLC = 0;
+    let countStockMgmt = 0;
+    stockData.forEach(item => {
+      const s = (item.status || '').toLowerCase();
+      if (s.includes('requested')) {
+        if (item.lcNo) countLC++;
+        else countStockMgmt++;
+      }
+    });
+
+    let countTransfer = 0;
+    whData.forEach(item => {
+      let dec = item.data ? decryptData(item.data) : item;
+      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
+      const s = (dec?.status || '').toLowerCase();
+      if (s.includes('requested')) countTransfer++;
+    });
+
+    let countToken = 0;
+    try {
+      const tokensData = await getCachedOrFetch('tokens', Token);
+      tokensData.forEach(t => {
+        const s = (t.status || '').toLowerCase();
+        if (s === 'pending') countToken++;
       });
-    });
+    } catch (e) { }
 
-    const hasRequestedInsurancePayment = insPaymentsData.some(p => (p.status || '').toLowerCase() === 'requested');
-    const hasRequestedCnfPayment = cnfPaymentsData.some(p => (p.status || '').toLowerCase() === 'requested');
+    const counts = {
+      paymentCollection: countPaymentCollection,
+      payToCustomer: countPayToCustomer,
+      order: countOrder,
+      generalSale: countGeneralSale,
+      borderSale: countBorderSale,
+      purchase: countPurchase,
+      purchaseReceive: countPurchaseReceive,
+      deposit: countDeposit,
+      withdrawal: countWithdrawal,
+      fundTransfer: countFundTransfer,
+      insurancePayment: countInsurancePayment,
+      cnfPayment: countCnfPayment,
+      stockTransfer: countTransfer,
+      stockManagement: countStockMgmt,
+      lcReceive: countLC,
+      token: countToken,
+      total: countPaymentCollection + countPayToCustomer + countOrder + countGeneralSale + countBorderSale + countPurchase + countPurchaseReceive + countDeposit + countWithdrawal + countFundTransfer + countInsurancePayment + countCnfPayment + countTransfer + countStockMgmt + countLC + countToken
+    };
 
-    const hasRequestedDeposit = depositsData.some(item => {
-      let dec = item.data ? decryptData(item.data) : item;
-      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
-      return (dec?.status || '').toLowerCase() === 'requested';
-    });
-
-    const hasRequestedWithdrawal = withdrawalsData.some(item => {
-      let dec = item.data ? decryptData(item.data) : item;
-      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
-      return (dec?.status || '').toLowerCase() === 'requested';
-    });
-
-    const hasRequestedFundTransfer = fundTransfersData.some(item => {
-      let dec = item.data ? decryptData(item.data) : item;
-      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
-      return (dec?.status || '').toLowerCase() === 'requested';
-    });
+    const hasRequestedLC = countLC > 0;
+    const hasRequestedStockMgmt = countStockMgmt > 0;
+    const hasRequestedTransfer = countTransfer > 0;
+    const hasRequestedPurchase = countPurchase > 0;
+    const hasRequestedPurchaseReceive = countPurchaseReceive > 0;
+    const hasRequestedOrder = countOrder > 0;
+    const hasRequestedGeneralSale = countGeneralSale > 0;
+    const hasRequestedBorderSale = countBorderSale > 0;
+    const hasRequestedPaymentCollection = countPaymentCollection > 0;
+    const hasRequestedPayToCustomer = countPayToCustomer > 0;
+    const hasRequestedInsurancePayment = countInsurancePayment > 0;
+    const hasRequestedCnfPayment = countCnfPayment > 0;
+    const hasRequestedDeposit = countDeposit > 0;
+    const hasRequestedWithdrawal = countWithdrawal > 0;
+    const hasRequestedFundTransfer = countFundTransfer > 0;
 
     const result = {
       lc: hasRequestedLC,
@@ -1344,7 +1408,9 @@ apiRouter.get('/api/pending-indicators', async (req, res) => {
       deposit: hasRequestedDeposit,
       withdrawal: hasRequestedWithdrawal,
       fundTransfer: hasRequestedFundTransfer,
-      bank: hasRequestedDeposit || hasRequestedWithdrawal || hasRequestedFundTransfer
+      bank: hasRequestedDeposit || hasRequestedWithdrawal || hasRequestedFundTransfer,
+      token: countToken > 0,
+      counts
     };
 
     memoryCache.pendingIndicators = result;

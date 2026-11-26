@@ -103,7 +103,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     const canManage = canAdd || canEdit || canDelete || canApprove || canPaymentRequest;
 
     // Requested Filter State
-    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [isRequestedOnly, setIsRequestedOnly] = useState(() => !!isRequestedNotif);
     useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
     const [isRequestMode, setIsRequestMode] = useState(false);
 

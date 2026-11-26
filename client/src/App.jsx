@@ -977,15 +977,21 @@ function App() {
   const [notifIsRequested, setNotifIsRequested] = useState(false);
 
   const handleNavigate = (view, highlightId, isRequested) => {
+    let hlId = highlightId;
+    let isReq = isRequested;
+    if (highlightId && typeof highlightId === 'object') {
+      hlId = highlightId.highlightId || null;
+      isReq = highlightId.isRequested !== undefined ? highlightId.isRequested : isReq;
+    }
     if (view) {
       handleViewChange(view);
       setShowNotifications(false);
-      if (highlightId || isRequested) {
+      if (hlId || isReq) {
         setNotifHighlightId(null);
-        setNotifIsRequested(!!isRequested);
+        setNotifIsRequested(!!isReq);
         setTimeout(() => {
-          setNotifHighlightId(highlightId);
-          setNotifIsRequested(!!isRequested);
+          setNotifHighlightId(hlId);
+          setNotifIsRequested(!!isReq);
         }, 50);
         setTimeout(() => {
           setNotifHighlightId(null);
@@ -3049,7 +3055,7 @@ function App() {
           <Deposit
             key={refreshKey}
             currentUser={currentUser}
-            isRequestedNotif={pendingModules.deposit}
+            isRequestedNotif={pendingModules.deposit || notifIsRequested}
             refreshPendingIndicators={fetchPendingEntries}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
@@ -3066,7 +3072,7 @@ function App() {
           <Withdrawal
             key={refreshKey}
             currentUser={currentUser}
-            isRequestedNotif={pendingModules.withdrawal}
+            isRequestedNotif={pendingModules.withdrawal || notifIsRequested}
             refreshPendingIndicators={fetchPendingEntries}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
@@ -3083,7 +3089,7 @@ function App() {
           <FundTransfer
             key={refreshKey}
             currentUser={currentUser}
-            isRequestedNotif={pendingModules.fundTransfer}
+            isRequestedNotif={pendingModules.fundTransfer || notifIsRequested}
             refreshPendingIndicators={fetchPendingEntries}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
@@ -3520,7 +3526,7 @@ function App() {
         return <BackupRestore addNotification={addNotification} />;
       }
       case 'token-section': {
-        return <Token currentUser={currentUser} addNotification={addNotification} />;
+        return <Token currentUser={currentUser} addNotification={addNotification} isRequestedNotif={notifIsRequested} />;
       }
       case 'log-section': {
         const isAdminUser = currentUser?.username === 'admin';

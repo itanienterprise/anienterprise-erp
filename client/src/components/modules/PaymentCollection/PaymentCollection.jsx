@@ -172,10 +172,9 @@ const PaymentCollection = ({
     };
 
     // Requested & Edit Request Toggle Filters
-    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
-    const isRequestedOnlyRef = useRef(false);
+    const [isRequestedOnly, setIsRequestedOnly] = useState(() => !!isRequestedNotif);
+    const isRequestedOnlyRef = useRef(!!isRequestedNotif);
     useEffect(() => { isRequestedOnlyRef.current = isRequestedOnly; }, [isRequestedOnly]);
-    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); isRequestedOnlyRef.current = true; } }, [isRequestedNotif]);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
     const isEditRequestedOnlyRef = useRef(false);
     useEffect(() => { isEditRequestedOnlyRef.current = isEditRequestedOnly; }, [isEditRequestedOnly]);
@@ -279,6 +278,23 @@ const PaymentCollection = ({
         const unique = new Set(payments.filter(p => (p.isEdited === true || p.isEdited === 'true') && (p.status || '').toLowerCase() !== 'requested').map(p => p.id || p.receiptNo));
         return unique.size;
     }, [payments]);
+
+    useEffect(() => {
+        if (isRequestedNotif) {
+            setSearchQuery('');
+            if (requestedCount === 0 && editRequestedCount > 0) {
+                setIsEditRequestedOnly(true);
+                isEditRequestedOnlyRef.current = true;
+                setIsRequestedOnly(false);
+                isRequestedOnlyRef.current = false;
+            } else {
+                setIsRequestedOnly(true);
+                isRequestedOnlyRef.current = true;
+                setIsEditRequestedOnly(false);
+                isEditRequestedOnlyRef.current = false;
+            }
+        }
+    }, [isRequestedNotif, requestedCount, editRequestedCount]);
 
     // Edit States
     const [isEditMode, setIsEditMode] = useState(false);

@@ -354,7 +354,8 @@ export const MODULES_LIST = [
             { key: 'collectionSales', label: 'Collection vs Sales Chart' },
             { key: 'todoList', label: 'To-Do List' },
             { key: 'locationMap', label: 'Location & Map' },
-            { key: 'recentActivity', label: 'Recent Activity Feed' }
+            { key: 'recentActivity', label: 'Recent Activity Feed' },
+            { key: 'pendingRequests', label: 'Pending Requests Hub' }
         ]
     },
     { key: 'log', label: 'Log' }
@@ -507,7 +508,7 @@ export const getDefaultPermissionsForRole = (role) => {
         defaults['dashboard'] = {
             view: true, add: true, edit: true, delete: false, special: true,
             profile: true, bankDollarRates: true, syncDollarRates: canSyncByDefault, lcGraph: true, pieChart: true, orderSales: true,
-            collectionSales: true, todoList: true, locationMap: true, recentActivity: true
+            collectionSales: true, todoList: true, locationMap: true, recentActivity: true, pendingRequests: true
         };
     }
 
