@@ -313,12 +313,23 @@ const SearchableFilterSelect = ({
   );
 };
 
-const Deposit = ({ currentUser, onDeleteConfirm }) => {
+const Deposit = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshPendingIndicators }) => {
   const user = currentUser || JSON.parse(localStorage.getItem('currentUser') || '{}');
+  const isAdmin = user?.username === 'admin' || (user?.role || '').toLowerCase() === 'admin';
+  const isIncharge = (user?.role || '').toLowerCase() === 'incharge';
+  const isHeadOfSales = (user?.role || '').toLowerCase() === 'head of sales';
+  const isSalesManager = (user?.role || '').toLowerCase() === 'sales manager';
   const canAdd = hasPermission(user, 'deposit', 'add');
   const canEdit = hasPermission(user, 'deposit', 'edit');
   const canDelete = hasPermission(user, 'deposit', 'delete');
-  const canShowEntryBy = hasPermission(user, 'deposit', 'showEntryBy');
+  const canShowEntryBy = isAdmin || isIncharge || hasPermission(user, 'deposit', 'showEntryBy');
+  const canApprove = hasPermission(user, 'deposit', 'special') || hasPermission(user, 'deposit', 'approve') || isAdmin;
+  const canApproveFirst = hasPermission(user, 'deposit', 'firstApprove');
+  const canApproveSecond = hasPermission(user, 'deposit', 'secondApprove');
+  const canViewRequest = hasPermission(user, 'deposit', 'paymentRequest') || canApprove || canApproveFirst || canApproveSecond;
+  const userModulePerms = user?.permissions?.deposit;
+  const hasSecondApprovePerm = (userModulePerms && userModulePerms.secondApprove === true) || canApproveSecond;
+  const hasFirstApprovePerm = (userModulePerms && userModulePerms.firstApprove === true) || canApproveFirst || isSalesManager;
   const cannotAddEdit = !canAdd && !canEdit;
 
   const [deposits, setDeposits] = useState(() => {
@@ -331,6 +342,92 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
       return [];
     }
   });
+
+  const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+  useEffect(() => {
+    if (isRequestedNotif) {
+      setIsRequestedOnly(true);
+    }
+  }, [isRequestedNotif]);
+
+  const requestedCount = useMemo(() => {
+    return (deposits || []).filter(d => (d.status || '').toLowerCase() === 'requested').length;
+  }, [deposits]);
+
+  const showRequestedApprovalButtons = (item) => {
+    if (!item) return false;
+    if (isAdmin) return true;
+
+    const entryBy = String(item.entryBy || '').toLowerCase().trim();
+    const entryByName = String(item.entryByName || '').toLowerCase().trim();
+    const myIdentifiers = [
+      user?.username,
+      user?.employeeId,
+      user?.id,
+      user?.name,
+      user?.nameEn
+    ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+    const isSelfEntry = myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName);
+    if (isSelfEntry) return false;
+
+    const smApproved = item.smApproved === true;
+    const currentUserRole = (user?.role || '').toLowerCase();
+
+    if (smApproved) {
+      // Stage 2: 2nd / Final Approval
+      const smApprovedBy = String(item.smApprovedBy || '').toLowerCase().trim();
+      const smApprovedByName = String(item.smApprovedByName || '').toLowerCase().trim();
+      const isFirstApprover = (smApprovedBy || smApprovedByName) &&
+        (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
+
+      if (isFirstApprover) return false;
+
+      if (userModulePerms && typeof userModulePerms.secondApprove === 'boolean') {
+        return userModulePerms.secondApprove === true;
+      }
+      if (currentUserRole === 'sales manager') return false;
+      return currentUserRole === 'incharge' || currentUserRole === 'head of sales' || currentUserRole === 'accounts manager' || currentUserRole === 'account manager' || hasSecondApprovePerm || canApprove;
+    }
+
+    // Stage 1: 1st Approval Step (smApproved is false)
+    if (userModulePerms && typeof userModulePerms.firstApprove === 'boolean') {
+      return userModulePerms.firstApprove === true;
+    }
+    if (currentUserRole === 'sales manager') return true;
+    if (canApproveFirst) return true;
+    if (currentUserRole === 'incharge' || currentUserRole === 'head of sales') return true;
+    if (hasSecondApprovePerm && !hasFirstApprovePerm) return false;
+    return canApprove;
+  };
+
+  const canEditBeforeApproval = (item) => {
+    const status = (item.status || '').toLowerCase();
+    const smApproved = item.smApproved === true;
+    if (status !== 'requested' || smApproved) return false;
+
+    const entryBy = String(item.entryBy || '').toLowerCase().trim();
+    const entryByName = String(item.entryByName || '').toLowerCase().trim();
+
+    const myIdentifiers = [
+      user?.username,
+      user?.employeeId,
+      user?.id,
+      user?.name,
+      user?.nameEn
+    ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+    return (myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName));
+  };
+
+  const getStatusBadgeText = (item) => {
+    if (!item) return '';
+    if (item.isEdited === true) return 'Edit Requested';
+    if (item.status === 'Requested') {
+      return item.smApproved ? 'Pending 2nd Approval' : 'Pending 1st Approval';
+    }
+    return item.status || 'Accepted';
+  };
   const [banks, setBanks] = useState(() => {
     try {
       const q = queryClient.getQueryData(['banks']);
@@ -958,6 +1055,96 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
     }
   };
 
+  const handleStatusUpdate = async (item, newStatus) => {
+    if (!item) return;
+    const entryBy = String(item.entryBy || '').toLowerCase().trim();
+    const entryByName = String(item.entryByName || '').toLowerCase().trim();
+    const myIdentifiers = [
+      user?.username,
+      user?.employeeId,
+      user?.id,
+      user?.name,
+      user?.nameEn
+    ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+    const isSelfEntry = myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName);
+
+    if (isSelfEntry && !isAdmin) {
+      alert('Forbidden: Only Admin can approve or reject self-created entries.');
+      return;
+    }
+
+    const smApproved = item.smApproved === true;
+    const smApprovedBy = String(item.smApprovedBy || '').toLowerCase().trim();
+    const smApprovedByName = String(item.smApprovedByName || '').toLowerCase().trim();
+    const isFirstApprover = smApproved && (smApprovedBy || smApprovedByName) &&
+      (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
+
+    if (isFirstApprover && !isAdmin && newStatus === 'Accepted') {
+      alert('Forbidden: You cannot perform 2nd approval on an entry you already approved for 1st approval.');
+      return;
+    }
+
+    let rejectionReason = '';
+    if (newStatus === 'Rejected') {
+      const promptReason = window.prompt('Please enter the reason for rejection (optional):');
+      if (promptReason === null) return;
+      rejectionReason = promptReason.trim();
+    }
+
+    const isSMApprovalStep = !smApproved && newStatus === 'Accepted';
+    const currentUsername = user?.username || user?.employeeId || user?.id || 'admin';
+    const currentName = user?.name || user?.username || 'Admin';
+
+    let updatedPayload;
+    if (newStatus === 'Rejected') {
+      updatedPayload = {
+        ...item,
+        status: 'Rejected',
+        rejectedBy: currentUsername,
+        rejectedByName: currentName,
+        rejectionReason: rejectionReason || undefined,
+        rejectedDate: new Date().toISOString(),
+        rejectedAt: new Date().toISOString()
+      };
+    } else if (isSMApprovalStep) {
+      updatedPayload = {
+        ...item,
+        status: 'Requested',
+        smApproved: true,
+        smApprovedBy: currentUsername,
+        smApprovedByName: currentName,
+        smApprovedDate: new Date().toISOString()
+      };
+    } else {
+      updatedPayload = {
+        ...item,
+        status: 'Accepted',
+        smApproved: true,
+        approvedBy: currentUsername,
+        approvedByName: currentName,
+        approvedDate: new Date().toISOString()
+      };
+    }
+
+    const targetId = item._id || item.id;
+    setDeposits(prev => prev.map(d => (d._id === targetId || d.id === targetId) ? { ...d, ...updatedPayload } : d));
+
+    try {
+      await axios.put(`${API_BASE_URL}/api/deposits/${targetId}`, updatedPayload);
+      queryClient.invalidateQueries(['deposits']);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('erp_data_updated', {
+          detail: { module: 'deposits', action: 'update' }
+        }));
+      }
+      refreshPendingIndicators?.();
+    } catch (err) {
+      console.error('Error updating deposit status:', err);
+      const updated = deposits.map(d => (d._id === targetId || d.id === targetId) ? { ...d, ...updatedPayload } : d);
+      safeStorage.setItem(localStorage, 'erp_deposits_cache', JSON.stringify(updated));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.bankName) {
@@ -978,12 +1165,15 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
         ...formData,
         note: formData.remarks,
         amount: Number(formData.amount),
-        entryBy: existingRecord?.entryBy || entryUser,
+        entryBy: existingRecord?.entryBy || (user?.username || user?.employeeId || user?.id || 'admin'),
         entryByName: existingRecord?.entryByName || entryUser,
+        entryByRole: existingRecord?.entryByRole || user?.role || 'admin',
         editedBy: editingId ? editorIdentifier : (existingRecord?.editedBy || undefined),
         editedByName: editingId ? entryUser : (existingRecord?.editedByName || undefined),
         updatedBy: entryUser,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        status: editingId ? (existingRecord?.status || 'Accepted') : 'Requested',
+        smApproved: editingId ? (existingRecord?.smApproved || false) : false
       };
 
       if (editingId) {
@@ -993,6 +1183,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
           ...payload,
           createdAt: new Date().toISOString()
         });
+        setIsRequestedOnly(true);
       }
 
       setShowModal(false);
@@ -1003,6 +1194,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
           detail: { module: 'deposits', action: editingId ? 'update' : 'create' }
         }));
       }
+      refreshPendingIndicators?.();
     } catch (err) {
       console.error('Error saving deposit:', err);
       // Fallback local persistence if server is unavailable
@@ -1012,12 +1204,15 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
       const newRecord = {
         ...formData,
         amount: Number(formData.amount),
-        entryBy: existingRecord?.entryBy || entryUser,
+        entryBy: existingRecord?.entryBy || (user?.username || user?.employeeId || user?.id || 'admin'),
         entryByName: existingRecord?.entryByName || entryUser,
+        entryByRole: existingRecord?.entryByRole || user?.role || 'admin',
         editedBy: editingId ? editorIdentifier : (existingRecord?.editedBy || undefined),
         editedByName: editingId ? entryUser : (existingRecord?.editedByName || undefined),
         updatedBy: entryUser,
         updatedAt: new Date().toISOString(),
+        status: editingId ? (existingRecord?.status || 'Accepted') : 'Requested',
+        smApproved: editingId ? (existingRecord?.smApproved || false) : false,
         _id: editingId || `local_dep_${Date.now()}`,
         createdAt: existingRecord?.createdAt || new Date().toISOString()
       };
@@ -1026,6 +1221,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
         : [newRecord, ...deposits];
       setDeposits(updated);
       safeStorage.setItem(localStorage, 'erp_deposits_cache', JSON.stringify(updated));
+      if (!editingId) setIsRequestedOnly(true);
       setShowModal(false);
       resetForm();
       if (typeof window !== 'undefined') {
@@ -1033,6 +1229,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
           detail: { module: 'deposits', action: editingId ? 'update' : 'create' }
         }));
       }
+      refreshPendingIndicators?.();
     } finally {
       setIsSubmitting(false);
     }
@@ -1157,6 +1354,13 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
   // Filtered deposits
   const filteredDeposits = useMemo(() => {
     return deposits.filter(item => {
+      const isReq = (item.status || '').toLowerCase() === 'requested';
+      if (isRequestedOnly) {
+        if (!isReq) return false;
+      } else {
+        if (isReq) return false;
+      }
+
       const q = searchQuery.toLowerCase().trim();
       const matchSearch = !q ||
         (item.bankName && item.bankName.toLowerCase().includes(q)) ||
@@ -1168,8 +1372,12 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
         (item.depositType && item.depositType.toLowerCase().includes(q)) ||
         (item.remarks && item.remarks.toLowerCase().includes(q)) ||
         (item.note && item.note.toLowerCase().includes(q)) ||
+        (getStatusBadgeText(item).toLowerCase().includes(q)) ||
+        (item.status && item.status.toLowerCase().includes(q)) ||
         (item.entryBy && item.entryBy.toLowerCase().includes(q)) ||
         (item.entryByName && item.entryByName.toLowerCase().includes(q)) ||
+        (item.smApprovedByName && item.smApprovedByName.toLowerCase().includes(q)) ||
+        (item.approvedByName && item.approvedByName.toLowerCase().includes(q)) ||
         (item.editedBy && item.editedBy.toLowerCase().includes(q)) ||
         (item.editedByName && item.editedByName.toLowerCase().includes(q)) ||
         (getEntryByName(item.entryBy, item.entryByName).toLowerCase().includes(q)) ||
@@ -1189,21 +1397,27 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
 
       return matchSearch && matchBank && matchBranch && matchAccount && matchType && matchDate;
     });
-  }, [deposits, searchQuery, filters]);
+  }, [deposits, searchQuery, filters, isRequestedOnly]);
 
   // Statistics
   const stats = useMemo(() => {
-    const totalAmount = deposits.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
-    const count = deposits.length;
+    const acceptedDeposits = deposits.filter(d => (d.status || 'Accepted').toLowerCase() === 'accepted');
+    const totalAmount = acceptedDeposits.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+    const count = acceptedDeposits.length;
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayAmount = deposits
+    const todayAmount = acceptedDeposits
       .filter(d => toDateStr(d.date) === todayStr)
       .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
 
-    const activeBanks = new Set(deposits.map(d => d.bankName).filter(Boolean)).size;
+    const pendingCount = deposits.filter(d => (d.status || '').toLowerCase() === 'requested').length;
+    const pendingAmount = deposits
+      .filter(d => (d.status || '').toLowerCase() === 'requested')
+      .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
 
-    return { totalAmount, count, todayAmount, activeBanks };
+    const activeBanks = new Set(acceptedDeposits.map(d => d.bankName).filter(Boolean)).size;
+
+    return { totalAmount, count, todayAmount, activeBanks, pendingCount, pendingAmount };
   }, [deposits]);
 
   // Report Modal & Export handlers
@@ -1251,23 +1465,55 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
             <p className="text-xs text-gray-500 mt-0.5">Track, record, and reconcile incoming bank deposits</p>
           </div>
 
-          {/* Search Input */}
-          <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+          {/* Center Aligned Search Bar & Requested Toggle */}
+          <div className="flex-1 w-full max-w-none md:max-w-xl mx-auto flex flex-col items-center gap-2">
+            <div className="w-full relative group">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search deposits by bank, account, slip #, depositor..."
+                autoComplete="off"
+                className="h-10 block w-full pl-10 pr-4 bg-white/70 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                >
+                  <XIcon className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            <input
-              type="text"
-              placeholder="Search deposits by bank, account, slip #, depositor..."
-              autoComplete="off"
-              className="h-10 block w-full pl-10 pr-4 bg-white/70 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-sm"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+
+            <div className="flex items-center gap-2">
+              {canViewRequest && (
+                <button
+                  type="button"
+                  onClick={() => setIsRequestedOnly(!isRequestedOnly)}
+                  className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
+                    isRequestedOnly
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600 shadow-xs'
+                  }`}
+                >
+                  Requested
+                  {requestedCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                      {requestedCount}
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Action Controls: Filter Button + Add Button */}
-          <div className="flex items-center justify-center md:justify-end gap-2.5 w-full md:w-auto shrink-0">
+          {/* Action Controls: Filter Button + Report + Add Button */}
+          <div className="flex items-center justify-center md:justify-end gap-2.5 w-full md:w-auto shrink-0 flex-wrap">
             {/* Filter Dropdown */}
             <div className="relative">
               <button
@@ -1884,6 +2130,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                     <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Deposited By</th>
                     <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Remarks / Note</th>
                     <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Amount (BDT)</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Status</th>
                     {canShowEntryBy && (
                       <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Entry By</th>
                     )}
@@ -1893,31 +2140,46 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                 <tbody className="divide-y divide-gray-50">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={canShowEntryBy ? 12 : 11} className="px-5 py-12 text-center text-gray-400">
+                      <td colSpan={canShowEntryBy ? 13 : 12} className="px-5 py-12 text-center text-gray-400">
                         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
                         <p className="text-sm">Loading deposit records...</p>
                       </td>
                     </tr>
                   ) : filteredDeposits.length === 0 ? (
                     <tr>
-                      <td colSpan={canShowEntryBy ? 12 : 11} className="px-5 py-16 text-center text-gray-400">
+                      <td colSpan={canShowEntryBy ? 13 : 12} className="px-5 py-16 text-center text-gray-400">
                         <div className="max-w-xs mx-auto space-y-3">
                           <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl mx-auto flex items-center justify-center">
                             <ArrowDownLeftIcon className="w-6 h-6" />
                           </div>
-                          <p className="text-sm font-medium text-gray-600">No deposit records found</p>
-                          <p className="text-xs text-gray-400">
-                            {searchQuery || isFilterActive
-                              ? "Try modifying your search or filter criteria."
-                              : "Click 'Record Deposit' above to add your first deposit entry."}
-                          </p>
-                          {!cannotAddEdit && (
-                            <button
-                              onClick={openAddModal}
-                              className="mt-2 inline-flex items-center px-3.5 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                            >
-                              <PlusIcon className="w-3.5 h-3.5 mr-1" /> Record Deposit
-                            </button>
+                          {isRequestedOnly ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <p className="text-gray-800 font-semibold text-sm">No pending deposit requests</p>
+                              <p className="text-xs text-gray-400 max-w-xs">All requested bank deposits have been accepted.</p>
+                              <button
+                                onClick={() => setIsRequestedOnly(false)}
+                                className="mt-2 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 cursor-pointer"
+                              >
+                                View All Deposits →
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm font-medium text-gray-600">No deposit records found</p>
+                              <p className="text-xs text-gray-400">
+                                {searchQuery || isFilterActive
+                                  ? "Try modifying your search or filter criteria."
+                                  : "Click 'Record Deposit' above to add your first deposit entry."}
+                              </p>
+                              {!cannotAddEdit && (
+                                <button
+                                  onClick={openAddModal}
+                                  className="mt-2 inline-flex items-center px-3.5 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition cursor-pointer"
+                                >
+                                  <PlusIcon className="w-3.5 h-3.5 mr-1" /> Record Deposit
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -1960,6 +2222,19 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                         <td className="px-5 py-4 whitespace-nowrap text-right font-bold text-emerald-600 text-[13px]">
                           ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-center">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                            item.status === 'Requested'
+                              ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                              : item.status === 'Rejected'
+                                ? 'bg-red-50 text-red-700 border border-red-200/60'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                          }`}>
+                            {getStatusBadgeText(item)}
+                          </span>
+                        </td>
                         {canShowEntryBy && (
                           <td className="px-5 py-4 whitespace-nowrap text-center align-middle">
                             <div className="flex flex-col items-center justify-center gap-0.5">
@@ -1971,9 +2246,14 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                                   ✎ {getEditedByName(item.editedBy, item.editedByName || item.updatedBy)}
                                 </span>
                               )}
+                              {(item.smApprovedByName || item.smApprovedBy) && (
+                                <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
+                                  ✓ {getFirstNameFromIdentifier(item.smApprovedByName || item.smApprovedBy)}
+                                </span>
+                              )}
                               {(item.approvedByName || item.approvedBy) && (
-                                <span className="text-[10px] text-emerald-600 font-semibold" title="Approved">
-                                  ✓ {getFirstNameFromIdentifier(item.approvedByName || item.approvedBy)}
+                                <span className="text-[10px] text-emerald-600 font-semibold" title="2nd / Final Approval">
+                                  ✓✓ {getFirstNameFromIdentifier(item.approvedByName || item.approvedBy)}
                                 </span>
                               )}
                             </div>
@@ -1984,24 +2264,42 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                             <button
                               onClick={() => setViewingDeposit(item)}
                               title="View Deposit Voucher"
-                              className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                              className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
                             >
                               <EyeIcon className="w-4 h-4" />
                             </button>
-                            {canEdit && (
+                            {(canEdit || (item.status === 'Requested' && canEditBeforeApproval(item))) && (
                               <button
                                 onClick={() => openEditModal(item)}
                                 title="Edit Deposit"
-                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
                               >
                                 <EditIcon className="w-4 h-4" />
                               </button>
                             )}
-                            {canDelete && (
+                            {item.status === 'Requested' && showRequestedApprovalButtons(item) && (
+                              <>
+                                <button
+                                  onClick={() => handleStatusUpdate(item, 'Accepted')}
+                                  className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                                  title={item.smApproved ? "Accept (Final Approval)" : "Accept (1st Approval)"}
+                                >
+                                  <CheckIcon className="w-4 h-4 text-emerald-600" />
+                                </button>
+                                <button
+                                  onClick={() => handleStatusUpdate(item, 'Rejected')}
+                                  className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                  title="Reject Deposit"
+                                >
+                                  <XIcon className="w-4 h-4 text-rose-600" />
+                                </button>
+                              </>
+                            )}
+                            {item.status !== 'Requested' && canDelete && (
                               <button
-                                onClick={() => handleDelete(item._id)}
+                                onClick={() => handleDelete(item._id || item.id)}
                                 title="Delete Deposit"
-                                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                               >
                                 <TrashIcon className="w-4 h-4" />
                               </button>
@@ -2030,19 +2328,34 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                 <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl mx-auto flex items-center justify-center mb-3">
                   <ArrowDownLeftIcon className="w-6 h-6" />
                 </div>
-                <p className="text-sm font-bold text-gray-700">No deposit records found</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {searchQuery || isFilterActive
-                    ? "Try modifying your search or filter criteria."
-                    : "Click 'Record Deposit' above to add your first deposit entry."}
-                </p>
-                {!cannotAddEdit && (
-                  <button
-                    onClick={openAddModal}
-                    className="mt-3 inline-flex items-center px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition active:scale-95 shadow-md shadow-blue-500/20"
-                  >
-                    <PlusIcon className="w-3.5 h-3.5 mr-1.5" /> Record Deposit
-                  </button>
+                {isRequestedOnly ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-gray-800 font-bold text-sm">No pending deposit requests</p>
+                    <p className="text-xs text-gray-400 max-w-xs">All requested bank deposits have been accepted.</p>
+                    <button
+                      onClick={() => setIsRequestedOnly(false)}
+                      className="mt-2 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 cursor-pointer"
+                    >
+                      View All Deposits →
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-bold text-gray-700">No deposit records found</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {searchQuery || isFilterActive
+                        ? "Try modifying your search or filter criteria."
+                        : "Click 'Record Deposit' above to add your first deposit entry."}
+                    </p>
+                    {!cannotAddEdit && (
+                      <button
+                        onClick={openAddModal}
+                        className="mt-3 inline-flex items-center px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition active:scale-95 shadow-md shadow-blue-500/20"
+                      >
+                        <PlusIcon className="w-3.5 h-3.5 mr-1.5" /> Record Deposit
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -2094,10 +2407,23 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                         )}
                       </div>
 
-                      {/* Right Side: Amount */}
-                      <div className="text-right shrink-0">
+                      {/* Right Side: Amount & Status */}
+                      <div className="text-right shrink-0 space-y-1">
                         <div className="font-black text-emerald-600 text-lg sm:text-xl">
                           ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            item.status === 'Requested'
+                              ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                              : item.status === 'Rejected'
+                                ? 'bg-red-50 text-red-700 border border-red-200/60'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                          }`}>
+                            {getStatusBadgeText(item)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -2106,6 +2432,22 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                     {isExpanded && (
                       <div className="px-4 pb-5 animate-in slide-in-from-top-2 duration-200">
                         <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Status -</span>
+                            <span className="font-bold flex-1">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                                item.status === 'Requested'
+                                  ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                                  : item.status === 'Rejected'
+                                    ? 'bg-red-50 text-red-700 border border-red-200/60'
+                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                              }`}>
+                                {getStatusBadgeText(item)}
+                              </span>
+                            </span>
+                          </div>
                           <div className="flex items-start text-xs sm:text-sm">
                             <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Date -</span>
                             <span className="font-semibold text-gray-800 flex-1">{formatDate(item.date)}</span>
@@ -2162,6 +2504,13 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                             </span>
                           </div>
 
+                          {item.rejectionReason && (
+                            <div className="flex items-start text-xs sm:text-sm">
+                              <span className="w-28 text-rose-500 font-bold uppercase tracking-wider text-[11px] shrink-0">Reject Reason -</span>
+                              <span className="text-rose-700 font-semibold leading-relaxed break-words flex-1">{item.rejectionReason}</span>
+                            </div>
+                          )}
+
                           {canShowEntryBy && (
                             <div className="flex items-start text-xs sm:text-sm">
                               <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Entry By -</span>
@@ -2170,8 +2519,14 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                                 {editedName && (
                                   <span className="text-[10px] text-amber-600 font-medium">✎ {editedName}</span>
                                 )}
+                                {(item.smApprovedByName || item.smApprovedBy) && (
+                                  <span className="text-[10px] text-blue-600 font-medium">✓ 1st Approved: {getFirstNameFromIdentifier(item.smApprovedByName || item.smApprovedBy)}</span>
+                                )}
                                 {approvedName && (
-                                  <span className="text-[10px] text-emerald-600 font-semibold">✓ {approvedName}</span>
+                                  <span className="text-[10px] text-emerald-600 font-semibold">✓✓ Final Approved: {approvedName}</span>
+                                )}
+                                {(item.rejectedByName || item.rejectedBy) && (
+                                  <span className="text-[10px] text-rose-600 font-semibold">✕ Rejected: {getFirstNameFromIdentifier(item.rejectedByName || item.rejectedBy)}</span>
                                 )}
                               </div>
                             </div>
@@ -2187,7 +2542,26 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                               <span>View Voucher</span>
                             </button>
 
-                            {canEdit && (
+                            {item.status === 'Requested' && showRequestedApprovalButtons(item) && (
+                              <>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleStatusUpdate(item, 'Accepted'); }}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-sm shadow-emerald-500/20"
+                                >
+                                  <CheckIcon className="w-3.5 h-3.5" />
+                                  <span>{item.smApproved ? 'Accept (Final)' : 'Accept (1st)'}</span>
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleStatusUpdate(item, 'Rejected'); }}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition active:scale-95"
+                                >
+                                  <XIcon className="w-3.5 h-3.5" />
+                                  <span>Reject</span>
+                                </button>
+                              </>
+                            )}
+
+                            {(canEdit || (item.status === 'Requested' && canEditBeforeApproval(item))) && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); openEditModal(item); }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition active:scale-95"
@@ -2197,7 +2571,7 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                               </button>
                             )}
 
-                            {canDelete && (
+                            {item.status !== 'Requested' && canDelete && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition active:scale-95"
@@ -2247,9 +2621,22 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                     ৳{(Number(viewingDeposit.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
-                <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">
-                  {viewingDeposit.depositType}
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">
+                    {viewingDeposit.depositType}
+                  </span>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    viewingDeposit.status === 'Requested'
+                      ? (getStatusBadgeText(viewingDeposit) === 'Pending 2nd Approval'
+                        ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                      : viewingDeposit.status === 'Rejected'
+                        ? 'bg-red-50 text-red-700 border border-red-200/60'
+                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                  }`}>
+                    {getStatusBadgeText(viewingDeposit)}
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -2293,20 +2680,37 @@ const Deposit = ({ currentUser, onDeleteConfirm }) => {
                 </div>
               )}
 
+              {viewingDeposit.rejectionReason && (
+                <div className="p-3 bg-red-50/60 border border-red-100 rounded-xl text-xs">
+                  <span className="text-red-500 font-bold block">Rejection Reason</span>
+                  <div className="text-red-800 font-semibold mt-0.5">{viewingDeposit.rejectionReason}</div>
+                </div>
+              )}
+
               {canShowEntryBy && (viewingDeposit.entryByName || viewingDeposit.entryBy || viewingDeposit.createdBy) && (
-                <div className="p-3 bg-gray-50 rounded-xl text-xs space-y-1">
-                  <span className="text-gray-400 font-medium block">Entry By</span>
+                <div className="p-3 bg-gray-50 rounded-xl text-xs space-y-1.5">
+                  <span className="text-gray-400 font-medium block">Audit & Approval Trail</span>
                   <div className="font-semibold text-gray-800">
-                    {getEntryByName(viewingDeposit.entryBy, viewingDeposit.entryByName || viewingDeposit.createdBy || viewingDeposit.createdByName || viewingDeposit.userName || viewingDeposit.user)}
+                    Entered By: {getEntryByName(viewingDeposit.entryBy, viewingDeposit.entryByName || viewingDeposit.createdBy || viewingDeposit.createdByName || viewingDeposit.userName || viewingDeposit.user)}
                   </div>
                   {(viewingDeposit.editedBy || viewingDeposit.editedByName || (viewingDeposit.updatedBy && viewingDeposit.updatedBy !== viewingDeposit.entryBy && viewingDeposit.updatedBy !== viewingDeposit.entryByName)) && (
                     <div className="text-[11px] text-amber-600 font-medium">
                       ✎ Edited: {getEditedByName(viewingDeposit.editedBy, viewingDeposit.editedByName || viewingDeposit.updatedBy)}
                     </div>
                   )}
+                  {(viewingDeposit.smApprovedByName || viewingDeposit.smApprovedBy) && (
+                    <div className="text-[11px] text-blue-600 font-medium">
+                      ✓ 1st Approved: {getFirstNameFromIdentifier(viewingDeposit.smApprovedByName || viewingDeposit.smApprovedBy)}
+                    </div>
+                  )}
                   {(viewingDeposit.approvedByName || viewingDeposit.approvedBy) && (
                     <div className="text-[11px] text-emerald-600 font-semibold">
-                      ✓ Approved: {getFirstNameFromIdentifier(viewingDeposit.approvedByName || viewingDeposit.approvedBy)}
+                      ✓✓ Final Approved: {getFirstNameFromIdentifier(viewingDeposit.approvedByName || viewingDeposit.approvedBy)}
+                    </div>
+                  )}
+                  {(viewingDeposit.rejectedByName || viewingDeposit.rejectedBy) && (
+                    <div className="text-[11px] text-red-600 font-semibold">
+                      ✕ Rejected By: {getFirstNameFromIdentifier(viewingDeposit.rejectedByName || viewingDeposit.rejectedBy)}
                     </div>
                   )}
                 </div>

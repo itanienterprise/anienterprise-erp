@@ -750,6 +750,9 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
 
     // 1. Direct Bank Deposits
     deposits.forEach((d, dIdx) => {
+      const dStatus = (d.status || '').toLowerCase();
+      if (dStatus === 'requested' || dStatus === 'rejected') return;
+
       list.push({
         id: `dep-${d._id || d.id || dIdx}`,
         sourceModule: 'Bank Deposit',
@@ -773,6 +776,9 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
 
     // 2. Direct Bank Withdrawals
     withdrawals.forEach((w, wIdx) => {
+      const wStatus = (w.status || '').toLowerCase();
+      if (wStatus === 'requested' || wStatus === 'rejected') return;
+
       list.push({
         id: `with-${w._id || w.id || wIdx}`,
         sourceModule: 'Bank Withdrawal',
@@ -1243,6 +1249,9 @@ const Statement = ({ currentUser, onDeleteConfirm }) => {
 
     // 9. Fund Transfers (Bank to Bank)
     fundTransfers.forEach((ft, ftIdx) => {
+      const ftStatus = (ft.status || '').toLowerCase();
+      if (ftStatus === 'requested' || ftStatus === 'rejected') return;
+
       const amt = Number(ft.amount) || 0;
       if (amt <= 0) return;
 

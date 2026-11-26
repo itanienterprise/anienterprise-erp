@@ -229,6 +229,12 @@ export const MODULES_LIST = [
         key: 'deposit',
         label: 'Bank Deposit',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
+            { key: 'special', label: 'Approve Payment' },
+            { key: 'paymentRequest', label: 'Payment Request' },
+            { key: 'editRequest', label: 'Edit Request' },
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
@@ -236,6 +242,12 @@ export const MODULES_LIST = [
         key: 'withdrawal',
         label: 'Bank Withdrawal',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
+            { key: 'special', label: 'Approve Payment' },
+            { key: 'paymentRequest', label: 'Payment Request' },
+            { key: 'editRequest', label: 'Edit Request' },
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
@@ -243,6 +255,12 @@ export const MODULES_LIST = [
         key: 'fundTransfer',
         label: 'Fund Transfer',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
+            { key: 'special', label: 'Approve Payment' },
+            { key: 'paymentRequest', label: 'Payment Request' },
+            { key: 'editRequest', label: 'Edit Request' },
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },

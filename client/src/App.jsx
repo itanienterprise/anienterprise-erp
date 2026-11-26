@@ -518,7 +518,11 @@ function App() {
     insurancePayment: false,
     insurance: false,
     cnfPayment: false,
-    cnf: false
+    cnf: false,
+    deposit: false,
+    withdrawal: false,
+    fundTransfer: false,
+    bank: false
   });
 
   const isFetchingPendingRef = useRef(false);
@@ -538,7 +542,7 @@ function App() {
         // Fallback to legacy check if server doesn't support lightweight endpoint
       }
 
-      const [stockRes, salesRes, purchasesRes, purchaseReceivesRes, customersRes, whRes, insPaymentsRes, cnfPaymentsRes] = await Promise.all([
+      const [stockRes, salesRes, purchasesRes, purchaseReceivesRes, customersRes, whRes, insPaymentsRes, cnfPaymentsRes, depositsRes, withdrawalsRes, fundTransfersRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/stock`),
         axios.get(`${API_BASE_URL}/api/sales`),
         axios.get(`${API_BASE_URL}/api/purchases`),
@@ -546,7 +550,10 @@ function App() {
         axios.get(`${API_BASE_URL}/api/customers`),
         axios.get(`${API_BASE_URL}/api/warehouses`),
         axios.get(`${API_BASE_URL}/api/insurance-payments`),
-        axios.get(`${API_BASE_URL}/api/cnf-payments`).catch(() => ({ data: [] }))
+        axios.get(`${API_BASE_URL}/api/cnf-payments`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/deposits`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/withdrawals`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/fund-transfers`).catch(() => ({ data: [] }))
       ]);
       const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
       const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
@@ -630,6 +637,15 @@ function App() {
       const cnfPaymentsData = Array.isArray(cnfPaymentsRes?.data) ? cnfPaymentsRes.data : [];
       const hasRequestedCnfPayment = cnfPaymentsData.some(p => (p.status || '').toLowerCase() === 'requested');
 
+      const depositsData = Array.isArray(depositsRes?.data) ? depositsRes.data : [];
+      const hasRequestedDeposit = depositsData.some(item => (item.status || '').toLowerCase() === 'requested');
+
+      const withdrawalsData = Array.isArray(withdrawalsRes?.data) ? withdrawalsRes.data : [];
+      const hasRequestedWithdrawal = withdrawalsData.some(item => (item.status || '').toLowerCase() === 'requested');
+
+      const fundTransfersData = Array.isArray(fundTransfersRes?.data) ? fundTransfersRes.data : [];
+      const hasRequestedFundTransfer = fundTransfersData.some(item => (item.status || '').toLowerCase() === 'requested');
+
       setPendingModules({
         lc: hasRequestedLC,
         stock: hasRequestedStockMgmt || hasRequestedTransfer,
@@ -648,7 +664,11 @@ function App() {
         insurancePayment: hasRequestedInsurancePayment,
         insurance: hasRequestedInsurancePayment,
         cnfPayment: hasRequestedCnfPayment,
-        cnf: hasRequestedCnfPayment
+        cnf: hasRequestedCnfPayment,
+        deposit: hasRequestedDeposit,
+        withdrawal: hasRequestedWithdrawal,
+        fundTransfer: hasRequestedFundTransfer,
+        bank: hasRequestedDeposit || hasRequestedWithdrawal || hasRequestedFundTransfer
       });
     } catch (err) {
       if (err?.response?.status === 401) return;
@@ -3029,6 +3049,8 @@ function App() {
           <Deposit
             key={refreshKey}
             currentUser={currentUser}
+            isRequestedNotif={pendingModules.deposit}
+            refreshPendingIndicators={fetchPendingEntries}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
         );
@@ -3044,6 +3066,8 @@ function App() {
           <Withdrawal
             key={refreshKey}
             currentUser={currentUser}
+            isRequestedNotif={pendingModules.withdrawal}
+            refreshPendingIndicators={fetchPendingEntries}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
         );
@@ -3059,6 +3083,8 @@ function App() {
           <FundTransfer
             key={refreshKey}
             currentUser={currentUser}
+            isRequestedNotif={pendingModules.fundTransfer}
+            refreshPendingIndicators={fetchPendingEntries}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
           />
         );
@@ -3792,6 +3818,9 @@ function App() {
                       <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
                         Bank
                       </span>
+                      {pendingModules?.bank && (
+                        <span className="w-1.5 h-1.5 bg-red-500 rounded-full ml-1.5 flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                      )}
                     </div>
                     <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
                       <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${bankDropdownOpen ? 'transform rotate-180' : ''}`} />
@@ -3811,28 +3840,43 @@ function App() {
                       {hasPermission(currentUser, 'deposit', 'view') && (
                         <button
                           onClick={() => { handleViewChange('deposit-section'); }}
-                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'deposit-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                          className={`w-full flex flex-row items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'deposit-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                         >
-                          <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                          <span>Deposit</span>
+                          <div className="flex items-center">
+                            <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Deposit</span>
+                          </div>
+                          {pendingModules?.deposit && (
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                          )}
                         </button>
                       )}
                       {hasPermission(currentUser, 'withdrawal', 'view') && (
                         <button
                           onClick={() => { handleViewChange('withdrawal-section'); }}
-                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'withdrawal-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                          className={`w-full flex flex-row items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'withdrawal-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                         >
-                          <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                          <span>Withdrawal</span>
+                          <div className="flex items-center">
+                            <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Withdrawal</span>
+                          </div>
+                          {pendingModules?.withdrawal && (
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                          )}
                         </button>
                       )}
                       {hasPermission(currentUser, 'fundTransfer', 'view') && (
                         <button
                           onClick={() => { handleViewChange('fund-transfer-section'); }}
-                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'fund-transfer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                          className={`w-full flex flex-row items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'fund-transfer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                         >
-                          <ArrowLeftRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                          <span>Fund Transfer</span>
+                          <div className="flex items-center">
+                            <ArrowLeftRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Fund Transfer</span>
+                          </div>
+                          {pendingModules?.fundTransfer && (
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                          )}
                         </button>
                       )}
                       {hasPermission(currentUser, 'bankStatement', 'view') && (

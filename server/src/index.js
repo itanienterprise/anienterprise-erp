@@ -220,6 +220,10 @@ const invalidateMemoryCache = (modName, options = {}) => {
     memoryCache.packingLists = null;
     memoryCache.packingListsLightweight = null;
   }
+  if (['deposit', 'deposits'].includes(mod)) memoryCache['deposits'] = null;
+  if (['withdrawal', 'withdrawals'].includes(mod)) memoryCache['withdrawals'] = null;
+  if (['fund-transfer', 'fund-transfers', 'fundtransfer'].includes(mod)) memoryCache['fund-transfers'] = null;
+  memoryCache.pendingIndicators = null;
 };
 
 const broadcastUpdate = (moduleName, action = 'update', payload = {}) => {
@@ -1214,7 +1218,7 @@ apiRouter.get('/api/pending-indicators', async (req, res) => {
       return decrypted;
     };
 
-    const [stockData, salesData, purchasesData, purchaseReceivesData, customersData, whData, insPaymentsData, cnfPaymentsData] = await Promise.all([
+    const [stockData, salesData, purchasesData, purchaseReceivesData, customersData, whData, insPaymentsData, cnfPaymentsData, depositsData, withdrawalsData, fundTransfersData] = await Promise.all([
       getCachedOrFetch('stock', Stock),
       getCachedOrFetch('sales', Sale, (r, d) => ({ saleType: d.saleType || r.saleType, invoiceNo: d.invoiceNo || r.invoiceNo })),
       getCachedOrFetch('purchases', Purchase),
@@ -1222,7 +1226,10 @@ apiRouter.get('/api/pending-indicators', async (req, res) => {
       getCachedOrFetch('customers', Customer),
       getCachedOrFetch('warehouses', Warehouse),
       getCachedOrFetch('insurancePayments', InsurancePayment),
-      getCachedOrFetch('cnfPayments', CnFPayment)
+      getCachedOrFetch('cnfPayments', CnFPayment),
+      getCachedOrFetch('deposits', Deposit),
+      getCachedOrFetch('withdrawals', Withdrawal),
+      getCachedOrFetch('fund-transfers', FundTransfer)
     ]);
 
     const hasRequestedLC = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !!item.lcNo);
@@ -1297,6 +1304,24 @@ apiRouter.get('/api/pending-indicators', async (req, res) => {
     const hasRequestedInsurancePayment = insPaymentsData.some(p => (p.status || '').toLowerCase() === 'requested');
     const hasRequestedCnfPayment = cnfPaymentsData.some(p => (p.status || '').toLowerCase() === 'requested');
 
+    const hasRequestedDeposit = depositsData.some(item => {
+      let dec = item.data ? decryptData(item.data) : item;
+      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
+      return (dec?.status || '').toLowerCase() === 'requested';
+    });
+
+    const hasRequestedWithdrawal = withdrawalsData.some(item => {
+      let dec = item.data ? decryptData(item.data) : item;
+      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
+      return (dec?.status || '').toLowerCase() === 'requested';
+    });
+
+    const hasRequestedFundTransfer = fundTransfersData.some(item => {
+      let dec = item.data ? decryptData(item.data) : item;
+      if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
+      return (dec?.status || '').toLowerCase() === 'requested';
+    });
+
     const result = {
       lc: hasRequestedLC,
       stock: hasRequestedStockMgmt || hasRequestedTransfer,
@@ -1315,7 +1340,11 @@ apiRouter.get('/api/pending-indicators', async (req, res) => {
       insurancePayment: hasRequestedInsurancePayment,
       insurance: hasRequestedInsurancePayment,
       cnfPayment: hasRequestedCnfPayment,
-      cnf: hasRequestedCnfPayment
+      cnf: hasRequestedCnfPayment,
+      deposit: hasRequestedDeposit,
+      withdrawal: hasRequestedWithdrawal,
+      fundTransfer: hasRequestedFundTransfer,
+      bank: hasRequestedDeposit || hasRequestedWithdrawal || hasRequestedFundTransfer
     };
 
     memoryCache.pendingIndicators = result;

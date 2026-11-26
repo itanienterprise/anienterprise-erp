@@ -314,8 +314,22 @@ const SearchableFilterSelect = ({
   );
 };
 
-const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
+const FundTransfer = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshPendingIndicators }) => {
   const user = currentUser || JSON.parse(localStorage.getItem('currentUser') || '{}');
+  const userRole = (user?.role || '').toLowerCase();
+  const isAdmin = userRole === 'admin' || user?.isAdmin;
+  const isIncharge = userRole === 'incharge';
+  const isAccountsManager = userRole === 'accounts manager';
+  const isSalesManager = userRole === 'sales manager';
+  const isHeadOfSales = userRole === 'head of sales';
+  const hasFirstApprovePerm = hasPermission(user, 'fundTransfer', 'firstApprove');
+  const hasSecondApprovePerm = hasPermission(user, 'fundTransfer', 'secondApprove');
+
+  const canApproveFirst = isAdmin || isIncharge || isSalesManager || hasFirstApprovePerm;
+  const canApproveSecond = isAdmin || isIncharge || isAccountsManager || isHeadOfSales || hasSecondApprovePerm;
+  const canApprove = canApproveFirst || canApproveSecond;
+  const canViewRequest = isAdmin || canApprove || hasPermission(user, 'fundTransfer', 'paymentRequest');
+
   const canAdd = hasPermission(user, 'fundTransfer', 'add');
   const canEdit = hasPermission(user, 'fundTransfer', 'edit');
   const canDelete = hasPermission(user, 'fundTransfer', 'delete');
@@ -347,6 +361,14 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
   const [viewingTransfer, setViewingTransfer] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRequestedOnly, setIsRequestedOnly] = useState(() => !!isRequestedNotif);
+
+  useEffect(() => {
+    if (isRequestedNotif) {
+      setIsRequestedOnly(true);
+    }
+  }, [isRequestedNotif]);
+
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [filters, setFilters] = useState({
     fromBankName: '',
@@ -503,6 +525,119 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
     const candidate = entryByName || entryByCode;
     if (!candidate || candidate === '-' || candidate === '—') return 'Administrator';
     return getFirstNameFromIdentifier(candidate) || candidate;
+  };
+
+  const requestedCount = useMemo(() => {
+    return fundTransfers.filter(d => (d.status || '').toLowerCase() === 'requested').length;
+  }, [fundTransfers]);
+
+  const showRequestedApprovalButtons = (item) => {
+    if ((item.status || '').toLowerCase() !== 'requested') return false;
+    const itemEntryBy = String(item.entryBy || '').toLowerCase();
+    const currentUsername = String(user?.username || '').toLowerCase();
+    const currentEmpId = String(user?.employeeId || '').toLowerCase();
+    const currentName = String(user?.name || user?.fullName || '').toLowerCase();
+    const isOwner = (itemEntryBy && (itemEntryBy === currentUsername || itemEntryBy === currentEmpId || itemEntryBy === currentName));
+
+    if (isOwner && !isAdmin) return false;
+
+    if (!item.smApproved) {
+      return canApproveFirst;
+    } else {
+      if (!canApproveSecond) return false;
+      const firstApproverId = String(item.smApprovedBy || '').toLowerCase();
+      const isFirstApprover = firstApproverId && (firstApproverId === currentUsername || firstApproverId === currentEmpId);
+      if (isFirstApprover && !isAdmin) return false;
+      return true;
+    }
+  };
+
+  const canEditBeforeApproval = (item) => {
+    if ((item.status || '').toLowerCase() !== 'requested') return false;
+    if (item.smApproved) return false;
+    const itemEntryBy = String(item.entryBy || '').toLowerCase();
+    const currentUsername = String(user?.username || '').toLowerCase();
+    const currentEmpId = String(user?.employeeId || '').toLowerCase();
+    const currentName = String(user?.name || user?.fullName || '').toLowerCase();
+    return isAdmin || (itemEntryBy && (itemEntryBy === currentUsername || itemEntryBy === currentEmpId || itemEntryBy === currentName));
+  };
+
+  const getStatusBadgeText = (item) => {
+    const s = (item.status || 'Accepted').toLowerCase();
+    if (s === 'requested') {
+      return item.smApproved ? 'Pending 2nd Approval' : 'Pending 1st Approval';
+    }
+    if (s === 'accepted') return 'Accepted';
+    if (s === 'rejected') return 'Rejected';
+    return item.status || 'Accepted';
+  };
+
+  const handleStatusUpdate = async (item, newStatus) => {
+    let rejectionReason = '';
+    const isFirstStage = newStatus === 'FirstApprove';
+
+    if (newStatus === 'Rejected') {
+      const reason = window.prompt('Please enter the reason for rejection:');
+      if (reason === null) return;
+      if (!reason.trim()) {
+        alert('Rejection reason is required.');
+        return;
+      }
+      rejectionReason = reason.trim();
+    }
+
+    const currentApproverId = user?.employeeId || user?.username || 'admin';
+    const currentApproverName = user?.name || user?.fullName || user?.username || 'Approver';
+    const nowIso = new Date().toISOString();
+
+    let updatePayload = {};
+    if (isFirstStage) {
+      updatePayload = {
+        smApproved: true,
+        smApprovedBy: currentApproverId,
+        smApprovedByName: currentApproverName,
+        smApprovedDate: nowIso,
+        status: 'Requested'
+      };
+    } else if (newStatus === 'Accepted') {
+      updatePayload = {
+        status: 'Accepted',
+        approvedBy: currentApproverId,
+        approvedByName: currentApproverName,
+        approvedDate: nowIso
+      };
+    } else if (newStatus === 'Rejected') {
+      updatePayload = {
+        status: 'Rejected',
+        rejectedBy: currentApproverId,
+        rejectedByName: currentApproverName,
+        rejectedDate: nowIso,
+        rejectionReason: rejectionReason
+      };
+    }
+
+    try {
+      await axios.put(`${API_BASE_URL}/api/fund-transfers/${item._id}`, updatePayload);
+      fetchFundTransfers(true);
+      if (refreshPendingIndicators) refreshPendingIndicators();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('erp_data_updated', {
+          detail: { module: 'fund-transfers', action: 'status_update' }
+        }));
+      }
+    } catch (err) {
+      console.error('Error updating fund transfer status:', err);
+      // Fallback local persistence
+      const updated = fundTransfers.map(d => d._id === item._id ? { ...d, ...updatePayload } : d);
+      setFundTransfers(updated);
+      safeStorage.setItem(localStorage, 'erp_fund_transfers_cache', JSON.stringify(updated));
+      if (refreshPendingIndicators) refreshPendingIndicators();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('erp_data_updated', {
+          detail: { module: 'fund-transfers', action: 'status_update' }
+        }));
+      }
+    }
   };
 
   useEffect(() => {
@@ -743,6 +878,8 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
       const payload = {
         ...formData,
         amount: Number(formData.amount),
+        status: existingRecord?.status || 'Requested',
+        smApproved: existingRecord?.smApproved !== undefined ? existingRecord.smApproved : false,
         entryBy: existingRecord?.entryBy || entryUser,
         entryByName: existingRecord?.entryByName || entryUser,
         editedBy: editingId ? editorIdentifier : (existingRecord?.editedBy || undefined),
@@ -762,7 +899,11 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
 
       setShowModal(false);
       resetForm();
+      if (!editingId) {
+        setIsRequestedOnly(true);
+      }
       fetchFundTransfers(true);
+      if (refreshPendingIndicators) refreshPendingIndicators();
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('erp_data_updated', {
           detail: { module: 'fund-transfers', action: editingId ? 'update' : 'create' }
@@ -777,6 +918,8 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
       const newRecord = {
         ...formData,
         amount: Number(formData.amount),
+        status: existingRecord?.status || 'Requested',
+        smApproved: existingRecord?.smApproved !== undefined ? existingRecord.smApproved : false,
         entryBy: existingRecord?.entryBy || entryUser,
         entryByName: existingRecord?.entryByName || entryUser,
         editedBy: editingId ? editorIdentifier : (existingRecord?.editedBy || undefined),
@@ -793,6 +936,10 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
       safeStorage.setItem(localStorage, 'erp_fund_transfers_cache', JSON.stringify(updated));
       setShowModal(false);
       resetForm();
+      if (!editingId) {
+        setIsRequestedOnly(true);
+      }
+      if (refreshPendingIndicators) refreshPendingIndicators();
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('erp_data_updated', {
           detail: { module: 'fund-transfers', action: editingId ? 'update' : 'create' }
@@ -819,6 +966,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
       try {
         await axios.delete(`${API_BASE_URL}/api/fund-transfers/${id}`);
         fetchFundTransfers(true);
+        if (refreshPendingIndicators) refreshPendingIndicators();
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('erp_data_updated', {
             detail: { module: 'fund-transfers', action: 'delete' }
@@ -829,6 +977,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
         const updated = fundTransfers.filter(d => d._id !== id);
         setFundTransfers(updated);
         safeStorage.setItem(localStorage, 'erp_fund_transfers_cache', JSON.stringify(updated));
+        if (refreshPendingIndicators) refreshPendingIndicators();
       }
     }
   };
@@ -857,8 +1006,18 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
 
   const filteredTransfers = useMemo(() => {
     return fundTransfers.filter(item => {
+      const isReq = (item.status || '').toLowerCase() === 'requested';
+      if (isRequestedOnly) {
+        if (!isReq) return false;
+      } else {
+        if (isReq) return false;
+      }
+
       const q = searchQuery.toLowerCase().trim();
       if (q) {
+        const statusText = getStatusBadgeText(item).toLowerCase();
+        const firstApprover = getFirstNameFromIdentifier(item.smApprovedByName || item.smApprovedBy).toLowerCase();
+        const finalApprover = getFirstNameFromIdentifier(item.approvedByName || item.approvedBy).toLowerCase();
         const matchSearch =
           (item.fromBankName || '').toLowerCase().includes(q) ||
           (item.fromBranch || '').toLowerCase().includes(q) ||
@@ -871,6 +1030,9 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
           (item.referenceNo || '').toLowerCase().includes(q) ||
           (item.transferType || '').toLowerCase().includes(q) ||
           (item.remarks || '').toLowerCase().includes(q) ||
+          statusText.includes(q) ||
+          firstApprover.includes(q) ||
+          finalApprover.includes(q) ||
           String(item.amount || '').includes(q);
         if (!matchSearch) return false;
       }
@@ -890,21 +1052,24 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
 
       return true;
     });
-  }, [fundTransfers, searchQuery, filters]);
+  }, [fundTransfers, searchQuery, filters, isRequestedOnly]);
 
   // Statistics calculation
   const stats = useMemo(() => {
-    const totalAmount = fundTransfers.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
-    const totalCount = fundTransfers.length;
+    const acceptedTransfers = fundTransfers.filter(d => (d.status || 'Accepted').toLowerCase() === 'accepted');
+    const totalAmount = acceptedTransfers.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+    const totalCount = acceptedTransfers.length;
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayTransfers = fundTransfers.filter(d => toDateStr(d.date || d.transferDate || d.createdAt) === todayStr);
+    const todayTransfers = acceptedTransfers.filter(d => toDateStr(d.date || d.transferDate || d.createdAt) === todayStr);
     const todayAmount = todayTransfers.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
 
     const now = new Date();
     const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const thisMonthTransfers = fundTransfers.filter(d => (toDateStr(d.date || d.transferDate || d.createdAt) || '').startsWith(currentYearMonth));
+    const thisMonthTransfers = acceptedTransfers.filter(d => (toDateStr(d.date || d.transferDate || d.createdAt) || '').startsWith(currentYearMonth));
     const thisMonthAmount = thisMonthTransfers.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+
+    const pendingCount = fundTransfers.filter(d => (d.status || '').toLowerCase() === 'requested').length;
 
     return {
       totalAmount,
@@ -912,7 +1077,8 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
       todayAmount,
       todayCount: todayTransfers.length,
       thisMonthAmount,
-      thisMonthCount: thisMonthTransfers.length
+      thisMonthCount: thisMonthTransfers.length,
+      pendingCount
     };
   }, [fundTransfers]);
 
@@ -958,28 +1124,51 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
           </div>
         </div>
 
-        {/* Center: Search Bar */}
-        <div className="w-full lg:flex-1 lg:max-w-md mx-auto relative group">
-          <div className="absolute inset-y-0 left-0 pl-3 sm:pl-3.5 flex items-center pointer-events-none">
-            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+        {/* Center: Search Bar & Requested Toggle */}
+        <div className="w-full lg:flex-1 lg:max-w-md mx-auto flex flex-col items-center gap-2">
+          <div className="w-full relative group">
+            <div className="absolute inset-y-0 left-0 pl-3 sm:pl-3.5 flex items-center pointer-events-none">
+              <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search by bank, account, ref no, remarks..."
+              autoComplete="off"
+              className="h-9 sm:h-10 block w-full pl-9 sm:pl-10 pr-8 sm:pr-9 bg-gray-50/80 border border-gray-200 rounded-xl text-xs sm:text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all shadow-xs"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            )}
           </div>
-          <input
-            type="text"
-            placeholder="Search by bank, account, ref no, remarks..."
-            autoComplete="off"
-            className="h-9 sm:h-10 block w-full pl-9 sm:pl-10 pr-8 sm:pr-9 bg-gray-50/80 border border-gray-200 rounded-xl text-xs sm:text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all shadow-xs"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
-            >
-              <XIcon className="w-4 h-4" />
-            </button>
-          )}
+
+          <div className="flex items-center gap-2">
+            {canViewRequest && (
+              <button
+                type="button"
+                onClick={() => setIsRequestedOnly(!isRequestedOnly)}
+                className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
+                  isRequestedOnly
+                    ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600 shadow-xs'
+                }`}
+              >
+                Requested
+                {requestedCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                    {requestedCount}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right: Filter, Report, New Transfer */}
@@ -1187,6 +1376,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                 <th className="py-3 px-4">Destination (To Bank)</th>
                 <th className="py-3 px-4">Mode</th>
                 <th className="py-3 px-4">Reference #</th>
+                <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-right">Amount (৳)</th>
                 {canShowEntryBy && <th className="py-3 px-4">Recorded By</th>}
                 <th className="py-3 px-4 text-center w-28">Actions</th>
@@ -1195,7 +1385,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
             <tbody className="divide-y divide-gray-100 text-xs text-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={canShowEntryBy ? 10 : 9} className="py-12 text-center text-gray-400">
+                  <td colSpan={canShowEntryBy ? 11 : 10} className="py-12 text-center text-gray-400">
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                       <span>Loading fund transfers...</span>
@@ -1204,13 +1394,28 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                 </tr>
               ) : filteredTransfers.length === 0 ? (
                 <tr>
-                  <td colSpan={canShowEntryBy ? 10 : 9} className="py-12 text-center text-gray-400">
+                  <td colSpan={canShowEntryBy ? 11 : 10} className="py-12 text-center text-gray-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <ArrowLeftRightIcon className="w-8 h-8 text-gray-300" />
-                      <p className="font-semibold text-gray-500">No fund transfers found</p>
-                      <p className="text-xs text-gray-400">
-                        {isFilterActive || searchQuery ? 'Try adjusting your search or filters' : 'Click "+ New Transfer" to record a bank to bank transfer'}
-                      </p>
+                      {isRequestedOnly ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <p className="text-gray-800 font-semibold text-sm">No pending fund transfer requests</p>
+                          <p className="text-xs text-gray-400 max-w-xs">All requested fund transfers have been accepted.</p>
+                          <button
+                            onClick={() => setIsRequestedOnly(false)}
+                            className="mt-2 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 cursor-pointer"
+                          >
+                            View All Transfers →
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="font-semibold text-gray-500">No fund transfers found</p>
+                          <p className="text-xs text-gray-400">
+                            {isFilterActive || searchQuery ? 'Try adjusting your search or filters' : 'Click "+ New Transfer" to record a bank to bank transfer'}
+                          </p>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -1269,6 +1474,37 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                     <td className="py-3.5 px-4 font-mono text-[11px] text-gray-600">
                       {ft.referenceNo || '—'}
                     </td>
+                    {/* Status */}
+                    <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                      {(() => {
+                        const s = (ft.status || 'Accepted').toLowerCase();
+                        if (s === 'requested') {
+                          return ft.smApproved ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                              Pending 2nd Approval
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                              Pending 1st Approval
+                            </span>
+                          );
+                        }
+                        if (s === 'rejected') {
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                              Rejected
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Accepted
+                          </span>
+                        );
+                      })()}
+                    </td>
                     {/* Amount */}
                     <td className="py-3.5 px-4 text-right whitespace-nowrap">
                       <span className="font-extrabold text-blue-600 text-sm">
@@ -1278,15 +1514,58 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                     {/* Recorded By */}
                     {canShowEntryBy && (
                       <td className="py-3.5 px-4 whitespace-nowrap text-gray-600">
-                        <div className="flex items-center gap-1.5">
-                          <UserIcon className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{getEntryByName(ft.entryBy, ft.entryByName)}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <UserIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span>{getEntryByName(ft.entryBy, ft.entryByName)}</span>
+                          </div>
+                          {ft.smApproved && (
+                            <span className="text-[10px] text-blue-600 font-medium">
+                              ✓ 1st Approved: {getFirstNameFromIdentifier(ft.smApprovedByName || ft.smApprovedBy)}
+                            </span>
+                          )}
+                          {((ft.status || 'Accepted').toLowerCase() === 'accepted' && (ft.approvedByName || ft.approvedBy)) && (
+                            <span className="text-[10px] text-emerald-600 font-medium">
+                              ✓✓ Final: {getFirstNameFromIdentifier(ft.approvedByName || ft.approvedBy)}
+                            </span>
+                          )}
                         </div>
                       </td>
                     )}
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
+                        {showRequestedApprovalButtons(ft) && (
+                          <>
+                            {!ft.smApproved ? (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusUpdate(ft, 'FirstApprove')}
+                                title="Accept (1st Approval)"
+                                className="px-2 py-1 text-[11px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-xs transition cursor-pointer"
+                              >
+                                Accept
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusUpdate(ft, 'Accepted')}
+                                title="Accept (Final Approval)"
+                                className="px-2 py-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs transition cursor-pointer"
+                              >
+                                Accept
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleStatusUpdate(ft, 'Rejected')}
+                              title="Reject Transfer"
+                              className="px-2 py-1 text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-xs transition cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
                         <button
                           type="button"
                           onClick={() => setViewingTransfer(ft)}
@@ -1295,7 +1574,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                         >
                           <EyeIcon className="w-4 h-4" />
                         </button>
-                        {canEdit && (
+                        {(canEdit || canEditBeforeApproval(ft)) && (
                           <button
                             type="button"
                             onClick={() => openEditModal(ft)}
@@ -1335,10 +1614,25 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
           ) : filteredTransfers.length === 0 ? (
             <div className="py-8 text-center text-gray-400 text-xs flex flex-col items-center justify-center gap-2">
               <ArrowLeftRightIcon className="w-7 h-7 text-gray-300" />
-              <p className="font-semibold text-gray-600">No fund transfers found</p>
-              <p className="text-[11px] text-gray-400">
-                {isFilterActive || searchQuery ? 'Try adjusting your search or filters' : 'Tap "+ New Transfer" to record one'}
-              </p>
+              {isRequestedOnly ? (
+                <div className="flex flex-col items-center gap-1">
+                  <p className="font-semibold text-gray-800 text-sm">No pending fund transfer requests</p>
+                  <p className="text-[11px] text-gray-400 max-w-xs">All requested fund transfers have been accepted.</p>
+                  <button
+                    onClick={() => setIsRequestedOnly(false)}
+                    className="mt-2 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 cursor-pointer"
+                  >
+                    View All Transfers →
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="font-semibold text-gray-600">No fund transfers found</p>
+                  <p className="text-[11px] text-gray-400">
+                    {isFilterActive || searchQuery ? 'Try adjusting your search or filters' : 'Tap "+ New Transfer" to record one'}
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             filteredTransfers.map((ft, idx) => (
@@ -1347,7 +1641,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                 className="p-3.5 space-y-2.5 hover:bg-gray-50/80 transition active:bg-gray-100/60 cursor-pointer"
                 onClick={() => setViewingTransfer(ft)}
               >
-                {/* Card Top: Date & Mode & Ref */}
+                {/* Card Top: Date & Mode & Ref & Status */}
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-xs font-bold text-gray-800">
@@ -1359,9 +1653,39 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                       </span>
                     )}
                   </div>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
-                    {ft.transferType || 'Online Banking'}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(() => {
+                      const s = (ft.status || 'Accepted').toLowerCase();
+                      if (s === 'requested') {
+                        return ft.smApproved ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            2nd Pending
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                            1st Pending
+                          </span>
+                        );
+                      }
+                      if (s === 'rejected') {
+                        return (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            Rejected
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Accepted
+                        </span>
+                      );
+                    })()}
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      {ft.transferType || 'Online Banking'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Transfer route summary with Bank Logos */}
@@ -1413,6 +1737,37 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                   </div>
 
                   <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {showRequestedApprovalButtons(ft) && (
+                      <>
+                        {!ft.smApproved ? (
+                          <button
+                            type="button"
+                            onClick={() => handleStatusUpdate(ft, 'FirstApprove')}
+                            title="Accept (1st Approval)"
+                            className="px-2 py-1 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-xs transition cursor-pointer"
+                          >
+                            Accept
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleStatusUpdate(ft, 'Accepted')}
+                            title="Accept (Final Approval)"
+                            className="px-2 py-1 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs transition cursor-pointer"
+                          >
+                            Accept
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleStatusUpdate(ft, 'Rejected')}
+                          title="Reject Transfer"
+                          className="px-2 py-1 text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-xs transition cursor-pointer"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={() => setViewingTransfer(ft)}
@@ -1421,7 +1776,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                     >
                       <EyeIcon className="w-4 h-4" />
                     </button>
-                    {canEdit && (
+                    {(canEdit || canEditBeforeApproval(ft)) && (
                       <button
                         type="button"
                         onClick={() => openEditModal(ft)}
@@ -1752,6 +2107,15 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                   <p className="text-xs text-gray-400">
                     {formatDate(viewingTransfer.date || viewingTransfer.transferDate || viewingTransfer.createdAt)} • {viewingTransfer.transferType || 'Online Banking'}
                   </p>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold mt-1 ${
+                    (viewingTransfer.status || 'Accepted').toLowerCase() === 'requested'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                      : (viewingTransfer.status || 'Accepted').toLowerCase() === 'rejected'
+                        ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                        : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  }`}>
+                    {getStatusBadgeText(viewingTransfer)}
+                  </span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1853,6 +2217,40 @@ const FundTransfer = ({ currentUser, onDeleteConfirm }) => {
                     Remarks / Purpose
                   </span>
                   <p className="text-gray-700">{viewingTransfer.remarks}</p>
+                </div>
+              )}
+
+              {/* Approval Trail */}
+              {(viewingTransfer.smApproved || viewingTransfer.approvedBy || viewingTransfer.rejectedBy) && (
+                <div className="bg-gray-50/80 rounded-xl p-3 border border-gray-100 space-y-1.5 text-xs">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Approval Status & History
+                  </span>
+                  {viewingTransfer.smApproved && (
+                    <div className="flex items-center justify-between text-blue-700">
+                      <span>✓ 1st Approved by: <strong>{getFirstNameFromIdentifier(viewingTransfer.smApprovedByName || viewingTransfer.smApprovedBy)}</strong></span>
+                      <span className="text-[11px] text-gray-500">{formatDate(viewingTransfer.smApprovedDate)}</span>
+                    </div>
+                  )}
+                  {viewingTransfer.approvedBy && (
+                    <div className="flex items-center justify-between text-emerald-700">
+                      <span>✓✓ Final Approved by: <strong>{getFirstNameFromIdentifier(viewingTransfer.approvedByName || viewingTransfer.approvedBy)}</strong></span>
+                      <span className="text-[11px] text-gray-500">{formatDate(viewingTransfer.approvedDate)}</span>
+                    </div>
+                  )}
+                  {viewingTransfer.rejectedBy && (
+                    <div className="text-rose-700 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span>✗ Rejected by: <strong>{getFirstNameFromIdentifier(viewingTransfer.rejectedByName || viewingTransfer.rejectedBy)}</strong></span>
+                        <span className="text-[11px] text-gray-500">{formatDate(viewingTransfer.rejectedDate)}</span>
+                      </div>
+                      {viewingTransfer.rejectionReason && (
+                        <p className="text-[11px] bg-rose-50 p-2 rounded-lg border border-rose-100 text-rose-800">
+                          Reason: {viewingTransfer.rejectionReason}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

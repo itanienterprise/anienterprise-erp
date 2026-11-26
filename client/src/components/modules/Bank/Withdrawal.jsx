@@ -306,12 +306,23 @@ const SearchableFilterSelect = ({
   );
 };
 
-const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
+const Withdrawal = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshPendingIndicators }) => {
   const user = currentUser || JSON.parse(localStorage.getItem('currentUser') || '{}');
+  const isAdmin = user?.username === 'admin' || (user?.role || '').toLowerCase() === 'admin';
+  const isIncharge = (user?.role || '').toLowerCase() === 'incharge';
+  const isHeadOfSales = (user?.role || '').toLowerCase() === 'head of sales';
+  const isSalesManager = (user?.role || '').toLowerCase() === 'sales manager';
   const canAdd = hasPermission(user, 'withdrawal', 'add');
   const canEdit = hasPermission(user, 'withdrawal', 'edit');
   const canDelete = hasPermission(user, 'withdrawal', 'delete');
-  const canShowEntryBy = hasPermission(user, 'withdrawal', 'showEntryBy');
+  const canShowEntryBy = isAdmin || isIncharge || hasPermission(user, 'withdrawal', 'showEntryBy');
+  const canApprove = hasPermission(user, 'withdrawal', 'special') || hasPermission(user, 'withdrawal', 'approve') || isAdmin;
+  const canApproveFirst = hasPermission(user, 'withdrawal', 'firstApprove');
+  const canApproveSecond = hasPermission(user, 'withdrawal', 'secondApprove');
+  const canViewRequest = hasPermission(user, 'withdrawal', 'paymentRequest') || canApprove || canApproveFirst || canApproveSecond;
+  const userModulePerms = user?.permissions?.withdrawal;
+  const hasSecondApprovePerm = (userModulePerms && userModulePerms.secondApprove === true) || canApproveSecond;
+  const hasFirstApprovePerm = (userModulePerms && userModulePerms.firstApprove === true) || canApproveFirst || isSalesManager;
   const cannotAddEdit = !canAdd && !canEdit;
 
   const [withdrawals, setWithdrawals] = useState(() => {
@@ -324,6 +335,92 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
       return [];
     }
   });
+
+  const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+  useEffect(() => {
+    if (isRequestedNotif) {
+      setIsRequestedOnly(true);
+    }
+  }, [isRequestedNotif]);
+
+  const requestedCount = useMemo(() => {
+    return (withdrawals || []).filter(w => (w.status || '').toLowerCase() === 'requested').length;
+  }, [withdrawals]);
+
+  const showRequestedApprovalButtons = (item) => {
+    if (!item) return false;
+    if (isAdmin) return true;
+
+    const entryBy = String(item.entryBy || '').toLowerCase().trim();
+    const entryByName = String(item.entryByName || '').toLowerCase().trim();
+    const myIdentifiers = [
+      user?.username,
+      user?.employeeId,
+      user?.id,
+      user?.name,
+      user?.nameEn
+    ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+    const isSelfEntry = myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName);
+    if (isSelfEntry) return false;
+
+    const smApproved = item.smApproved === true;
+    const currentUserRole = (user?.role || '').toLowerCase();
+
+    if (smApproved) {
+      // Stage 2: 2nd / Final Approval
+      const smApprovedBy = String(item.smApprovedBy || '').toLowerCase().trim();
+      const smApprovedByName = String(item.smApprovedByName || '').toLowerCase().trim();
+      const isFirstApprover = (smApprovedBy || smApprovedByName) &&
+        (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
+
+      if (isFirstApprover) return false;
+
+      if (userModulePerms && typeof userModulePerms.secondApprove === 'boolean') {
+        return userModulePerms.secondApprove === true;
+      }
+      if (currentUserRole === 'sales manager') return false;
+      return currentUserRole === 'incharge' || currentUserRole === 'head of sales' || currentUserRole === 'accounts manager' || currentUserRole === 'account manager' || hasSecondApprovePerm || canApprove;
+    }
+
+    // Stage 1: 1st Approval Step (smApproved is false)
+    if (userModulePerms && typeof userModulePerms.firstApprove === 'boolean') {
+      return userModulePerms.firstApprove === true;
+    }
+    if (currentUserRole === 'sales manager') return true;
+    if (canApproveFirst) return true;
+    if (currentUserRole === 'incharge' || currentUserRole === 'head of sales') return true;
+    if (hasSecondApprovePerm && !hasFirstApprovePerm) return false;
+    return canApprove;
+  };
+
+  const canEditBeforeApproval = (item) => {
+    const status = (item.status || '').toLowerCase();
+    const smApproved = item.smApproved === true;
+    if (status !== 'requested' || smApproved) return false;
+
+    const entryBy = String(item.entryBy || '').toLowerCase().trim();
+    const entryByName = String(item.entryByName || '').toLowerCase().trim();
+
+    const myIdentifiers = [
+      user?.username,
+      user?.employeeId,
+      user?.id,
+      user?.name,
+      user?.nameEn
+    ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+    return (myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName));
+  };
+
+  const getStatusBadgeText = (item) => {
+    if (!item) return '';
+    if (item.isEdited === true) return 'Edit Requested';
+    if (item.status === 'Requested') {
+      return item.smApproved ? 'Pending 2nd Approval' : 'Pending 1st Approval';
+    }
+    return item.status || 'Accepted';
+  };
   const [banks, setBanks] = useState(() => {
     try {
       const q = queryClient.getQueryData(['banks']);
@@ -926,6 +1023,96 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
     setShowModal(true);
   };
 
+  const handleStatusUpdate = async (item, newStatus) => {
+    if (!item) return;
+    const entryBy = String(item.entryBy || '').toLowerCase().trim();
+    const entryByName = String(item.entryByName || '').toLowerCase().trim();
+    const myIdentifiers = [
+      user?.username,
+      user?.employeeId,
+      user?.id,
+      user?.name,
+      user?.nameEn
+    ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+    const isSelfEntry = myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName);
+
+    if (isSelfEntry && !isAdmin) {
+      alert('Forbidden: Only Admin can approve or reject self-created entries.');
+      return;
+    }
+
+    const smApproved = item.smApproved === true;
+    const smApprovedBy = String(item.smApprovedBy || '').toLowerCase().trim();
+    const smApprovedByName = String(item.smApprovedByName || '').toLowerCase().trim();
+    const isFirstApprover = smApproved && (smApprovedBy || smApprovedByName) &&
+      (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
+
+    if (isFirstApprover && !isAdmin && newStatus === 'Accepted') {
+      alert('Forbidden: You cannot perform 2nd approval on an entry you already approved for 1st approval.');
+      return;
+    }
+
+    let rejectionReason = '';
+    if (newStatus === 'Rejected') {
+      const promptReason = window.prompt('Please enter the reason for rejection (optional):');
+      if (promptReason === null) return;
+      rejectionReason = promptReason.trim();
+    }
+
+    const isSMApprovalStep = !smApproved && newStatus === 'Accepted';
+    const currentUsername = user?.username || user?.employeeId || user?.id || 'admin';
+    const currentName = user?.name || user?.username || 'Admin';
+
+    let updatedPayload;
+    if (newStatus === 'Rejected') {
+      updatedPayload = {
+        ...item,
+        status: 'Rejected',
+        rejectedBy: currentUsername,
+        rejectedByName: currentName,
+        rejectionReason: rejectionReason || undefined,
+        rejectedDate: new Date().toISOString(),
+        rejectedAt: new Date().toISOString()
+      };
+    } else if (isSMApprovalStep) {
+      updatedPayload = {
+        ...item,
+        status: 'Requested',
+        smApproved: true,
+        smApprovedBy: currentUsername,
+        smApprovedByName: currentName,
+        smApprovedDate: new Date().toISOString()
+      };
+    } else {
+      updatedPayload = {
+        ...item,
+        status: 'Accepted',
+        smApproved: true,
+        approvedBy: currentUsername,
+        approvedByName: currentName,
+        approvedDate: new Date().toISOString()
+      };
+    }
+
+    const targetId = item._id || item.id;
+    setWithdrawals(prev => prev.map(w => (w._id === targetId || w.id === targetId) ? { ...w, ...updatedPayload } : w));
+
+    try {
+      await axios.put(`${API_BASE_URL}/api/withdrawals/${targetId}`, updatedPayload);
+      queryClient.invalidateQueries(['withdrawals']);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('erp_data_updated', {
+          detail: { module: 'withdrawals', action: 'update' }
+        }));
+      }
+      refreshPendingIndicators?.();
+    } catch (err) {
+      console.error('Error updating withdrawal status:', err);
+      const updated = withdrawals.map(w => (w._id === targetId || w.id === targetId) ? { ...w, ...updatedPayload } : w);
+      safeStorage.setItem(localStorage, 'erp_withdrawals_cache', JSON.stringify(updated));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.bankName) {
@@ -946,12 +1133,15 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
         ...formData,
         note: formData.remarks,
         amount: Number(formData.amount),
-        entryBy: existingRecord?.entryBy || entryUser,
+        entryBy: existingRecord?.entryBy || (user?.username || user?.employeeId || user?.id || 'admin'),
         entryByName: existingRecord?.entryByName || entryUser,
+        entryByRole: existingRecord?.entryByRole || user?.role || 'admin',
         editedBy: editingId ? editorIdentifier : (existingRecord?.editedBy || undefined),
         editedByName: editingId ? entryUser : (existingRecord?.editedByName || undefined),
         updatedBy: entryUser,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        status: editingId ? (existingRecord?.status || 'Accepted') : 'Requested',
+        smApproved: editingId ? (existingRecord?.smApproved || false) : false
       };
 
       if (editingId) {
@@ -961,6 +1151,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
           ...payload,
           createdAt: new Date().toISOString()
         });
+        setIsRequestedOnly(true);
       }
 
       setShowModal(false);
@@ -971,6 +1162,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
           detail: { module: 'withdrawals', action: editingId ? 'update' : 'create' }
         }));
       }
+      refreshPendingIndicators?.();
     } catch (err) {
       console.error('Error saving withdrawal:', err);
       // Fallback local persistence if server is unavailable
@@ -980,12 +1172,15 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
       const newRecord = {
         ...formData,
         amount: Number(formData.amount),
-        entryBy: existingRecord?.entryBy || entryUser,
+        entryBy: existingRecord?.entryBy || (user?.username || user?.employeeId || user?.id || 'admin'),
         entryByName: existingRecord?.entryByName || entryUser,
+        entryByRole: existingRecord?.entryByRole || user?.role || 'admin',
         editedBy: editingId ? editorIdentifier : (existingRecord?.editedBy || undefined),
         editedByName: editingId ? entryUser : (existingRecord?.editedByName || undefined),
         updatedBy: entryUser,
         updatedAt: new Date().toISOString(),
+        status: editingId ? (existingRecord?.status || 'Accepted') : 'Requested',
+        smApproved: editingId ? (existingRecord?.smApproved || false) : false,
         _id: editingId || `local_wdr_${Date.now()}`,
         createdAt: existingRecord?.createdAt || new Date().toISOString()
       };
@@ -994,6 +1189,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
         : [newRecord, ...withdrawals];
       setWithdrawals(updated);
       safeStorage.setItem(localStorage, 'erp_withdrawals_cache', JSON.stringify(updated));
+      if (!editingId) setIsRequestedOnly(true);
       setShowModal(false);
       resetForm();
       if (typeof window !== 'undefined') {
@@ -1001,6 +1197,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
           detail: { module: 'withdrawals', action: editingId ? 'update' : 'create' }
         }));
       }
+      refreshPendingIndicators?.();
     } finally {
       setIsSubmitting(false);
     }
@@ -1107,6 +1304,13 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
   // Filtered withdrawals
   const filteredWithdrawals = useMemo(() => {
     return withdrawals.filter(item => {
+      const isReq = (item.status || '').toLowerCase() === 'requested';
+      if (isRequestedOnly) {
+        if (!isReq) return false;
+      } else {
+        if (isReq) return false;
+      }
+
       const q = searchQuery.toLowerCase().trim();
       const matchSearch = !q ||
         (item.bankName && item.bankName.toLowerCase().includes(q)) ||
@@ -1118,8 +1322,12 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
         (item.withdrawalType && item.withdrawalType.toLowerCase().includes(q)) ||
         (item.remarks && item.remarks.toLowerCase().includes(q)) ||
         (item.note && item.note.toLowerCase().includes(q)) ||
+        (getStatusBadgeText(item).toLowerCase().includes(q)) ||
+        (item.status && item.status.toLowerCase().includes(q)) ||
         (item.entryBy && item.entryBy.toLowerCase().includes(q)) ||
         (item.entryByName && item.entryByName.toLowerCase().includes(q)) ||
+        (item.smApprovedByName && item.smApprovedByName.toLowerCase().includes(q)) ||
+        (item.approvedByName && item.approvedByName.toLowerCase().includes(q)) ||
         (item.editedBy && item.editedBy.toLowerCase().includes(q)) ||
         (item.editedByName && item.editedByName.toLowerCase().includes(q)) ||
         (getEntryByName(item.entryBy, item.entryByName).toLowerCase().includes(q)) ||
@@ -1139,25 +1347,33 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
 
       return matchSearch && matchBank && matchBranch && matchAccount && matchType && matchDate;
     });
-  }, [withdrawals, searchQuery, filters, employeesMap]);
+  }, [withdrawals, searchQuery, filters, isRequestedOnly, employeesMap]);
 
   // Statistics
   const stats = useMemo(() => {
-    const totalAmount = withdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
-    const count = withdrawals.length;
+    const acceptedWithdrawals = withdrawals.filter(w => (w.status || 'Accepted').toLowerCase() === 'accepted');
+    const totalAmount = acceptedWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+    const count = acceptedWithdrawals.length;
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayAmount = withdrawals
+    const todayAmount = acceptedWithdrawals
       .filter(w => toDateStr(w.date) === todayStr)
       .reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
 
-    const activeBanks = new Set(withdrawals.map(w => w.bankName).filter(Boolean)).size;
+    const pendingCount = withdrawals.filter(w => (w.status || '').toLowerCase() === 'requested').length;
+    const pendingAmount = withdrawals
+      .filter(w => (w.status || '').toLowerCase() === 'requested')
+      .reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+
+    const activeBanks = new Set(acceptedWithdrawals.map(w => w.bankName).filter(Boolean)).size;
 
     return {
       totalAmount,
       count,
       todayAmount,
-      activeBanks
+      activeBanks,
+      pendingCount,
+      pendingAmount
     };
   }, [withdrawals]);
 
@@ -1206,31 +1422,55 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
             <p className="text-xs text-gray-500 mt-0.5">Track, record, and reconcile bank withdrawals</p>
           </div>
 
-          {/* Search Input - CENTERED */}
-          <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-rose-500 transition-colors" />
+          {/* Center Aligned Search Bar & Requested Toggle */}
+          <div className="flex-1 w-full max-w-none md:max-w-xl mx-auto flex flex-col items-center gap-2">
+            <div className="w-full relative group">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-rose-500 transition-colors" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search withdrawals by bank, account, slip #, recipient..."
+                autoComplete="off"
+                className="h-10 block w-full pl-10 pr-4 bg-white/70 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 focus:bg-white transition-all outline-none shadow-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                >
+                  <XIcon className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            <input
-              type="text"
-              placeholder="Search withdrawals by bank, account, slip #, recipient..."
-              autoComplete="off"
-              className="h-10 block w-full pl-10 pr-4 bg-white/70 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 focus:bg-white transition-all outline-none shadow-sm"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
-              >
-                <XIcon className="w-4 h-4" />
-              </button>
-            )}
+
+            <div className="flex items-center gap-2">
+              {canViewRequest && (
+                <button
+                  type="button"
+                  onClick={() => setIsRequestedOnly(!isRequestedOnly)}
+                  className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
+                    isRequestedOnly
+                      ? 'bg-rose-600 border-rose-600 text-white shadow-md'
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-rose-300 hover:text-rose-600 shadow-xs'
+                  }`}
+                >
+                  Requested
+                  {requestedCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                      {requestedCount}
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Action Controls: Filter Button + Add Button */}
-          <div className="flex items-center justify-center md:justify-end gap-2.5 w-full md:w-auto shrink-0">
+          {/* Action Controls: Filter Button + Report + Add Button */}
+          <div className="flex items-center justify-center md:justify-end gap-2.5 w-full md:w-auto shrink-0 flex-wrap">
             {/* Filter Dropdown */}
             <div className="relative">
               <button
@@ -1853,6 +2093,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                     <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Withdrawn By</th>
                     <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Remarks / Note</th>
                     <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Amount (BDT)</th>
+                    <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Status</th>
                     {canShowEntryBy && (
                       <th className="px-5 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 text-center">Entry By</th>
                     )}
@@ -1862,31 +2103,46 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                 <tbody className="divide-y divide-gray-50">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={canShowEntryBy ? 12 : 11} className="px-5 py-12 text-center text-gray-400">
+                      <td colSpan={canShowEntryBy ? 13 : 12} className="px-5 py-12 text-center text-gray-400">
                         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-rose-600 mb-2"></div>
                         <p className="text-sm">Loading withdrawal records...</p>
                       </td>
                     </tr>
                   ) : filteredWithdrawals.length === 0 ? (
                     <tr>
-                      <td colSpan={canShowEntryBy ? 12 : 11} className="px-5 py-16 text-center text-gray-400">
+                      <td colSpan={canShowEntryBy ? 13 : 12} className="px-5 py-16 text-center text-gray-400">
                         <div className="max-w-xs mx-auto space-y-3">
                           <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl mx-auto flex items-center justify-center">
                             <ArrowUpRightIcon className="w-6 h-6" />
                           </div>
-                          <p className="text-sm font-medium text-gray-600">No withdrawal records found</p>
-                          <p className="text-xs text-gray-400">
-                            {searchQuery || isFilterActive
-                              ? "Try modifying your search or filter criteria."
-                              : "Click 'Record Withdrawal' above to add your first withdrawal entry."}
-                          </p>
-                          {!cannotAddEdit && (
-                            <button
-                              onClick={openAddModal}
-                              className="mt-2 inline-flex items-center px-3.5 py-1.5 text-xs font-semibold bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition cursor-pointer"
-                            >
-                              <PlusIcon className="w-3.5 h-3.5 mr-1" /> Record Withdrawal
-                            </button>
+                          {isRequestedOnly ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <p className="text-gray-800 font-semibold text-sm">No pending withdrawal requests</p>
+                              <p className="text-xs text-gray-400 max-w-xs">All requested bank withdrawals have been accepted.</p>
+                              <button
+                                onClick={() => setIsRequestedOnly(false)}
+                                className="mt-2 px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 cursor-pointer"
+                              >
+                                View All Withdrawals →
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm font-medium text-gray-600">No withdrawal records found</p>
+                              <p className="text-xs text-gray-400">
+                                {searchQuery || isFilterActive
+                                  ? "Try modifying your search or filter criteria."
+                                  : "Click 'Record Withdrawal' above to add your first withdrawal entry."}
+                              </p>
+                              {!cannotAddEdit && (
+                                <button
+                                  onClick={openAddModal}
+                                  className="mt-2 inline-flex items-center px-3.5 py-1.5 text-xs font-semibold bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition cursor-pointer"
+                                >
+                                  <PlusIcon className="w-3.5 h-3.5 mr-1" /> Record Withdrawal
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -1929,6 +2185,19 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                         <td className="px-5 py-4 whitespace-nowrap text-right font-bold text-rose-600 text-[13px]">
                           ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-center">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                            item.status === 'Requested'
+                              ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                              : item.status === 'Rejected'
+                                ? 'bg-red-50 text-red-700 border border-red-200/60'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                          }`}>
+                            {getStatusBadgeText(item)}
+                          </span>
+                        </td>
                         {canShowEntryBy && (
                           <td className="px-5 py-4 whitespace-nowrap text-center align-middle">
                             <div className="flex flex-col items-center justify-center gap-0.5">
@@ -1940,9 +2209,14 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                                   ✎ {getEditedByName(item.editedBy, item.editedByName || item.updatedBy)}
                                 </span>
                               )}
+                              {(item.smApprovedByName || item.smApprovedBy) && (
+                                <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
+                                  ✓ {getFirstNameFromIdentifier(item.smApprovedByName || item.smApprovedBy)}
+                                </span>
+                              )}
                               {(item.approvedByName || item.approvedBy) && (
-                                <span className="text-[10px] text-emerald-600 font-semibold" title="Approved">
-                                  ✓ {getFirstNameFromIdentifier(item.approvedByName || item.approvedBy)}
+                                <span className="text-[10px] text-emerald-600 font-semibold" title="2nd / Final Approval">
+                                  ✓✓ {getFirstNameFromIdentifier(item.approvedByName || item.approvedBy)}
                                 </span>
                               )}
                             </div>
@@ -1957,7 +2231,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                             >
                               <EyeIcon className="w-4 h-4" />
                             </button>
-                            {canEdit && (
+                            {(canEdit || (item.status === 'Requested' && canEditBeforeApproval(item))) && (
                               <button
                                 onClick={() => openEditModal(item)}
                                 title="Edit Withdrawal"
@@ -1966,11 +2240,29 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                                 <EditIcon className="w-4 h-4" />
                               </button>
                             )}
-                            {canDelete && (
+                            {item.status === 'Requested' && showRequestedApprovalButtons(item) && (
+                              <>
+                                <button
+                                  onClick={() => handleStatusUpdate(item, 'Accepted')}
+                                  className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                                  title={item.smApproved ? "Accept (Final Approval)" : "Accept (1st Approval)"}
+                                >
+                                  <CheckIcon className="w-4 h-4 text-emerald-600" />
+                                </button>
+                                <button
+                                  onClick={() => handleStatusUpdate(item, 'Rejected')}
+                                  className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                  title="Reject Withdrawal"
+                                >
+                                  <XIcon className="w-4 h-4 text-rose-600" />
+                                </button>
+                              </>
+                            )}
+                            {item.status !== 'Requested' && canDelete && (
                               <button
-                                onClick={() => handleDelete(item._id)}
+                                onClick={() => handleDelete(item._id || item.id)}
                                 title="Delete Withdrawal"
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                               >
                                 <TrashIcon className="w-4 h-4" />
                               </button>
@@ -1998,19 +2290,34 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                 <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl mx-auto flex items-center justify-center mb-3">
                   <ArrowUpRightIcon className="w-6 h-6" />
                 </div>
-                <p className="text-sm font-bold text-gray-700">No withdrawal records found</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {searchQuery || isFilterActive
-                    ? "Try modifying your search or filter criteria."
-                    : "Click 'Record Withdrawal' above to add your first withdrawal entry."}
-                </p>
-                {!cannotAddEdit && (
-                  <button
-                    onClick={openAddModal}
-                    className="mt-3 inline-flex items-center px-4 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition active:scale-95 shadow-md shadow-rose-500/20 cursor-pointer"
-                  >
-                    <PlusIcon className="w-3.5 h-3.5 mr-1.5" /> Record Withdrawal
-                  </button>
+                {isRequestedOnly ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-gray-800 font-bold text-sm">No pending withdrawal requests</p>
+                    <p className="text-xs text-gray-400 max-w-xs">All requested bank withdrawals have been accepted.</p>
+                    <button
+                      onClick={() => setIsRequestedOnly(false)}
+                      className="mt-2 px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 cursor-pointer"
+                    >
+                      View All Withdrawals →
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-bold text-gray-700">No withdrawal records found</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {searchQuery || isFilterActive
+                        ? "Try modifying your search or filter criteria."
+                        : "Click 'Record Withdrawal' above to add your first withdrawal entry."}
+                    </p>
+                    {!cannotAddEdit && (
+                      <button
+                        onClick={openAddModal}
+                        className="mt-3 inline-flex items-center px-4 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition active:scale-95 shadow-md shadow-rose-500/20 cursor-pointer"
+                      >
+                        <PlusIcon className="w-3.5 h-3.5 mr-1.5" /> Record Withdrawal
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -2062,10 +2369,23 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                         )}
                       </div>
 
-                      {/* Right Side: Amount */}
-                      <div className="text-right shrink-0">
+                      {/* Right Side: Amount & Status */}
+                      <div className="text-right shrink-0 space-y-1">
                         <div className="font-black text-rose-600 text-lg sm:text-xl">
                           ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            item.status === 'Requested'
+                              ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                              : item.status === 'Rejected'
+                                ? 'bg-red-50 text-red-700 border border-red-200/60'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                          }`}>
+                            {getStatusBadgeText(item)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -2074,6 +2394,23 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                     {isExpanded && (
                       <div className="px-4 pb-5 animate-in slide-in-from-top-2 duration-200">
                         <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                          <div className="flex items-start text-xs sm:text-sm">
+                            <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Status -</span>
+                            <span className="font-bold flex-1">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                                item.status === 'Requested'
+                                  ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                                  : item.status === 'Rejected'
+                                    ? 'bg-red-50 text-red-700 border border-red-200/60'
+                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                              }`}>
+                                {getStatusBadgeText(item)}
+                              </span>
+                            </span>
+                          </div>
+
                           <div className="flex items-start text-xs sm:text-sm">
                             <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Date -</span>
                             <span className="font-semibold text-gray-800 flex-1">{formatDate(item.date)}</span>
@@ -2123,6 +2460,13 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                             </div>
                           )}
 
+                          {item.rejectionReason && (
+                            <div className="flex items-start text-xs sm:text-sm">
+                              <span className="w-28 text-rose-500 font-bold uppercase tracking-wider text-[11px] shrink-0">Reject Reason -</span>
+                              <span className="text-rose-700 font-semibold leading-relaxed break-words flex-1">{item.rejectionReason}</span>
+                            </div>
+                          )}
+
                           <div className="flex items-start text-xs sm:text-sm">
                             <span className="w-28 text-rose-500 font-bold uppercase tracking-wider text-[11px] shrink-0">Amount -</span>
                             <span className="font-black text-rose-600 text-sm sm:text-base flex-1">
@@ -2138,8 +2482,14 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                                 {editedName && (
                                   <span className="text-[10px] text-amber-600 font-medium">✎ {editedName}</span>
                                 )}
+                                {(item.smApprovedByName || item.smApprovedBy) && (
+                                  <span className="text-[10px] text-blue-600 font-medium">✓ 1st Approved: {getFirstNameFromIdentifier(item.smApprovedByName || item.smApprovedBy)}</span>
+                                )}
                                 {approvedName && (
-                                  <span className="text-[10px] text-emerald-600 font-semibold">✓ {approvedName}</span>
+                                  <span className="text-[10px] text-emerald-600 font-semibold">✓✓ Final Approved: {approvedName}</span>
+                                )}
+                                {(item.rejectedByName || item.rejectedBy) && (
+                                  <span className="text-[10px] text-rose-600 font-semibold">✕ Rejected: {getFirstNameFromIdentifier(item.rejectedByName || item.rejectedBy)}</span>
                                 )}
                               </div>
                             </div>
@@ -2155,7 +2505,26 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                               <span>View Voucher</span>
                             </button>
 
-                            {canEdit && (
+                            {item.status === 'Requested' && showRequestedApprovalButtons(item) && (
+                              <>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleStatusUpdate(item, 'Accepted'); }}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-sm shadow-emerald-500/20 cursor-pointer"
+                                >
+                                  <CheckIcon className="w-3.5 h-3.5" />
+                                  <span>{item.smApproved ? 'Accept (Final)' : 'Accept (1st)'}</span>
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleStatusUpdate(item, 'Rejected'); }}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition active:scale-95 cursor-pointer"
+                                >
+                                  <XIcon className="w-3.5 h-3.5" />
+                                  <span>Reject</span>
+                                </button>
+                              </>
+                            )}
+
+                            {(canEdit || (item.status === 'Requested' && canEditBeforeApproval(item))) && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); openEditModal(item); }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition active:scale-95 cursor-pointer"
@@ -2165,7 +2534,7 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                               </button>
                             )}
 
-                            {canDelete && (
+                            {item.status !== 'Requested' && canDelete && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition active:scale-95 cursor-pointer"
@@ -2216,9 +2585,22 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                 <div className="text-2xl font-black text-rose-600 mt-1 font-mono">
                   ৳{(Number(viewingWithdrawal.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
-                <span className="inline-block mt-1 text-[11px] px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">
-                  {viewingWithdrawal.withdrawalType}
-                </span>
+                <div className="flex items-center justify-center gap-1.5 mt-1.5 flex-wrap">
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">
+                    {viewingWithdrawal.withdrawalType}
+                  </span>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    viewingWithdrawal.status === 'Requested'
+                      ? (getStatusBadgeText(viewingWithdrawal) === 'Pending 2nd Approval'
+                        ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                      : viewingWithdrawal.status === 'Rejected'
+                        ? 'bg-red-50 text-red-700 border border-red-200/60'
+                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                  }`}>
+                    {getStatusBadgeText(viewingWithdrawal)}
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -2262,20 +2644,37 @@ const Withdrawal = ({ currentUser, onDeleteConfirm }) => {
                 </div>
               )}
 
+              {viewingWithdrawal.rejectionReason && (
+                <div className="p-3 bg-red-50/60 border border-red-100 rounded-xl text-xs">
+                  <span className="text-red-500 font-bold block">Rejection Reason</span>
+                  <div className="text-red-800 font-semibold mt-0.5">{viewingWithdrawal.rejectionReason}</div>
+                </div>
+              )}
+
               {canShowEntryBy && (viewingWithdrawal.entryByName || viewingWithdrawal.entryBy || viewingWithdrawal.createdBy) && (
-                <div className="p-3 bg-gray-50 rounded-xl text-xs space-y-1">
-                  <span className="text-gray-400 font-medium block">Entry By</span>
+                <div className="p-3 bg-gray-50 rounded-xl text-xs space-y-1.5">
+                  <span className="text-gray-400 font-medium block">Audit & Approval Trail</span>
                   <div className="font-semibold text-gray-800">
-                    {getEntryByName(viewingWithdrawal.entryBy, viewingWithdrawal.entryByName || viewingWithdrawal.createdBy || viewingWithdrawal.createdByName || viewingWithdrawal.userName || viewingWithdrawal.user)}
+                    Entered By: {getEntryByName(viewingWithdrawal.entryBy, viewingWithdrawal.entryByName || viewingWithdrawal.createdBy || viewingWithdrawal.createdByName || viewingWithdrawal.userName || viewingWithdrawal.user)}
                   </div>
                   {(viewingWithdrawal.editedBy || viewingWithdrawal.editedByName || (viewingWithdrawal.updatedBy && viewingWithdrawal.updatedBy !== viewingWithdrawal.entryBy && viewingWithdrawal.updatedBy !== viewingWithdrawal.entryByName)) && (
                     <div className="text-[11px] text-amber-600 font-medium">
                       ✎ Edited: {getEditedByName(viewingWithdrawal.editedBy, viewingWithdrawal.editedByName || viewingWithdrawal.updatedBy)}
                     </div>
                   )}
+                  {(viewingWithdrawal.smApprovedByName || viewingWithdrawal.smApprovedBy) && (
+                    <div className="text-[11px] text-blue-600 font-medium">
+                      ✓ 1st Approved: {getFirstNameFromIdentifier(viewingWithdrawal.smApprovedByName || viewingWithdrawal.smApprovedBy)}
+                    </div>
+                  )}
                   {(viewingWithdrawal.approvedByName || viewingWithdrawal.approvedBy) && (
                     <div className="text-[11px] text-emerald-600 font-semibold">
-                      ✓ Approved: {getFirstNameFromIdentifier(viewingWithdrawal.approvedByName || viewingWithdrawal.approvedBy)}
+                      ✓✓ Final Approved: {getFirstNameFromIdentifier(viewingWithdrawal.approvedByName || viewingWithdrawal.approvedBy)}
+                    </div>
+                  )}
+                  {(viewingWithdrawal.rejectedByName || viewingWithdrawal.rejectedBy) && (
+                    <div className="text-[11px] text-rose-600 font-semibold">
+                      ✕ Rejected By: {getFirstNameFromIdentifier(viewingWithdrawal.rejectedByName || viewingWithdrawal.rejectedBy)}
                     </div>
                   )}
                 </div>
