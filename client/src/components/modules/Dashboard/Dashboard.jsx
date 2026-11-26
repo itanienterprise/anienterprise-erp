@@ -1763,12 +1763,595 @@ const Dashboard = ({
   const hasCard8 = canAccess('lcGraph', 'lcManagement');
   const hasCard9 = canAccess('recentActivity', 'log');
 
-  const row3GridClass = useMemo(() => {
-    const count = (hasCard7 ? 1 : 0) + (hasCard8 ? 1 : 0) + (hasCard9 ? 1 : 0);
-    if (count === 3) return 'grid-cols-1 lg:grid-cols-3';
-    if (count === 2) return 'grid-cols-1 lg:grid-cols-2';
-    return 'grid-cols-1';
-  }, [hasCard7, hasCard8, hasCard9]);
+  const row3CardsCount = (hasCard7 ? 1 : 0) + (hasCard8 ? 1 : 0) + (hasCard9 ? 1 : 0);
+  const isCard3InRow3 = hasCard3 && (row3CardsCount === 1 || row3CardsCount === 2);
+
+  // ─── Render Helper: Card 7 Location & Hubs ──────────────────────────────
+  const renderCard7 = (colSpanClass = '') => {
+    if (!hasCard7) return null;
+    return (
+      <div className={`dash-card ${colSpanClass} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between h-full`}>
+        <div>
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100 min-h-[46px]">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-cyan-50 flex items-center justify-center text-cyan-600">
+                <MapPinIcon className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-gray-900">Location & Hubs</h2>
+                <p className="text-[11px] text-gray-400">MDM GPS & Logistics Map</p>
+              </div>
+            </div>
+
+            {/* Filter */}
+            <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
+              {['all', 'devices', 'hubs'].map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setMapTab(t)}
+                  className={`px-2 py-1 rounded-md text-[11px] capitalize font-semibold transition-all cursor-pointer ${mapTab === t
+                    ? 'bg-white text-cyan-600 shadow-xs'
+                    : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Map Container */}
+          <div className="my-3 rounded-xl overflow-hidden border border-gray-200 h-64 dash-map-container relative">
+            <div ref={mapContainerRef} className="w-full h-full"></div>
+          </div>
+
+          {/* Map Legend */}
+          <div className="flex items-center justify-between text-[11px] text-gray-500 px-1">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600"></span> Sea/Land Port</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-600"></span> Warehouse Hub</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> Live GPS</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+          <span>National Coverage:</span>
+          <span className="font-semibold text-gray-700">Bangladesh Grid</span>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Render Helper: Card 8 LC & PI Trends ──────────────────────────────
+  const renderCard8 = (colSpanClass = '') => {
+    if (!hasCard8) return null;
+
+    const pts = lineGraphData.points;
+    const hasPoints = pts && pts.length >= 2;
+    const step = hasPoints ? 472 / (pts.length - 1) : 0;
+    const max = Math.max(6, Math.ceil(lineGraphData.maxVal * 1.25));
+
+    const coordinatesLc = hasPoints ? pts.map((p, idx) => {
+      const x = 14 + idx * step;
+      const y = 130 - ((p.lcCount || 0) / max) * 105;
+      return { x, y, p };
+    }) : [];
+
+    const coordinatesPi = hasPoints ? pts.map((p, idx) => {
+      const x = 14 + idx * step;
+      const y = 130 - ((p.piCount || 0) / max) * 105;
+      return { x, y, p };
+    }) : [];
+
+    const lcPathD = coordinatesLc.reduce((acc, c, idx) => {
+      return idx === 0 ? `M ${c.x} ${c.y}` : `${acc} L ${c.x} ${c.y}`;
+    }, '');
+    const lcAreaD = coordinatesLc.length > 0
+      ? `${lcPathD} L ${coordinatesLc[coordinatesLc.length - 1].x} 130 L ${coordinatesLc[0].x} 130 Z`
+      : '';
+
+    const piPathD = coordinatesPi.reduce((acc, c, idx) => {
+      return idx === 0 ? `M ${c.x} ${c.y}` : `${acc} L ${c.x} ${c.y}`;
+    }, '');
+    const piAreaD = coordinatesPi.length > 0
+      ? `${piPathD} L ${coordinatesPi[coordinatesPi.length - 1].x} 130 L ${coordinatesPi[0].x} 130 Z`
+      : '';
+
+    return (
+      <div className={`dash-card ${colSpanClass} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between h-full`}>
+        <div>
+          {/* Header with Switch */}
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100 min-h-[46px]">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <TrendingUpIcon className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-gray-900">LC & PI Trends</h2>
+                <p className="text-[11px] text-gray-400">Activity Over Days</p>
+              </div>
+            </div>
+
+            <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
+              {['weekly', 'daily', 'all'].map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setLcGraphTimeframe(tab)}
+                  className={`px-2 py-1 rounded-md text-[11px] capitalize font-semibold transition-all cursor-pointer ${lcGraphTimeframe === tab
+                    ? 'bg-white text-indigo-600 shadow-xs'
+                    : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                >
+                  {tab === 'weekly' ? 'Weekly' : tab === 'daily' ? 'Daily' : 'All'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* KPI Chips */}
+          <div className="grid grid-cols-2 gap-3 my-4">
+            <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/80">
+              <span className="text-[11px] font-semibold text-indigo-600 block">Total LC Records</span>
+              <span className="text-xl font-bold text-indigo-950">{lineGraphData.totalLcs}</span>
+            </div>
+            <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100/80">
+              <span className="text-[11px] font-semibold text-emerald-600 block">Active PIs</span>
+              <span className="text-xl font-bold text-emerald-950">{lineGraphData.totalPis}</span>
+            </div>
+          </div>
+
+          {/* Interactive SVG Line Graph with Crisp Typography & Round Dots */}
+          <div className="relative h-44 sm:h-48 w-full mt-2">
+            {/* SVG Canvas for smooth area gradients and paths */}
+            <svg viewBox="0 0 500 135" preserveAspectRatio="none" className="w-full h-36 sm:h-40 overflow-visible">
+              <defs>
+                <linearGradient id="lcGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#6366f1" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
+                </linearGradient>
+                <linearGradient id="piGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              {/* Horizontal Guide Lines */}
+              {[25, 60, 95, 130].map((y) => (
+                <line key={y} x1="8" y1={y} x2="492" y2={y} stroke="#f1f5f9" strokeDasharray="3 3" />
+              ))}
+
+              {/* LC Curve & Area (Indigo) */}
+              {hasPoints && (
+                <g>
+                  <path d={lcAreaD} fill="url(#lcGradient)" />
+                  <path d={lcPathD} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </g>
+              )}
+
+              {/* PI Curve & Area (Emerald) */}
+              {hasPoints && (
+                <g>
+                  <path d={piAreaD} fill="url(#piGradient)" />
+                  <path d={piPathD} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </g>
+              )}
+            </svg>
+
+            {/* Interactive HTML Dots Layer: 100% round circles in pure CSS, never distorted */}
+            {hasPoints && (
+              <div className="absolute top-0 left-0 right-0 h-36 sm:h-40 pointer-events-none">
+                {coordinatesLc.map((c, idx) => {
+                  const leftPct = (c.x / 500) * 100;
+                  const topPct = (c.y / 135) * 100;
+                  const isHovered = lineHoveredPoint?.type === 'LC' && lineHoveredPoint?.label === c.p.label;
+
+                  return (
+                    <div
+                      key={`lc-dot-${idx}`}
+                      className={`absolute w-2.5 h-2.5 -ml-1.25 -mt-1.25 rounded-full bg-indigo-500 border-2 border-white shadow-xs pointer-events-auto cursor-pointer transition-transform duration-150 ${isHovered ? 'scale-150 ring-2 ring-indigo-300' : 'hover:scale-135'}`}
+                      style={{ left: `${leftPct}%`, top: `${topPct}%` }}
+                      onMouseEnter={() => setLineHoveredPoint({ ...c.p, x: c.x, y: c.y, type: 'LC' })}
+                      onMouseLeave={() => setLineHoveredPoint(null)}
+                    />
+                  );
+                })}
+
+                {coordinatesPi.map((c, idx) => {
+                  const leftPct = (c.x / 500) * 100;
+                  const topPct = (c.y / 135) * 100;
+                  const isHovered = lineHoveredPoint?.type === 'PI' && lineHoveredPoint?.label === c.p.label;
+
+                  return (
+                    <div
+                      key={`pi-dot-${idx}`}
+                      className={`absolute w-2.5 h-2.5 -ml-1.25 -mt-1.25 rounded-full bg-emerald-500 border-2 border-white shadow-xs pointer-events-auto cursor-pointer transition-transform duration-150 ${isHovered ? 'scale-150 ring-2 ring-emerald-300' : 'hover:scale-135'}`}
+                      style={{ left: `${leftPct}%`, top: `${topPct}%` }}
+                      onMouseEnter={() => setLineHoveredPoint({ ...c.p, x: c.x, y: c.y, type: 'PI' })}
+                      onMouseLeave={() => setLineHoveredPoint(null)}
+                    />
+                  );
+                })}
+              </div>
+            )}
+
+            {/* X Axis Labels: Crisp HTML typography, never stretched horizontally */}
+            {hasPoints && (
+              <div className="relative w-full h-5 mt-1 pointer-events-none">
+                {pts.map((p, idx) => {
+                  const x = 14 + idx * step;
+                  const leftPct = (x / 500) * 100;
+                  return (
+                    <span
+                      key={idx}
+                      className="absolute text-[10px] sm:text-[11px] font-semibold text-slate-400 transform -translate-x-1/2 whitespace-nowrap"
+                      style={{ left: `${leftPct}%` }}
+                    >
+                      {p.label}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Hover Tooltip */}
+            {lineHoveredPoint && (
+              <div
+                className="absolute z-20 bg-gray-900/95 backdrop-blur-xs text-white text-[11px] p-2.5 rounded-xl shadow-xl pointer-events-none transform -translate-x-1/2 -translate-y-full border border-gray-700/50 min-w-[130px]"
+                style={{
+                  left: `${(lineHoveredPoint.x / 500) * 100}%`,
+                  top: `${(lineHoveredPoint.y / 135) * 100 - 8}%`
+                }}
+              >
+                <div className="font-bold text-gray-200 border-b border-gray-800 pb-1 mb-1.5 flex items-center justify-between">
+                  <span>{lineHoveredPoint.label}</span>
+                  {lineHoveredPoint.subLabel && <span className="text-[10px] text-gray-400 font-normal">{lineHoveredPoint.subLabel}</span>}
+                </div>
+                <div className="flex items-center justify-between gap-3 text-indigo-300 font-semibold">
+                  <span>LC Records:</span>
+                  <strong className="text-white text-xs">{lineHoveredPoint.lcCount}</strong>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-emerald-300 font-semibold mt-1">
+                  <span>PI Records:</span>
+                  <strong className="text-white text-xs">{lineHoveredPoint.piCount}</strong>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 font-medium"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> LC Stream</span>
+            <span className="flex items-center gap-1.5 font-medium"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> PI Records</span>
+          </div>
+          <span className="font-semibold text-gray-700">
+            {lcGraphTimeframe === 'weekly' ? '8-Week Trend' : lcGraphTimeframe === 'all' ? 'Monthly Trend' : '7-Day Trend'}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Render Helper: Card 9 Recent Activity ──────────────────────────────
+  const renderCard9 = (colSpanClass = '') => {
+    if (!hasCard9) return null;
+    return (
+      <div className={`dash-card ${colSpanClass} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between h-full`}>
+        <div>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 min-h-[46px]">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
+                <ActivityLogIcon className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-gray-900">Recent Activity</h2>
+                <p className="text-[11px] text-gray-400">Live System Operations & Audits</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={activityModuleFilter}
+                onChange={(e) => setActivityModuleFilter(e.target.value)}
+                className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 outline-none cursor-pointer"
+              >
+                <option value="ALL">All Modules</option>
+                <option value="SALES">Sales & Orders</option>
+                <option value="LC">LC Operations</option>
+                <option value="PAYMENT">Payments</option>
+                <option value="STOCK">Inventory</option>
+                <option value="AUTH">Authentication</option>
+              </select>
+
+              {onNavigate && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('log-section')}
+                  className="text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer whitespace-nowrap ml-1"
+                >
+                  View All Logs →
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Activity Log Feed */}
+          <div className="space-y-2.5 my-3 max-h-64 overflow-y-auto dash-scrollbar pr-1">
+            {filteredRecentLogs.length === 0 ? (
+              <div className="text-center py-12 text-gray-400 text-xs">
+                No recent activity logs recorded yet.
+              </div>
+            ) : (
+              filteredRecentLogs.map((log, idx) => {
+                const modUpper = (log.module || 'SYSTEM').toUpperCase();
+                const badgeColor =
+                  modUpper.includes('SALE') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    modUpper.includes('LC') ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                      modUpper.includes('PAY') || modUpper.includes('BANK') ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        modUpper.includes('STOCK') ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                          'bg-gray-100 text-gray-700 border-gray-200';
+
+                return (
+                  <div
+                    key={log._id || idx}
+                    className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:border-gray-200 hover:bg-gray-50/60 transition-all"
+                  >
+                    {/* Avatar */}
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-gray-700 to-gray-500 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs">
+                      {(log.displayName || log.username || 'S').charAt(0).toUpperCase()}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-gray-900 truncate">
+                          {log.displayName || log.username || 'System'}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeColor}`}>
+                          {log.module || 'General'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5 leading-snug break-words">
+                        {log.description}
+                      </p>
+                    </div>
+
+                    {/* Timestamp */}
+                    <div className="text-right flex-shrink-0 text-[10px] text-gray-400 font-medium">
+                      {getRelativeTime(log.timestamp)}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
+          <span>Synchronized via Real-time Socket</span>
+          <span className="text-gray-500 font-semibold">{filteredRecentLogs.length} events logged</span>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Render Helper: Card 3 Distribution Pie ─────────────────────────────
+  const renderCard3 = (colSpanClass = '') => {
+    if (!hasCard3) return null;
+    return (
+      <div className={`dash-card ${colSpanClass} bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between h-full`}>
+        <div>
+          {/* Header with Product / IP / LC Switch */}
+          <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                <BoxIcon className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-gray-900">Distribution Pie</h2>
+                <p className="text-[11px] text-gray-400">Inventory & Volumes</p>
+              </div>
+            </div>
+
+            <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
+              {['product', 'ip', 'lc'].map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => { setPieTab(tab); setPieHoveredSlice(null); }}
+                  className={`px-2 py-1 rounded-md text-[11px] uppercase font-semibold transition-all cursor-pointer ${pieTab === tab
+                    ? 'bg-white text-amber-600 shadow-xs'
+                    : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Metric Filter */}
+          <div className="flex items-center justify-between my-3 px-1 text-xs text-gray-500">
+            <span>Metric Mode:</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setPieMetric('quantity'); setPieHoveredSlice(null); }}
+                className={`text-[11px] font-semibold cursor-pointer ${pieMetric === 'quantity' ? 'text-amber-600 underline' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                Volume / Qty
+              </button>
+              <span className="text-gray-300">|</span>
+              <button
+                type="button"
+                onClick={() => { setPieMetric('profit'); setPieHoveredSlice(null); }}
+                className={`text-[11px] font-semibold cursor-pointer ${pieMetric === 'profit' ? 'text-amber-600 underline' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                Total Value
+              </button>
+            </div>
+          </div>
+
+          {/* Interactive SVG Pie / Donut Chart */}
+          <div className="relative flex items-center justify-center h-44 sm:h-48 my-1">
+            <svg viewBox="0 0 180 180" className="w-44 h-44 sm:w-48 sm:h-48 transform -rotate-90">
+              {pieChartData.slices.map((slice, idx) => {
+                const r = 82;
+                const cx = 90;
+                const cy = 90;
+                const startAngleRad = (slice.startAngle * Math.PI) / 180;
+                const endAngleRad = (slice.endAngle * Math.PI) / 180;
+
+                const x1 = cx + r * Math.cos(startAngleRad);
+                const y1 = cy + r * Math.sin(startAngleRad);
+                const x2 = cx + r * Math.cos(endAngleRad);
+                const y2 = cy + r * Math.sin(endAngleRad);
+
+                const largeArc = slice.endAngle - slice.startAngle > 180 ? 1 : 0;
+                const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+
+                const isHovered = pieHoveredSlice?.name === slice.name;
+
+                return (
+                  <path
+                    key={idx}
+                    d={d}
+                    fill={slice.color}
+                    stroke="#ffffff"
+                    strokeWidth={isHovered ? "3.5" : "2"}
+                    className="chart-slice transition-all duration-150 cursor-pointer"
+                    style={{
+                      transformOrigin: '90px 90px',
+                      transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                      filter: isHovered ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))' : 'none'
+                    }}
+                    onMouseEnter={() => setPieHoveredSlice(slice)}
+                    onMouseLeave={() => setPieHoveredSlice(null)}
+                  />
+                );
+              })}
+              {/* Donut Hole */}
+              <circle cx="90" cy="90" r="50" fill="#ffffff" />
+            </svg>
+
+            {/* Donut Center Label */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-1">
+              {pieHoveredSlice ? (
+                <>
+                  <span className="text-[11px] uppercase font-bold text-amber-600 max-w-[95px] truncate">
+                    {pieHoveredSlice.name}
+                  </span>
+                  <span className="text-xl font-black text-gray-900 leading-tight">
+                    {pieHoveredSlice.percentage}%
+                  </span>
+                  <span className="text-xs font-semibold text-gray-500">
+                    {pieHoveredSlice.formattedValue}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                    {pieMetric === 'profit' ? 'Total Value' : 'Total Qty'}
+                  </span>
+                  <span className="text-base font-black text-gray-900 leading-tight">
+                    {pieChartData.formattedTotal}
+                  </span>
+                  <span className="text-[10px] font-medium text-gray-400">
+                    Top 5 {pieTab === 'product' ? (pieProductType === 'all' ? 'Products' : `${pieProductType} Products`) : pieTab === 'ip' ? 'Importers' : 'Ports'} ({pieTimeframe === 'monthly' ? 'Monthly' : pieTimeframe === 'yearly' ? 'Yearly' : 'All Time'})
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Breakdown Legend Table */}
+          <div className="space-y-1 mt-1 max-h-32 overflow-y-auto dash-scrollbar pr-0.5">
+            {pieChartData.slices.map((slice, idx) => (
+              <div
+                key={idx}
+                className={`flex items-center justify-between text-xs py-1 px-1.5 rounded-lg cursor-pointer transition-all ${pieHoveredSlice?.name === slice.name
+                  ? 'bg-amber-50/80 shadow-xs ring-1 ring-amber-300'
+                  : 'hover:bg-gray-50'
+                  }`}
+                onMouseEnter={() => setPieHoveredSlice(slice)}
+                onMouseLeave={() => setPieHoveredSlice(null)}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-transform"
+                    style={{
+                      backgroundColor: slice.color,
+                      transform: pieHoveredSlice?.name === slice.name ? 'scale(1.25)' : 'scale(1)'
+                    }}
+                  ></span>
+                  <span className="font-semibold text-gray-700 truncate text-[11px] sm:text-xs">{slice.name}</span>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <span className="text-[11px] text-gray-400 font-medium hidden sm:inline">{slice.formattedValue}</span>
+                  <span className="font-bold text-gray-900 text-[11px] sm:text-xs">{slice.percentage}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+          {/* Left Side: General & Border Product Switch */}
+          {pieTab === 'product' ? (
+            <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'General', label: 'General' },
+                { id: 'Border', label: 'Border' }
+              ].map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => { setPieProductType(id); setPieHoveredSlice(null); }}
+                  className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${pieProductType === id
+                    ? 'bg-white text-amber-600 shadow-xs'
+                    : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+              {pieTab} Distribution
+            </span>
+          )}
+
+          {/* Right Side: Timeframe Switch (Monthly / Yearly / All Time) */}
+          <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
+            {[
+              { id: 'monthly', label: 'Monthly' },
+              { id: 'yearly', label: 'Yearly' },
+              { id: 'all', label: 'All Time' }
+            ].map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => { setPieTimeframe(id); setPieHoveredSlice(null); }}
+                className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${pieTimeframe === id
+                  ? 'bg-white text-amber-600 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-800'
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="dashboard-container space-y-6 pb-12 font-sans">
@@ -1782,7 +2365,7 @@ const Dashboard = ({
               {/* ─── DESKTOP VIEW (md: and above): EXACT ORIGINAL LAYOUT AND STYLING ─── */}
               <div className="hidden md:grid md:grid-cols-12 gap-5 h-full items-stretch">
                 {/* LEFT SIDE: Profile Card */}
-                <div className={`${hasCard2 || hasCard3 ? 'md:col-span-5' : 'md:col-span-4 xl:col-span-3'} relative rounded-2xl select-none md:bg-slate-900 p-4 sm:p-5 min-h-[380px] flex flex-col justify-end overflow-hidden border-none shadow-none`}>
+                <div className={`${hasCard2 || hasPendingRequests ? 'md:col-span-5' : 'md:col-span-4 xl:col-span-3'} relative rounded-2xl select-none md:bg-slate-900 p-4 sm:p-5 min-h-[380px] flex flex-col justify-end overflow-hidden border-none shadow-none`}>
                   {(profilePhoto && !photoLoadError) ? (
                     <img
                       src={profilePhoto}
@@ -1819,7 +2402,7 @@ const Dashboard = ({
                 </div>
 
                 {/* RIGHT SIDE: Saturday - Friday Attendance & Working Time Track */}
-                <div className={`${hasCard2 || hasCard3 ? 'md:col-span-7' : 'md:col-span-8 xl:col-span-9'} flex flex-col justify-between`}>
+                <div className={`${hasCard2 || hasPendingRequests ? 'md:col-span-7' : 'md:col-span-8 xl:col-span-9'} flex flex-col justify-between`}>
                   {renderAttendanceSection()}
                 </div>
               </div>
@@ -2330,571 +2913,49 @@ const Dashboard = ({
         </div>
       )}
 
-      {/* ─── ROW 3: 3 Columns (Location Map | LC & PI Trends | Recent Activity) ── */}
-      {(hasCard7 || hasCard8 || hasCard9) && (
-        <div className={`grid ${row3GridClass} gap-6`}>
-
-          {/* Card 7: Location (Leaflet Map) */}
-          {hasCard7 ? (
-            <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
-              <div>
-                {/* Header */}
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100 min-h-[46px]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-cyan-50 flex items-center justify-center text-cyan-600">
-                      <MapPinIcon className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-bold text-gray-900">Location & Hubs</h2>
-                      <p className="text-[11px] text-gray-400">MDM GPS & Logistics Map</p>
-                    </div>
-                  </div>
-
-                  {/* Filter */}
-                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
-                    {['all', 'devices', 'hubs'].map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => setMapTab(t)}
-                        className={`px-2 py-1 rounded-md text-[11px] capitalize font-semibold transition-all cursor-pointer ${mapTab === t
-                          ? 'bg-white text-cyan-600 shadow-xs'
-                          : 'text-gray-500 hover:text-gray-800'
-                          }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Map Container */}
-                <div className="my-3 rounded-xl overflow-hidden border border-gray-200 h-64 dash-map-container relative">
-                  <div ref={mapContainerRef} className="w-full h-full"></div>
-                </div>
-
-                {/* Map Legend */}
-                <div className="flex items-center justify-between text-[11px] text-gray-500 px-1">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600"></span> Sea/Land Port</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-600"></span> Warehouse Hub</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> Live GPS</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <span>National Coverage:</span>
-                <span className="font-semibold text-gray-700">Bangladesh Grid</span>
-              </div>
+      {/* ─── ROW 3: Location Map | LC & PI Trends | Recent Activity | Distribution Pie (Adaptive Sizing) ── */}
+      {(row3CardsCount > 0 || isCard3InRow3) && (
+        <>
+          {row3CardsCount === 3 && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {renderCard7()}
+              {renderCard8()}
+              {renderCard9()}
             </div>
-          ) : null}
+          )}
 
-          {/* Card 8: LC & PI Trends */}
-          {hasCard8 ? (
-            <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
-              <div>
-                {/* Header with Switch */}
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100 min-h-[46px]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                      <TrendingUpIcon className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-bold text-gray-900">LC & PI Trends</h2>
-                      <p className="text-[11px] text-gray-400">Activity Over Days</p>
-                    </div>
-                  </div>
-
-                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
-                    {['weekly', 'daily', 'all'].map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => setLcGraphTimeframe(tab)}
-                        className={`px-2 py-1 rounded-md text-[11px] capitalize font-semibold transition-all cursor-pointer ${lcGraphTimeframe === tab
-                          ? 'bg-white text-indigo-600 shadow-xs'
-                          : 'text-gray-500 hover:text-gray-800'
-                          }`}
-                      >
-                        {tab === 'weekly' ? 'Weekly' : tab === 'daily' ? 'Daily' : 'All'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* KPI Chips */}
-                <div className="grid grid-cols-2 gap-3 my-4">
-                  <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/80">
-                    <span className="text-[11px] font-semibold text-indigo-600 block">Total LC Records</span>
-                    <span className="text-xl font-bold text-indigo-950">{lineGraphData.totalLcs}</span>
-                  </div>
-                  <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100/80">
-                    <span className="text-[11px] font-semibold text-emerald-600 block">Active PIs</span>
-                    <span className="text-xl font-bold text-emerald-950">{lineGraphData.totalPis}</span>
-                  </div>
-                </div>
-
-                {/* Interactive SVG Line Graph */}
-                <div className="relative h-48 w-full mt-2">
-                  <svg viewBox="0 0 500 160" preserveAspectRatio="none" className="w-full h-full overflow-visible">
-                    <defs>
-                      <linearGradient id="lcGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.3" />
-                        <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
-                      </linearGradient>
-                      <linearGradient id="piGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-                      </linearGradient>
-                    </defs>
-
-                    {/* Horizontal Guide Lines */}
-                    {[30, 65, 100, 135].map((y) => (
-                      <line key={y} x1="8" y1={y} x2="492" y2={y} stroke="#f1f5f9" strokeDasharray="3 3" />
-                    ))}
-
-                    {/* ─── LC Curve & Area (Indigo) ─── */}
-                    {(() => {
-                      const pts = lineGraphData.points;
-                      if (pts.length < 2) return null;
-                      const step = 472 / (pts.length - 1);
-                      const max = Math.max(6, Math.ceil(lineGraphData.maxVal * 1.25));
-
-                      const coordinates = pts.map((p, idx) => {
-                        const x = 14 + idx * step;
-                        const y = 135 - ((p.lcCount || 0) / max) * 105;
-                        return { x, y, p };
-                      });
-
-                      const pathD = coordinates.reduce((acc, c, idx) => {
-                        return idx === 0 ? `M ${c.x} ${c.y}` : `${acc} L ${c.x} ${c.y}`;
-                      }, '');
-
-                      const areaD = `${pathD} L ${coordinates[coordinates.length - 1].x} 135 L ${coordinates[0].x} 135 Z`;
-
-                      return (
-                        <g>
-                          <path d={areaD} fill="url(#lcGradient)" />
-                          <path d={pathD} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                          {coordinates.map((c, idx) => (
-                            <circle
-                              key={`lc-${idx}`}
-                              cx={c.x}
-                              cy={c.y}
-                              r="3.5"
-                              fill="#6366f1"
-                              stroke="#ffffff"
-                              strokeWidth="1.5"
-                              className="chart-dot cursor-pointer"
-                              onMouseEnter={() => setLineHoveredPoint({ ...c.p, x: c.x, y: c.y, type: 'LC' })}
-                              onMouseLeave={() => setLineHoveredPoint(null)}
-                            />
-                          ))}
-                        </g>
-                      );
-                    })()}
-
-                    {/* ─── PI Curve & Area (Emerald) ─── */}
-                    {(() => {
-                      const pts = lineGraphData.points;
-                      if (pts.length < 2) return null;
-                      const step = 472 / (pts.length - 1);
-                      const max = Math.max(6, Math.ceil(lineGraphData.maxVal * 1.25));
-
-                      const coordinates = pts.map((p, idx) => {
-                        const x = 14 + idx * step;
-                        const y = 135 - ((p.piCount || 0) / max) * 105;
-                        return { x, y, p };
-                      });
-
-                      const pathD = coordinates.reduce((acc, c, idx) => {
-                        return idx === 0 ? `M ${c.x} ${c.y}` : `${acc} L ${c.x} ${c.y}`;
-                      }, '');
-
-                      const areaD = `${pathD} L ${coordinates[coordinates.length - 1].x} 135 L ${coordinates[0].x} 135 Z`;
-
-                      return (
-                        <g>
-                          <path d={areaD} fill="url(#piGradient)" />
-                          <path d={pathD} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                          {coordinates.map((c, idx) => (
-                            <circle
-                              key={`pi-${idx}`}
-                              cx={c.x}
-                              cy={c.y}
-                              r="3.5"
-                              fill="#10b981"
-                              stroke="#ffffff"
-                              strokeWidth="1.5"
-                              className="chart-dot cursor-pointer"
-                              onMouseEnter={() => setLineHoveredPoint({ ...c.p, x: c.x, y: c.y, type: 'PI' })}
-                              onMouseLeave={() => setLineHoveredPoint(null)}
-                            />
-                          ))}
-                        </g>
-                      );
-                    })()}
-
-                    {/* X Axis Labels */}
-                    {lineGraphData.points.map((p, idx) => {
-                      const step = 472 / (lineGraphData.points.length - 1);
-                      const x = 14 + idx * step;
-                      return (
-                        <text key={idx} x={x} y="152" textAnchor="middle" fontSize="9.5" fill="#94a3b8" fontWeight="600">
-                          {p.label}
-                        </text>
-                      );
-                    })}
-                  </svg>
-
-                  {/* Hover Tooltip */}
-                  {lineHoveredPoint && (
-                    <div
-                      className="absolute z-20 bg-gray-900/95 backdrop-blur-xs text-white text-[11px] p-2.5 rounded-xl shadow-xl pointer-events-none transform -translate-x-1/2 -translate-y-full border border-gray-700/50 min-w-[130px]"
-                      style={{ left: `${(lineHoveredPoint.x / 500) * 100}%`, top: `${(lineHoveredPoint.y / 160) * 100 - 8}%` }}
-                    >
-                      <div className="font-bold text-gray-200 border-b border-gray-800 pb-1 mb-1.5 flex items-center justify-between">
-                        <span>{lineHoveredPoint.label}</span>
-                        {lineHoveredPoint.subLabel && <span className="text-[10px] text-gray-400 font-normal">{lineHoveredPoint.subLabel}</span>}
-                      </div>
-                      <div className="flex items-center justify-between gap-3 text-indigo-300 font-semibold">
-                        <span>LC Records:</span>
-                        <strong className="text-white text-xs">{lineHoveredPoint.lcCount}</strong>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 text-emerald-300 font-semibold mt-1">
-                        <span>PI Records:</span>
-                        <strong className="text-white text-xs">{lineHoveredPoint.piCount}</strong>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1.5 font-medium"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> LC Stream</span>
-                  <span className="flex items-center gap-1.5 font-medium"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> PI Records</span>
-                </div>
-                <span className="font-semibold text-gray-700">
-                  {lcGraphTimeframe === 'weekly' ? '8-Week Trend' : lcGraphTimeframe === 'all' ? 'Monthly Trend' : '7-Day Trend'}
-                </span>
-              </div>
+          {row3CardsCount === 2 && (
+            <div className={`grid grid-cols-1 ${hasCard3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-6`}>
+              {hasCard7 && renderCard7()}
+              {hasCard8 && renderCard8()}
+              {hasCard9 && renderCard9()}
+              {hasCard3 && renderCard3()}
             </div>
-          ) : null}
+          )}
 
-          {/* Card 9: Recent Activity */}
-          {hasCard9 ? (
-            <div className="dash-card bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between">
-              <div>
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 min-h-[46px]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
-                      <ActivityLogIcon className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-bold text-gray-900">Recent Activity</h2>
-                      <p className="text-[11px] text-gray-400">Live System Operations & Audits</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={activityModuleFilter}
-                      onChange={(e) => setActivityModuleFilter(e.target.value)}
-                      className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 outline-none cursor-pointer"
-                    >
-                      <option value="ALL">All Modules</option>
-                      <option value="SALES">Sales & Orders</option>
-                      <option value="LC">LC Operations</option>
-                      <option value="PAYMENT">Payments</option>
-                      <option value="STOCK">Inventory</option>
-                      <option value="AUTH">Authentication</option>
-                    </select>
-
-                    {onNavigate && (
-                      <button
-                        onClick={() => onNavigate('log-section')}
-                        className="text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer whitespace-nowrap ml-1"
-                      >
-                        View All Logs →
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Activity Log Feed */}
-                <div className="space-y-2.5 my-3 max-h-64 overflow-y-auto dash-scrollbar pr-1">
-                  {filteredRecentLogs.length === 0 ? (
-                    <div className="text-center py-12 text-gray-400 text-xs">
-                      No recent activity logs recorded yet.
-                    </div>
-                  ) : (
-                    filteredRecentLogs.map((log, idx) => {
-                      const modUpper = (log.module || 'SYSTEM').toUpperCase();
-                      const badgeColor =
-                        modUpper.includes('SALE') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                          modUpper.includes('LC') ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                            modUpper.includes('PAY') || modUpper.includes('BANK') ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                              modUpper.includes('STOCK') ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                'bg-gray-100 text-gray-700 border-gray-200';
-
-                      return (
-                        <div
-                          key={log._id || idx}
-                          className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:border-gray-200 hover:bg-gray-50/60 transition-all"
-                        >
-                          {/* Avatar */}
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-gray-700 to-gray-500 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs">
-                            {(log.displayName || log.username || 'S').charAt(0).toUpperCase()}
-                          </div>
-
-                          {/* Content */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-gray-900 truncate">
-                                {log.displayName || log.username || 'System'}
-                              </span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeColor}`}>
-                                {log.module || 'General'}
-                              </span>
-                            </div>
-                            <p className="text-xs text-gray-600 mt-0.5 leading-snug break-words">
-                              {log.description}
-                            </p>
-                          </div>
-
-                          {/* Timestamp */}
-                          <div className="text-right flex-shrink-0 text-[10px] text-gray-400 font-medium">
-                            {getRelativeTime(log.timestamp)}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
-                <span>Synchronized via Real-time Socket</span>
-                <span className="text-gray-500 font-semibold">{filteredRecentLogs.length} events logged</span>
-              </div>
+          {row3CardsCount === 1 && (
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+              {hasCard7 && renderCard7(hasCard3 ? 'xl:col-span-8 lg:col-span-7 col-span-12' : 'xl:col-span-8 lg:col-span-10 col-span-12')}
+              {hasCard8 && renderCard8(hasCard3 ? 'xl:col-span-8 lg:col-span-7 col-span-12' : 'xl:col-span-8 lg:col-span-10 col-span-12')}
+              {hasCard9 && renderCard9(hasCard3 ? 'xl:col-span-8 lg:col-span-7 col-span-12' : 'xl:col-span-8 lg:col-span-10 col-span-12')}
+              {hasCard3 && renderCard3('xl:col-span-4 lg:col-span-5 col-span-12')}
             </div>
-          ) : null}
+          )}
 
-        </div>
+          {row3CardsCount === 0 && hasCard3 && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {renderCard3('col-span-1')}
+            </div>
+          )}
+        </>
       )}
 
-      {/* ─── ROW 4: Distribution Pie (At Last, Size Unchanged) ─── */}
-      {hasCard3 ? (
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-          {/* Card 3: LC / IP / Pie Chart (Product & Profit) */}
-          {hasCard3 ? (
-            <div className={`dash-card xl:col-span-3 bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs flex flex-col justify-between`}>
-              <div>
-                {/* Header with Product / IP / LC Switch */}
-                <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
-                      <BoxIcon className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-bold text-gray-900">Distribution Pie</h2>
-                      <p className="text-[11px] text-gray-400">Inventory & Volumes</p>
-                    </div>
-                  </div>
-
-                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
-                    {['product', 'ip', 'lc'].map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => { setPieTab(tab); setPieHoveredSlice(null); }}
-                        className={`px-2 py-1 rounded-md text-[11px] uppercase font-semibold transition-all cursor-pointer ${pieTab === tab
-                          ? 'bg-white text-amber-600 shadow-xs'
-                          : 'text-gray-500 hover:text-gray-800'
-                          }`}
-                      >
-                        {tab}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Metric Filter */}
-                <div className="flex items-center justify-between my-3 px-1 text-xs text-gray-500">
-                  <span>Metric Mode:</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { setPieMetric('quantity'); setPieHoveredSlice(null); }}
-                      className={`text-[11px] font-semibold cursor-pointer ${pieMetric === 'quantity' ? 'text-amber-600 underline' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                      Volume / Qty
-                    </button>
-                    <span className="text-gray-300">|</span>
-                    <button
-                      onClick={() => { setPieMetric('profit'); setPieHoveredSlice(null); }}
-                      className={`text-[11px] font-semibold cursor-pointer ${pieMetric === 'profit' ? 'text-amber-600 underline' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                      Total Value
-                    </button>
-                  </div>
-                </div>
-
-                {/* Interactive SVG Pie / Donut Chart */}
-                <div className="relative flex items-center justify-center h-44 sm:h-48 my-1">
-                  <svg viewBox="0 0 180 180" className="w-44 h-44 sm:w-48 sm:h-48 transform -rotate-90">
-                    {pieChartData.slices.map((slice, idx) => {
-                      const r = 82;
-                      const cx = 90;
-                      const cy = 90;
-                      const startAngleRad = (slice.startAngle * Math.PI) / 180;
-                      const endAngleRad = (slice.endAngle * Math.PI) / 180;
-
-                      const x1 = cx + r * Math.cos(startAngleRad);
-                      const y1 = cy + r * Math.sin(startAngleRad);
-                      const x2 = cx + r * Math.cos(endAngleRad);
-                      const y2 = cy + r * Math.sin(endAngleRad);
-
-                      const largeArc = slice.endAngle - slice.startAngle > 180 ? 1 : 0;
-                      const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
-
-                      const isHovered = pieHoveredSlice?.name === slice.name;
-
-                      return (
-                        <path
-                          key={idx}
-                          d={d}
-                          fill={slice.color}
-                          stroke="#ffffff"
-                          strokeWidth={isHovered ? "3.5" : "2"}
-                          className="chart-slice transition-all duration-150 cursor-pointer"
-                          style={{
-                            transformOrigin: '90px 90px',
-                            transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-                            filter: isHovered ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))' : 'none'
-                          }}
-                          onMouseEnter={() => setPieHoveredSlice(slice)}
-                          onMouseLeave={() => setPieHoveredSlice(null)}
-                        />
-                      );
-                    })}
-                    {/* Donut Hole */}
-                    <circle cx="90" cy="90" r="50" fill="#ffffff" />
-                  </svg>
-
-                  {/* Donut Center Label */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-1">
-                    {pieHoveredSlice ? (
-                      <>
-                        <span className="text-[11px] uppercase font-bold text-amber-600 max-w-[95px] truncate">
-                          {pieHoveredSlice.name}
-                        </span>
-                        <span className="text-xl font-black text-gray-900 leading-tight">
-                          {pieHoveredSlice.percentage}%
-                        </span>
-                        <span className="text-xs font-semibold text-gray-500">
-                          {pieHoveredSlice.formattedValue}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                          {pieMetric === 'profit' ? 'Total Value' : 'Total Qty'}
-                        </span>
-                        <span className="text-base font-black text-gray-900 leading-tight">
-                          {pieChartData.formattedTotal}
-                        </span>
-                        <span className="text-[10px] font-medium text-gray-400">
-                          Top 5 {pieTab === 'product' ? (pieProductType === 'all' ? 'Products' : `${pieProductType} Products`) : pieTab === 'ip' ? 'Importers' : 'Ports'} ({pieTimeframe === 'monthly' ? 'Monthly' : pieTimeframe === 'yearly' ? 'Yearly' : 'All Time'})
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Breakdown Legend Table */}
-                <div className="space-y-1 mt-1 max-h-32 overflow-y-auto dash-scrollbar pr-0.5">
-                  {pieChartData.slices.map((slice, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex items-center justify-between text-xs py-1 px-1.5 rounded-lg cursor-pointer transition-all ${pieHoveredSlice?.name === slice.name
-                        ? 'bg-amber-50/80 shadow-xs ring-1 ring-amber-300'
-                        : 'hover:bg-gray-50'
-                        }`}
-                      onMouseEnter={() => setPieHoveredSlice(slice)}
-                      onMouseLeave={() => setPieHoveredSlice(null)}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-transform"
-                          style={{
-                            backgroundColor: slice.color,
-                            transform: pieHoveredSlice?.name === slice.name ? 'scale(1.25)' : 'scale(1)'
-                          }}
-                        ></span>
-                        <span className="font-semibold text-gray-700 truncate text-[11px] sm:text-xs">{slice.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                        <span className="text-[11px] text-gray-400 font-medium hidden sm:inline">{slice.formattedValue}</span>
-                        <span className="font-bold text-gray-900 text-[11px] sm:text-xs">{slice.percentage}%</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-                {/* Left Side: General & Border Product Switch */}
-                {pieTab === 'product' ? (
-                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
-                    {[
-                      { id: 'all', label: 'All' },
-                      { id: 'General', label: 'General' },
-                      { id: 'Border', label: 'Border' }
-                    ].map(({ id, label }) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => { setPieProductType(id); setPieHoveredSlice(null); }}
-                        className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${pieProductType === id
-                          ? 'bg-white text-amber-600 shadow-xs'
-                          : 'text-gray-500 hover:text-gray-800'
-                          }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                    {pieTab} Distribution
-                  </span>
-                )}
-
-                {/* Right Side: Timeframe Switch (Monthly / Yearly / All Time) */}
-                <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
-                  {[
-                    { id: 'monthly', label: 'Monthly' },
-                    { id: 'yearly', label: 'Yearly' },
-                    { id: 'all', label: 'All Time' }
-                  ].map(({ id, label }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => { setPieTimeframe(id); setPieHoveredSlice(null); }}
-                      className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer ${pieTimeframe === id
-                        ? 'bg-white text-amber-600 shadow-xs'
-                        : 'text-gray-500 hover:text-gray-800'
-                        }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
+      {/* ─── ROW 4: Distribution Pie (When Row 3 is Full with 3 Cards) ─── */}
+      {hasCard3 && !isCard3InRow3 && row3CardsCount > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {renderCard3('col-span-1')}
         </div>
-      ) : null}
+      )}
     </div>
   );
 };
