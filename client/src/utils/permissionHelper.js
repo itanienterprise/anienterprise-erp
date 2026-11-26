@@ -355,10 +355,17 @@ export const MODULES_LIST = [
             { key: 'todoList', label: 'To-Do List' },
             { key: 'locationMap', label: 'Location & Map' },
             { key: 'recentActivity', label: 'Recent Activity Feed' },
-            { key: 'pendingRequests', label: 'Pending Requests Hub' }
+            { key: 'pendingRequests', label: 'Pending Requests Hub' },
+            { key: 'activeUsers', label: 'Active Users Today' }
         ]
     },
-    { key: 'log', label: 'Log' }
+    { 
+        key: 'log', 
+        label: 'Log',
+        specialLabels: [
+            { key: 'activeUsers', label: 'Active Users Today' }
+        ]
+    }
 ].sort((a, b) => (a.label || '').localeCompare(b.label || ''));
 
 /**
@@ -508,7 +515,7 @@ export const getDefaultPermissionsForRole = (role) => {
         defaults['dashboard'] = {
             view: true, add: true, edit: true, delete: false, special: true,
             profile: true, bankDollarRates: true, syncDollarRates: canSyncByDefault, lcGraph: true, pieChart: true, orderSales: true,
-            collectionSales: true, todoList: true, locationMap: true, recentActivity: true, pendingRequests: true
+            collectionSales: true, todoList: true, locationMap: true, recentActivity: true, pendingRequests: true, activeUsers: true
         };
     }
 

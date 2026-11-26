@@ -8706,6 +8706,212 @@ apiRouter.get('/api/logs', adminOnly, async (req, res) => {
   }
 });
 
+// Helper function to calculate active users today with rich duration and live tracking
+const getTodayActiveUsersData = async (currentUser, precomputedTodayUsers = null) => {
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+  const todayStart = new Date(`${todayStr}T00:00:00.000+06:00`);
+
+  const baseFilter = {
+    module: { $ne: 'Notification' },
+    path: { $not: /\/notifications/i }
+  };
+
+  const userNamesMap = {
+    admin: 'Administrator',
+    System: 'System'
+  };
+
+  try {
+    const employees = await Employee.find();
+    for (const emp of employees) {
+      try {
+        let decrypted = decryptData(emp.data);
+        if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
+          try { decrypted = decryptData(decrypted.data); } catch (e) { }
+        }
+        if (decrypted && decrypted.employeeId && decrypted.name) {
+          userNamesMap[decrypted.employeeId] = decrypted.name.trim();
+        }
+      } catch (e) { }
+    }
+  } catch (empErr) { }
+
+  try {
+    const logNames = await ActivityLog.aggregate([
+      { $match: { displayName: { $exists: true, $nin: [null, ''] } } },
+      { $group: { _id: '$username', displayName: { $first: '$displayName' } } }
+    ]);
+    logNames.forEach(l => {
+      if (l._id && l.displayName && !userNamesMap[l._id]) {
+        userNamesMap[l._id] = l.displayName.trim();
+      }
+    });
+  } catch (logErr) { }
+
+  let todayActiveUsersList = [];
+  let dailyMap = {};
+  try {
+    const dailyRecords = await UserDailyActivity.find({ date: todayStr }).lean();
+    (dailyRecords || []).forEach(d => { if (d && d.username) dailyMap[d.username] = d; });
+  } catch (dailyErr) {
+    console.warn('UserDailyActivity fetch failed in active users:', dailyErr.message);
+  }
+
+  const nowMs = Date.now();
+
+  try {
+    const activeAgg = await ActivityLog.aggregate([
+      { $match: { ...baseFilter, timestamp: { $gte: todayStart } } },
+      { $sort: { timestamp: -1 } },
+      {
+        $group: {
+          _id: '$username',
+          firstActive: { $last: '$timestamp' },
+          lastActive: { $first: '$timestamp' },
+          actionCount: { $sum: 1 },
+          lastAction: { $first: '$action' },
+          lastModule: { $first: '$module' },
+          lastIp: { $first: '$ip' },
+          displayName: { $first: '$displayName' },
+          userRole: { $first: '$userRole' },
+          timestamps: { $push: '$timestamp' }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          firstActive: 1,
+          lastActive: 1,
+          actionCount: 1,
+          lastAction: 1,
+          lastModule: 1,
+          lastIp: 1,
+          displayName: 1,
+          userRole: 1,
+          timestamps: { $slice: ['$timestamps', 50] }
+        }
+      },
+      { $sort: { lastActive: -1 } }
+    ], { allowDiskUse: true });
+
+    if (Array.isArray(activeAgg) && activeAgg.length > 0) {
+      todayActiveUsersList = activeAgg.map(u => {
+        try {
+          const isCurrent = Boolean(currentUser && currentUser.username === u._id);
+          const lastActiveDate = isCurrent ? new Date() : (u.lastActive || new Date());
+          const lastMs = new Date(u.lastActive || lastActiveDate).getTime();
+          const isLive = isCurrent || (nowMs - lastMs <= 15 * 60 * 1000);
+
+          const logActiveMs = calculateActiveTimeFromTimestamps(u.timestamps || [u.lastActive], isLive);
+          const trackedSeconds = dailyMap[u._id]?.activeSeconds || 0;
+          const activeMs = trackedSeconds > 0 ? Math.max(trackedSeconds * 1000, 1000) : Math.max(logActiveMs, 60000);
+
+          return {
+            username: u._id,
+            name: userNamesMap[u._id] || u.displayName || (u._id === 'admin' ? 'Administrator' : u._id),
+            role: u.userRole || (u._id === 'admin' ? 'Administrator' : 'User'),
+            firstActive: u.firstActive || u.lastActive,
+            lastActive: lastActiveDate,
+            actionCount: u.actionCount || 1,
+            lastAction: u.lastAction || 'OPERATION',
+            lastModule: u.lastModule || 'System',
+            lastIp: u.lastIp || '127.0.0.1',
+            isCurrent,
+            isLive,
+            activeMs
+          };
+        } catch (itemErr) {
+          return null;
+        }
+      }).filter(Boolean);
+    }
+  } catch (aggErr) {
+    console.error('Error aggregating today active users:', aggErr);
+  }
+
+  // Fallback if needed
+  if ((!todayActiveUsersList || todayActiveUsersList.length === 0)) {
+    const usersToFetch = precomputedTodayUsers || await ActivityLog.distinct('username', { ...baseFilter, timestamp: { $gte: todayStart } });
+    if (Array.isArray(usersToFetch) && usersToFetch.length > 0) {
+      try {
+        const fallbackUsers = await Promise.all(
+          usersToFetch.map(async (uname) => {
+            try {
+              const [latestLog, earliestLog, userActionCount] = await Promise.all([
+                ActivityLog.findOne({ ...baseFilter, username: uname, timestamp: { $gte: todayStart } }).sort({ timestamp: -1 }).lean(),
+                ActivityLog.findOne({ ...baseFilter, username: uname, timestamp: { $gte: todayStart } }).sort({ timestamp: 1 }).lean(),
+                ActivityLog.countDocuments({ ...baseFilter, username: uname, timestamp: { $gte: todayStart } })
+              ]);
+
+              if (!latestLog) return null;
+
+              const isCurrent = Boolean(currentUser && currentUser.username === uname);
+              const lastActiveDate = isCurrent ? new Date() : (latestLog.timestamp || new Date());
+              const lastMs = new Date(lastActiveDate).getTime();
+              const isLive = isCurrent || (nowMs - lastMs <= 15 * 60 * 1000);
+              const trackedSeconds = dailyMap[uname]?.activeSeconds || 0;
+              const activeMs = trackedSeconds > 0 ? Math.max(trackedSeconds * 1000, 1000) : 60000;
+
+              return {
+                username: uname,
+                name: userNamesMap[uname] || latestLog.displayName || (uname === 'admin' ? 'Administrator' : uname),
+                role: latestLog.userRole || (uname === 'admin' ? 'Administrator' : 'User'),
+                firstActive: earliestLog?.timestamp || latestLog.timestamp,
+                lastActive: lastActiveDate,
+                actionCount: userActionCount || 1,
+                lastAction: latestLog.action || 'OPERATION',
+                lastModule: latestLog.module || 'System',
+                lastIp: latestLog.ip || '127.0.0.1',
+                isCurrent,
+                isLive,
+                activeMs
+              };
+            } catch (err) {
+              return null;
+            }
+          })
+        );
+        todayActiveUsersList = fallbackUsers.filter(Boolean);
+      } catch (fbErr) {
+        console.error('Fallback query for today active users failed:', fbErr);
+      }
+    }
+  }
+
+  const todayLiveUsers = (todayActiveUsersList || []).filter(u => u.isLive).length;
+  const todayActiveUsers = todayActiveUsersList.length;
+
+  return {
+    todayActiveUsers,
+    todayLiveUsers,
+    todayActiveUsersList,
+    userNamesMap
+  };
+};
+
+// Dashboard Widget: Active Users Today API (accessible to authenticated users)
+apiRouter.get('/api/dashboard/active-users', async (req, res) => {
+  try {
+    const user = req.session?.user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const roleLower = (user.role || '').toLowerCase().trim();
+    const isAdmin = user.username === 'admin' || roleLower === 'admin' || roleLower === 'administrator' || roleLower === 'superadmin';
+    if (!isAdmin && user.permissions?.dashboard && user.permissions.dashboard.activeUsers === false) {
+      return res.status(403).json({ success: false, message: 'Access denied: Active Users Today permission is disabled' });
+    }
+    const data = await getTodayActiveUsersData(user);
+    res.json({
+      success: true,
+      ...data
+    });
+  } catch (err) {
+    console.error('Error fetching dashboard active users:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch active users' });
+  }
+});
+
 // 2. Fetch log statistics for dashboard cards
 apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
   try {
@@ -8772,174 +8978,8 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       }
     } catch (statErr) { }
 
-    // Build user mapping (username -> full displayName)
-    const userNamesMap = {
-      admin: 'Administrator',
-      System: 'System'
-    };
-
-    try {
-      const employees = await Employee.find();
-      for (const emp of employees) {
-        try {
-          let decrypted = decryptData(emp.data);
-          if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
-            try { decrypted = decryptData(decrypted.data); } catch (e) { }
-          }
-          if (decrypted && decrypted.employeeId && decrypted.name) {
-            userNamesMap[decrypted.employeeId] = decrypted.name.trim();
-          }
-        } catch (e) { }
-      }
-    } catch (empErr) { }
-
-    try {
-      const logNames = await ActivityLog.aggregate([
-        { $match: { displayName: { $exists: true, $nin: [null, ''] } } },
-        { $group: { _id: '$username', displayName: { $first: '$displayName' } } }
-      ]);
-      logNames.forEach(l => {
-        if (l._id && l.displayName && !userNamesMap[l._id]) {
-          userNamesMap[l._id] = l.displayName.trim();
-        }
-      });
-    } catch (logErr) { }
-
-    // Fetch detailed activity for active users today
-    let todayActiveUsersList = [];
-    let todayLiveUsers = 0;
-
-    // Fetch UserDailyActivity tracked engagement today safely
-    let dailyMap = {};
-    try {
-      const dailyRecords = await UserDailyActivity.find({ date: todayStr }).lean();
-      (dailyRecords || []).forEach(d => { if (d && d.username) dailyMap[d.username] = d; });
-    } catch (dailyErr) {
-      console.warn('UserDailyActivity fetch failed, using log-based active calculation:', dailyErr.message);
-    }
-
-    const currentUser = req.session?.user;
-    const nowMs = Date.now();
-
-    try {
-      const activeAgg = await ActivityLog.aggregate([
-        { $match: { ...baseFilter, timestamp: { $gte: todayStart } } },
-        { $sort: { timestamp: -1 } },
-        {
-          $group: {
-            _id: '$username',
-            firstActive: { $last: '$timestamp' },
-            lastActive: { $first: '$timestamp' },
-            actionCount: { $sum: 1 },
-            lastAction: { $first: '$action' },
-            lastModule: { $first: '$module' },
-            lastIp: { $first: '$ip' },
-            displayName: { $first: '$displayName' },
-            userRole: { $first: '$userRole' },
-            timestamps: { $push: '$timestamp' }
-          }
-        },
-        {
-          $project: {
-            _id: 1,
-            firstActive: 1,
-            lastActive: 1,
-            actionCount: 1,
-            lastAction: 1,
-            lastModule: 1,
-            lastIp: 1,
-            displayName: 1,
-            userRole: 1,
-            timestamps: { $slice: ['$timestamps', 50] }
-          }
-        },
-        { $sort: { lastActive: -1 } }
-      ], { allowDiskUse: true });
-
-      if (Array.isArray(activeAgg) && activeAgg.length > 0) {
-        todayActiveUsersList = activeAgg.map(u => {
-          try {
-            const isCurrent = Boolean(currentUser && currentUser.username === u._id);
-            const lastActiveDate = isCurrent ? new Date() : (u.lastActive || new Date());
-            const lastMs = new Date(u.lastActive || lastActiveDate).getTime();
-            const isLive = isCurrent || (nowMs - lastMs <= 15 * 60 * 1000);
-
-            // Compute true active ERP usage time (clusters of interaction + heartbeat engagement)
-            const logActiveMs = calculateActiveTimeFromTimestamps(u.timestamps || [u.lastActive], isLive);
-            const trackedSeconds = dailyMap[u._id]?.activeSeconds || 0;
-            const activeMs = trackedSeconds > 0 ? Math.max(trackedSeconds * 1000, 1000) : Math.max(logActiveMs, 60000);
-
-            return {
-              username: u._id,
-              name: userNamesMap[u._id] || u.displayName || (u._id === 'admin' ? 'Administrator' : u._id),
-              role: u.userRole || (u._id === 'admin' ? 'Administrator' : 'User'),
-              firstActive: u.firstActive || u.lastActive,
-              lastActive: lastActiveDate,
-              actionCount: u.actionCount || 1,
-              lastAction: u.lastAction || 'OPERATION',
-              lastModule: u.lastModule || 'System',
-              lastIp: u.lastIp || '127.0.0.1',
-              isCurrent,
-              isLive,
-              activeMs
-            };
-          } catch (itemErr) {
-            console.error('Error mapping single active user:', itemErr);
-            return null;
-          }
-        }).filter(Boolean);
-      }
-    } catch (aggErr) {
-      console.error('Error aggregating today active users:', aggErr);
-    }
-
-    // Robust Fallback: If aggregation failed or returned empty but todayUsers has users
-    if ((!todayActiveUsersList || todayActiveUsersList.length === 0) && Array.isArray(todayUsers) && todayUsers.length > 0) {
-      try {
-        const fallbackUsers = await Promise.all(
-          todayUsers.map(async (uname) => {
-            try {
-              const [latestLog, earliestLog, userActionCount] = await Promise.all([
-                ActivityLog.findOne({ ...baseFilter, username: uname, timestamp: { $gte: todayStart } }).sort({ timestamp: -1 }).lean(),
-                ActivityLog.findOne({ ...baseFilter, username: uname, timestamp: { $gte: todayStart } }).sort({ timestamp: 1 }).lean(),
-                ActivityLog.countDocuments({ ...baseFilter, username: uname, timestamp: { $gte: todayStart } })
-              ]);
-
-              if (!latestLog) return null;
-
-              const isCurrent = Boolean(currentUser && currentUser.username === uname);
-              const lastActiveDate = isCurrent ? new Date() : (latestLog.timestamp || new Date());
-              const lastMs = new Date(lastActiveDate).getTime();
-              const isLive = isCurrent || (nowMs - lastMs <= 15 * 60 * 1000);
-              const trackedSeconds = dailyMap[uname]?.activeSeconds || 0;
-              const activeMs = trackedSeconds > 0 ? Math.max(trackedSeconds * 1000, 1000) : 60000;
-
-              return {
-                username: uname,
-                name: userNamesMap[uname] || latestLog.displayName || (uname === 'admin' ? 'Administrator' : uname),
-                role: latestLog.userRole || (uname === 'admin' ? 'Administrator' : 'User'),
-                firstActive: earliestLog?.timestamp || latestLog.timestamp,
-                lastActive: lastActiveDate,
-                actionCount: userActionCount || 1,
-                lastAction: latestLog.action || 'OPERATION',
-                lastModule: latestLog.module || 'System',
-                lastIp: latestLog.ip || '127.0.0.1',
-                isCurrent,
-                isLive,
-                activeMs
-              };
-            } catch (err) {
-              return null;
-            }
-          })
-        );
-        todayActiveUsersList = fallbackUsers.filter(Boolean);
-      } catch (fbErr) {
-        console.error('Fallback query for today active users failed:', fbErr);
-      }
-    }
-
-    todayLiveUsers = (todayActiveUsersList || []).filter(u => u.isLive).length;
+    // Build user mapping and fetch detailed active users today
+    const { todayActiveUsersList, todayLiveUsers, userNamesMap } = await getTodayActiveUsersData(req.session?.user, todayUsers);
 
     res.json({
       success: true,
@@ -8963,9 +9003,13 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
   }
 });
 
-// 2.5. Fetch monthly user activity history for a specific user
-apiRouter.get('/api/logs/user-history', adminOnly, async (req, res) => {
+// 2.5. Fetch monthly user activity history for a specific user (accessible to authenticated users)
+apiRouter.get(['/api/logs/user-history', '/api/dashboard/user-history'], async (req, res) => {
   try {
+    const user = req.session?.user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
     const { username, month, tz = '+06:00' } = req.query;
     if (!username) {
       return res.status(400).json({ success: false, message: 'Username is required' });

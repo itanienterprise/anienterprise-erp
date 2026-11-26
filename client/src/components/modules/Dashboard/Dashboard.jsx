@@ -35,6 +35,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { getSocket } from '../../../utils/socket';
 import BankDollarRatesWidget from './BankDollarRatesWidget';
 import PendingRequestsWidget from './PendingRequestsWidget';
+import ActiveUsersWidget from './ActiveUsersWidget';
 import './Dashboard.css';
 import { queryClient } from '../../../utils/queryClient';
 
@@ -1762,6 +1763,7 @@ const Dashboard = ({
   const hasCard7 = canAccess('locationMap', 'mdm');
   const hasCard8 = canAccess('lcGraph', 'lcManagement');
   const hasCard9 = canAccess('recentActivity', 'log');
+  const hasActiveUsers = canAccess('activeUsers', 'log');
 
   const row3CardsCount = (hasCard7 ? 1 : 0) + (hasCard8 ? 1 : 0) + (hasCard9 ? 1 : 0);
   const isCard3InRow3 = hasCard3 && (row3CardsCount === 1 || row3CardsCount === 2);
@@ -2950,10 +2952,19 @@ const Dashboard = ({
         </>
       )}
 
-      {/* ─── ROW 4: Distribution Pie (When Row 3 is Full with 3 Cards) ─── */}
-      {hasCard3 && !isCard3InRow3 && row3CardsCount > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {renderCard3('col-span-1')}
+      {/* ─── ROW 4: Distribution Pie & Active Users Today Widget (Fixed Standard Card Width) ─── */}
+      {((hasCard3 && !isCard3InRow3 && row3CardsCount > 0) || hasActiveUsers) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+          {hasCard3 && !isCard3InRow3 && row3CardsCount > 0 && (
+            <div className="col-span-1">
+              {renderCard3()}
+            </div>
+          )}
+          {hasActiveUsers && (
+            <div className="col-span-1">
+              <ActiveUsersWidget onNavigate={onNavigate} />
+            </div>
+          )}
         </div>
       )}
     </div>
