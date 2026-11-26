@@ -2890,15 +2890,25 @@ apiRouter.put('/api/cost-of-goods/:id', async (req, res) => {
     broadcastUpdate('cost-of-goods', 'update', { _id: updatedRecord._id });
     req._broadcastDone = true;
 
-    // Cascade update to LC Receive (Stock)
+    // Cascade update to LC Receive (Stock), Deal Receive, and Purchase Deal (vice versa)
     if (typeof cascadeCostOfGoodsUpdate === 'function') {
       cascadeCostOfGoodsUpdate(updatedRecord._id, req.body, oldData).then(cascadeRes => {
-        if (cascadeRes?.counts?.stocks > 0) {
-          invalidateMemoryCache('stock');
-          broadcastUpdate('stock', 'update', { reason: 'cog_cascade' });
+        if (cascadeRes?.counts) {
+          if (cascadeRes.counts.dealReceives > 0) {
+            invalidateMemoryCache('deal-receives');
+            broadcastUpdate('deal-receives', 'update', { reason: 'cog_cascade' });
+          }
+          if (cascadeRes.counts.lcPurchases > 0) {
+            invalidateMemoryCache('lc-purchases');
+            broadcastUpdate('lc-purchases', 'update', { reason: 'cog_cascade' });
+          }
+          if (cascadeRes.counts.stocks > 0) {
+            invalidateMemoryCache('stock');
+            broadcastUpdate('stock', 'update', { reason: 'cog_cascade' });
+          }
         }
       }).catch(err => {
-        console.error('Error cascading Cost of Goods update to Stock:', err);
+        console.error('Error cascading Cost of Goods update to Stock/Deal/Purchase:', err);
       });
     }
 
@@ -5237,7 +5247,7 @@ apiRouter.put('/api/deal-receives/:id', async (req, res) => {
     broadcastUpdate('deal-receives', 'update', { _id: updated._id, receiveId: req.body.receiveId });
     req._broadcastDone = true;
 
-    // Background Cascade: Update all dependent Cost of Goods and LC Receive (Stock) records
+    // Background Cascade: Update all dependent Cost of Goods, LC Receive (Stock), and Purchase Deals
     if (typeof cascadeDealReceiveUpdate === 'function') {
       cascadeDealReceiveUpdate(updated._id, req.body, oldData).then(cascadeRes => {
         if (cascadeRes?.counts) {
@@ -5248,6 +5258,10 @@ apiRouter.put('/api/deal-receives/:id', async (req, res) => {
           if (cascadeRes.counts.stocks > 0) {
             invalidateMemoryCache('stock');
             broadcastUpdate('stock', 'update', { reason: 'deal_receive_cascade' });
+          }
+          if (cascadeRes.counts.lcPurchases > 0) {
+            invalidateMemoryCache('lc-purchases');
+            broadcastUpdate('lc-purchases', 'update', { reason: 'deal_receive_cascade' });
           }
         }
       }).catch(err => {
@@ -5263,10 +5277,12 @@ apiRouter.put('/api/deal-receives/:id', async (req, res) => {
 
 apiRouter.post('/api/purchase-deals/sync-cascades', async (req, res) => {
   try {
-    const counts = typeof syncAllPurchaseDealCascades === 'function' ? await syncAllPurchaseDealCascades() : { dealReceives: 0, costOfGoods: 0, stocks: 0 };
+    const counts = typeof syncAllPurchaseDealCascades === 'function' ? await syncAllPurchaseDealCascades() : { dealReceives: 0, costOfGoods: 0, stocks: 0, lcPurchases: 0 };
+    invalidateMemoryCache('lc-purchases');
     invalidateMemoryCache('deal-receives');
     invalidateMemoryCache('cost-of-goods');
     invalidateMemoryCache('stock');
+    broadcastUpdate('lc-purchases', 'update', { reason: 'full_sync' });
     broadcastUpdate('deal-receives', 'update', { reason: 'full_sync' });
     broadcastUpdate('cost-of-goods', 'update', { reason: 'full_sync' });
     broadcastUpdate('stock', 'update', { reason: 'full_sync' });

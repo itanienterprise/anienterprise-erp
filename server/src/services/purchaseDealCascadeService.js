@@ -76,7 +76,70 @@ function calculateCostingValues(data) {
 }
 
 /**
- * Cascades updates from Purchase Deal (LCPurchase) to:
+ * Recalculates receivedQty, remainingQty, and status for a Purchase Deal from its Deal Receives.
+ */
+async function syncDealQuantitiesForDeal(dealId, purchaseId) {
+    if (!dealId && !purchaseId) return false;
+    const normDealId = dealId ? String(dealId).trim() : '';
+    const cleanPId = cleanId(purchaseId);
+
+    try {
+        let dealDoc = normDealId ? await LCPurchase.findById(normDealId) : null;
+        if (!dealDoc && cleanPId) {
+            const allDeals = await LCPurchase.find({});
+            for (const d of allDeals) {
+                const dec = getDecrypted(d);
+                if (dec && cleanId(dec.purchaseId) === cleanPId) {
+                    dealDoc = d;
+                    break;
+                }
+            }
+        }
+        if (!dealDoc) return false;
+
+        const deal = getDecrypted(dealDoc);
+        if (!deal) return false;
+
+        const allDrs = await DealReceive.find({});
+        const matchingReceives = [];
+        for (const drDoc of allDrs) {
+            const dr = getDecrypted(drDoc);
+            if (!dr) continue;
+            const drRef = String(dr.dealRefId || '').trim();
+            const drPId = cleanId(dr.purchaseId);
+            if ((normDealId && drRef === normDealId) || (cleanPId && drPId === cleanPId)) {
+                matchingReceives.push(dr);
+            }
+        }
+
+        const isTruck = (deal.uom || '').toLowerCase() === 'truck';
+        const totalReceived = matchingReceives.reduce((sum, r) => {
+            if (isTruck) {
+                const count = parseFloat(r.trucks) || (Array.isArray(r.truckNumbers) && r.truckNumbers.length ? r.truckNumbers.length : 1);
+                return sum + count;
+            }
+            return sum + (parseFloat(r.quantity || r.receiveQty) || 0);
+        }, 0);
+
+        const totalQty = parseFloat(deal.qty) || 0;
+        const remaining = Math.max(0, totalQty - totalReceived);
+        const newStatus = remaining <= 0.0001 ? 'Completed' : 'Active';
+
+        if (deal.receivedQty !== totalReceived || deal.remainingQty !== remaining || deal.status !== newStatus) {
+            deal.receivedQty = totalReceived;
+            deal.remainingQty = remaining;
+            deal.status = newStatus;
+            await saveEncrypted(dealDoc, deal);
+            return true;
+        }
+    } catch (err) {
+        console.error('Error syncing deal quantities:', err);
+    }
+    return false;
+}
+
+/**
+ * Cascades updates from Purchase Deal (LCPurchase) DOWNSTREAM to:
  * 1. Deal Receive (DealReceive)
  * 2. Cost of Goods (CostOfGoods)
  * 3. LC Receive (Stock)
@@ -84,9 +147,19 @@ function calculateCostingValues(data) {
  * @param {string} dealId - The _id of the Purchase Deal
  * @param {Object} newDeal - The updated Purchase Deal data
  * @param {Object} oldDeal - The previous Purchase Deal data before update
+ * @param {Object} context - Optional context to prevent circular cascading
  * @returns {Promise<Object>} Counts of updated documents in each collection
  */
-async function cascadePurchaseDealUpdate(dealId, newDeal = {}, oldDeal = {}) {
+async function cascadePurchaseDealUpdate(dealId, newDeal = {}, oldDeal = {}, context = {}) {
+    const visited = context.visited || {
+        deals: new Set(),
+        drs: new Set(),
+        cogs: new Set(),
+        stocks: new Set()
+    };
+
+    if (dealId) visited.deals.add(String(dealId));
+
     const counts = {
         dealReceives: 0,
         costOfGoods: 0,
@@ -110,6 +183,8 @@ async function cascadePurchaseDealUpdate(dealId, newDeal = {}, oldDeal = {}) {
     try {
         const drDocs = await DealReceive.find({});
         for (const doc of drDocs) {
+            if (visited.drs.has(String(doc._id))) continue;
+
             const dr = getDecrypted(doc);
             if (!dr) continue;
 
@@ -123,6 +198,7 @@ async function cascadePurchaseDealUpdate(dealId, newDeal = {}, oldDeal = {}) {
 
             if (!isMatchingDeal) continue;
 
+            visited.drs.add(String(doc._id));
             let drModified = false;
             const oldDrData = { ...dr };
 
@@ -163,8 +239,8 @@ async function cascadePurchaseDealUpdate(dealId, newDeal = {}, oldDeal = {}) {
                 counts.dealReceives++;
             }
 
-            // Always cascade to COG and LC Receive for all linked deal receives
-            const subRes = await cascadeDealReceiveUpdate(doc._id, dr, oldDrData);
+            // Cascade downstream to COG and LC Receive
+            const subRes = await cascadeDealReceiveUpdate(doc._id, dr, oldDrData, { visited, skipDealUpstream: true });
             if (subRes && subRes.counts) {
                 counts.costOfGoods += subRes.counts.costOfGoods || 0;
                 counts.stocks += subRes.counts.stocks || 0;
@@ -178,19 +254,30 @@ async function cascadePurchaseDealUpdate(dealId, newDeal = {}, oldDeal = {}) {
 }
 
 /**
- * Cascades updates from Deal Receive (DealReceive) to:
- * 1. Cost of Goods (CostOfGoods)
- * 2. LC Receive (Stock)
+ * Cascades updates from Deal Receive (DealReceive):
+ * 1. DOWNSTREAM to Cost of Goods (CostOfGoods) and LC Receive (Stock)
+ * 2. UPSTREAM to Purchase Deal (LCPurchase)
  *
  * @param {string} dealReceiveId - The _id of the Deal Receive
  * @param {Object} newDr - The updated Deal Receive data
  * @param {Object} oldDr - The previous Deal Receive data before update
+ * @param {Object} context - Optional context to prevent circular cascading
  * @returns {Promise<Object>} Counts of updated documents in each collection
  */
-async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}) {
+async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}, context = {}) {
+    const visited = context.visited || {
+        deals: new Set(),
+        drs: new Set(),
+        cogs: new Set(),
+        stocks: new Set()
+    };
+
+    if (dealReceiveId) visited.drs.add(String(dealReceiveId));
+
     const counts = {
         costOfGoods: 0,
-        stocks: 0
+        stocks: 0,
+        lcPurchases: 0
     };
 
     if (!dealReceiveId && !newDr.receiveId && !oldDr.receiveId && !newDr.invoiceNo && !oldDr.invoiceNo) {
@@ -210,8 +297,11 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}) {
     const truckNoVal = (newDr.truckNo || (Array.isArray(newDr.truckNumbers) ? newDr.truckNumbers.filter(Boolean).join(', ') : '') || '').trim();
 
     try {
+        // ─── 1. DOWNSTREAM: Update matching Cost of Goods ───────────────────
         const cogDocs = await CostOfGoods.find({});
         for (const doc of cogDocs) {
+            if (visited.cogs.has(String(doc._id))) continue;
+
             const cog = getDecrypted(doc);
             if (!cog) continue;
 
@@ -227,6 +317,7 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}) {
 
             if (!isMatchingCog) continue;
 
+            visited.cogs.add(String(doc._id));
             const oldCogData = { ...cog };
             let cogModified = false;
 
@@ -266,7 +357,6 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}) {
                 cogModified = true;
             }
 
-            // Sync quantities & financials
             if (newDr.quantity !== undefined && newDr.quantity !== '' && cog.quantity !== newDr.quantity) {
                 cog.quantity = newDr.quantity;
                 cogModified = true;
@@ -327,7 +417,6 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}) {
                 cogModified = true;
             }
 
-            // Sync calculated totals and costing
             const calc = calculateCostingValues(cog);
             const costingVal = newDr.costingKg !== undefined && newDr.costingKg !== '' ? newDr.costingKg : calc.costingKg;
             if (cog.costingKg !== costingVal) {
@@ -364,17 +453,19 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}) {
                 counts.costOfGoods++;
             }
 
-            // Cascade to LC Receive (Stock)
-            const subRes = await cascadeCostOfGoodsUpdate(doc._id, cog, oldCogData);
+            // Downstream to LC Receive (Stock)
+            const subRes = await cascadeCostOfGoodsUpdate(doc._id, cog, oldCogData, { visited, skipDrUpstream: true });
             if (subRes && subRes.counts) {
                 counts.stocks += subRes.counts.stocks || 0;
             }
         }
 
-        // Direct fallback: If any Stock matches Deal Receive invoice directly (even before COG is linked)
+        // Direct fallback: Update Stock directly if invoice matches
         if (cleanNewInv || cleanOldInv) {
             const stockDocs = await Stock.find({});
             for (const doc of stockDocs) {
+                if (visited.stocks.has(String(doc._id))) continue;
+
                 const stock = getDecrypted(doc);
                 if (!stock) continue;
 
@@ -382,6 +473,7 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}) {
                 const matchesInv = (cleanNewInv && stInvClean === cleanNewInv) || (cleanOldInv && stInvClean === cleanOldInv);
                 if (!matchesInv) continue;
 
+                visited.stocks.add(String(doc._id));
                 let stockModified = false;
                 if (productVal && normalize(stock.productName || stock.product) !== normalize(productVal)) {
                     stock.productName = productVal;
@@ -430,6 +522,60 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}) {
                 }
             }
         }
+
+        // ─── 2. UPSTREAM: Update matching Purchase Deal (LCPurchase) ────────
+        if (!context.skipDealUpstream) {
+            const dealRefId = String(newDr.dealRefId || oldDr.dealRefId || '').trim();
+            const pIdClean = cleanId(newDr.purchaseId || oldDr.purchaseId);
+
+            if (dealRefId || pIdClean) {
+                const dealDocs = await LCPurchase.find({});
+                for (const dDoc of dealDocs) {
+                    if (visited.deals.has(String(dDoc._id))) continue;
+
+                    const deal = getDecrypted(dDoc);
+                    if (!deal) continue;
+
+                    const dIdStr = String(dDoc._id);
+                    const dPIdClean = cleanId(deal.purchaseId);
+
+                    const matchesDeal = (dealRefId && dIdStr === dealRefId) || (pIdClean && dPIdClean === pIdClean);
+                    if (!matchesDeal) continue;
+
+                    visited.deals.add(dIdStr);
+                    let dealModified = false;
+
+                    if (supplierVal && (deal.supplierName !== supplierVal || deal.supplier !== supplierVal)) {
+                        deal.supplierName = supplierVal;
+                        deal.supplier = supplierVal;
+                        dealModified = true;
+                    }
+
+                    if (productVal && (deal.productName !== productVal || deal.product !== productVal)) {
+                        deal.productName = productVal;
+                        deal.product = productVal;
+                        dealModified = true;
+                    }
+
+                    if (brandVal !== undefined && deal.brand !== brandVal) {
+                        deal.brand = brandVal;
+                        dealModified = true;
+                    }
+
+                    if (newDr.exporter && deal.exporter !== newDr.exporter) {
+                        deal.exporter = newDr.exporter;
+                        dealModified = true;
+                    }
+
+                    if (dealModified) {
+                        await saveEncrypted(dDoc, deal);
+                        counts.lcPurchases++;
+                    }
+
+                    await syncDealQuantitiesForDeal(dDoc._id, deal.purchaseId);
+                }
+            }
+        }
     } catch (err) {
         console.error('Error cascading Deal Receive update:', err);
     }
@@ -438,19 +584,33 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}) {
 }
 
 /**
- * Cascades updates from Cost of Goods (CostOfGoods) to LC Receive (Stock).
+ * Cascades updates from Cost of Goods (CostOfGoods):
+ * 1. DOWNSTREAM to LC Receive (Stock)
+ * 2. UPSTREAM to Deal Receive (DealReceive) and Purchase Deal (LCPurchase) (VICE VERSA)
  *
  * @param {string} cogId - The _id of the Cost of Goods record
  * @param {Object} newCog - The updated Cost of Goods data
  * @param {Object} oldCog - The previous Cost of Goods data before update
- * @returns {Promise<Object>} Counts of updated documents in Stock
+ * @param {Object} context - Optional context to prevent circular cascading
+ * @returns {Promise<Object>} Counts of updated documents in Stock, DealReceive, and LCPurchase
  */
-async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}) {
-    const counts = {
-        stocks: 0
+async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}, context = {}) {
+    const visited = context.visited || {
+        deals: new Set(),
+        drs: new Set(),
+        cogs: new Set(),
+        stocks: new Set()
     };
 
-    if (!cogId && !newCog.invoiceNo && !oldCog.invoiceNo) {
+    if (cogId) visited.cogs.add(String(cogId));
+
+    const counts = {
+        stocks: 0,
+        dealReceives: 0,
+        lcPurchases: 0
+    };
+
+    if (!cogId && !newCog.invoiceNo && !oldCog.invoiceNo && !newCog.dealReceiveId && !newCog.dealReceiveRefId) {
         return { status: 'skipped', counts };
     }
 
@@ -460,6 +620,7 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}) {
     const cleanNewLc = cleanId(newCog.lcNo);
     const cleanOldLc = cleanId(oldCog.lcNo);
 
+    const targetSupplier = (newCog.supplier || newCog.supplierName || '').trim();
     const targetProduct = (newCog.product || newCog.productName || '').trim();
     const targetBrand = (newCog.brand || '').trim();
     const targetInvoiceNo = (newCog.invoiceNo || '').trim();
@@ -468,8 +629,11 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}) {
     const targetQty = newCog.quantity !== undefined && newCog.quantity !== null ? String(newCog.quantity) : '';
 
     try {
+        // ─── 1. DOWNSTREAM: Update matching Stock (LC Receive) ─────────────
         const stockDocs = await Stock.find({});
         for (const doc of stockDocs) {
+            if (visited.stocks.has(String(doc._id))) continue;
+
             const stock = getDecrypted(doc);
             if (!stock) continue;
 
@@ -482,7 +646,6 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}) {
                 (cleanNewInv && stInvClean && stInvClean === cleanNewInv && (!cleanNewLc || !stLcClean || stLcClean === cleanNewLc)) ||
                 (cleanOldInv && stInvClean && stInvClean === cleanOldInv && (!cleanOldLc || !stLcClean || stLcClean === cleanOldLc));
 
-            // Also check entries array
             let hasMatchingEntry = false;
             if (Array.isArray(stock.entries)) {
                 hasMatchingEntry = stock.entries.some(e => {
@@ -496,6 +659,7 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}) {
 
             if (!isMatchingStock && !hasMatchingEntry) continue;
 
+            visited.stocks.add(String(doc._id));
             let stockModified = false;
 
             if (isMatchingStock) {
@@ -561,24 +725,230 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}) {
                 counts.stocks++;
             }
         }
+
+        // ─── 2. UPSTREAM: Update matching Deal Receive (DealReceive) (VICE VERSA) ───
+        if (!context.skipDrUpstream) {
+            const targetDrRefId = String(newCog.dealReceiveRefId || oldCog.dealReceiveRefId || '').trim();
+            const cleanTargetDrId = cleanId(newCog.dealReceiveId || oldCog.dealReceiveId);
+
+            const drDocs = await DealReceive.find({});
+            for (const doc of drDocs) {
+                if (visited.drs.has(String(doc._id))) continue;
+
+                const dr = getDecrypted(doc);
+                if (!dr) continue;
+
+                const drIdStr = String(doc._id);
+                const drRecIdClean = cleanId(dr.receiveId);
+                const drInvClean = cleanId(dr.invoiceNo);
+
+                const isMatch =
+                    (targetDrRefId && drIdStr === targetDrRefId) ||
+                    (cleanTargetDrId && drRecIdClean === cleanTargetDrId) ||
+                    (cleanNewInv && drInvClean === cleanNewInv && (!targetSupplier || normalize(dr.supplier) === normalize(targetSupplier))) ||
+                    (cleanOldInv && drInvClean === cleanOldInv && (!targetSupplier || normalize(dr.supplier) === normalize(targetSupplier)));
+
+                if (!isMatch) continue;
+
+                visited.drs.add(drIdStr);
+                let drModified = false;
+
+                if (targetSupplier && (dr.supplier !== targetSupplier || dr.supplierName !== targetSupplier)) {
+                    dr.supplier = targetSupplier;
+                    dr.supplierName = targetSupplier;
+                    drModified = true;
+                }
+
+                if (targetProduct && (dr.product !== targetProduct || dr.productName !== targetProduct)) {
+                    dr.product = targetProduct;
+                    dr.productName = targetProduct;
+                    drModified = true;
+                }
+
+                if (targetBrand !== undefined && dr.brand !== targetBrand) {
+                    dr.brand = targetBrand;
+                    drModified = true;
+                }
+
+                if (targetInvoiceNo && dr.invoiceNo !== targetInvoiceNo) {
+                    dr.invoiceNo = targetInvoiceNo;
+                    drModified = true;
+                }
+
+                if (targetTruckNo && dr.truckNo !== targetTruckNo) {
+                    dr.truckNo = targetTruckNo;
+                    drModified = true;
+                }
+
+                if (newCog.quantity !== undefined && newCog.quantity !== '' && dr.quantity !== newCog.quantity) {
+                    dr.quantity = newCog.quantity;
+                    drModified = true;
+                }
+
+                if (newCog.amount !== undefined && newCog.amount !== '' && dr.amount !== newCog.amount) {
+                    dr.amount = newCog.amount;
+                    drModified = true;
+                }
+
+                if (newCog.indTruckFare !== undefined && dr.indTruckFare !== newCog.indTruckFare) {
+                    dr.indTruckFare = newCog.indTruckFare;
+                    drModified = true;
+                }
+
+                if (newCog.truckChangeFare !== undefined && dr.truckChangeFare !== newCog.truckChangeFare) {
+                    dr.truckChangeFare = newCog.truckChangeFare;
+                    drModified = true;
+                }
+
+                if (newCog.slofCf !== undefined && dr.slofCf !== newCog.slofCf) {
+                    dr.slofCf = newCog.slofCf;
+                    drModified = true;
+                }
+
+                if (newCog.rebate !== undefined && dr.rebate !== newCog.rebate) {
+                    dr.rebate = newCog.rebate;
+                    drModified = true;
+                }
+
+                if (newCog.rsToDollar !== undefined && newCog.rsToDollar !== '' && dr.rsToDollar !== newCog.rsToDollar) {
+                    dr.rsToDollar = newCog.rsToDollar;
+                    drModified = true;
+                }
+
+                if (newCog.dollarRateBdt !== undefined && newCog.dollarRateBdt !== '' && dr.dollarRateBdt !== newCog.dollarRateBdt) {
+                    dr.dollarRateBdt = newCog.dollarRateBdt;
+                    drModified = true;
+                }
+
+                if (newCog.cfOtherExpense !== undefined && dr.cfOtherExpense !== newCog.cfOtherExpense) {
+                    dr.cfOtherExpense = newCog.cfOtherExpense;
+                    drModified = true;
+                }
+
+                if (newCog.country && dr.country !== newCog.country) {
+                    dr.country = newCog.country;
+                    drModified = true;
+                }
+
+                if (newCog.date && dr.date !== newCog.date) {
+                    dr.date = newCog.date;
+                    drModified = true;
+                }
+
+                if (newCog.exporter && dr.exporter !== newCog.exporter) {
+                    dr.exporter = newCog.exporter;
+                    drModified = true;
+                }
+
+                const calc = calculateCostingValues(dr);
+                const costingVal = newCog.costingKg !== undefined && newCog.costingKg !== '' ? newCog.costingKg : calc.costingKg;
+                if (dr.costingKg !== costingVal) {
+                    dr.costingKg = costingVal;
+                    drModified = true;
+                }
+                if (newCog.rateKg !== undefined && dr.rateKg !== newCog.rateKg) {
+                    dr.rateKg = newCog.rateKg;
+                    drModified = true;
+                }
+                if (newCog.rateKgUsd !== undefined && dr.rateKgUsd !== newCog.rateKgUsd) {
+                    dr.rateKgUsd = newCog.rateKgUsd;
+                    drModified = true;
+                }
+                if (newCog.rateKgBdt !== undefined && dr.rateKgBdt !== newCog.rateKgBdt) {
+                    dr.rateKgBdt = newCog.rateKgBdt;
+                    drModified = true;
+                }
+                if (newCog.netBill !== undefined && dr.netBill !== newCog.netBill) {
+                    dr.netBill = newCog.netBill;
+                    drModified = true;
+                }
+                if (newCog.totalBill !== undefined && dr.totalBill !== newCog.totalBill) {
+                    dr.totalBill = newCog.totalBill;
+                    drModified = true;
+                }
+                if (newCog.rebateAmount !== undefined && dr.rebateAmount !== newCog.rebateAmount) {
+                    dr.rebateAmount = newCog.rebateAmount;
+                    drModified = true;
+                }
+
+                if (drModified) {
+                    await saveEncrypted(doc, dr);
+                    counts.dealReceives++;
+                }
+
+                // ─── 3. UPSTREAM: From Deal Receive to Purchase Deal (LCPurchase) ───
+                const dealRefId = String(dr.dealRefId || '').trim();
+                const pIdClean = cleanId(dr.purchaseId);
+
+                if (dealRefId || pIdClean) {
+                    const dealDocs = await LCPurchase.find({});
+                    for (const dDoc of dealDocs) {
+                        if (visited.deals.has(String(dDoc._id))) continue;
+
+                        const deal = getDecrypted(dDoc);
+                        if (!deal) continue;
+
+                        const dIdStr = String(dDoc._id);
+                        const dPIdClean = cleanId(deal.purchaseId);
+
+                        const matchesDeal = (dealRefId && dIdStr === dealRefId) || (pIdClean && dPIdClean === pIdClean);
+                        if (!matchesDeal) continue;
+
+                        visited.deals.add(dIdStr);
+                        let dealModified = false;
+
+                        if (targetSupplier && (deal.supplierName !== targetSupplier || deal.supplier !== targetSupplier)) {
+                            deal.supplierName = targetSupplier;
+                            deal.supplier = targetSupplier;
+                            dealModified = true;
+                        }
+
+                        if (targetProduct && (deal.productName !== targetProduct || deal.product !== targetProduct)) {
+                            deal.productName = targetProduct;
+                            deal.product = targetProduct;
+                            dealModified = true;
+                        }
+
+                        if (targetBrand !== undefined && deal.brand !== targetBrand) {
+                            deal.brand = targetBrand;
+                            dealModified = true;
+                        }
+
+                        if (newCog.exporter && deal.exporter !== newCog.exporter) {
+                            deal.exporter = newCog.exporter;
+                            dealModified = true;
+                        }
+
+                        if (dealModified) {
+                            await saveEncrypted(dDoc, deal);
+                            counts.lcPurchases++;
+                        }
+
+                        await syncDealQuantitiesForDeal(dDoc._id, deal.purchaseId);
+                    }
+                }
+            }
+        }
     } catch (err) {
-        console.error('Error cascading Cost of Goods update to Stock:', err);
+        console.error('Error cascading Cost of Goods update:', err);
     }
 
     return { status: 'success', counts };
 }
 
 /**
- * Syncs / repairs all historical Purchase Deals, Deal Receives, Cost of Goods, and LC Receives.
+ * Reconciles and synchronizes all historical Purchase Deals, Deal Receives, Cost of Goods, and LC Receives.
  */
 async function syncAllPurchaseDealCascades() {
     const totalCounts = {
         dealReceives: 0,
         costOfGoods: 0,
-        stocks: 0
+        stocks: 0,
+        lcPurchases: 0
     };
 
     try {
+        // 1. Sync from Deals downstream
         const deals = await LCPurchase.find({});
         for (const dealDoc of deals) {
             const deal = getDecrypted(dealDoc);
@@ -591,7 +961,7 @@ async function syncAllPurchaseDealCascades() {
             }
         }
 
-        // Also loop through all Deal Receives to catch any that might not be linked to a deal
+        // 2. Sync from Deal Receives
         const drs = await DealReceive.find({});
         for (const drDoc of drs) {
             const dr = getDecrypted(drDoc);
@@ -600,10 +970,24 @@ async function syncAllPurchaseDealCascades() {
             if (res && res.counts) {
                 totalCounts.costOfGoods += res.counts.costOfGoods || 0;
                 totalCounts.stocks += res.counts.stocks || 0;
+                totalCounts.lcPurchases += res.counts.lcPurchases || 0;
             }
         }
 
-        console.log('Purchase deal cascade sync completed:', totalCounts);
+        // 3. Sync from COGs
+        const cogs = await CostOfGoods.find({});
+        for (const cogDoc of cogs) {
+            const cog = getDecrypted(cogDoc);
+            if (!cog) continue;
+            const res = await cascadeCostOfGoodsUpdate(cogDoc._id, cog, cog);
+            if (res && res.counts) {
+                totalCounts.stocks += res.counts.stocks || 0;
+                totalCounts.dealReceives += res.counts.dealReceives || 0;
+                totalCounts.lcPurchases += res.counts.lcPurchases || 0;
+            }
+        }
+
+        console.log('Bidirectional Purchase Deal <-> Deal Receive <-> COG <-> Stock sync completed:', totalCounts);
     } catch (err) {
         console.error('Error syncing all purchase deal cascades:', err);
     }
@@ -615,5 +999,6 @@ module.exports = {
     cascadePurchaseDealUpdate,
     cascadeDealReceiveUpdate,
     cascadeCostOfGoodsUpdate,
+    syncDealQuantitiesForDeal,
     syncAllPurchaseDealCascades
 };

@@ -463,7 +463,7 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
             if (!mod || ['suppliers', 'supplier', 'exporters', 'exporter', 'products', 'product', 'all'].includes(mod)) {
                 loadInitialData();
             }
-            if (!mod || ['lc-purchases', 'lc-purchase', 'lcpurchase', 'all'].includes(mod)) {
+            if (!mod || ['lc-purchases', 'lc-purchase', 'lcpurchase', 'deal-receives', 'deal-receive', 'dealreceive', 'costofgoods', 'cost-of-goods', 'cog', 'all'].includes(mod)) {
                 fetchLCPurchases(true);
             }
             if (!mod || ['deal-receives', 'deal-receive', 'dealreceive', 'costofgoods', 'cost-of-goods', 'stock', 'lcreceive', 'lc-receive', 'all'].includes(mod)) {
