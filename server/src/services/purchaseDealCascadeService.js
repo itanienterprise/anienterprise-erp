@@ -475,15 +475,7 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}, c
 
                 visited.stocks.add(String(doc._id));
                 let stockModified = false;
-                if (productVal && normalize(stock.productName || stock.product) !== normalize(productVal)) {
-                    stock.productName = productVal;
-                    stock.product = productVal;
-                    stockModified = true;
-                }
-                if (brandVal && normalize(stock.brand) !== normalize(brandVal)) {
-                    stock.brand = brandVal;
-                    stockModified = true;
-                }
+                // Preserve internal catalog productName and verified arrival brand on Stock (do not overwrite with external trade names)
                 if (invoiceNoVal && stock.invoiceNo !== invoiceNoVal) {
                     stock.invoiceNo = invoiceNoVal;
                     stockModified = true;
@@ -505,8 +497,6 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}, c
                     stock.entries.forEach(entry => {
                         const eInv = cleanId(entry.invoiceNo);
                         if ((cleanNewInv && eInv === cleanNewInv) || (cleanOldInv && eInv === cleanOldInv)) {
-                            if (productVal) entry.productName = productVal;
-                            if (brandVal) entry.brand = brandVal;
                             if (invoiceNoVal) entry.invoiceNo = invoiceNoVal;
                             if (truckNoVal) entry.truckNo = truckNoVal;
                             if (newDr.quantity !== undefined && newDr.quantity !== '') entry.invoiceQty = String(newDr.quantity);
@@ -667,17 +657,7 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}, context
                     stock.matchedCogId = normCogId;
                     stockModified = true;
                 }
-
-                if (targetProduct && normalize(stock.productName || stock.product) !== normalize(targetProduct)) {
-                    stock.productName = targetProduct;
-                    stock.product = targetProduct;
-                    stockModified = true;
-                }
-
-                if (targetBrand !== undefined && normalize(stock.brand) !== normalize(targetBrand)) {
-                    stock.brand = targetBrand;
-                    stockModified = true;
-                }
+                // Preserve internal catalog productName and verified arrival brand on Stock (do not overwrite with COG trade names)
 
                 if (targetInvoiceNo && stock.invoiceNo !== targetInvoiceNo) {
                     stock.invoiceNo = targetInvoiceNo;
@@ -709,8 +689,6 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}, context
                                   (cleanOldInv && eInv && eInv === cleanOldInv);
                     if (eMatch) {
                         if (normCogId) entry.matchedCogId = normCogId;
-                        if (targetProduct) entry.productName = targetProduct;
-                        if (targetBrand !== undefined) entry.brand = targetBrand;
                         if (targetInvoiceNo) entry.invoiceNo = targetInvoiceNo;
                         if (targetTruckNo) entry.truckNo = targetTruckNo;
                         if (targetPrice) entry.purchasedPrice = targetPrice;

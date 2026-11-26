@@ -604,6 +604,21 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         }
     }
 
+    const resolveCatalogProductName = (rawName) => {
+        if (!rawName) return '';
+        const norm = String(rawName).trim().toLowerCase();
+        if (norm === 'wheat bran' || norm === 'wheat bran (feed grade)') return 'BRAN';
+        if (Array.isArray(products)) {
+            const match = products.find(p => {
+                const pName = (p.name || p.productName || '').trim().toLowerCase();
+                const ipName = (p.ipName || '').trim().toLowerCase();
+                return pName === norm || ipName === norm;
+            });
+            if (match) return (match.name || match.productName || '').trim();
+        }
+        return String(rawName).trim();
+    };
+
     const resolveQuality = (pName, bName) => {
         if (!products || !Array.isArray(products)) return '-';
         const targetP = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === (pName || '').trim().toLowerCase());
@@ -715,7 +730,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         const lc = (item.lcNo || '').trim().toUpperCase();
         const wh = (item.warehouse || item.whName || '').trim().toUpperCase();
-        const prod = (item.productName || item.product || '').trim().toUpperCase();
+        const prod = resolveCatalogProductName(item.productName || item.product).toUpperCase();
         const brand = (item.brand || '').trim().toUpperCase();
 
         let qty = safeParse(item.quantity);
@@ -758,7 +773,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             }
             if (snapQty <= 0 && snapPkt <= 0) return;
 
-            const pName = (snap.productName || snap.product || '').trim();
+            const pName = resolveCatalogProductName(snap.productName || snap.product);
             const bName = (snap.brand || 'No Brand').trim();
             const uniqueId = `baseline_${snapWh}_${pName}_${bName}_${idx}`;
             if (seenRecords.has(uniqueId)) return;
@@ -953,7 +968,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         const rq = resolveQuality(item.productName || item.product, entry.brand || item.brand);
                         return rq !== '-' ? rq : (entry.quality || item.quality || '-');
                     })(),
-                    productName: item.productName || item.product || '',
+                    productName: resolveCatalogProductName(item.productName || item.product),
                     warehouse: item.warehouse || item.whName || '',
                     quantity: safeParse(entry.quantity ?? item.quantity),
                     packet: safeParse(entry.packet ?? item.packet),
@@ -977,6 +992,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             rawExpanded.push({
                 ...item,
                 recordType: 'stock',
+                productName: resolveCatalogProductName(item.productName || item.product),
                 quality: q,
                 purchasedPrice: safeParse(item.purchasedPrice ?? item.rate),
                 // InHouse quantity is already net (Quantity - Shortage)
@@ -1072,7 +1088,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         const destWhName = (whItem.toWh || whItem.whName || whItem.warehouse || '').trim();
         const srcWhName = (whItem.fromWh || '').trim();
-        const pName = (whItem.productName || whItem.product || '').trim();
+        const pName = resolveCatalogProductName(whItem.productName || whItem.product);
         const itemQty = safeParse(whItem.transferQty ?? whItem.whQty ?? whItem.inHouseQuantity ?? whItem.quantity);
         const itemPkt = safeParse(whItem.transferPkt ?? whItem.whPkt ?? whItem.inHousePacket ?? whItem.packet);
 
@@ -1201,7 +1217,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     });
 
     const groupedStock = sortedFilteredRecords.reduce((acc, item) => {
-        const key = (item.productName || item.product || 'Unknown').trim();
+        const key = resolveCatalogProductName(item.productName || item.product || 'Unknown');
         const keyLower = key.toLowerCase();
         const itemDateOnly = (item.date || '').split('T')[0];
         const isBefore = startDate && itemDateOnly < startDate;
@@ -1283,7 +1299,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                 const isBeforeSale = startDate && sDate < startDate;
                 (sale.items || []).forEach((si, siIdx) => {
-                    const siName = (si.productName || si.product || '').trim().toLowerCase();
+                    const siName = resolveCatalogProductName(si.productName || si.product || '').toLowerCase();
                     if (siName === keyLower) {
                         const itemBrandEntries = (si.brandEntries && si.brandEntries.length > 0)
                             ? si.brandEntries
@@ -1515,7 +1531,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
 
         (sale.items || []).forEach((si, siIdx) => {
-            const sProdName = (si.productName || '').trim();
+            const sProdName = resolveCatalogProductName(si.productName || si.product || '');
             if (!sProdName) return;
 
             const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === sProdName.toLowerCase());

@@ -1136,10 +1136,20 @@ const OrderManagement = ({
     }, [lcRecords, stockRecords]);
 
     const salesForCalc = useMemo(() => {
-        return editingId
-            ? allSalesRecords.filter(s => s._id !== editingId && s.orderNo !== formData.orderNo && s.invoiceNo !== formData.invoiceNo)
-            : allSalesRecords;
-    }, [allSalesRecords, editingId, formData.orderNo, formData.invoiceNo]);
+        if (!editingId) return allSalesRecords;
+        const curOrdNo = (formData.orderNo || formData.invoiceNo || originalData?.orderNo || originalData?.invoiceNo || '').trim().toUpperCase();
+        const curInvNo = (formData.invoiceNo || originalData?.invoiceNo || '').trim().toUpperCase();
+        const curIdStr = String(editingId);
+
+        return (allSalesRecords || []).filter(s => {
+            if (String(s._id) === curIdStr) return false;
+            const sOrd = (s.orderNo || s.orderRef || s.orderId || '').trim().toUpperCase();
+            const sInv = (s.invoiceNo || '').trim().toUpperCase();
+            if (curOrdNo && (sOrd === curOrdNo || sInv === curOrdNo)) return false;
+            if (curInvNo && (sOrd === curInvNo || sInv === curInvNo)) return false;
+            return true;
+        });
+    }, [allSalesRecords, editingId, formData.orderNo, formData.invoiceNo, originalData]);
 
     const productStockSummaries = useMemo(() => {
         if (!formData.items || formData.items.length === 0) return {};
@@ -1292,6 +1302,47 @@ const OrderManagement = ({
         };
     };
 
+    // Helper to calculate the quantity already allocated to this order when editing
+    const getOriginalQtyForEntry = (prodName, brandName, lcNo, whName, isBagUom) => {
+        if (!editingId || !originalData || !Array.isArray(originalData.items)) return 0;
+        const targetProd = (prodName || '').trim().toLowerCase();
+        const targetBrand = (brandName || '').trim().toLowerCase();
+        const targetLc = (lcNo || '').trim().toLowerCase();
+        const targetWh = (whName || '').trim().toLowerCase();
+
+        let origTotal = 0;
+        for (const it of originalData.items) {
+            const itProd = (it.productName || it.product || '').trim().toLowerCase();
+            if (targetProd && itProd && targetProd !== itProd) continue;
+
+            const bEntries = Array.isArray(it.brandEntries) && it.brandEntries.length > 0
+                ? it.brandEntries
+                : [{
+                    brand: it.brand || it.brandName,
+                    warehouseName: it.warehouseName || it.warehouse,
+                    lcNo: it.lcNo,
+                    quantity: it.quantity,
+                    packet: it.packet || it.bag
+                }];
+
+            for (const be of bEntries) {
+                const b = (be.brand || be.brandName || '').trim().toLowerCase();
+                const w = (be.warehouseName || be.warehouse || '').trim().toLowerCase();
+                const l = (be.lcNo || '').trim().toLowerCase();
+
+                const isBrandMatch = !targetBrand || !b || targetBrand === b || targetBrand.replace(/\s+/g, ' ') === b.replace(/\s+/g, ' ');
+                const isWhMatch = !targetWh || !w || targetWh === w;
+                const isLcMatchVal = !targetLc || !l || targetLc === l || isLcMatch(l, targetLc);
+
+                if (isBrandMatch && isWhMatch && isLcMatchVal) {
+                    const q = isBagUom ? (parseFloat(be.packet || be.bag) || 0) : (parseFloat(be.quantity) || 0);
+                    origTotal += q;
+                }
+            }
+        }
+        return origTotal;
+    };
+
     const findDeficitEntry = (items = formData.items) => {
         for (let pIdx = 0; pIdx < (items || []).length; pIdx++) {
             const item = items[pIdx];
@@ -1315,6 +1366,21 @@ const OrderManagement = ({
 
                 const subVal = isBagUom ? (parseFloat(be.packet) || 0) : (parseFloat(be.quantity) || 0);
                 if (subVal <= 0) continue;
+
+                // When editing an order, check if this quantity was already allocated/fulfilled for this order
+                const origOrderQty = getOriginalQtyForEntry(
+                    item.productName,
+                    be.brand || be.brandName,
+                    be.lcNo,
+                    be.warehouseName,
+                    isBagUom
+                );
+
+                // If the user hasn't increased the quantity beyond what this order originally had,
+                // zero new stock is required from the warehouse! It cannot be in deficit.
+                if (editingId && origOrderQty > 0 && subVal <= origOrderQty) {
+                    continue;
+                }
 
                 let baseWhStock = parseFloat(be.warehouseQty) || 0;
                 if (baseWhStock === 0 && currentBrand) {
@@ -1369,7 +1435,10 @@ const OrderManagement = ({
                     }
                 }
 
-                const startingWhStock = baseWhStock - priorQty;
+                // If editing and quantity increased beyond origOrderQty,
+                // credit back origOrderQty to warehouse stock because this order already possessed that amount
+                const effectiveWhStock = Math.max(0, baseWhStock) + (editingId ? origOrderQty : 0);
+                const startingWhStock = effectiveWhStock - priorQty;
                 const remainingWhStock = Number((startingWhStock - subVal).toFixed(2));
 
                 if (startingWhStock < subVal || remainingWhStock < 0) {
@@ -1784,6 +1853,7 @@ const OrderManagement = ({
         fetchWarehouses();
         fetchLCRecords();
         setEditingId(null);
+        setOriginalData(null);
         setCompanyNameSearch('');
         setFormData({
             ...initialFormState,
@@ -3899,7 +3969,15 @@ const OrderManagement = ({
                                                         }
 
                                                         const subVal = item.uom === 'BAG' ? (parseFloat(be.packet) || 0) : (parseFloat(be.quantity) || 0);
-                                                        const startingWhStock = baseWhStock - priorQty;
+                                                        const origOrderQty = getOriginalQtyForEntry(
+                                                            item.productName,
+                                                            be.brand || be.brandName,
+                                                            be.lcNo,
+                                                            be.warehouseName,
+                                                            item.uom === 'BAG'
+                                                        );
+                                                        const effectiveWhStock = Math.max(0, baseWhStock) + (editingId ? origOrderQty : 0);
+                                                        const startingWhStock = effectiveWhStock - priorQty;
                                                         const displayVal = Number((startingWhStock - subVal).toFixed(2));
 
                                                         return (
