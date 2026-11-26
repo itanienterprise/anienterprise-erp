@@ -583,19 +583,31 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
         });
     };
 
-    // Filter deals for Deal dropdown
+    // Filter deals for Deal dropdown (hide deals with 0 remaining unless already selected)
     const filteredDeals = useMemo(() => {
         const query = dealSearchQuery.trim().toLowerCase();
-        if (!query) return dealsList;
         return dealsList.filter(d => {
-            const pId = String(d.purchaseId || '').replace(/-/g, '').toLowerCase();
+            const cleanPId = String(d.purchaseId || '').replace(/-/g, '');
+            const pQty = parseFloat(d.qty) || 0;
+            const rQty = parseFloat(d.receivedQty) || 0;
+            const remaining = pQty - rQty;
+
+            // If remaining is 0 or less, do not show in dropdown (unless currently selected in form)
+            const isCurrentlySelected = formData.purchaseId && formData.purchaseId === cleanPId;
+            if (remaining <= 0.0001 && !isCurrentlySelected) {
+                return false;
+            }
+
+            if (!query) return true;
+
+            const pId = cleanPId.toLowerCase();
             const exp = String(d.exporter || '').toLowerCase();
             const sup = String(d.supplierName || '').toLowerCase();
             const prod = String(d.productName || '').toLowerCase();
             const br = String(d.brand || '').toLowerCase();
             return pId.includes(query) || exp.includes(query) || sup.includes(query) || prod.includes(query) || br.includes(query);
         });
-    }, [dealsList, dealSearchQuery]);
+    }, [dealsList, dealSearchQuery, formData.purchaseId]);
 
     // Handle Deal selection in form
     const handleDealSelect = (deal) => {
