@@ -23,198 +23,6 @@ const saveEncrypted = async (doc, data) => {
     await doc.save();
 };
 
-const isLcMatch = (a, b) => {
-    if (!a || !b) return true;
-    const cleanA = cleanId(a);
-    const cleanB = cleanId(b);
-    if (cleanA === cleanB) return true;
-    const digA = cleanA.replace(/\D/g, '');
-    const digB = cleanB.replace(/\D/g, '');
-    if (digA && digB && (digA === digB || digA.endsWith(digB) || digB.endsWith(digA))) return true;
-    return false;
-};
-
-/**
- * Synchronizes all relevant fields (product, brand, supplier, exporter, pricing, quantities, invoices)
- * onto a Stock document (LC Receive).
- */
-function applyStockUpdate(stock, fields = {}) {
-    let modified = false;
-
-    // Product Name & Product
-    const newProduct = (fields.productName || fields.product || '').trim();
-    if (newProduct) {
-        if (stock.productName !== newProduct) {
-            stock.productName = newProduct;
-            modified = true;
-        }
-        if (stock.product !== newProduct) {
-            stock.product = newProduct;
-            modified = true;
-        }
-    }
-
-    // Brand
-    if (fields.brand !== undefined && fields.brand !== null) {
-        const newBrand = fields.brand.trim();
-        if (stock.brand !== newBrand) {
-            stock.brand = newBrand;
-            modified = true;
-        }
-    }
-
-    // Supplier & SupplierName
-    const newSupplier = (fields.supplier || fields.supplierName || '').trim();
-    if (newSupplier) {
-        if (stock.supplier !== newSupplier) {
-            stock.supplier = newSupplier;
-            modified = true;
-        }
-        if (stock.supplierName !== newSupplier) {
-            stock.supplierName = newSupplier;
-            modified = true;
-        }
-    }
-
-    // Exporter
-    if (fields.exporter !== undefined && fields.exporter !== null) {
-        const newExporter = fields.exporter.trim();
-        if (newExporter && stock.exporter !== newExporter) {
-            stock.exporter = newExporter;
-            modified = true;
-        }
-    }
-
-    // Importer
-    if (fields.importer !== undefined && fields.importer !== null) {
-        const newImporter = fields.importer.trim();
-        if (newImporter && stock.importer !== newImporter) {
-            stock.importer = newImporter;
-            modified = true;
-        }
-    }
-
-    // Invoice No
-    if (fields.invoiceNo !== undefined && fields.invoiceNo !== null) {
-        const newInv = fields.invoiceNo.trim();
-        if (newInv && stock.invoiceNo !== newInv) {
-            stock.invoiceNo = newInv;
-            modified = true;
-        }
-    }
-
-    // Truck No
-    if (fields.truckNo !== undefined && fields.truckNo !== null) {
-        const newTruck = fields.truckNo.trim();
-        if (newTruck && stock.truckNo !== newTruck) {
-            stock.truckNo = newTruck;
-            modified = true;
-        }
-    }
-
-    // LC No
-    if (fields.lcNo !== undefined && fields.lcNo !== null) {
-        const newLc = fields.lcNo.trim();
-        if (newLc && stock.lcNo !== newLc) {
-            stock.lcNo = newLc;
-            modified = true;
-        }
-    }
-
-    // Matched COG Id
-    if (fields.matchedCogId !== undefined && fields.matchedCogId !== null) {
-        const cogId = String(fields.matchedCogId).trim();
-        if (cogId && stock.matchedCogId !== cogId) {
-            stock.matchedCogId = cogId;
-            modified = true;
-        }
-    }
-
-    // Price / Costing per kg / Rate
-    if (fields.costingKg !== undefined && fields.costingKg !== null && fields.costingKg !== '') {
-        const priceStr = String(fields.costingKg);
-        if (String(stock.purchasedPrice) !== priceStr) {
-            stock.purchasedPrice = priceStr;
-            modified = true;
-        }
-    } else if (fields.purchasedPrice !== undefined && fields.purchasedPrice !== null && fields.purchasedPrice !== '') {
-        const priceStr = String(fields.purchasedPrice);
-        if (String(stock.purchasedPrice) !== priceStr) {
-            stock.purchasedPrice = priceStr;
-            modified = true;
-        }
-    }
-
-    // Invoice Qty / Quantity
-    if (fields.quantity !== undefined && fields.quantity !== null && fields.quantity !== '') {
-        const qtyStr = String(fields.quantity);
-        if (String(stock.invoiceQty) !== qtyStr) {
-            stock.invoiceQty = qtyStr;
-            modified = true;
-        }
-        const oldQtyClean = fields.oldQuantity !== undefined && fields.oldQuantity !== null ? String(fields.oldQuantity).trim() : '';
-        const currentStockQty = String(stock.quantity || '').trim();
-        if (!currentStockQty || currentStockQty === '0' || (oldQtyClean && currentStockQty === oldQtyClean)) {
-            stock.quantity = qtyStr;
-            const swp = parseFloat(stock.sweepedQuantity) || 0;
-            const inHouse = Math.max(0, (parseFloat(qtyStr) || 0) - swp);
-            stock.inHouseQuantity = String(inHouse);
-            stock.totalInHouseQuantity = String(inHouse);
-            modified = true;
-        }
-    }
-
-    // Entries array if present
-    if (Array.isArray(stock.entries)) {
-        stock.entries.forEach(entry => {
-            const entryMatch = !fields.matchEntryInvoice ||
-                !entry.invoiceNo ||
-                cleanId(entry.invoiceNo) === cleanId(fields.matchEntryInvoice) ||
-                (fields.oldInvoiceNo && cleanId(entry.invoiceNo) === cleanId(fields.oldInvoiceNo));
-
-            if (entryMatch) {
-                if (newProduct) {
-                    if (entry.productName !== newProduct) { entry.productName = newProduct; modified = true; }
-                    if (entry.product !== newProduct) { entry.product = newProduct; modified = true; }
-                }
-                if (fields.brand !== undefined && fields.brand !== null) {
-                    const newBrand = fields.brand.trim();
-                    if (entry.brand !== newBrand) { entry.brand = newBrand; modified = true; }
-                }
-                if (newSupplier) {
-                    if (entry.supplier !== newSupplier) { entry.supplier = newSupplier; modified = true; }
-                    if (entry.supplierName !== newSupplier) { entry.supplierName = newSupplier; modified = true; }
-                }
-                if (fields.invoiceNo) {
-                    const newInv = fields.invoiceNo.trim();
-                    if (entry.invoiceNo !== newInv) { entry.invoiceNo = newInv; modified = true; }
-                }
-                if (fields.truckNo) {
-                    const newTruck = fields.truckNo.trim();
-                    if (entry.truckNo !== newTruck) { entry.truckNo = newTruck; modified = true; }
-                }
-                if (fields.costingKg !== undefined && fields.costingKg !== '') {
-                    const priceStr = String(fields.costingKg);
-                    if (String(entry.purchasedPrice) !== priceStr) { entry.purchasedPrice = priceStr; modified = true; }
-                } else if (fields.purchasedPrice !== undefined && fields.purchasedPrice !== '') {
-                    const priceStr = String(fields.purchasedPrice);
-                    if (String(entry.purchasedPrice) !== priceStr) { entry.purchasedPrice = priceStr; modified = true; }
-                }
-                if (fields.quantity !== undefined && fields.quantity !== '') {
-                    const qtyStr = String(fields.quantity);
-                    if (String(entry.invoiceQty) !== qtyStr) { entry.invoiceQty = qtyStr; modified = true; }
-                }
-                if (fields.matchedCogId) {
-                    entry.matchedCogId = String(fields.matchedCogId);
-                    modified = true;
-                }
-            }
-        });
-    }
-
-    return modified;
-}
-
 /**
  * Calculates financial costing fields for India and China entries matching the ERP formula.
  */
@@ -438,30 +246,6 @@ async function cascadePurchaseDealUpdate(dealId, newDeal = {}, oldDeal = {}, con
                 counts.stocks += subRes.counts.stocks || 0;
             }
         }
-
-        // Direct fallback for Stock if any stock record references this purchase deal directly
-        if (cleanNewPId || cleanOldPId) {
-            const stockDocs = await Stock.find({});
-            for (const doc of stockDocs) {
-                if (visited.stocks.has(String(doc._id))) continue;
-                const stock = getDecrypted(doc);
-                if (!stock) continue;
-                const stPId = cleanId(stock.purchaseId);
-                if ((cleanNewPId && stPId === cleanNewPId) || (cleanOldPId && stPId === cleanOldPId)) {
-                    visited.stocks.add(String(doc._id));
-                    const stockModified = applyStockUpdate(stock, {
-                        productName: newProduct,
-                        brand: newBrand,
-                        supplier: newSupplier,
-                        exporter: newExporter
-                    });
-                    if (stockModified) {
-                        await saveEncrypted(doc, stock);
-                        counts.stocks++;
-                    }
-                }
-            }
-        }
     } catch (err) {
         console.error('Error cascading Purchase Deal update:', err);
     }
@@ -676,8 +460,8 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}, c
             }
         }
 
-        // Direct fallback: Update Stock directly if invoice or truck matches
-        if (cleanNewInv || cleanOldInv || truckNoVal) {
+        // Direct fallback: Update Stock directly if invoice matches
+        if (cleanNewInv || cleanOldInv) {
             const stockDocs = await Stock.find({});
             for (const doc of stockDocs) {
                 if (visited.stocks.has(String(doc._id))) continue;
@@ -686,40 +470,41 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}, c
                 if (!stock) continue;
 
                 const stInvClean = cleanId(stock.invoiceNo);
-                const stTruckClean = cleanId(stock.truckNo);
-                const cleanDrTruck = cleanId(truckNoVal);
-
                 const matchesInv = (cleanNewInv && stInvClean === cleanNewInv) || (cleanOldInv && stInvClean === cleanOldInv);
-                const matchesTruck = (cleanDrTruck && stTruckClean === cleanDrTruck && (!cleanNewInv || !stock.invoiceNo || stInvClean === cleanNewInv));
-
-                let hasMatchingEntry = false;
-                if (Array.isArray(stock.entries)) {
-                    hasMatchingEntry = stock.entries.some(e => {
-                        const eInv = cleanId(e.invoiceNo);
-                        const eTruck = cleanId(e.truckNo);
-                        return (cleanNewInv && eInv === cleanNewInv) ||
-                               (cleanOldInv && eInv === cleanOldInv) ||
-                               (cleanDrTruck && eTruck === cleanDrTruck);
-                    });
-                }
-
-                if (!matchesInv && !matchesTruck && !hasMatchingEntry) continue;
+                if (!matchesInv) continue;
 
                 visited.stocks.add(String(doc._id));
-                const stockModified = applyStockUpdate(stock, {
-                    productName: productVal,
-                    brand: brandVal,
-                    supplier: supplierVal,
-                    exporter: newDr.exporter,
-                    importer: newDr.importer,
-                    invoiceNo: invoiceNoVal,
-                    truckNo: truckNoVal,
-                    costingKg: newDr.costingKg,
-                    quantity: newDr.quantity,
-                    oldQuantity: oldDr.quantity,
-                    matchEntryInvoice: newDr.invoiceNo,
-                    oldInvoiceNo: oldDr.invoiceNo
-                });
+                let stockModified = false;
+                // Preserve internal catalog productName and verified arrival brand on Stock (do not overwrite with external trade names)
+                if (invoiceNoVal && stock.invoiceNo !== invoiceNoVal) {
+                    stock.invoiceNo = invoiceNoVal;
+                    stockModified = true;
+                }
+                if (truckNoVal && stock.truckNo !== truckNoVal) {
+                    stock.truckNo = truckNoVal;
+                    stockModified = true;
+                }
+                if (newDr.quantity !== undefined && newDr.quantity !== '' && String(stock.invoiceQty) !== String(newDr.quantity)) {
+                    stock.invoiceQty = String(newDr.quantity);
+                    stockModified = true;
+                }
+                if (newDr.costingKg !== undefined && newDr.costingKg !== '' && String(stock.purchasedPrice) !== String(newDr.costingKg)) {
+                    stock.purchasedPrice = String(newDr.costingKg);
+                    stockModified = true;
+                }
+
+                if (Array.isArray(stock.entries)) {
+                    stock.entries.forEach(entry => {
+                        const eInv = cleanId(entry.invoiceNo);
+                        if ((cleanNewInv && eInv === cleanNewInv) || (cleanOldInv && eInv === cleanOldInv)) {
+                            if (invoiceNoVal) entry.invoiceNo = invoiceNoVal;
+                            if (truckNoVal) entry.truckNo = truckNoVal;
+                            if (newDr.quantity !== undefined && newDr.quantity !== '') entry.invoiceQty = String(newDr.quantity);
+                            if (newDr.costingKg !== undefined && newDr.costingKg !== '') entry.purchasedPrice = String(newDr.costingKg);
+                            stockModified = true;
+                        }
+                    });
+                }
 
                 if (stockModified) {
                     await saveEncrypted(doc, stock);
@@ -845,49 +630,73 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}, context
             const stMatchedCogId = String(stock.matchedCogId || '').trim();
             const stInvClean = cleanId(stock.invoiceNo);
             const stLcClean = cleanId(stock.lcNo);
-            const stTruckClean = cleanId(stock.truckNo);
-            const cleanNewTruck = cleanId(newCog.truckNo);
-            const cleanOldTruck = cleanId(oldCog.truckNo);
 
             const isMatchingStock =
                 (normCogId && stMatchedCogId && stMatchedCogId === normCogId) ||
-                (cleanNewInv && stInvClean && stInvClean === cleanNewInv && isLcMatch(stLcClean, cleanNewLc)) ||
-                (cleanOldInv && stInvClean && stInvClean === cleanOldInv && isLcMatch(stLcClean, cleanOldLc)) ||
-                (cleanNewTruck && stTruckClean && stTruckClean === cleanNewTruck && cleanNewLc && isLcMatch(stLcClean, cleanNewLc)) ||
-                (cleanOldTruck && stTruckClean && stTruckClean === cleanOldTruck && cleanOldLc && isLcMatch(stLcClean, cleanOldLc));
+                (cleanNewInv && stInvClean && stInvClean === cleanNewInv && (!cleanNewLc || !stLcClean || stLcClean === cleanNewLc)) ||
+                (cleanOldInv && stInvClean && stInvClean === cleanOldInv && (!cleanOldLc || !stLcClean || stLcClean === cleanOldLc));
 
             let hasMatchingEntry = false;
             if (Array.isArray(stock.entries)) {
                 hasMatchingEntry = stock.entries.some(e => {
                     const eCogId = String(e.matchedCogId || '').trim();
                     const eInv = cleanId(e.invoiceNo);
-                    const eTruck = cleanId(e.truckNo);
                     return (normCogId && eCogId && eCogId === normCogId) ||
                            (cleanNewInv && eInv && eInv === cleanNewInv) ||
-                           (cleanOldInv && eInv && eInv === cleanOldInv) ||
-                           (cleanNewTruck && eTruck === cleanNewTruck && cleanNewLc && isLcMatch(stLcClean, cleanNewLc));
+                           (cleanOldInv && eInv && eInv === cleanOldInv);
                 });
             }
 
             if (!isMatchingStock && !hasMatchingEntry) continue;
 
             visited.stocks.add(String(doc._id));
-            const stockModified = applyStockUpdate(stock, {
-                productName: targetProduct,
-                brand: targetBrand,
-                supplier: targetSupplier,
-                exporter: newCog.exporter,
-                importer: newCog.importer,
-                invoiceNo: targetInvoiceNo,
-                truckNo: targetTruckNo,
-                lcNo: newCog.lcNo,
-                matchedCogId: normCogId,
-                costingKg: newCog.costingKg,
-                quantity: newCog.quantity,
-                oldQuantity: oldCog.quantity,
-                matchEntryInvoice: newCog.invoiceNo,
-                oldInvoiceNo: oldCog.invoiceNo
-            });
+            let stockModified = false;
+
+            if (isMatchingStock) {
+                if (normCogId && stock.matchedCogId !== normCogId) {
+                    stock.matchedCogId = normCogId;
+                    stockModified = true;
+                }
+                // Preserve internal catalog productName and verified arrival brand on Stock (do not overwrite with COG trade names)
+
+                if (targetInvoiceNo && stock.invoiceNo !== targetInvoiceNo) {
+                    stock.invoiceNo = targetInvoiceNo;
+                    stockModified = true;
+                }
+
+                if (targetTruckNo && stock.truckNo !== targetTruckNo) {
+                    stock.truckNo = targetTruckNo;
+                    stockModified = true;
+                }
+
+                if (targetPrice && String(stock.purchasedPrice) !== targetPrice) {
+                    stock.purchasedPrice = targetPrice;
+                    stockModified = true;
+                }
+
+                if (targetQty && String(stock.invoiceQty) !== targetQty) {
+                    stock.invoiceQty = targetQty;
+                    stockModified = true;
+                }
+            }
+
+            if (Array.isArray(stock.entries)) {
+                stock.entries.forEach(entry => {
+                    const eCogId = String(entry.matchedCogId || '').trim();
+                    const eInv = cleanId(entry.invoiceNo);
+                    const eMatch = (normCogId && eCogId && eCogId === normCogId) ||
+                                  (cleanNewInv && eInv && eInv === cleanNewInv) ||
+                                  (cleanOldInv && eInv && eInv === cleanOldInv);
+                    if (eMatch) {
+                        if (normCogId) entry.matchedCogId = normCogId;
+                        if (targetInvoiceNo) entry.invoiceNo = targetInvoiceNo;
+                        if (targetTruckNo) entry.truckNo = targetTruckNo;
+                        if (targetPrice) entry.purchasedPrice = targetPrice;
+                        if (targetQty) entry.invoiceQty = targetQty;
+                        stockModified = true;
+                    }
+                });
+            }
 
             if (stockModified) {
                 await saveEncrypted(doc, stock);
