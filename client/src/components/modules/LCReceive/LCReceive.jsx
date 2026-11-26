@@ -1332,7 +1332,8 @@ function LCReceive({
 
         const handleRealtimeUpdate = (data) => {
             const mod = (data?.module || '').toLowerCase().trim();
-            if (!mod || ['stock', 'lcreceive', 'lc-receive', 'warehouses', 'warehouse', 'all'].includes(mod)) {
+            if (!mod || ['stock', 'lcreceive', 'lc-receive', 'warehouses', 'warehouse', 'cost-of-goods', 'costofgoods', 'cog', 'deal-receives', 'deal-receive', 'dealreceive', 'lc-purchases', 'lc-purchase', 'all'].includes(mod)) {
+                fetchCostOfGoods();
                 debouncedFetch();
             }
         };

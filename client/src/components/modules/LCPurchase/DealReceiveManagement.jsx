@@ -489,20 +489,31 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
         loadDependencies();
         fetchRecords();
 
+        const handleUpdate = (data) => {
+            const mod = (data?.module || '').toLowerCase().trim();
+            if (!mod || ['deal-receives', 'deal-receive', 'dealreceive', 'lc-purchases', 'lc-purchase', 'cost-of-goods', 'costofgoods', 'cog', 'stock', 'all'].includes(mod)) {
+                queryClient.invalidateQueries({ queryKey: ['deal-receives'] });
+                queryClient.invalidateQueries({ queryKey: ['dealReceives'] });
+                queryClient.invalidateQueries({ queryKey: ['cost-of-goods'] });
+                queryClient.invalidateQueries({ queryKey: ['costOfGoods'] });
+                queryClient.invalidateQueries({ queryKey: ['stock'] });
+                queryClient.invalidateQueries({ queryKey: ['lcPurchases'] });
+                fetchRecords();
+                loadDependencies();
+            }
+        };
+
         const socket = getSocket();
         if (socket) {
-            const handleUpdate = (data) => {
-                if (data.module === 'deal-receives' || data.module === 'lc-purchases') {
-                    queryClient.invalidateQueries({ queryKey: [data.module] });
-                    if (data.module === 'deal-receives') fetchRecords();
-                    if (data.module === 'lc-purchases') loadDependencies();
-                }
-            };
             socket.on('data_updated', handleUpdate);
-            return () => {
-                socket.off('data_updated', handleUpdate);
-            };
         }
+        const onCustomEvent = (e) => handleUpdate(e?.detail);
+        window.addEventListener('erp_data_updated', onCustomEvent);
+
+        return () => {
+            if (socket) socket.off('data_updated', handleUpdate);
+            window.removeEventListener('erp_data_updated', onCustomEvent);
+        };
     }, []);
 
     // Outside click listener for dropdowns
@@ -1010,6 +1021,14 @@ const DealReceiveManagement = ({ currentUser, addNotification, refreshPendingInd
             }
 
             await syncDealQuantities(formData.dealRefId, formData.purchaseId);
+
+            queryClient.invalidateQueries({ queryKey: ['deal-receives'] });
+            queryClient.invalidateQueries({ queryKey: ['dealReceives'] });
+            queryClient.invalidateQueries({ queryKey: ['cost-of-goods'] });
+            queryClient.invalidateQueries({ queryKey: ['costOfGoods'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            queryClient.invalidateQueries({ queryKey: ['lcPurchases'] });
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'deal-receives', action: editingId ? 'update' : 'create' } }));
 
             setShowForm(false);
             resetForm();

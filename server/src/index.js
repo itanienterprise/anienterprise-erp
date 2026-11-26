@@ -524,6 +524,7 @@ const BankDollarRate = require('./models/BankDollarRate');
 const { encryptData, decryptData, decryptRecordWithUnwrap } = require('./utils/encryption');
 const { updateBrandAcrossAllCollections } = require('./services/brandCascadeService');
 const { cascadeIpUpdate, cascadeProductUpdate, cascadeProductIpNameUpdate } = require('./services/ipCascadeService');
+const { cascadePurchaseDealUpdate, cascadeDealReceiveUpdate, cascadeCostOfGoodsUpdate, syncAllPurchaseDealCascades } = require('./services/purchaseDealCascadeService');
 const { syncSaleOnSave, syncSaleOnDelete, repairAllCustomerSalesHistory } = require('./services/customerSyncService');
 const { repairCorruptedGarlicProducts } = require('./services/productHealService');
 const { scrapeBankWebsites, matchBankToRate, BANK_REGISTRY, extractCircularDate } = require('./services/bankExchangeRateScraper');
@@ -1018,6 +1019,9 @@ const runSystemSelfHealingMigrations = async () => {
     }
     if (typeof repairCorruptedGarlicProducts === 'function') {
       await repairCorruptedGarlicProducts();
+    }
+    if (typeof syncAllPurchaseDealCascades === 'function') {
+      await syncAllPurchaseDealCascades();
     }
     if (typeof invalidateMemoryCache === 'function') {
       invalidateMemoryCache();
@@ -2869,12 +2873,35 @@ apiRouter.delete('/api/cost-of-goods/:id', async (req, res) => {
 
 apiRouter.put('/api/cost-of-goods/:id', async (req, res) => {
   try {
+    let oldData = null;
+    try {
+      const existingDoc = await CostOfGoods.findById(req.params.id);
+      if (existingDoc && existingDoc.data) {
+        oldData = decryptRecordWithUnwrap(existingDoc.data);
+      }
+    } catch (e) {
+      console.warn('Error reading old CostOfGoods:', e.message);
+    }
+
     const encryptedData = encryptData(req.body);
     const updatedRecord = await CostOfGoods.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Record not found' });
     invalidateMemoryCache('cost-of-goods');
     broadcastUpdate('cost-of-goods', 'update', { _id: updatedRecord._id });
     req._broadcastDone = true;
+
+    // Cascade update to LC Receive (Stock)
+    if (typeof cascadeCostOfGoodsUpdate === 'function') {
+      cascadeCostOfGoodsUpdate(updatedRecord._id, req.body, oldData).then(cascadeRes => {
+        if (cascadeRes?.counts?.stocks > 0) {
+          invalidateMemoryCache('stock');
+          broadcastUpdate('stock', 'update', { reason: 'cog_cascade' });
+        }
+      }).catch(err => {
+        console.error('Error cascading Cost of Goods update to Stock:', err);
+      });
+    }
+
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -5091,6 +5118,16 @@ apiRouter.post('/api/lc-purchases', async (req, res) => {
 
 apiRouter.put('/api/lc-purchases/:id', async (req, res) => {
   try {
+    let oldData = null;
+    try {
+      const existingDoc = await LCPurchase.findById(req.params.id);
+      if (existingDoc && existingDoc.data) {
+        oldData = decryptRecordWithUnwrap(existingDoc.data);
+      }
+    } catch (e) {
+      console.warn('Error reading old LCPurchase:', e.message);
+    }
+
     const encryptedData = encryptData(req.body);
     const updated = await LCPurchase.findByIdAndUpdate(req.params.id, {
       data: encryptedData
@@ -5099,6 +5136,29 @@ apiRouter.put('/api/lc-purchases/:id', async (req, res) => {
     invalidateMemoryCache('lc-purchases');
     broadcastUpdate('lc-purchases', 'update', { _id: updated._id, purchaseId: req.body.purchaseId });
     req._broadcastDone = true;
+
+    // Background Cascade: Update all dependent Deal Receive, Cost of Goods, and LC Receive (Stock) records
+    if (typeof cascadePurchaseDealUpdate === 'function') {
+      cascadePurchaseDealUpdate(updated._id, req.body, oldData).then(cascadeRes => {
+        if (cascadeRes?.counts) {
+          if (cascadeRes.counts.dealReceives > 0) {
+            invalidateMemoryCache('deal-receives');
+            broadcastUpdate('deal-receives', 'update', { reason: 'deal_cascade' });
+          }
+          if (cascadeRes.counts.costOfGoods > 0) {
+            invalidateMemoryCache('cost-of-goods');
+            broadcastUpdate('cost-of-goods', 'update', { reason: 'deal_cascade' });
+          }
+          if (cascadeRes.counts.stocks > 0) {
+            invalidateMemoryCache('stock');
+            broadcastUpdate('stock', 'update', { reason: 'deal_cascade' });
+          }
+        }
+      }).catch(err => {
+        console.error('Error cascading Purchase Deal update to dependent collections:', err);
+      });
+    }
+
     res.json({ ...req.body, _id: updated._id, createdAt: updated.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -5158,6 +5218,16 @@ apiRouter.post('/api/deal-receives', async (req, res) => {
 
 apiRouter.put('/api/deal-receives/:id', async (req, res) => {
   try {
+    let oldData = null;
+    try {
+      const existingDoc = await DealReceive.findById(req.params.id);
+      if (existingDoc && existingDoc.data) {
+        oldData = decryptRecordWithUnwrap(existingDoc.data);
+      }
+    } catch (e) {
+      console.warn('Error reading old DealReceive:', e.message);
+    }
+
     const encryptedData = encryptData(req.body);
     const updated = await DealReceive.findByIdAndUpdate(req.params.id, {
       data: encryptedData
@@ -5166,9 +5236,43 @@ apiRouter.put('/api/deal-receives/:id', async (req, res) => {
     invalidateMemoryCache('deal-receives');
     broadcastUpdate('deal-receives', 'update', { _id: updated._id, receiveId: req.body.receiveId });
     req._broadcastDone = true;
+
+    // Background Cascade: Update all dependent Cost of Goods and LC Receive (Stock) records
+    if (typeof cascadeDealReceiveUpdate === 'function') {
+      cascadeDealReceiveUpdate(updated._id, req.body, oldData).then(cascadeRes => {
+        if (cascadeRes?.counts) {
+          if (cascadeRes.counts.costOfGoods > 0) {
+            invalidateMemoryCache('cost-of-goods');
+            broadcastUpdate('cost-of-goods', 'update', { reason: 'deal_receive_cascade' });
+          }
+          if (cascadeRes.counts.stocks > 0) {
+            invalidateMemoryCache('stock');
+            broadcastUpdate('stock', 'update', { reason: 'deal_receive_cascade' });
+          }
+        }
+      }).catch(err => {
+        console.error('Error cascading Deal Receive update to dependent collections:', err);
+      });
+    }
+
     res.json({ ...req.body, _id: updated._id, createdAt: updated.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.post('/api/purchase-deals/sync-cascades', async (req, res) => {
+  try {
+    const counts = typeof syncAllPurchaseDealCascades === 'function' ? await syncAllPurchaseDealCascades() : { dealReceives: 0, costOfGoods: 0, stocks: 0 };
+    invalidateMemoryCache('deal-receives');
+    invalidateMemoryCache('cost-of-goods');
+    invalidateMemoryCache('stock');
+    broadcastUpdate('deal-receives', 'update', { reason: 'full_sync' });
+    broadcastUpdate('cost-of-goods', 'update', { reason: 'full_sync' });
+    broadcastUpdate('stock', 'update', { reason: 'full_sync' });
+    res.json({ message: 'Purchase deals cascades synchronized successfully', counts });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 

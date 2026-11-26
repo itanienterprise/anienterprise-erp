@@ -768,6 +768,12 @@ const LCPurchaseManagement = ({ currentUser, addNotification, refreshPendingIndi
                 const updatedRecord = res.data || { ...payload, _id: editingRecord._id };
                 setRecords(prev => prev.map(r => r._id === editingRecord._id ? updatedRecord : r));
                 queryClient.invalidateQueries({ queryKey: ['lcPurchases'] });
+                queryClient.invalidateQueries({ queryKey: ['deal-receives'] });
+                queryClient.invalidateQueries({ queryKey: ['dealReceives'] });
+                queryClient.invalidateQueries({ queryKey: ['cost-of-goods'] });
+                queryClient.invalidateQueries({ queryKey: ['costOfGoods'] });
+                queryClient.invalidateQueries({ queryKey: ['stock'] });
+                window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'lc-purchases', action: 'update' } }));
                 if (addNotification) {
                     addNotification(`Purchase Deal ${pId} updated successfully`, 'success');
                 }

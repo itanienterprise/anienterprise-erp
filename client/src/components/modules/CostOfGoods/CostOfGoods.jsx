@@ -998,6 +998,9 @@ const CostOfGoods = ({
             else await axios.post(url, payload);
 
             queryClient.invalidateQueries({ queryKey: ['cost-of-goods'] });
+            queryClient.invalidateQueries({ queryKey: ['costOfGoods'] });
+            queryClient.invalidateQueries({ queryKey: ['stock'] });
+            window.dispatchEvent(new CustomEvent('erp_data_updated', { detail: { module: 'cost-of-goods', action: editingId ? 'update' : 'create' } }));
             fetchRecords(true);
         } catch (error) {
             console.error('Error saving cost of goods:', error);
