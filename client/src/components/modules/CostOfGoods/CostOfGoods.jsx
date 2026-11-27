@@ -462,8 +462,10 @@ const CostOfGoods = ({
         const drProduct = dr.product || '';
         const drBrand = dr.brand || '';
         
-        let autoCnfExpense = dr.cfOtherExpense || '9';
-        if (drProduct && !dr.cfOtherExpense) {
+        let autoCnfExpense = (dr.cfOtherExpense !== undefined && dr.cfOtherExpense !== null && String(dr.cfOtherExpense).trim() !== '')
+            ? String(dr.cfOtherExpense).trim()
+            : '';
+        if (!autoCnfExpense && drProduct) {
             const selectedProductObj = products.find(p => 
                 (p.name || '').trim().toLowerCase() === drProduct.trim().toLowerCase() ||
                 (p.ipName || '').trim().toLowerCase() === drProduct.trim().toLowerCase()
@@ -474,6 +476,9 @@ const CostOfGoods = ({
                     autoCnfExpense = String(prodCnf).trim();
                 }
             }
+        }
+        if (!autoCnfExpense) {
+            autoCnfExpense = '9';
         }
 
         const truckStr = dr.truckNo || (Array.isArray(dr.truckNumbers) ? dr.truckNumbers.filter(Boolean).join(', ') : '') || '';
@@ -531,7 +536,8 @@ const CostOfGoods = ({
             slofCf: '',
             rebate: '2.9',
             rsToDollar: '',
-            dollarRateBdt: ''
+            dollarRateBdt: '',
+            cfOtherExpense: '9'
         }));
         setDealReceiveSearchQuery('');
         setHighlightedDealReceiveIndex(-1);
@@ -647,9 +653,9 @@ const CostOfGoods = ({
         setHighlightedProductIndex(-1);
     };
 
-    // Auto fill C&F & Other Expense from selected product's cnfOther field if available
+    // Auto fill C&F & Other Expense from selected product's cnfOther field if available (only when not from Deal Receive)
     useEffect(() => {
-        if (!editingId && formData.product && products && products.length > 0) {
+        if (!editingId && !formData.dealReceiveId && formData.product && products && products.length > 0) {
             const selectedProductObj = products.find(p => 
                 (p.name || '').trim().toLowerCase() === formData.product.trim().toLowerCase() ||
                 (p.ipName || '').trim().toLowerCase() === formData.product.trim().toLowerCase()
@@ -665,7 +671,7 @@ const CostOfGoods = ({
                 });
             }
         }
-    }, [formData.product, products, editingId]);
+    }, [formData.product, formData.dealReceiveId, products, editingId]);
 
     // Filter suppliers where supplier.exporter or supplier.exporters includes selected exporter if available, otherwise return all suppliers
     const filteredSuppliersForExporter = useMemo(() => {
@@ -725,8 +731,35 @@ const CostOfGoods = ({
 
     const filteredLcs = useMemo(() => {
         const q = lcSearchQuery.trim().toLowerCase();
-        if (!q) return lcs;
-        return lcs.filter(lc => {
+        let list = lcs;
+
+        if (formData.product) {
+            const prodNorm = formData.product.trim().toLowerCase();
+            const prodObj = products.find(p => 
+                (p.name || '').trim().toLowerCase() === prodNorm ||
+                (p.ipName || '').trim().toLowerCase() === prodNorm
+            );
+            const targetNames = [
+                prodNorm,
+                prodObj?.name?.trim().toLowerCase(),
+                prodObj?.ipName?.trim().toLowerCase()
+            ].filter(Boolean);
+
+            list = list.filter(lc => {
+                const uniqueProds = [
+                    ...(lc.productsList || []).map(p => p.productName || p.product || p.name).filter(Boolean),
+                    lc.productName,
+                    lc.product
+                ].filter(Boolean).map(p => String(p).trim().toLowerCase());
+
+                return uniqueProds.some(lp => 
+                    targetNames.some(tn => lp === tn || lp.includes(tn) || tn.includes(lp))
+                );
+            });
+        }
+
+        if (!q) return list;
+        return list.filter(lc => {
             const lcNum = String(lc.lcNo || '').toLowerCase();
             const imp = String(lc.importerName || lc.importer || '').toLowerCase();
             const exp = String(lc.exporterName || lc.exporter || '').toLowerCase();
@@ -734,7 +767,7 @@ const CostOfGoods = ({
             const prodStr = String([lc.productName, ...prodList].filter(Boolean).join(' ')).toLowerCase();
             return lcNum.includes(q) || imp.includes(q) || exp.includes(q) || prodStr.includes(q);
         });
-    }, [lcs, lcSearchQuery]);
+    }, [lcs, lcSearchQuery, formData.product, products]);
 
     const handleLcKeyDown = (e) => {
         const filtered = filteredLcs;
@@ -2225,7 +2258,28 @@ const CostOfGoods = ({
                                             className="w-full px-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-7 font-semibold text-gray-800"
                                             required={!formData.dealReceiveId}
                                         />
-                                        <SearchIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                        {formData.lcNo && !lcDropdownOpen ? (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        lcNo: '',
+                                                        importer: '',
+                                                        exporter: ''
+                                                    }));
+                                                    setLcSearchQuery('');
+                                                    setHighlightedLcIndex(-1);
+                                                }}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 p-0.5 transition-colors"
+                                                title="Clear LC"
+                                            >
+                                                <XIcon className="w-3.5 h-3.5" />
+                                            </button>
+                                        ) : (
+                                            <SearchIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                        )}
                                     </div>
                                     {lcDropdownOpen && (
                                         <div className="absolute top-full left-0 mt-1.5 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[120] max-h-56 overflow-y-auto py-1 min-w-[260px] sm:min-w-[280px]">
@@ -2266,7 +2320,7 @@ const CostOfGoods = ({
                                                 })
                                             ) : (
                                                 <div className="px-4 py-4 text-center text-gray-400 text-xs">
-                                                    No LC found
+                                                    {formData.product ? `No matching LC found for ${formData.product}` : 'No LC found'}
                                                 </div>
                                             )}
                                         </div>
