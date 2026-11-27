@@ -970,6 +970,397 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}, context
 }
 
 /**
+ * Cascades changes from Stock (LC Receive) upstream to Cost of Goods, Deal Receive, and Purchase Deal (LCPurchase).
+ *
+ * @param {string} stockId - MongoDB _id of the Stock document being updated
+ * @param {Object} newStock - Newly submitted or updated Stock data
+ * @param {Object} oldStock - Previous Stock data before update
+ * @param {Object} [context] - Context tracking visited IDs to prevent cycles
+ * @returns {Promise<Object>} Counts of updated documents in CostOfGoods, DealReceive, and LCPurchase
+ */
+async function cascadeStockUpdate(stockId, newStock = {}, oldStock = {}, context = {}) {
+    const visited = context.visited || {
+        deals: new Set(),
+        drs: new Set(),
+        cogs: new Set(),
+        stocks: new Set()
+    };
+
+    if (stockId) visited.stocks.add(String(stockId));
+
+    const counts = {
+        costOfGoods: 0,
+        dealReceives: 0,
+        lcPurchases: 0
+    };
+
+    if (!stockId && !newStock.invoiceNo && !oldStock.invoiceNo && !newStock.matchedCogId && !oldStock.matchedCogId) {
+        return { status: 'skipped', counts };
+    }
+
+    try {
+        const entries = [];
+        if (Array.isArray(newStock.entries) && newStock.entries.length > 0) {
+            newStock.entries.forEach(e => entries.push({ ...e, lcNo: e.lcNo || newStock.lcNo }));
+        } else if (Array.isArray(newStock.productEntries) && newStock.productEntries.length > 0) {
+            newStock.productEntries.forEach(pe => {
+                if (Array.isArray(pe.brandEntries) && pe.brandEntries.length > 0) {
+                    pe.brandEntries.forEach(be => {
+                        entries.push({
+                            ...be,
+                            productName: pe.productName || newStock.productName,
+                            truckNo: pe.truckNo || newStock.truckNo,
+                            lcNo: be.lcNo || newStock.lcNo
+                        });
+                    });
+                } else {
+                    entries.push({
+                        ...pe,
+                        lcNo: newStock.lcNo
+                    });
+                }
+            });
+        } else {
+            entries.push(newStock);
+        }
+
+        const oldInvoices = new Set();
+        if (oldStock.invoiceNo) oldInvoices.add(cleanId(oldStock.invoiceNo));
+        if (Array.isArray(oldStock.entries)) {
+            oldStock.entries.forEach(e => { if (e.invoiceNo) oldInvoices.add(cleanId(e.invoiceNo)); });
+        }
+        if (Array.isArray(oldStock.productEntries)) {
+            oldStock.productEntries.forEach(pe => {
+                if (Array.isArray(pe.brandEntries)) {
+                    pe.brandEntries.forEach(be => { if (be.invoiceNo) oldInvoices.add(cleanId(be.invoiceNo)); });
+                }
+            });
+        }
+
+        for (const entry of entries) {
+            const entryCogId = String(entry.matchedCogId || newStock.matchedCogId || oldStock.matchedCogId || '').trim();
+            const cleanEntryInv = cleanId(entry.invoiceNo);
+            const cleanEntryLc = cleanId(entry.lcNo || newStock.lcNo);
+            const cleanOldLc = cleanId(oldStock.lcNo);
+
+            const targetInvoiceNo = (entry.invoiceNo || '').trim();
+            const targetTruckNo = (entry.truckNo || newStock.truckNo || '').trim();
+            const targetProduct = (entry.productName || entry.product || newStock.productName || newStock.product || '').trim();
+            const targetBrand = (entry.brand || newStock.brand || '').trim();
+            const targetPrice = entry.purchasedPrice !== undefined && entry.purchasedPrice !== '' 
+                ? String(entry.purchasedPrice) 
+                : (newStock.purchasedPrice !== undefined && newStock.purchasedPrice !== '' ? String(newStock.purchasedPrice) : '');
+            const targetQty = entry.invoiceQty !== undefined && entry.invoiceQty !== '' 
+                ? String(entry.invoiceQty) 
+                : (entry.quantity !== undefined && entry.quantity !== '' ? String(entry.quantity) : (newStock.invoiceQty || newStock.quantity || ''));
+            const targetLcNo = (entry.lcNo || newStock.lcNo || '').trim();
+            const targetImporter = (newStock.importer || '').trim();
+            const targetExporter = (newStock.exporter || '').trim();
+
+            if (!entryCogId && !cleanEntryInv && oldInvoices.size === 0) continue;
+
+            // ─── 1. UPSTREAM: Update Cost of Goods (CostOfGoods) ─────────────
+            const cogDocs = await CostOfGoods.find({});
+            for (const cDoc of cogDocs) {
+                if (visited.cogs.has(String(cDoc._id))) continue;
+
+                const cog = getDecrypted(cDoc);
+                if (!cog) continue;
+
+                const cogIdStr = String(cDoc._id);
+                const cogInvClean = cleanId(cog.invoiceNo);
+                const cogLcClean = cleanId(cog.lcNo);
+
+                const matchesCog =
+                    (entryCogId && cogIdStr === entryCogId) ||
+                    (cleanEntryInv && cogInvClean && cogInvClean === cleanEntryInv && (!cleanEntryLc || !cogLcClean || cogLcClean === cleanEntryLc)) ||
+                    (cogInvClean && oldInvoices.has(cogInvClean) && (!cleanOldLc || !cogLcClean || cogLcClean === cleanOldLc));
+
+                if (!matchesCog) continue;
+
+                visited.cogs.add(cogIdStr);
+                let cogModified = false;
+
+                if (targetLcNo && cog.lcNo !== targetLcNo) {
+                    cog.lcNo = targetLcNo;
+                    cogModified = true;
+                }
+                if (targetInvoiceNo && cog.invoiceNo !== targetInvoiceNo) {
+                    cog.invoiceNo = targetInvoiceNo;
+                    cogModified = true;
+                }
+                if (targetTruckNo && cog.truckNo !== targetTruckNo) {
+                    cog.truckNo = targetTruckNo;
+                    cogModified = true;
+                }
+                if (targetProduct && (cog.product !== targetProduct || cog.productName !== targetProduct)) {
+                    cog.product = targetProduct;
+                    cog.productName = targetProduct;
+                    cogModified = true;
+                }
+                if (targetBrand && cog.brand !== targetBrand) {
+                    cog.brand = targetBrand;
+                    cogModified = true;
+                }
+                if (targetQty && String(cog.quantity) !== String(targetQty)) {
+                    cog.quantity = String(targetQty);
+                    cogModified = true;
+                }
+                if (targetPrice && String(cog.costingKg) !== targetPrice) {
+                    cog.costingKg = parseFloat(targetPrice) || targetPrice;
+                    cogModified = true;
+                }
+                if (targetImporter && cog.importer !== targetImporter) {
+                    cog.importer = targetImporter;
+                    cogModified = true;
+                }
+                if (targetExporter && cog.exporter !== targetExporter) {
+                    cog.exporter = targetExporter;
+                    cogModified = true;
+                }
+
+                if (cogModified) {
+                    await saveEncrypted(cDoc, cog);
+                    counts.costOfGoods++;
+                }
+
+                // ─── 2. UPSTREAM: Update Deal Receive from COG ─────────────
+                const targetDrRefId = String(cog.dealReceiveRefId || '').trim();
+                const cleanTargetDrId = cleanId(cog.dealReceiveId);
+
+                const drDocs = await DealReceive.find({});
+                for (const dDoc of drDocs) {
+                    if (visited.drs.has(String(dDoc._id))) continue;
+
+                    const dr = getDecrypted(dDoc);
+                    if (!dr) continue;
+
+                    const drIdStr = String(dDoc._id);
+                    const drRecIdClean = cleanId(dr.receiveId);
+                    const drInvClean = cleanId(dr.invoiceNo);
+
+                    const matchesDr =
+                        (targetDrRefId && drIdStr === targetDrRefId) ||
+                        (cleanTargetDrId && drRecIdClean === cleanTargetDrId) ||
+                        (cleanEntryInv && drInvClean && drInvClean === cleanEntryInv) ||
+                        (drInvClean && oldInvoices.has(drInvClean));
+
+                    if (!matchesDr) continue;
+
+                    visited.drs.add(drIdStr);
+                    let drModified = false;
+
+                    if (targetInvoiceNo && dr.invoiceNo !== targetInvoiceNo) {
+                        dr.invoiceNo = targetInvoiceNo;
+                        drModified = true;
+                    }
+                    if (targetTruckNo && dr.truckNo !== targetTruckNo) {
+                        dr.truckNo = targetTruckNo;
+                        if (Array.isArray(dr.truckNumbers)) {
+                            dr.truckNumbers = [targetTruckNo];
+                        }
+                        drModified = true;
+                    }
+                    if (targetProduct && (dr.product !== targetProduct || dr.productName !== targetProduct)) {
+                        dr.product = targetProduct;
+                        dr.productName = targetProduct;
+                        drModified = true;
+                    }
+                    if (targetBrand && dr.brand !== targetBrand) {
+                        dr.brand = targetBrand;
+                        drModified = true;
+                    }
+                    if (targetQty && String(dr.quantity) !== String(targetQty)) {
+                        dr.quantity = String(targetQty);
+                        drModified = true;
+                    }
+                    if (targetPrice && String(dr.costingKg) !== targetPrice) {
+                        dr.costingKg = parseFloat(targetPrice) || targetPrice;
+                        drModified = true;
+                    }
+                    if (targetLcNo) {
+                        if (dr._lcInfo && dr._lcInfo.lcNo !== targetLcNo) {
+                            dr._lcInfo.lcNo = targetLcNo;
+                            drModified = true;
+                        }
+                        if (dr._lcNo !== targetLcNo) {
+                            dr._lcNo = targetLcNo;
+                            drModified = true;
+                        }
+                    }
+                    if (targetExporter && dr.exporter !== targetExporter) {
+                        dr.exporter = targetExporter;
+                        drModified = true;
+                    }
+                    if (targetImporter && dr.importer !== targetImporter) {
+                        dr.importer = targetImporter;
+                        drModified = true;
+                    }
+
+                    if (drModified) {
+                        await saveEncrypted(dDoc, dr);
+                        counts.dealReceives++;
+                    }
+
+                    // ─── 3. UPSTREAM: Update Purchase Deal (LCPurchase) ────────
+                    const dealRefId = String(dr.dealRefId || '').trim();
+                    const pIdClean = cleanId(dr.purchaseId);
+
+                    if (dealRefId || pIdClean) {
+                        const dealDocs = await LCPurchase.find({});
+                        for (const dealDoc of dealDocs) {
+                            if (visited.deals.has(String(dealDoc._id))) continue;
+
+                            const deal = getDecrypted(dealDoc);
+                            if (!deal) continue;
+
+                            const dealIdStr = String(dealDoc._id);
+                            const dPIdClean = cleanId(deal.purchaseId);
+
+                            const matchesDeal =
+                                (dealRefId && dealIdStr === dealRefId) ||
+                                (pIdClean && dPIdClean === pIdClean);
+
+                            if (!matchesDeal) continue;
+
+                            visited.deals.add(dealIdStr);
+                            let dealModified = false;
+
+                            if (targetProduct && (deal.productName !== targetProduct || deal.product !== targetProduct)) {
+                                deal.productName = targetProduct;
+                                deal.product = targetProduct;
+                                dealModified = true;
+                            }
+                            if (targetBrand && deal.brand !== targetBrand) {
+                                deal.brand = targetBrand;
+                                dealModified = true;
+                            }
+                            if (targetExporter && deal.exporter !== targetExporter) {
+                                deal.exporter = targetExporter;
+                                dealModified = true;
+                            }
+
+                            if (dealModified) {
+                                await saveEncrypted(dealDoc, deal);
+                                counts.lcPurchases++;
+                            }
+
+                            await syncDealQuantitiesForDeal(dealDoc._id, deal.purchaseId);
+                        }
+                    }
+                }
+            }
+
+            // Fallback: If no COG was found/linked, check DealReceive directly by invoice
+            const remainingDrDocs = await DealReceive.find({});
+            for (const dDoc of remainingDrDocs) {
+                if (visited.drs.has(String(dDoc._id))) continue;
+
+                const dr = getDecrypted(dDoc);
+                if (!dr) continue;
+
+                const drInvClean = cleanId(dr.invoiceNo);
+                const matchesDr = (cleanEntryInv && drInvClean && drInvClean === cleanEntryInv) ||
+                                  (drInvClean && oldInvoices.has(drInvClean));
+
+                if (!matchesDr) continue;
+
+                visited.drs.add(String(dDoc._id));
+                let drModified = false;
+
+                if (targetInvoiceNo && dr.invoiceNo !== targetInvoiceNo) {
+                    dr.invoiceNo = targetInvoiceNo;
+                    drModified = true;
+                }
+                if (targetTruckNo && dr.truckNo !== targetTruckNo) {
+                    dr.truckNo = targetTruckNo;
+                    if (Array.isArray(dr.truckNumbers)) dr.truckNumbers = [targetTruckNo];
+                    drModified = true;
+                }
+                if (targetProduct && (dr.product !== targetProduct || dr.productName !== targetProduct)) {
+                    dr.product = targetProduct;
+                    dr.productName = targetProduct;
+                    drModified = true;
+                }
+                if (targetBrand && dr.brand !== targetBrand) {
+                    dr.brand = targetBrand;
+                    drModified = true;
+                }
+                if (targetQty && String(dr.quantity) !== String(targetQty)) {
+                    dr.quantity = String(targetQty);
+                    drModified = true;
+                }
+                if (targetPrice && String(dr.costingKg) !== targetPrice) {
+                    dr.costingKg = parseFloat(targetPrice) || targetPrice;
+                    drModified = true;
+                }
+                if (targetLcNo) {
+                    if (dr._lcInfo && dr._lcInfo.lcNo !== targetLcNo) {
+                        dr._lcInfo.lcNo = targetLcNo;
+                        drModified = true;
+                    }
+                    if (dr._lcNo !== targetLcNo) {
+                        dr._lcNo = targetLcNo;
+                        drModified = true;
+                    }
+                }
+                if (targetExporter && dr.exporter !== targetExporter) {
+                    dr.exporter = targetExporter;
+                    drModified = true;
+                }
+                if (targetImporter && dr.importer !== targetImporter) {
+                    dr.importer = targetImporter;
+                    drModified = true;
+                }
+
+                if (drModified) {
+                    await saveEncrypted(dDoc, dr);
+                    counts.dealReceives++;
+                }
+
+                const dealRefId = String(dr.dealRefId || '').trim();
+                const pIdClean = cleanId(dr.purchaseId);
+                if (dealRefId || pIdClean) {
+                    const dealDocs = await LCPurchase.find({});
+                    for (const dealDoc of dealDocs) {
+                        if (visited.deals.has(String(dealDoc._id))) continue;
+                        const deal = getDecrypted(dealDoc);
+                        if (!deal) continue;
+                        const matchesDeal = (dealRefId && String(dealDoc._id) === dealRefId) || (pIdClean && cleanId(deal.purchaseId) === pIdClean);
+                        if (!matchesDeal) continue;
+
+                        visited.deals.add(String(dealDoc._id));
+                        let dealModified = false;
+                        if (targetProduct && (deal.productName !== targetProduct || deal.product !== targetProduct)) {
+                            deal.productName = targetProduct;
+                            deal.product = targetProduct;
+                            dealModified = true;
+                        }
+                        if (targetBrand && deal.brand !== targetBrand) {
+                            deal.brand = targetBrand;
+                            dealModified = true;
+                        }
+                        if (targetExporter && deal.exporter !== targetExporter) {
+                            deal.exporter = targetExporter;
+                            dealModified = true;
+                        }
+                        if (dealModified) {
+                            await saveEncrypted(dealDoc, deal);
+                            counts.lcPurchases++;
+                        }
+                        await syncDealQuantitiesForDeal(dealDoc._id, deal.purchaseId);
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error cascading Stock (LC Receive) update:', err);
+    }
+
+    return { status: 'success', counts };
+}
+
+/**
  * Safe no-op to prevent any bulk modification of historical data.
  */
 async function syncAllPurchaseDealCascades() {
@@ -985,6 +1376,7 @@ module.exports = {
     cascadePurchaseDealUpdate,
     cascadeDealReceiveUpdate,
     cascadeCostOfGoodsUpdate,
+    cascadeStockUpdate,
     syncDealQuantitiesForDeal,
     syncAllPurchaseDealCascades
 };

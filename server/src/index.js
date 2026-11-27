@@ -524,7 +524,7 @@ const BankDollarRate = require('./models/BankDollarRate');
 const { encryptData, decryptData, decryptRecordWithUnwrap } = require('./utils/encryption');
 const { updateBrandAcrossAllCollections } = require('./services/brandCascadeService');
 const { cascadeIpUpdate, cascadeProductUpdate, cascadeProductIpNameUpdate } = require('./services/ipCascadeService');
-const { cascadePurchaseDealUpdate, cascadeDealReceiveUpdate, cascadeCostOfGoodsUpdate, syncAllPurchaseDealCascades } = require('./services/purchaseDealCascadeService');
+const { cascadePurchaseDealUpdate, cascadeDealReceiveUpdate, cascadeCostOfGoodsUpdate, cascadeStockUpdate, syncAllPurchaseDealCascades } = require('./services/purchaseDealCascadeService');
 const { syncSaleOnSave, syncSaleOnDelete, repairAllCustomerSalesHistory } = require('./services/customerSyncService');
 const { repairCorruptedGarlicProducts } = require('./services/productHealService');
 const { scrapeBankWebsites, matchBankToRate, BANK_REGISTRY, extractCircularDate } = require('./services/bankExchangeRateScraper');
@@ -3190,6 +3190,26 @@ apiRouter.post('/api/stock', async (req, res) => {
         const result = { ...resolvedBody, _id: updatedStock._id, createdAt: resolvedBody.createdAt || updatedStock.createdAt };
         broadcastUpdate('stock', 'update', { id: updatedStock._id, stock: result });
         req._broadcastDone = true;
+
+        if (typeof cascadeStockUpdate === 'function') {
+          cascadeStockUpdate(updatedStock._id, resolvedBody, {}).then(cascadeRes => {
+            if (cascadeRes?.counts) {
+              if (cascadeRes.counts.costOfGoods > 0) {
+                invalidateMemoryCache('cost-of-goods');
+                broadcastUpdate('cost-of-goods', 'update', { reason: 'stock_cascade' });
+              }
+              if (cascadeRes.counts.dealReceives > 0) {
+                invalidateMemoryCache('deal-receives');
+                broadcastUpdate('deal-receives', 'update', { reason: 'stock_cascade' });
+              }
+              if (cascadeRes.counts.lcPurchases > 0) {
+                invalidateMemoryCache('lc-purchases');
+                broadcastUpdate('lc-purchases', 'update', { reason: 'stock_cascade' });
+              }
+            }
+          }).catch(err => console.error('Error in cascadeStockUpdate:', err));
+        }
+
         return res.status(200).json(result);
       }
     }
@@ -3204,6 +3224,26 @@ apiRouter.post('/api/stock', async (req, res) => {
     const result = { ...resolvedBody, _id: savedStock._id, createdAt: resolvedBody.createdAt || savedStock.createdAt };
     broadcastUpdate('stock', 'create', { id: savedStock._id, stock: result });
     req._broadcastDone = true;
+
+    if (typeof cascadeStockUpdate === 'function') {
+      cascadeStockUpdate(savedStock._id, resolvedBody, {}).then(cascadeRes => {
+        if (cascadeRes?.counts) {
+          if (cascadeRes.counts.costOfGoods > 0) {
+            invalidateMemoryCache('cost-of-goods');
+            broadcastUpdate('cost-of-goods', 'update', { reason: 'stock_cascade' });
+          }
+          if (cascadeRes.counts.dealReceives > 0) {
+            invalidateMemoryCache('deal-receives');
+            broadcastUpdate('deal-receives', 'update', { reason: 'stock_cascade' });
+          }
+          if (cascadeRes.counts.lcPurchases > 0) {
+            invalidateMemoryCache('lc-purchases');
+            broadcastUpdate('lc-purchases', 'update', { reason: 'stock_cascade' });
+          }
+        }
+      }).catch(err => console.error('Error in cascadeStockUpdate:', err));
+    }
+
     res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -3326,6 +3366,29 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
     const result = { ...resolvedBody, _id: req.params.id, createdAt: resolvedBody.createdAt || updatedStock?.createdAt };
     broadcastUpdate('stock', 'update', { id: req.params.id, stock: result });
     req._broadcastDone = true;
+
+    // Upstream cascade: LC Receive (Stock) -> Cost of Goods -> Deal Receive -> Purchase Deal
+    if (typeof cascadeStockUpdate === 'function') {
+      cascadeStockUpdate(req.params.id, resolvedBody, existingData).then(cascadeRes => {
+        if (cascadeRes?.counts) {
+          if (cascadeRes.counts.costOfGoods > 0) {
+            invalidateMemoryCache('cost-of-goods');
+            broadcastUpdate('cost-of-goods', 'update', { reason: 'stock_cascade' });
+          }
+          if (cascadeRes.counts.dealReceives > 0) {
+            invalidateMemoryCache('deal-receives');
+            broadcastUpdate('deal-receives', 'update', { reason: 'stock_cascade' });
+          }
+          if (cascadeRes.counts.lcPurchases > 0) {
+            invalidateMemoryCache('lc-purchases');
+            broadcastUpdate('lc-purchases', 'update', { reason: 'stock_cascade' });
+          }
+        }
+      }).catch(cascadeErr => {
+        console.error('Error cascading Stock (LC Receive) update:', cascadeErr);
+      });
+    }
+
     res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
