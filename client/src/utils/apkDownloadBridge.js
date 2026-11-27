@@ -16,6 +16,19 @@
 const blobRegistry = new Map();
 let isInterceptorInitialized = false;
 
+/**
+ * Associates a human-readable file name with an active Blob URL
+ */
+export const registerBlobFileName = (url, fileName) => {
+    if (!url || !fileName) return;
+    const existing = blobRegistry.get(url) || {};
+    blobRegistry.set(url, {
+        ...existing,
+        name: fileName,
+        timestamp: Date.now()
+    });
+};
+
 export const isApkEnvironment = () => {
     return typeof window !== 'undefined' &&
         !!(window.AndroidBridge && typeof window.AndroidBridge.saveBase64File === 'function');
@@ -147,9 +160,9 @@ export const initApkDownloadInterceptor = () => {
         if (isApkEnvironment() && typeof url === 'string' && (url.startsWith('blob:') || url.startsWith('data:'))) {
             const entry = blobRegistry.get(url);
             const isPdf = (entry?.type && entry.type.includes('pdf')) || url.includes('application/pdf');
-            const defaultName = isPdf
+            const defaultName = entry?.name || (isPdf
                 ? `Report_${new Date().toISOString().split('T')[0]}.pdf`
-                : `Document_${new Date().toISOString().split('T')[0]}`;
+                : `Document_${new Date().toISOString().split('T')[0]}`);
 
             (async () => {
                 try {
@@ -184,7 +197,7 @@ export const initApkDownloadInterceptor = () => {
             if (downloadAttr || (href && (href.startsWith('blob:') || href.startsWith('data:')))) {
                 if (href && (href.startsWith('blob:') || href.startsWith('data:'))) {
                     const entry = blobRegistry.get(href);
-                    let resolvedName = downloadAttr;
+                    let resolvedName = downloadAttr || entry?.name;
                     if (!resolvedName) {
                         const isExcel = entry?.type?.includes('spreadsheet') || entry?.type?.includes('excel');
                         const isPdf = entry?.type?.includes('pdf');

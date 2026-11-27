@@ -15,6 +15,7 @@ try {
   console.warn('[Server] multer not found in node_modules, falling back to direct JSON/stream parser');
 }
 const BackupSetting = require('./models/BackupSetting');
+const crypto = require('crypto');
 
 const uploadDir = path.resolve(__dirname, '../backups/uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -1139,6 +1140,7 @@ const requireAuth = (req, res, next) => {
 
   if (
     publicPaths.includes(rawPath) ||
+    rawPath.startsWith('/api/pdf-preview') ||
     rawPath.startsWith('/api/attendance/device/push') ||
     rawPath.startsWith('/iclock') ||
     rawPath.startsWith('/cdata')
@@ -1195,6 +1197,48 @@ apiRouter.get('/api/health', (req, res) => {
     timestamp: Date.now(),
     zk: zkLiveManager ? zkLiveManager.getStatus() : null
   });
+});
+
+// Ephemeral PDF preview store (5-minute TTL) to enable named PDF viewing & downloading in Chrome
+const pdfPreviewStore = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, item] of pdfPreviewStore.entries()) {
+    if (now - item.createdAt > 5 * 60 * 1000) {
+      pdfPreviewStore.delete(id);
+    }
+  }
+}, 60 * 1000);
+
+apiRouter.post('/api/pdf-preview/register', (req, res) => {
+  try {
+    const { fileName, pdfBase64 } = req.body;
+    if (!pdfBase64) {
+      return res.status(400).json({ error: 'Missing PDF data' });
+    }
+    const token = crypto.randomBytes(12).toString('hex');
+    const buffer = Buffer.from(pdfBase64, 'base64');
+    pdfPreviewStore.set(token, {
+      fileName: fileName || 'Document.pdf',
+      buffer,
+      createdAt: Date.now()
+    });
+    res.json({ token });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to register PDF preview' });
+  }
+});
+
+apiRouter.get('/api/pdf-preview/:token/:filename', (req, res) => {
+  const item = pdfPreviewStore.get(req.params.token);
+  if (!item) {
+    return res.status(404).send('PDF preview expired or not found. Please re-generate from the ERP.');
+  }
+  const fileName = req.params.filename || item.fileName || 'Document.pdf';
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.send(item.buffer);
 });
 
 // Lightweight Pending Indicators Endpoint

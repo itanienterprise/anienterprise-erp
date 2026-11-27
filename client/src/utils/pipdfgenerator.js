@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { appendBankApplicationPage } from './islbankApplicationGenerator';
+import { openPdfDocument } from './pdfPreviewHelper';
 
 // Helper function to convert number to words for USD
 const numberToWordsUSD = (amount) => {
@@ -1092,8 +1093,9 @@ export const generatePIPDF = (record) => {
     // Append Bank Application Page as Page 2 (just like Packing List & TR)
     appendBankApplicationPage(doc, record);
 
-    // Opening in new tab instead of direct download
-    const pdfOutput = doc.output('blob');
-    const blobURL = URL.createObjectURL(pdfOutput);
-    window.open(blobURL, '_blank');
+    // Open in new tab with clean related filename
+    const isRev = (record.revisions && record.revisions.length > 0) || String(record.piNumber || '').toLowerCase().includes('revised');
+    const piNum = record.piNumber || record.originalPiNumber || (record.piNumbers && record.piNumbers.join('-')) || 'Draft';
+    const fileName = `PI_${piNum}${isRev && !String(piNum).toLowerCase().includes('revised') ? '_REVISED' : ''}`;
+    openPdfDocument(doc, fileName);
 };

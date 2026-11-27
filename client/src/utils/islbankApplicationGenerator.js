@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import { renderNonIslamiBankApplication, generateNonIslamiBankApplicationPDF } from './nonIslamiBankApplicationGenerator';
+import { openPdfDocument } from './pdfPreviewHelper';
 
 // Helper function for date formatting (DD/MM/YYYY)
 const formatDate = (dateStr) => {
@@ -1459,9 +1460,8 @@ export const generateBankApplicationPDF = (record) => {
 
     renderBankApplicationContent(doc, record);
 
-    const pdfOutput = doc.output('blob');
-    const blobURL = URL.createObjectURL(pdfOutput);
-    window.open(blobURL, '_blank');
+    const piNum = record.piNumber || record.originalPiNumber || 'Draft';
+    openPdfDocument(doc, `Bank_Application_${piNum}`);
 };
 
 /**
@@ -1479,8 +1479,7 @@ export const generateIslamiBankApplicationPDF = (record) => {
 
     renderIslamiBankApplication(doc, record);
 
-    const pdfOutput = doc.output('blob');
-    const blobURL = URL.createObjectURL(pdfOutput);
-    window.open(blobURL, '_blank');
+    const piNum = record.piNumber || record.originalPiNumber || 'Draft';
+    openPdfDocument(doc, `Islami_Bank_Application_${piNum}`);
 };
 

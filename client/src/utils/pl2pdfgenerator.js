@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { appendTrTemplatePage } from './plTrTemplatePage';
 import { appendNocApplicationPage } from './plNocApplicationPage';
+import { openPdfDocument } from './pdfPreviewHelper';
 
 const numberToWordsUSD = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
@@ -1809,8 +1810,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         portOfDischarge
     }, { piRecords, lcRecords, importers, exporters, banks, ipRecords, products });
 
-    // Open in new tab
-    const pdfOutput = doc.output('blob');
-    const blobURL = URL.createObjectURL(pdfOutput);
-    window.open(blobURL, '_blank');
+    // Open in new tab with clean related filename
+    const plNum = record.packingListNumber || record.lcNo || record.invoiceNo || 'Draft';
+    const fileName = `Packing_List_${plNum}`;
+    openPdfDocument(doc, fileName);
 };

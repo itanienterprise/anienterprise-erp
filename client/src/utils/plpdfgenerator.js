@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { appendTrTemplatePage } from './plTrTemplatePage';
 import { appendNocApplicationPage } from './plNocApplicationPage';
+import { sanitizePdfFileName } from './pdfPreviewHelper';
 
 // Helper function to format dates
 const formatDate = (dateString) => {
@@ -808,7 +809,13 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         portOfDischarge: record.portOfDischarge || pi?.portOfDischarge
     }, { piRecords, lcRecords, importers, exporters, banks, ipRecords, products });
 
-    // Save/Download PDF
-    const filename = `PackingList_${record.packingListNumber || 'Draft'}.pdf`;
-    doc.save(filename);
+    // Save/Download PDF with clean related name and metadata
+    const plNum = record.packingListNumber || record.lcNo || 'Draft';
+    const cleanName = sanitizePdfFileName(`Packing_List_${plNum}`);
+    doc.setProperties({
+        title: cleanName,
+        subject: cleanName,
+        author: 'ANI Enterprise ERP'
+    });
+    doc.save(`${cleanName}.pdf`);
 };

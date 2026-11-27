@@ -6,6 +6,7 @@ import { preloadBengaliFont, ensureBengaliFont } from './bengaliFontLoader';
 import { computeCustomerBalance, compareTransactions, getIsoDateString, calculatePurchaseRemainingQty } from './helpers';
 import { getAdjustedLcValues, getRecCostingKg, getLcMilestoneFinances, calculateLcConclusion, getLcOpenCostMap, getLcOpenCost } from './lcValueUtils';
 import { api } from './api';
+import { openPdfDocument, sanitizePdfFileName } from './pdfPreviewHelper';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -366,9 +367,9 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.setFont('helvetica', 'normal');
         doc.text("Authorized Signature", pageWidth - margin - 30, pageHeight - margin - 14, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        const receiptNo = payment.receiptNo || payment.voucherNo || payment.moneyReceiptNo || 'Receipt';
+        const custName = payment.customerName || payment.partyName || '';
+        openPdfDocument(doc, `Money_Receipt_${receiptNo}${custName ? '_' + custName : ''}`);
     } catch (error) {
         console.error("Money Receipt Error:", error);
         alert(`Failed to generate receipt: ${error.message}`);
@@ -694,10 +695,9 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - (sigWidth / 2), sigY + 5, { align: 'center' });
 
-        // Open in new tab for print preview instead of downloading directly
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        // Open in new tab with clean related filename
+        const reportDateStr = filters?.date || (filters?.startDate ? `${filters.startDate}_to_${filters.endDate || ''}` : '');
+        openPdfDocument(doc, `LC_Receive_Report${reportDateStr ? '_' + reportDateStr : ''}`);
     } catch (error) {
         console.error("PDF Generation Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
@@ -1648,9 +1648,8 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        const prodName = filters?.productName ? `_${filters.productName}` : '';
+        openPdfDocument(doc, `Stock_Report_${reportType}${prodName}`);
 
     } catch (error) {
         console.error("Stock PDF Generation Error:", error);
@@ -1975,9 +1974,8 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
 
         // Finalize
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        const whDate = filters?.date || (filters?.startDate ? `${filters.startDate}_to_${filters.endDate || ''}` : '');
+        openPdfDocument(doc, `Warehouse_Report${whDate ? '_' + whDate : ''}`);
 
     } catch (error) {
         console.error("Warehouse PDF Generation Error:", error);
@@ -3143,9 +3141,11 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
         doc.setFont('helvetica', 'bold');
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - 20, sigY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        const invOrChallan = docType === 'challan'
+            ? `Delivery_Challan_${sale.challanNo || sale.invoiceNo || 'Document'}`
+            : `Sale_Invoice_${sale.invoiceNo || sale.challanNo || 'Document'}`;
+        const custSuffix = sale.customerName ? `_${sale.customerName}` : '';
+        openPdfDocument(doc, `${invOrChallan}${custSuffix}`);
 
     } catch (error) {
         console.error("Invoice PDF Generation Error:", error);
@@ -3957,9 +3957,7 @@ export const generateProductHistoryPDF = async (productName, category, activeTab
         doc.line(pageWidth - margin - 65, sigY, pageWidth - margin - 15, sigY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - 40, sigY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `Product_History_${productName || 'Product'}_${activeTab || 'All'}`);
     } catch (error) {
         console.error("Product History PDF Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
@@ -4236,9 +4234,7 @@ export const generateSalesReportPDF = async (reportData, filters, summary, saleT
             doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
             doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-            const pdfOutput = doc.output('blob');
-            const blobURL = URL.createObjectURL(pdfOutput);
-            window.open(blobURL, '_blank');
+            openPdfDocument(doc, `Sales_Summary_Report_${saleType || 'General'}${filters?.date ? '_' + filters.date : ''}`);
             return;
         }
 
@@ -4358,9 +4354,7 @@ export const generateSalesReportPDF = async (reportData, filters, summary, saleT
             doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
             doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-            const pdfOutput = doc.output('blob');
-            const blobURL = URL.createObjectURL(pdfOutput);
-            window.open(blobURL, '_blank');
+            openPdfDocument(doc, `Sales_Product_Wise_Report_${saleType || 'General'}${filters?.date ? '_' + filters.date : ''}`);
             return;
         }
 
@@ -4652,9 +4646,7 @@ export const generateSalesReportPDF = async (reportData, filters, summary, saleT
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `Sales_Report_${saleType || 'General'}_${reportTab || 'All'}${filters?.date ? '_' + filters.date : ''}`);
     } catch (error) {
         console.error("Sales PDF Generation Error:", error);
         alert(`Failed to generate Sales PDF: ${error.message}`);
@@ -4930,10 +4922,7 @@ export const generateCustomerReportPDF = async (
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
-
+        openPdfDocument(doc, `Customer_Report${filters?.date ? '_' + filters.date : ''}`);
     } catch (error) {
         console.error("Customer Report PDF Generation Error:", error);
         alert(`Failed to generate Customer Report PDF: ${error.message}`);
@@ -5410,10 +5399,7 @@ export const generatePaymentCollectionReportPDF = async (payments, filters, date
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
-
+        openPdfDocument(doc, `Payment_Collection_Report${dateStr ? '_' + dateStr : ''}`);
     } catch (error) {
         console.error("Payment Collection Report PDF Generation Error:", error);
         alert(`Failed to generate Payment Collection Report PDF: ${error.message}`);
@@ -5611,10 +5597,7 @@ export const generateInsurancePaymentReportPDF = (payments, filters, dateStr, lc
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
-
+        openPdfDocument(doc, `Insurance_Payment_Report${dateStr ? '_' + dateStr : ''}`);
     } catch (error) {
         console.error("Insurance Payment Report PDF Generation Error:", error);
         alert(`Failed to generate Insurance Payment Report PDF: ${error.message}`);
@@ -6334,10 +6317,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         doc.line(pageWidth - margin - sigWidth, yPos, pageWidth - margin, yPos);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - (sigWidth / 2), yPos + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
-
+        const cName = customer?.customerName || customer?.name || 'Customer';
+        openPdfDocument(doc, `Customer_Ledger_${cName}_${activeTab || 'All'}`);
     } catch (error) {
         console.error("Customer History PDF Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
@@ -6614,11 +6595,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
         }
 
-        // Open in new tab
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
-
+        openPdfDocument(doc, `CnF_History_Report_${agentInfo?.name || 'Agent'}`);
     } catch (error) {
         console.error("C&F PDF Error:", error);
         alert(`Failed to generate C&F PDF: ${error.message}`);
@@ -7178,11 +7155,7 @@ export const generateCnFLCWiseReportPDF = async (reportData = [], agentInfo = {}
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
         }
 
-        // Open in new tab
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
-
+        openPdfDocument(doc, `CnF_LC_Wise_Report_${agentInfo?.name || 'Agent'}_${historyViewMode || 'All'}`);
     } catch (error) {
         console.error("C&F LC-Wise PDF Error:", error);
         alert(`Failed to generate C&F LC-Wise PDF: ${error.message}`);
@@ -7355,9 +7328,7 @@ export const generateCnFExpenseReportPDF = (reportData, agentInfo, filters) => {
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `CnF_Expense_Report_${agentInfo?.name || 'Agent'}`);
     } catch (error) {
         console.error("PDF Generation Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
@@ -7484,9 +7455,7 @@ export const generateCnFAgentListReportPDF = (agents, moduleType) => {
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `CnF_Agent_List_Report_${moduleType || 'All'}`);
 
     } catch (error) {
         console.error("C&F Agent List PDF Error:", error);
@@ -7678,9 +7647,7 @@ export const generateCnFPaymentsListReportPDF = (payments = [], filters = {}, da
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `CnF_Payments_List_Report${dateStr ? '_' + dateStr : ''}`);
     } catch (error) {
         console.error("C&F Payment Report PDF Generation Error:", error);
         alert(`Failed to generate C&F Payment Report PDF: ${error.message}`);
@@ -7859,9 +7826,7 @@ export const generateCnFPaymentReportPDF = (reportData, agentInfo, filters) => {
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `CnF_Payment_Report_${agentInfo?.name || 'Agent'}`);
     } catch (error) {
         console.error("PDF Generation Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
@@ -8082,9 +8047,7 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `CnF_All_Report_${agentInfo?.name || 'Agent'}`);
     } catch (error) {
         console.error("PDF Generation Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
@@ -8281,9 +8244,7 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `LC_Bill_History_Report_${bankName || 'All_Banks'}`);
     } catch (error) {
         console.error("LC Bill History Report PDF Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
@@ -8532,9 +8493,7 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
         doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `LC_Management_Report${searchQuery ? '_' + searchQuery : ''}`);
     } catch (error) {
         console.error("LC Management Report PDF Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
@@ -8755,9 +8714,7 @@ export const generateLCBillReportPDF = (reportData, totals, searchQuery = '', fi
         doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `LC_Bill_Report${searchQuery ? '_' + searchQuery : ''}`);
     } catch (error) {
         console.error("LC Bill Report PDF Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
@@ -8940,9 +8897,7 @@ export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
             margin: { left: margin, right: margin },
         });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `Cost_Of_Goods_Report`);
     } catch (error) {
         console.error("Error generating Cost of Goods report PDF:", error);
     }
@@ -9212,9 +9167,9 @@ export const generatePayToCustomerVoucherPDF = async (payment) => {
         doc.setFont('helvetica', 'normal');
         doc.text("Authorized Signature", pageWidth - margin - 30, pageHeight - margin - 14, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        const vNo = payment?.voucherNo || payment?.receiptNo || 'Voucher';
+        const cName = payment?.customerName || '';
+        openPdfDocument(doc, `Pay_To_Customer_Voucher_${vNo}${cName ? '_' + cName : ''}`);
     } catch (error) {
         console.error("Pay To Customer Voucher PDF Error:", error);
         alert(`Failed to generate Pay To Customer Voucher PDF: ${error.message}`);
@@ -9674,9 +9629,7 @@ export const generatePayToCustomerReportPDF = async (payments, filters, dateStr)
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `Pay_To_Customer_Report${dateStr ? '_' + dateStr : ''}`);
     } catch (error) {
         console.error("Pay To Customer Report PDF Error:", error);
         alert(`Failed to generate Pay To Customer Report PDF: ${error.message}`);
@@ -9873,9 +9826,7 @@ export const generateIPManagementReportPDF = (reportData, totals, searchQuery = 
         doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `IP_Management_Report${searchQuery ? '_' + searchQuery : ''}`);
     } catch (err) {
         console.error("Error generating IP Management Report PDF:", err);
         alert(`Failed to generate IP Management Report PDF: ${err.message}`);
@@ -10816,9 +10767,7 @@ export const generateProfitLossPDF = async (params) => {
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `Profit_Loss_Report`);
     } catch (err) {
         console.error("Error generating Profit Loss PDF:", err);
         alert(`Failed to generate Profit Loss PDF: ${err.message}`);
@@ -11090,9 +11039,7 @@ export const generateSupplierProfileReportPDF = async (supplier, records, filter
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `Supplier_Profile_${supplier?.name || 'Supplier'}`);
     } catch (err) {
         console.error("Error generating Supplier Profile Report PDF:", err);
         alert(`Failed to generate Supplier Report PDF: ${err.message}`);
@@ -11396,9 +11343,7 @@ export const generateExporterProfileReportPDF = async (exporter, records, filter
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `Exporter_Profile_${exporter?.name || 'Exporter'}`);
     } catch (err) {
         console.error("Error generating Exporter Profile Report PDF:", err);
         alert(`Failed to generate Exporter Report PDF: ${err.message}`);
@@ -11590,9 +11535,7 @@ export const generateLCExpenseReportPDF = (expenses = [], filters = {}, searchQu
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `LC_Expense_Report${searchQuery ? '_' + searchQuery : ''}`);
     } catch (err) {
         console.error("Error generating LC Expense Report PDF:", err);
         alert(`Failed to generate LC Expense Report PDF: ${err.message}`);
@@ -11800,9 +11743,7 @@ export const generateMarginReturnReportPDF = (records = [], filters = {}, totals
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `Margin_Return_Report${searchQuery ? '_' + searchQuery : ''}`);
     } catch (err) {
         console.error("Error generating Margin Return Report PDF:", err);
         alert(`Failed to generate Margin Return Report PDF: ${err.message}`);
@@ -12226,9 +12167,7 @@ export const generateInsuranceHistoryReportPDF = async ({
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
+        openPdfDocument(doc, `Insurance_History_Report`);
     } catch (err) {
         console.error("Error generating Insurance History Report PDF:", err);
         alert(`Failed to generate Insurance History Report PDF: ${err.message}`);
@@ -12561,13 +12500,7 @@ export const generatePattyCashReportPDF = async (records = [], filters = {}, sum
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        // Open in browser tab for instant preview/print, fallback to download if popup blocked
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        const newTab = window.open(blobURL, '_blank');
-        if (!newTab) {
-            doc.save(`Patty_Cash_Report_${new Date().toISOString().split('T')[0]}.pdf`);
-        }
+        openPdfDocument(doc, `Petty_Cash_Report`);
     } catch (err) {
         console.error("Error generating Patty Cash PDF report:", err);
         alert("Failed to generate PDF report: " + err.message);
@@ -12935,14 +12868,8 @@ export const generateBankStatementPDF = async (statementData = [], meta = {}) =>
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        // Open in browser tab for instant preview/print, fallback to download
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        const newTab = window.open(blobURL, '_blank');
-        if (!newTab) {
-            const fileName = `Bank_Statement_${(meta.bankName || 'Consolidated').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(fileName);
-        }
+        const bName = meta?.accountName || meta?.bankName || 'Account';
+        openPdfDocument(doc, `Bank_Statement_${bName}`);
     } catch (err) {
         console.error("Error generating Bank Statement PDF:", err);
         alert("Failed to generate PDF statement: " + err.message);
@@ -13329,13 +13256,7 @@ export const generatePurchaseReportPDF = async (purchases = [], filters = {}, da
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        const newTab = window.open(blobURL, '_blank');
-        if (!newTab) {
-            const fileName = `Purchase_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(fileName);
-        }
+        openPdfDocument(doc, `Purchase_Report${dateStr ? '_' + dateStr : ''}`);
     } catch (err) {
         console.error("Error generating Purchase Report PDF:", err);
         alert("Failed to generate Purchase Report PDF: " + err.message);
@@ -13719,13 +13640,7 @@ export const generatePurchaseReceiveReportPDF = async (purchaseReceives = [], fi
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        const newTab = window.open(blobURL, '_blank');
-        if (!newTab) {
-            const fileName = `Purchase_Receive_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(fileName);
-        }
+        openPdfDocument(doc, `Purchase_Receive_Report${dateStr ? '_' + dateStr : ''}`);
     } catch (err) {
         console.error("Error generating Purchase Receive Report PDF:", err);
         alert("Failed to generate Purchase Receive Report PDF: " + err.message);
@@ -14398,13 +14313,7 @@ export const generatePurchaseDealReportPDF = async (deals = [], filters = {}, da
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        const newTab = window.open(blobURL, '_blank');
-        if (!newTab) {
-            const fileName = `Purchase_Deal_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(fileName);
-        }
+        openPdfDocument(doc, `Purchase_Deal_Report_${reportType || 'Deal'}${dateStr ? '_' + dateStr : ''}`);
     } catch (err) {
         console.error("Error generating Purchase Deal Report PDF:", err);
     }
@@ -14896,13 +14805,7 @@ export const generateDealReceiveReportPDF = async (records = [], filters = {}, d
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        const newTab = window.open(blobURL, '_blank');
-        if (!newTab) {
-            const fileName = `Deal_Receive_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(fileName);
-        }
+        openPdfDocument(doc, `Deal_Receive_Report${dateStr ? '_' + dateStr : ''}`);
     } catch (err) {
         console.error("Error generating Deal Receive Report PDF:", err);
     }
@@ -15194,13 +15097,7 @@ export const generateFundTransferPDF = async (transfers = [], meta = {}) => {
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        const newTab = window.open(blobURL, '_blank');
-        if (!newTab) {
-            const fileName = `Fund_Transfer_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(fileName);
-        }
+        openPdfDocument(doc, `Fund_Transfer_Report`);
     } catch (err) {
         console.error("Error generating Fund Transfer Report PDF:", err);
         alert(`Failed to generate PDF report: ${err.message}`);
@@ -15564,13 +15461,7 @@ export const generateAllBankAccountsSummaryPDF = async (accountsData = [], meta 
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        const newTab = window.open(blobURL, '_blank');
-        if (!newTab) {
-            const fileName = `All_Bank_Accounts_Balance_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(fileName);
-        }
+        openPdfDocument(doc, `Bank_Accounts_Summary`);
     } catch (err) {
         console.error("Error generating All Bank Accounts Summary PDF:", err);
         alert(`Failed to generate PDF report: ${err.message}`);
@@ -15928,13 +15819,8 @@ export const generateBankDepositReportPDF = async (deposits = [], meta = {}) => 
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        const newTab = window.open(blobURL, '_blank');
-        if (!newTab) {
-            const fileName = `Bank_Deposit_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(fileName);
-        }
+        const dAcc = meta?.accountName || '';
+        openPdfDocument(doc, `Bank_Deposit_Report${dAcc ? '_' + dAcc : ''}`);
     } catch (err) {
         console.error("Error generating Bank Deposit Report PDF:", err);
         alert(`Failed to generate PDF report: ${err.message}`);
@@ -16292,13 +16178,8 @@ export const generateBankWithdrawalReportPDF = async (withdrawals = [], meta = {
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
         }
 
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        const newTab = window.open(blobURL, '_blank');
-        if (!newTab) {
-            const fileName = `Bank_Withdrawal_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(fileName);
-        }
+        const wAcc = meta?.accountName || '';
+        openPdfDocument(doc, `Bank_Withdrawal_Report${wAcc ? '_' + wAcc : ''}`);
     } catch (err) {
         console.error("Error generating Bank Withdrawal Report PDF:", err);
         alert(`Failed to generate PDF report: ${err.message}`);
